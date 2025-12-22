@@ -172,17 +172,17 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
 
     use async_trait::async_trait;
     use databend_common_expression::DataBlock;
 
-    use crate::core::port::connect;
     use crate::core::Event;
     use crate::core::InputPort;
     use crate::core::OutputPort;
+    use crate::core::port::connect;
     use crate::sinks::async_mpsc_sink::AsyncMpscSink;
     use crate::sinks::async_mpsc_sink::AsyncMpscSinker;
 

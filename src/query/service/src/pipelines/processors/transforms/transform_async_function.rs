@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;

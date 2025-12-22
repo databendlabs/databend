@@ -13,24 +13,24 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::bitmap::TrueIdxIter;
+use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
-use crate::types::binary::BinaryColumn;
-use crate::types::nullable::NullableColumn;
-use crate::types::string::StringColumn;
-use crate::types::*;
-use crate::visitor::ValueVisitor;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
+use crate::types::binary::BinaryColumn;
+use crate::types::nullable::NullableColumn;
+use crate::types::string::StringColumn;
+use crate::types::*;
+use crate::visitor::ValueVisitor;
 
 impl DataBlock {
     pub fn filter_with_bitmap(self, bitmap: &Bitmap) -> Result<DataBlock> {

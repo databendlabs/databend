@@ -30,29 +30,29 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
-use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
-use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
 use log::error;
 use log::info;
 use log::warn;
 
+use crate::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::FuseTable;
 use crate::index::InvertedIndexFile;
-use crate::io::read::ColumnOrientedSegmentReader;
-use crate::io::read::RowOrientedSegmentReader;
 use crate::io::InvertedIndexReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::FuseTable;
-use crate::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 
 impl FuseTable {
     pub async fn do_purge(

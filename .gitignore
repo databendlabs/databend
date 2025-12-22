@@ -83,5 +83,7 @@ benchmark/clickbench/results
 # lychee
 .lycheecache
 
+.claude
+
 # tmp
 tmp

@@ -14,9 +14,9 @@
 
 use databend_common_catalog::table::DistributionLevel;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
-use crate::MetadataRef;
 
 /// Check if a query will read data from local tables(e.g. system tables).
 pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {

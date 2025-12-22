@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Scalar;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::ScalarExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
@@ -23,9 +26,6 @@ use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::planner::plans::JoinEquiCondition;
 use databend_common_sql::planner::plans::JoinType;
 use databend_common_sql::planner::plans::RelOperator;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::MetadataRef;
-use databend_common_sql::ScalarExpr;
 use pretty_assertions::assert_eq;
 
 use crate::sql::planner::optimizer::test_utils::ExprBuilder;
@@ -297,7 +297,9 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
             normalized_after_expected.contains("Filter") && normalized_after.contains("Filter");
 
         if normalized_after.contains("Inner Join") && expected_filter_pushed {
-            println!("Note: Optimizer converted RIGHT JOIN to INNER JOIN, but filter was correctly pushed down.");
+            println!(
+                "Note: Optimizer converted RIGHT JOIN to INNER JOIN, but filter was correctly pushed down."
+            );
         } else {
             assert_eq!(
                 normalized_after, normalized_after_expected,

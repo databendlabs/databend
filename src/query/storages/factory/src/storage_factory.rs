@@ -21,16 +21,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
-use databend_common_storages_basic::view_table::ViewTable;
 use databend_common_storages_basic::MemoryTable;
 use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::RandomTable;
+use databend_common_storages_basic::view_table::ViewTable;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 
-use crate::fuse::FuseTable;
 use crate::Table;
+use crate::fuse::FuseTable;
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>>;

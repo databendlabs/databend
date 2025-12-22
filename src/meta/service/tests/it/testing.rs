@@ -18,9 +18,9 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
+use databend_common_tracing::Config;
 use databend_common_tracing::closure_name;
 use databend_common_tracing::init_logging;
-use databend_common_tracing::Config;
 use fastrace::prelude::*;
 
 pub fn meta_service_test_harness<F, Fut>(test: F)

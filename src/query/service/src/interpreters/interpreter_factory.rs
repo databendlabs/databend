@@ -38,6 +38,12 @@ use super::interpreter_table_modify_connection::ModifyTableConnectionInterpreter
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
+use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::DescUserInterpreter;
+use crate::interpreters::DropStreamInterpreter;
+use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::access_log::AccessLogger;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
@@ -103,12 +109,6 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
-use crate::interpreters::AlterUserInterpreter;
-use crate::interpreters::CreateStreamInterpreter;
-use crate::interpreters::DescUserInterpreter;
-use crate::interpreters::DropStreamInterpreter;
-use crate::interpreters::DropUserInterpreter;
-use crate::interpreters::SetRoleInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 

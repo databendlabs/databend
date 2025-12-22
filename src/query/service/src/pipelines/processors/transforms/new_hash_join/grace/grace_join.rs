@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
 use std::collections::VecDeque;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::PoisonError;
 
@@ -29,14 +29,14 @@ use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 
+use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::get_hashes;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::Join;
-use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;

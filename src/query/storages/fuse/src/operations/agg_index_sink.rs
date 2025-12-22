@@ -18,10 +18,10 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::StringType;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::ProcessorPtr;

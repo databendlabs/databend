@@ -17,14 +17,14 @@ use std::sync::Arc;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -139,19 +139,27 @@ impl SyncSystemTable for CachesTable {
         }
 
         if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
-            Self::append_row(&inverted_index_meta_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(
+                &inverted_index_meta_cache,
+                &local_node,
+                &mut columns,
+            );
         }
 
         if let Some(inverted_index_file_cache) = inverted_index_file_cache {
-            Self::append_row(&inverted_index_file_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(
+                &inverted_index_file_cache,
+                &local_node,
+                &mut columns,
+            );
         }
 
         if let Some(vector_index_meta_cache) = vector_index_meta_cache {
-            Self::append_row(&vector_index_meta_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(&vector_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(vector_index_file_cache) = vector_index_file_cache {
-            Self::append_row(&vector_index_file_cache, &local_node, &mut columns);
+            Self::append_rows_of_hybrid_cache(&vector_index_file_cache, &local_node, &mut columns);
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {

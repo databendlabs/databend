@@ -20,11 +20,11 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_s3() -> Result<()> {

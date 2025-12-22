@@ -25,15 +25,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::filter_helper::FilterHelpers;
-use databend_common_expression::type_check::check_number;
-use databend_common_expression::type_check::check_string;
-use databend_common_expression::types::number::UInt64Type;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::utils::FromData;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -42,19 +33,28 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::check_string;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::NullTable;
+use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
@@ -116,7 +116,7 @@ macro_rules! impl_history_aware {
                         CatalogType::Default => {
                             return Err(ErrorCode::Internal(
                                 "Catalog type is Default, can not mock table".to_string(),
-                            ))
+                            ));
                         }
                         CatalogType::Iceberg => "Iceberg".to_string(),
                         CatalogType::Hive => "Hive".to_string(),

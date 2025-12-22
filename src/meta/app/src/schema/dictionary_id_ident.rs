@@ -36,8 +36,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::dictionary_id_ident::DictionaryIdIdent;
     use crate::schema::DictionaryMeta;
+    use crate::schema::dictionary_id_ident::DictionaryIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DictionaryIdRsc;

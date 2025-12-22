@@ -16,8 +16,8 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_exception::Result;
 
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::format::FormatContext;
 
 pub trait PhysicalFormat {
     #[recursive::recursive]

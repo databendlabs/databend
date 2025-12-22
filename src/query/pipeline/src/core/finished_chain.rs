@@ -271,17 +271,17 @@ pub fn basic_callback<T: Callback>(inner: T) -> BasicCallback<T> {
 mod tests {
     use std::collections::HashMap;
     use std::panic::Location;
+    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
 
     use databend_common_exception::ErrorCode;
     use databend_common_exception::Result;
 
-    use crate::core::always_callback;
-    use crate::core::basic_callback;
     use crate::core::ExecutionInfo;
     use crate::core::FinishedCallbackChain;
+    use crate::core::always_callback;
+    use crate::core::basic_callback;
 
     #[test]
     fn test_callback_order() -> Result<()> {
@@ -509,9 +509,11 @@ mod tests {
             }),
         );
 
-        assert!(chain
-            .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
-            .is_err());
+        assert!(
+            chain
+                .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
+                .is_err()
+        );
 
         assert_eq!(seq.load(Ordering::SeqCst), 13);
 

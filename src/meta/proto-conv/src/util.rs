@@ -214,12 +214,10 @@ pub const MIN_MSG_VER: u64 = 1;
 pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Incompatible> {
     // The reader version must be big enough
     if VER < msg_min_reader_ver {
-        return Err(Incompatible::new(
-            format!(
-                "executable ver={} is smaller than the min reader version({}) that can read this message",
-                VER, msg_min_reader_ver
-            ),
-        ));
+        return Err(Incompatible::new(format!(
+            "executable ver={} is smaller than the min reader version({}) that can read this message",
+            VER, msg_min_reader_ver
+        )));
     }
 
     // The message version must be big enough

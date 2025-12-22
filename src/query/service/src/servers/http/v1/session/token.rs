@@ -19,8 +19,8 @@ use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::Deserialize;
 use serde::Serialize;
 

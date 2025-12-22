@@ -19,8 +19,8 @@ use std::ops::RangeBounds;
 use enum_as_inner::EnumAsInner;
 use nom::Needed;
 
-use crate::parser::token::Token;
 use crate::parser::Backtrace;
+use crate::parser::token::Token;
 
 /// Input tokens slice with a backtrace that records all errors including
 /// the optional branch.

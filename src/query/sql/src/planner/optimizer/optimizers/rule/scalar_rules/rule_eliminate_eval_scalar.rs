@@ -14,6 +14,9 @@
 
 use databend_common_exception::Result;
 
+use crate::ColumnSet;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -23,9 +26,6 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
-use crate::MetadataRef;
-use crate::ScalarExpr;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,

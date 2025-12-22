@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::Lock;

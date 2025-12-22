@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::ALL_FLOAT_TYPES;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
-use databend_common_expression::EvalContext;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
 use num_traits::AsPrimitive;
 
 use crate::arithmetic_modulo::vectorize_modulo;

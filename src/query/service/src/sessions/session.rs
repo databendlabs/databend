@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
-use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
@@ -37,23 +37,23 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
-use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
-use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 
 pub struct Session {
     pub(in crate::sessions) id: String,

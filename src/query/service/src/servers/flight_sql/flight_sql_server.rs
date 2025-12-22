@@ -23,13 +23,13 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
-use tonic::transport::server::TcpIncoming;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tonic::transport::server::TcpIncoming;
 
-use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use crate::servers::Server as DatabendQueryServer;
+use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use crate::sessions::BuildInfoRef;
 
 pub struct FlightSQLServer {

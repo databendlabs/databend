@@ -1142,7 +1142,7 @@ query T
 EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 Sort
-├── sort keys: [default.t1.i (#0) ASC NULLS LAST, default.t1.j (#1) ASC NULLS LAST]
+├── sort keys: [t1.i (#0) ASC NULLS LAST, t1.j (#1) ASC NULLS LAST]
 ├── limit: [NONE]
 └── Join(Left)
     ├── build keys: [t2.k (#2)]

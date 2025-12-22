@@ -28,8 +28,11 @@ use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::Empty;
@@ -45,42 +48,39 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_metrics::count::Count;
 use databend_common_tracing::start_trace_for_remote_request;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
-use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream::TryChunksError;
 use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
-use tonic::codegen::BoxStream;
-use tonic::metadata::MetadataMap;
-use tonic::server::NamedService;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
+use tonic::codegen::BoxStream;
+use tonic::metadata::MetadataMap;
+use tonic::server::NamedService;
 use watcher::watch_stream::WatchStreamSender;
 
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
-use crate::metrics::network_metrics;
 use crate::metrics::InFlightRead;
 use crate::metrics::InFlightWrite;
+use crate::metrics::network_metrics;
+use crate::version::MIN_METACLI_SEMVER;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
-use crate::version::MIN_METACLI_SEMVER;
 
 /// Metrics collector that logs when dropped
 struct MetricsCollector {
@@ -328,6 +328,7 @@ impl MetaService for MetaServiceImpl {
 
     type KvReadV1Stream = BoxStream<StreamItem>;
 
+    #[allow(unused)]
     async fn kv_read_v1(
         &self,
         request: Request<RaftRequest>,
@@ -349,12 +350,12 @@ impl MetaService for MetaServiceImpl {
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
             // MetricsCollector logs metrics when dropped
-            let mut collector = MetricsCollector::new(req_str);
+            let mut _collector = MetricsCollector::new(req_str);
 
             let strm = strm.map(move |item| {
                 let _g = &guard; // hold the guard until the stream is done.
                 network_metrics::incr_stream_sent_item(req_typ);
-                collector.count += 1;
+                _collector.count += 1;
                 item
             });
 

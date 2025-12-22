@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if, clippy::to_string_in_format_args)]
+
 mod storage;
 pub mod utils;
 

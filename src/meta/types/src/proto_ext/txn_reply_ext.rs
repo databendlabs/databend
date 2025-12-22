@@ -19,10 +19,10 @@ use anyerror::AnyError;
 use display_more::DisplaySliceExt;
 use map_api::SeqV;
 
-use crate::protobuf as pb;
-use crate::txn_op_response;
 use crate::Change;
 use crate::InvalidReply;
+use crate::protobuf as pb;
+use crate::txn_op_response;
 
 impl pb::TxnReply {
     pub fn new(execution_path: impl ToString) -> Self {
@@ -184,7 +184,10 @@ mod tests {
         ];
 
         let display_str = reply.to_string();
-        assert_eq!(display_str, "TxnReply{ success: true, responses: [TxnOpResponse: Get: Get-resp: key=key1, prev_seq=Some(1),TxnOpResponse: Put: Put-resp: key=key2, prev_seq=None, current_seq=2,TxnOpResponse: Delete: Delete-resp: success: true, key=key3, prev_seq=None] }");
+        assert_eq!(
+            display_str,
+            "TxnReply{ success: true, responses: [TxnOpResponse: Get: Get-resp: key=key1, prev_seq=Some(1),TxnOpResponse: Put: Put-resp: key=key2, prev_seq=None, current_seq=2,TxnOpResponse: Delete: Delete-resp: success: true, key=key3, prev_seq=None] }"
+        );
     }
 
     #[test]
@@ -341,10 +344,11 @@ mod tests {
         reply.responses = vec![pb::TxnOpResponse { response: None }];
 
         let res = reply.into_upsert_reply();
-        assert!(res
-            .unwrap_err()
-            .to_string()
-            .contains("Empty response in TxnReply"));
+        assert!(
+            res.unwrap_err()
+                .to_string()
+                .contains("Empty response in TxnReply")
+        );
     }
 
     #[test]
@@ -381,9 +385,10 @@ mod tests {
         let reply = pb::TxnReply::new("operation:0");
         // responses vector is empty by default
         let res = reply.into_upsert_reply();
-        assert!(res
-            .unwrap_err()
-            .to_string()
-            .contains("No responses in TxnReply"));
+        assert!(
+            res.unwrap_err()
+                .to_string()
+                .contains("No responses in TxnReply")
+        );
     }
 }

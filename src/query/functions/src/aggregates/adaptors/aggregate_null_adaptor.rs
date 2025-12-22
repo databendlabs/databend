@@ -17,16 +17,16 @@ use std::sync::Arc;
 
 use databend_common_base::hints::assume;
 use databend_common_exception::Result;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::utils::column_merge_validity;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -215,7 +215,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.drop_state(place);
+        unsafe { self.0.drop_state(place) };
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -348,7 +348,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.drop_state(place);
+        unsafe { self.0.drop_state(place) };
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -638,7 +638,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return self.nested.merge_result(place, read_only, builder);
         }
 
-        let ColumnBuilder::Nullable(ref mut inner) = builder else {
+        let ColumnBuilder::Nullable(inner) = builder else {
             unreachable!()
         };
 
@@ -654,9 +654,9 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
     unsafe fn drop_state(&self, place: AggrState) {
         if !NULLABLE_RESULT {
-            self.nested.drop_state(place)
+            unsafe { self.nested.drop_state(place) }
         } else {
-            self.nested.drop_state(place.remove_last_loc())
+            unsafe { self.nested.drop_state(place.remove_last_loc()) }
         }
     }
 

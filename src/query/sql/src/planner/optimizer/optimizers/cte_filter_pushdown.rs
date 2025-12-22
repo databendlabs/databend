@@ -19,12 +19,12 @@ use async_trait::async_trait;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;

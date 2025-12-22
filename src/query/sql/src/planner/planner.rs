@@ -24,13 +24,13 @@ use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -44,15 +44,15 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
-use crate::planner::QueryExecutor;
-use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
+use crate::optimizer::OptimizerContext;
+use crate::optimizer::optimize;
+use crate::planner::QueryExecutor;
+use crate::plans::Plan;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 
@@ -146,7 +146,9 @@ impl Planner {
                 .collect::<databend_common_ast::Result<_>>()
                 .unwrap()
         } else {
-            (&mut tokenizer).collect::<databend_common_ast::Result<_>>()?
+            (&mut tokenizer)
+                .collect::<databend_common_ast::Result<_>>()
+                .map_err(ErrorCode::from)?
         };
         let session_type = self.ctx.get_session_type();
         let in_streaming_load = session_type == SessionType::HTTPStreamingLoad;
@@ -156,13 +158,17 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
                     (
-                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)?,
+                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)
+                            .map_err(ErrorCode::from)?,
                         None,
                     )
                 } else if is_replace_stmt {
-                    (parse_raw_replace_stmt(&tokens, sql_dialect)?, None)
+                    (
+                        parse_raw_replace_stmt(&tokens, sql_dialect).map_err(ErrorCode::from)?,
+                        None,
+                    )
                 } else {
-                    parse_sql(&tokens, sql_dialect)?
+                    parse_sql(&tokens, sql_dialect).map_err(ErrorCode::from)?
                 };
                 if !matches!(stmt, Statement::SetStmt { .. })
                     && sql_dialect == Dialect::PRQL

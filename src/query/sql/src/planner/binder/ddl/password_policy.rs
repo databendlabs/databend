@@ -15,15 +15,15 @@
 use databend_common_ast::ast::*;
 use databend_common_exception::Result;
 
-use crate::binder::show::get_show_options;
+use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::show::get_show_options;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
 
 impl Binder {
     #[async_backtrace::framed]

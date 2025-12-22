@@ -15,20 +15,20 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::plans::BoundColumnRef;
-use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::Visibility;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::plans::BoundColumnRef;
+use databend_common_sql::plans::FunctionCall;
 use itertools::Itertools;
 use rand::Rng;
 

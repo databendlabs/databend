@@ -28,12 +28,12 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
+use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::Planner;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::DefaultExprBinder;
-use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -43,10 +43,10 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
-use crate::interpreters::interpreter_table_create::is_valid_column;
-use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
+use crate::interpreters::interpreter_table_create::is_valid_column;
+use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

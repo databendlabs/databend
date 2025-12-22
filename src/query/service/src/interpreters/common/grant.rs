@@ -125,7 +125,7 @@ pub async fn validate_grant_object_exists(
             return match ctx.get_connection(c).await {
                 Ok(_c) => Ok(()),
                 Err(e) => Err(e),
-            }
+            };
         }
         GrantObject::Sequence(c) => {
             let catalog = ctx.get_default_catalog()?;

@@ -15,21 +15,21 @@
 use std::io::BufRead;
 use std::io::BufReader;
 
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::*;
+use databend_common_native::ColumnMeta;
+use databend_common_native::CommonCompression;
+use databend_common_native::PageMeta;
 use databend_common_native::n_columns;
 use databend_common_native::read::batch_read::batch_read_column;
 use databend_common_native::read::deserialize::column_iters;
 use databend_common_native::read::reader::NativeReader;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
-use databend_common_native::ColumnMeta;
-use databend_common_native::CommonCompression;
-use databend_common_native::PageMeta;
 
 pub const WRITE_PAGE: usize = 2048;
 pub const SMALL_WRITE_PAGE: usize = 2;

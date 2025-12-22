@@ -23,11 +23,11 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Scalar;
+use crate::types::DecimalSize;
 use crate::types::decimal::DecimalScalar;
 use crate::types::i256;
 use crate::types::number::NumberScalar;
-use crate::types::DecimalSize;
-use crate::Scalar;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, EnumAsInner)]
 pub enum IndexDecimalScalar {

@@ -31,8 +31,8 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadMgr;
-use databend_common_meta_api::data_mask_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
+use databend_common_meta_api::data_mask_api::DatamaskApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GetProcedureReq;
@@ -46,6 +46,8 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_users::UserApiProvider;
 
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::plans::AlterUserPlan;
@@ -56,8 +58,6 @@ use crate::plans::Plan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::Binder;
 
 impl Binder {
     #[async_backtrace::framed]

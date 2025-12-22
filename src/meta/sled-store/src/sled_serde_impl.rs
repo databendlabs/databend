@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
@@ -20,8 +22,6 @@ use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::Vote;
-use databend_common_meta_types::SeqNum;
-use databend_common_meta_types::SeqV;
 use state_machine_api::ExpireValue;
 
 use crate::SledBytesError;

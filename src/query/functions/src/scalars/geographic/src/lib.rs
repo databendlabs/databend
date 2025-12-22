@@ -14,8 +14,10 @@
 
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if)]
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::redundant_iter_cloned)]
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]

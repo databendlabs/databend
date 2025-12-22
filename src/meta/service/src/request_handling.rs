@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_client::RequestFor;
-use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::MetaOperationError;
+use databend_common_meta_types::raft_types::NodeId;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;

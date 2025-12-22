@@ -20,11 +20,11 @@ use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::DatabaseMeta {
     type PB = pb::DatabaseMeta;

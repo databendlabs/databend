@@ -17,6 +17,8 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_exception::Result;
 
+use crate::IndexType;
+use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -29,8 +31,6 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
-use crate::IndexType;
-use crate::Visibility;
 
 // For a union query, it's not allowed to add `filter` after union
 // Such as: `(select * from t1 union all select * from t2) where a > 1`, it's invalid.

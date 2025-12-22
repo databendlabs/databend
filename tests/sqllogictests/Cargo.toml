@@ -1,14 +1,15 @@
 [package]
-authors = ["Databend Authors <opensource@datafuselabs.com>"]
 categories = ["command-line-utilities", "development-tools::build-utils"]
 description = "Databend-Sqllogictests is a testing tool to verify the correctness of Databend."
-edition = "2021"
 keywords = ["sqllogictest"]
-license = "Apache-2.0"
 name = "databend-sqllogictests"
+
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
 readme = "README.md"
-repository = "https://github.com/datafuselabs/databend/"
-version = "0.1.0"
 
 [[bin]]
 name = "databend-sqllogictests"

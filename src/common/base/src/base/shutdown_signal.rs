@@ -19,15 +19,15 @@ use std::task::Poll;
 use databend_common_exception::Result;
 use futures::Stream;
 #[cfg(not(target_os = "windows"))]
-use tokio::signal::unix::signal;
-#[cfg(not(target_os = "windows"))]
 use tokio::signal::unix::Signal;
 #[cfg(not(target_os = "windows"))]
 use tokio::signal::unix::SignalKind;
-#[cfg(target_os = "windows")]
-use tokio::signal::windows::ctrl_c;
+#[cfg(not(target_os = "windows"))]
+use tokio::signal::unix::signal;
 #[cfg(target_os = "windows")]
 use tokio::signal::windows::CtrlC;
+#[cfg(target_os = "windows")]
+use tokio::signal::windows::ctrl_c;
 
 pub enum SignalType {
     Hangup,

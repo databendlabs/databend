@@ -123,10 +123,10 @@ impl HttpClient {
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
 
         // Enable TCP keepalive if set.
-        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
-            if let Ok(v) = v.parse::<u64>() {
-                builder = builder.tcp_keepalive(Duration::from_secs(v));
-            }
+        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE")
+            && let Ok(v) = v.parse::<u64>()
+        {
+            builder = builder.tcp_keepalive(Duration::from_secs(v));
         }
 
         let client = builder.build().expect("http client must be created");

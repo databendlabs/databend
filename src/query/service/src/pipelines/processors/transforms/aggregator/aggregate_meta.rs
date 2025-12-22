@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfo;
@@ -31,6 +30,7 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::types::DataType;
 use parquet::file::metadata::RowGroupMetaData;
 
 pub struct SerializedPayload {

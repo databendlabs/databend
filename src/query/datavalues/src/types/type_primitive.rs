@@ -26,7 +26,7 @@ pub struct PrimitiveDataType<T: Clone + Copy + std::fmt::Debug + serde::Serializ
 }
 
 macro_rules! impl_numeric {
-    ($ty:ident, $tname:ident, $name: expr, $sql_name:expr, $alias: expr) => {
+    ($ty:ident, $tname:ident, $name: expr_2021, $sql_name:expr_2021, $alias: expr_2021) => {
         impl PrimitiveDataType<$ty> {
             pub fn new_impl() -> DataTypeImpl {
                 DataTypeImpl::$tname(Self { _t: PhantomData })

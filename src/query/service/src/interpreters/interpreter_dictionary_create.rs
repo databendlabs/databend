@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_ast::ast::CreateOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_sql::plans::CreateDictionaryPlan;
 
 use crate::interpreters::Interpreter;

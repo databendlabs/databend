@@ -15,6 +15,8 @@
 mod dwarf;
 mod dwarf_inline_functions;
 mod dwarf_subprogram;
+
+#[allow(clippy::collapsible_if)]
 mod dwarf_unit;
 mod library_loader;
 mod library_manager;

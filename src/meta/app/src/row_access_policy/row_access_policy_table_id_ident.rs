@@ -78,8 +78,8 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
     use crate::row_access_policy::RowAccessPolicyTableIdIdent;
+    use crate::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
     use crate::tenant::Tenant;
 
     #[test]

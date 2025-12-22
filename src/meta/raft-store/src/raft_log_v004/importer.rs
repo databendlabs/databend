@@ -18,10 +18,10 @@ use databend_common_meta_types::raft_types::LogId;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 
 use crate::key_spaces::RaftStoreEntry;
+use crate::raft_log_v004::RaftLogV004;
 use crate::raft_log_v004::codec_wrapper::Cw;
 use crate::raft_log_v004::log_store_meta::LogStoreMeta;
 use crate::raft_log_v004::util;
-use crate::raft_log_v004::RaftLogV004;
 
 /// Import series of [`RaftStoreEntry`] record into [`RaftLogV004`].
 ///

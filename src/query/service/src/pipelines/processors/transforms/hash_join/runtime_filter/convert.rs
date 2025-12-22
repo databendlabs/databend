@@ -23,16 +23,16 @@ use databend_common_catalog::sbbf::Sbbf;
 use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDomain;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::Constant;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::builder::should_enable_runtime_filter;
@@ -250,7 +250,7 @@ fn build_min_max_filter(
             return Err(ErrorCode::UnsupportedDataType(format!(
                 "Unsupported domain {:?} for runtime filter",
                 min_max,
-            )))
+            )));
         }
     };
     Ok(min_max_filter)
@@ -305,8 +305,6 @@ async fn build_bloom_filter(
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
@@ -315,6 +313,8 @@ mod tests {
     use databend_common_expression::Expr;
     use databend_common_expression::FunctionContext;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_functions::BUILTIN_FUNCTIONS;
 
     use super::build_inlist_filter;
@@ -466,7 +466,9 @@ mod tests {
                 scalar: Scalar::Boolean(false),
                 ..
             }) => {
-                println!("✓ Test passed: column_b in [2000,3000] correctly evaluated to false for 1024 elements");
+                println!(
+                    "✓ Test passed: column_b in [2000,3000] correctly evaluated to false for 1024 elements"
+                );
             }
             _ => {
                 panic!(
@@ -476,6 +478,8 @@ mod tests {
             }
         }
 
-        println!("✓ Large inlist filter test (1024 elements) passed - balanced binary tree working correctly");
+        println!(
+            "✓ Large inlist filter test (1024 elements) passed - balanced binary tree working correctly"
+        );
     }
 }

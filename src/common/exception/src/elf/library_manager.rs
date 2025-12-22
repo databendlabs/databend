@@ -21,10 +21,10 @@ use std::sync::Arc;
 use object::Object;
 use once_cell::sync::OnceCell;
 
+use crate::elf::ElfFile;
 use crate::elf::dwarf::Dwarf;
 use crate::elf::library_loader::LibraryLoader;
 use crate::elf::library_symbol::Symbol;
-use crate::elf::ElfFile;
 use crate::exception_backtrace::PhysicalAddr;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
@@ -111,10 +111,10 @@ impl LibraryManager {
 
     fn find_library_by_build_id(&self, build_id: &Arc<Vec<u8>>) -> Option<&Library> {
         for library in &self.libraries {
-            if let Some(v) = &library.build_id {
-                if v == build_id {
-                    return Some(library);
-                }
+            if let Some(v) = &library.build_id
+                && v == build_id
+            {
+                return Some(library);
             }
         }
 

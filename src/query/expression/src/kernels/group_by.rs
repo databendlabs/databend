@@ -14,17 +14,17 @@
 
 use databend_common_exception::Result;
 
+use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKeysU16;
 use super::group_by_hash::HashMethodKeysU32;
 use super::group_by_hash::HashMethodKeysU64;
-use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
 use super::group_by_hash::HashMethodSingleBinary;
-use crate::types::DataType;
 use crate::DataBlock;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
+use crate::types::DataType;
 
 impl DataBlock {
     pub fn choose_hash_method(block: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {

@@ -19,10 +19,10 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::ops::Not;
 
+use super::Bitmap;
 use super::utils::BitChunk;
 use super::utils::BitChunkIterExact;
 use super::utils::BitChunksExact;
-use super::Bitmap;
 use crate::bitmap::MutableBitmap;
 
 /// Creates a [Vec<u8>] from an [`Iterator`] of [`BitChunk`].
@@ -31,27 +31,29 @@ use crate::bitmap::MutableBitmap;
 pub unsafe fn from_chunk_iter_unchecked<T: BitChunk, I: Iterator<Item = T>>(
     iterator: I,
 ) -> Vec<u8> {
-    let (_, upper) = iterator.size_hint();
-    let upper = upper.expect("try_from_trusted_len_iter requires an upper limit");
-    let len = upper * std::mem::size_of::<T>();
+    unsafe {
+        let (_, upper) = iterator.size_hint();
+        let upper = upper.expect("try_from_trusted_len_iter requires an upper limit");
+        let len = upper * std::mem::size_of::<T>();
 
-    let mut buffer = Vec::with_capacity(len);
+        let mut buffer = Vec::with_capacity(len);
 
-    let mut dst = buffer.as_mut_ptr();
-    for item in iterator {
-        let bytes = item.to_ne_bytes();
-        for i in 0..std::mem::size_of::<T>() {
-            std::ptr::write(dst, bytes[i]);
-            dst = dst.add(1);
+        let mut dst = buffer.as_mut_ptr();
+        for item in iterator {
+            let bytes = item.to_ne_bytes();
+            for i in 0..std::mem::size_of::<T>() {
+                std::ptr::write(dst, bytes[i]);
+                dst = dst.add(1);
+            }
         }
+        assert_eq!(
+            dst.offset_from(buffer.as_ptr()) as usize,
+            len,
+            "Trusted iterator length was not accurately reported"
+        );
+        buffer.set_len(len);
+        buffer
     }
-    assert_eq!(
-        dst.offset_from(buffer.as_ptr()) as usize,
-        len,
-        "Trusted iterator length was not accurately reported"
-    );
-    buffer.set_len(len);
-    buffer
 }
 
 /// Creates a [`Vec<u8>`] from a [`TrustedLen`] of [`BitChunk`].

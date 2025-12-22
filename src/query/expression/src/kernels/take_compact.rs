@@ -17,15 +17,15 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
+use crate::BlockEntry;
+use crate::ColumnBuilder;
+use crate::DataBlock;
+use crate::Value;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
-use crate::BlockEntry;
-use crate::ColumnBuilder;
-use crate::DataBlock;
-use crate::Value;
 
 impl DataBlock {
     pub fn take_compacted_indices(&self, indices: &[(u32, u32)], num_rows: usize) -> Result<Self> {

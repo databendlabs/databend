@@ -14,8 +14,8 @@
 
 use databend_common_expression::Scalar;
 
-use crate::plans::ConstantExpr;
 use crate::ScalarExpr;
+use crate::plans::ConstantExpr;
 
 pub fn is_true(predicate: &ScalarExpr) -> bool {
     matches!(

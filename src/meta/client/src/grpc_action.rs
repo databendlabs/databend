@@ -23,6 +23,11 @@ use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::InvalidArgument;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::MemberListReply;
@@ -30,15 +35,11 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
 use log::debug;
-use tonic::codegen::BoxStream;
 use tonic::Request;
+use tonic::codegen::BoxStream;
 
+use crate::InitFlag;
 use crate::established_client::EstablishedClient;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
@@ -47,7 +48,6 @@ use crate::message::GetEndpoints;
 use crate::message::GetMemberList;
 use crate::message::MakeEstablishedClient;
 use crate::message::Streamed;
-use crate::InitFlag;
 
 /// Bind a request type to its corresponding response type.
 pub trait RequestFor: Clone + fmt::Debug {

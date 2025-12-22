@@ -23,9 +23,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_sql::Planner;
 use databend_common_sql::binder::parse_uri_location;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::Planner;
 use log::info;
 
 use crate::history_tables::external::ExternalStorageConnection;
@@ -160,7 +160,7 @@ pub async fn should_reset(
                 current_storage_params, new_storage_params
             );
             return Err(ErrorCode::InvalidConfig(
-                "Cannot change storage parameters of external history table, please drop the tables and stage first."
+                "Cannot change storage parameters of external history table, please drop the tables and stage first.",
             ));
         }
     }

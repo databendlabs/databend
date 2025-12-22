@@ -13,23 +13,25 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::geometry::GeometryType;
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
-use databend_common_expression::EvalContext;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
+use databend_common_io::Axis;
+use databend_common_io::Extremum;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -41,10 +43,6 @@ use databend_common_io::geometry_format;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::geometry_type_name;
 use databend_common_io::read_srid;
-use databend_common_io::Axis;
-use databend_common_io::Extremum;
-use geo::coord;
-use geo::dimensions::Dimensions;
 use geo::Area;
 use geo::BoundingRect;
 use geo::Contains;
@@ -67,19 +65,21 @@ use geo::ToDegrees;
 use geo::ToRadians;
 use geo::Triangle;
 use geo::Within;
+use geo::coord;
+use geo::dimensions::Dimensions;
 use geohash::decode_bbox;
 use geohash::encode;
-use geozero::geojson::GeoJson;
-use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
 use geozero::ToGeo;
 use geozero::ToWkb;
-use jsonb::parse_owned_jsonb_with_buf;
+use geozero::geojson::GeoJson;
+use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
+use jsonb::parse_owned_jsonb_with_buf;
 use num_traits::AsPrimitive;
-use proj4rs::transform::transform;
 use proj4rs::Proj;
+use proj4rs::transform::transform;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases

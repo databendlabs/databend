@@ -40,6 +40,14 @@ use super::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
+use crate::Column;
+use crate::ColumnId;
+use crate::DataBlock;
+use crate::DataField;
+use crate::DataSchema;
+use crate::TableDataType;
+use crate::TableField;
+use crate::TableSchema;
 use crate::infer_table_schema;
 use crate::schema::is_internal_column_id;
 use crate::types::DataType;
@@ -50,14 +58,6 @@ use crate::types::NumberDataType;
 use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::with_number_type;
-use crate::Column;
-use crate::ColumnId;
-use crate::DataBlock;
-use crate::DataField;
-use crate::DataSchema;
-use crate::TableDataType;
-use crate::TableField;
-use crate::TableSchema;
 
 impl From<&DataSchema> for Schema {
     fn from(schema: &DataSchema) -> Self {

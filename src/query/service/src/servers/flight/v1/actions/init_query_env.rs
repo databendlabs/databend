@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadGroupResourceManager;

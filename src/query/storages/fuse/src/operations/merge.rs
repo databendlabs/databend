@@ -27,11 +27,11 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
-use crate::io::create_inverted_index_builders;
+use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::VectorIndexBuilder;
+use crate::io::create_inverted_index_builders;
 use crate::statistics::ClusterStatsGenerator;
-use crate::FuseTable;
 
 impl FuseTable {
     // todo: (JackTan25) add pipeline picture

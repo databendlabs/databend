@@ -18,19 +18,19 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::StringType;
 use databend_storages_common_cache::CacheManager;
 
-use crate::table_functions::string_literal;
-use crate::table_functions::string_value;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::TableArgs;
+use crate::table_functions::string_literal;
+use crate::table_functions::string_value;
 
 #[derive(Clone)]
 pub struct SetCapacity {

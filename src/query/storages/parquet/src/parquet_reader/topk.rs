@@ -16,18 +16,18 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::TopK;
 use databend_common_exception::Result;
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::Column;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TopKSorter;
-use parquet::arrow::parquet_to_arrow_field_levels;
+use databend_common_expression::types::Bitmap;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::schema::types::SchemaDescriptor;
 
-use super::utils::compute_output_field_paths;
 use super::utils::FieldPaths;
+use super::utils::compute_output_field_paths;
 
 pub struct ParquetTopK {
     projection: ProjectionMask,

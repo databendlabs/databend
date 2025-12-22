@@ -15,15 +15,15 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::intrinsics::unlikely;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
+use databend_common_expression::local_block_meta_serde;
 
 use crate::processors::BlockMetaTransform;
 use crate::processors::UnknownMode;

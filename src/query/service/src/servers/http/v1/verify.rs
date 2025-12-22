@@ -14,9 +14,9 @@
 
 use databend_common_users::UserApiProvider;
 use jwt_simple::prelude::Serialize;
+use poem::IntoResponse;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
-use poem::IntoResponse;
 
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;

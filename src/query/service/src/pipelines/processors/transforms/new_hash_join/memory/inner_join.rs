@@ -21,27 +21,27 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NullableColumn;
-use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::with_join_hash_method;
 
+use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
-use crate::pipelines::processors::transforms::HashJoinHashTable;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
 pub struct InnerHashJoin {

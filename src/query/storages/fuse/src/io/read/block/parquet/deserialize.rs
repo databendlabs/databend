@@ -19,10 +19,10 @@ use arrow_schema::Schema;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;

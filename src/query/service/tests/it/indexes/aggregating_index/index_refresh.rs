@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if)]
+
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -25,16 +27,16 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::assert_two_blocks_sorted_eq_with_name;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::block_debug::assert_two_blocks_sorted_eq_with_name;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexType;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::AggregatingIndexRewriter;
 use databend_common_sql::Planner;
+use databend_common_sql::plans::Plan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;

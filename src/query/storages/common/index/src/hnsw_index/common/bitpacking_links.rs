@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::bitpacking::packed_bits;
 use super::bitpacking::BitReader;
 use super::bitpacking::BitWriter;
+use super::bitpacking::packed_bits;
 
 /// To simplify value counting, each value should be at least one byte.
 /// Otherwise the count could would be ambiguous, e.g., a 2-byte slice of 5-bit
@@ -82,7 +82,7 @@ pub fn iterate_packed_links(
     links: &[u8],
     bits_per_unsorted: u8,
     sorted_count: usize,
-) -> PackedLinksIterator {
+) -> PackedLinksIterator<'_> {
     let mut reader = BitReader::new(links);
 
     let mut remaining_bits = links.len() * u8::BITS as usize;

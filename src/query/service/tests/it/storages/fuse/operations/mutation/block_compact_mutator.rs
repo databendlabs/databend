@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#![allow(clippy::manual_is_multiple_of)]
+
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -44,8 +46,8 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 

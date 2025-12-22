@@ -21,11 +21,6 @@ use std::sync::Arc;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::*;
-use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -33,15 +28,13 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_unsigned_integer_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::aggregate_quantile_tdigest::QuantileTDigestState;
-use super::aggregate_quantile_tdigest::MEDIAN;
-use super::aggregate_quantile_tdigest::QUANTILE;
-use super::assert_binary_arguments;
-use super::assert_params;
-use super::borsh_partial_deserialize;
-use super::get_levels;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -49,6 +42,13 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::aggregate_quantile_tdigest::MEDIAN;
+use super::aggregate_quantile_tdigest::QUANTILE;
+use super::aggregate_quantile_tdigest::QuantileTDigestState;
+use super::assert_binary_arguments;
+use super::assert_params;
+use super::borsh_partial_deserialize;
+use super::get_levels;
 
 #[derive(Clone)]
 pub struct AggregateQuantileTDigestWeightedFunction<T0, T1> {
@@ -212,7 +212,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<QuantileTDigestState>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

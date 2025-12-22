@@ -16,14 +16,14 @@ use std::str::FromStr;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::VariantType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::VariantDataType;
-use databend_common_storages_fuse::io::VirtualColumnBuilder;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::VariantType;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::VirtualColumnBuilder;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;

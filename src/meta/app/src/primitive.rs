@@ -114,11 +114,11 @@ mod prost_message_impl {
     use std::ops::Deref;
     use std::ops::DerefMut;
 
+    use prost::DecodeError;
     use prost::bytes::Buf;
     use prost::bytes::BufMut;
     use prost::encoding::DecodeContext;
     use prost::encoding::WireType;
-    use prost::DecodeError;
 
     use crate::primitive::Id;
 

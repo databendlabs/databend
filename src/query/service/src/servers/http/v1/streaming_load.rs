@@ -18,9 +18,9 @@ databend_common_tracing::register_module_tag!("[HTTP-STREAMING-LOAD]");
 use std::future::Future;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io::AsyncReadExt;
-use databend_common_base::base::ProgressValues;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
@@ -31,9 +31,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_sql::Planner;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::Planner;
 use databend_common_storages_stage::BytesBatch;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
@@ -42,14 +42,14 @@ use http::StatusCode;
 use log::debug;
 use log::info;
 use log::warn;
+use poem::IntoResponse;
+use poem::Request;
+use poem::Response;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Multipart;
-use poem::IntoResponse;
-use poem::Request;
-use poem::Response;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
@@ -113,24 +113,23 @@ pub async fn streaming_load_handler(
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     let _tracking_guard = ThreadTracker::tracking(tracking_payload);
     let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);
-    let mut session_conf: Option<HttpSessionConf> = match req.headers().get(HEADER_QUERY_CONTEXT) {
-        Some(v) => {
-            let s = v.to_str().unwrap().to_string();
-            match serde_json::from_str(s.trim()) {
-                Ok(s) => Some(s),
-                Err(e) => {
-                    return poem::Error::from_string(
+    let mut session_conf: Option<HttpSessionConf> =
+        match req.headers().get(HEADER_QUERY_CONTEXT) {
+            Some(v) => {
+                let s = v.to_str().unwrap().to_string();
+                match serde_json::from_str(s.trim()) {
+                    Ok(s) => Some(s),
+                    Err(e) => return poem::Error::from_string(
                         format!(
                             "invalid value for header {HEADER_QUERY_CONTEXT}({s}) in request: {e}"
                         ),
                         StatusCode::BAD_REQUEST,
                     )
-                    .into_response()
+                    .into_response(),
                 }
             }
-        }
-        None => None,
-    };
+            None => None,
+        };
     let res = ThreadTracker::tracking_future(
         streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
             .in_span(root),
@@ -227,52 +226,61 @@ async fn streaming_load_handler_inner(
         as usize;
 
     match &mut plan {
-        Plan::Insert(insert) => {
-            match &mut insert.source {
-                InsertInputSource::StreamingLoad(streaming_load)
-                 => {
-                    if !streaming_load.file_format.support_streaming_load() {
-                        return Err(poem::Error::from_string( format!( "Unsupported file format: {}", streaming_load.file_format.get_type() ), StatusCode::BAD_REQUEST));
-                    }
-                    let (tx, rx) = tokio::sync::mpsc::channel(1);
-                    *streaming_load.receiver.lock() = Some(rx);
+        Plan::Insert(insert) => match &mut insert.source {
+            InsertInputSource::StreamingLoad(streaming_load) => {
+                if !streaming_load.file_format.support_streaming_load() {
+                    return Err(poem::Error::from_string(
+                        format!(
+                            "Unsupported file format: {}",
+                            streaming_load.file_format.get_type()
+                        ),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                }
+                let (tx, rx) = tokio::sync::mpsc::channel(1);
+                *streaming_load.receiver.lock() = Some(rx);
 
-                    let format = streaming_load.file_format.clone();
-                    let handler = query_context.spawn(execute_query(http_context.clone(), query_context.clone(), plan, mem_stat));
-                    read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
+                let format = streaming_load.file_format.clone();
+                let handler = query_context.spawn(execute_query(
+                    http_context.clone(),
+                    query_context.clone(),
+                    plan,
+                    mem_stat,
+                ));
+                read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
-                    match handler.await {
-                        Ok(Ok(_)) => Ok(Json(LoadResponse {
-                            id: http_context.query_id.clone(),
-                            stats: query_context.get_write_progress().get_values(),
-                        })),
-                        Ok(Err(cause)) => {
-                            info!("Query execution failed: {:?}", cause);
-                            Err(poem::Error::from_string(
+                match handler.await {
+                    Ok(Ok(_)) => Ok(Json(LoadResponse {
+                        id: http_context.query_id.clone(),
+                        stats: query_context.get_write_progress().get_values(),
+                    })),
+                    Ok(Err(cause)) => {
+                        info!("Query execution failed: {:?}", cause);
+                        Err(poem::Error::from_string(
                             format!(
                                 "Query execution failed: {}",
                                 cause.display_with_sql(sql).message()
                             ),
                             StatusCode::BAD_REQUEST,
-                        ))},
-                        Err(err) => {
-                            info!("Internal server error: {:?}", err);
-                            Err(poem::Error::from_string(
-                                "Internal server error: execution thread panicked",
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                            ))
-                        },
+                        ))
+                    }
+                    Err(err) => {
+                        info!("Internal server error: {:?}", err);
+                        Err(poem::Error::from_string(
+                            "Internal server error: execution thread panicked",
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                        ))
                     }
                 }
-                _non_supported_source => Err(poem::Error::from_string(
-                    format!(
-                        "Unsupported INSERT source. Streaming upload only supports 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)'. Got: {}",
-                        plan
-                    ),
-                    StatusCode::BAD_REQUEST,
-                )),
             }
-        }
+            _non_supported_source => Err(poem::Error::from_string(
+                format!(
+                    "Unsupported INSERT source. Streaming upload only supports 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)'. Got: {}",
+                    plan
+                ),
+                StatusCode::BAD_REQUEST,
+            )),
+        },
         non_insert_plan => Err(poem::Error::from_string(
             format!(
                 "Only INSERT statements are supported in streaming load. Got: {}",

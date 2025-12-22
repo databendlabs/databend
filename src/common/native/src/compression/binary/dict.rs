@@ -21,16 +21,15 @@ use databend_common_column::types::Index;
 
 use super::BinaryCompression;
 use super::BinaryStats;
+use crate::compression::Compression;
 use crate::compression::get_bits_needed;
-use crate::compression::integer::compress_integer;
-use crate::compression::integer::decompress_integer;
 use crate::compression::integer::Dict;
 use crate::compression::integer::DictEncoder;
+use crate::compression::integer::compress_integer;
+use crate::compression::integer::decompress_integer;
 use crate::compression::is_valid;
-use crate::compression::Compression;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 

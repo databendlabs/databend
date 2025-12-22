@@ -20,12 +20,12 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::FlightCompression;
 
 use super::exchange_params::MergeExchangeParams;
-use crate::servers::flight::v1::exchange::serde::TransformExchangeDeserializer;
-use crate::servers::flight::v1::exchange::serde::TransformExchangeSerializer;
-use crate::servers::flight::v1::exchange::serde::TransformScatterExchangeSerializer;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::exchange::serde::TransformExchangeDeserializer;
+use crate::servers::flight::v1::exchange::serde::TransformExchangeSerializer;
+use crate::servers::flight::v1::exchange::serde::TransformScatterExchangeSerializer;
 use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;

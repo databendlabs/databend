@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::base::Profiling;
+use databend_common_base::base::tokio::time::Duration;
 use log::debug;
+use poem::IntoResponse;
 use poem::error::InternalServerError;
 use poem::web::Query;
-use poem::IntoResponse;
 
 use crate::debug::PProfRequest;
 

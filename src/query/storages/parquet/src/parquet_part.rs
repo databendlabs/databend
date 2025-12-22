@@ -169,7 +169,7 @@ fn collect_small_file_parts(
         // there are no large files, so we choose a default value.
         max_compressed_size = 128u64 << 20;
     }
-    let mut num_small_files = small_files.len();
+    let num_small_files = small_files.len();
     stats.read_rows += num_small_files;
     let mut small_part = vec![];
     let mut part_size = 0;
@@ -186,9 +186,6 @@ fn collect_small_file_parts(
         if !small_part.is_empty()
             && (part_size > max_compressed_size || small_part.len() >= max_files || is_last)
         {
-            // turn small_parts into ParquetPart::ParquetSmallFiles
-            num_small_files -= small_part.len();
-
             let files = small_part
                 .iter()
                 .cloned()

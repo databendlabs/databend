@@ -21,11 +21,11 @@ use std::marker::PhantomData;
 
 use thiserror::Error;
 
-use crate::exception_backtrace::capture;
-use crate::span::pretty_print_error;
-use crate::span::Span;
 use crate::ErrorFrame;
 use crate::StackTrace;
+use crate::exception_backtrace::capture;
+use crate::span::Span;
+use crate::span::pretty_print_error;
 
 #[derive(Error)]
 pub struct ErrorCode<C = ()> {

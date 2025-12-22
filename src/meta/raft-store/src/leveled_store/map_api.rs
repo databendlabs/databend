@@ -16,11 +16,11 @@ use std::fmt;
 use std::fmt::Write;
 use std::io;
 
+pub use map_api::BeforeAfter;
+pub use map_api::IOResultStream;
 pub use map_api::map_key::MapKey;
 pub use map_api::map_value::MapValue;
 use map_api::mvcc;
-pub use map_api::BeforeAfter;
-pub use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;

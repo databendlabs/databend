@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
@@ -47,13 +47,13 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
 
-use crate::io::write_data;
+use crate::FuseStorageFormat;
+use crate::FuseTable;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
-use crate::FuseStorageFormat;
-use crate::FuseTable;
+use crate::io::write_data;
 
 impl FuseTable {
     // The big picture of refresh inverted index into pipeline:

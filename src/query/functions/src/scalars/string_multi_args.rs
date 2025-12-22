@@ -14,15 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_expression::passthrough_nullable;
-use databend_common_expression::types::array::ArrayColumnBuilder;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -34,6 +25,15 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::passthrough_nullable;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::*;
 use regex::Match;
 use string::StringColumnBuilder;
 

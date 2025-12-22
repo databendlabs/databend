@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::types::*;
 use databend_common_formats::column_from_json;
 use goldenfile::Mint;
 

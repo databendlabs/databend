@@ -13,10 +13,13 @@
 // limitations under the License.
 
 #![allow(internal_features)]
-#![allow(clippy::unconditional_recursion)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::let_and_return,
+    clippy::unconditional_recursion
+)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![feature(let_chains)]
 #![feature(iter_map_windows)]
 #![feature(assert_matches)]
 #![feature(debug_closure_helpers)]

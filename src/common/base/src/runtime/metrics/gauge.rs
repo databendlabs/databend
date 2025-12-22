@@ -14,14 +14,14 @@
 
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::encoding::MetricEncoder;
-use prometheus_client::metrics::gauge::Gauge as PGauge;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
+use prometheus_client::metrics::gauge::Gauge as PGauge;
 
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
-use crate::runtime::metrics::ScopedRegistry;
 
 #[derive(Debug)]
 pub struct Gauge {

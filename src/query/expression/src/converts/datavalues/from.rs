@@ -15,13 +15,13 @@
 use databend_common_datavalues::DataTypeImpl;
 use databend_common_datavalues::DataValue;
 
-use crate::types::number::NumberScalar;
-use crate::types::*;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
+use crate::types::number::NumberScalar;
+use crate::types::*;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     !matches!(

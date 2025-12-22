@@ -20,13 +20,13 @@ use itertools::Itertools;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowLayout;
-use crate::get_states_layout;
-use crate::types::DataType;
 use crate::AggregateFunctionRef;
+use crate::BATCH_SIZE;
 use crate::PayloadFlushState;
 use crate::ProjectedBlock;
 use crate::StatesLayout;
-use crate::BATCH_SIZE;
+use crate::get_states_layout;
+use crate::types::DataType;
 
 #[derive(Debug, Clone, Copy)]
 struct PartitionMask {

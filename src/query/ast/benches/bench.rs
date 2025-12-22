@@ -27,10 +27,10 @@ fn main() {
 
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
+    use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_expr;
     use databend_common_ast::parser::parse_sql;
     use databend_common_ast::parser::tokenize_sql;
-    use databend_common_ast::parser::Dialect;
 
     #[divan::bench]
     fn large_statement() {

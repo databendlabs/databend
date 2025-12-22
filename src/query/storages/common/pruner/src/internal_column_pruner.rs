@@ -15,15 +15,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
-use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_expression::Scalar;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 /// Only support `_segment_name` and `_block_name` now.

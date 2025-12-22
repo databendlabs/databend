@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(try_blocks)]
-#![feature(let_chains)]
 
 pub mod ir;
 

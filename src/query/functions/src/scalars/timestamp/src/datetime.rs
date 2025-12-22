@@ -24,34 +24,18 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
-use databend_common_expression::types::date::clamp_date;
-use databend_common_expression::types::date::date_to_string;
-use databend_common_expression::types::date::string_to_date;
-use databend_common_expression::types::date::DATE_MAX;
-use databend_common_expression::types::date::DATE_MIN;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::SimpleDomain;
-use databend_common_expression::types::number::UInt16Type;
-use databend_common_expression::types::number::UInt32Type;
-use databend_common_expression::types::number::UInt64Type;
-use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::timestamp::clamp_timestamp;
-use databend_common_expression::types::timestamp::string_to_timestamp;
-use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
-use databend_common_expression::types::timestamp::MICROS_PER_SEC;
-use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
-use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
-use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
-use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::IntervalType;
@@ -59,7 +43,29 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::date::DATE_MAX;
+use databend_common_expression::types::date::DATE_MIN;
+use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::date_to_string;
+use databend_common_expression::types::date::string_to_date;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::number::UInt8Type;
+use databend_common_expression::types::number::UInt16Type;
+use databend_common_expression::types::number::UInt32Type;
+use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
+use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::string_to_timestamp;
+use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::utils::date_helper::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
@@ -67,23 +73,17 @@ use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
-use databend_common_expression::EvalContext;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionProperty;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::Value;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
-use jiff::civil::date;
+use jiff::Timestamp;
+use jiff::Unit;
 use jiff::civil::Date;
 use jiff::civil::Weekday;
+use jiff::civil::date;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
-use jiff::Unit;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -210,7 +210,7 @@ fn timestamp_tz_domain_to_timestamp_domain(
 
 // jiff don't support local formats:
 // https://github.com/BurntSushi/jiff/issues/219
-fn replace_time_format(format: &str) -> Cow<str> {
+fn replace_time_format(format: &str) -> Cow<'_, str> {
     if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
         let format = format
             .replace("%c", "%x %X")

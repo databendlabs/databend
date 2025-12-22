@@ -22,11 +22,11 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono::SecondsFormat;
-use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::JoinHandle;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

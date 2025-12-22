@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::create_test_complex_schema;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::NumberDataType;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 

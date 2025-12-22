@@ -37,10 +37,10 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use crate::KeyWithTenant;
     use crate::data_mask::DataMaskId;
     use crate::data_mask::DataMaskNameIdent;
     use crate::tenant_key::resource::TenantResource;
-    use crate::KeyWithTenant;
 
     pub struct Resource;
     impl TenantResource for Resource {

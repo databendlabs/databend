@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::eval_function;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(crate) fn get_and(

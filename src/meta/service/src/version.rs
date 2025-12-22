@@ -60,10 +60,10 @@ pub static MIN_META_SEMVER: Version = Version::new(0, 9, 41);
 /// ```
 pub(crate) mod raft {
     pub(crate) mod server {
-        use feature_set::add_provide;
-        use feature_set::del_provide;
         use feature_set::Action;
         use feature_set::Provide;
+        use feature_set::add_provide;
+        use feature_set::del_provide;
 
         /// Removed and unused anymore.
         #[rustfmt::skip]
@@ -97,11 +97,11 @@ pub(crate) mod raft {
     }
 
     pub(crate) mod client {
+        use feature_set::Action;
+        use feature_set::Require;
         use feature_set::add_optional;
         use feature_set::add_require;
         use feature_set::del_require;
-        use feature_set::Action;
-        use feature_set::Require;
 
         /// Removed and unused anymore.
         #[rustfmt::skip]

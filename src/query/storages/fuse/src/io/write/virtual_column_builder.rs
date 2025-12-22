@@ -23,17 +23,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Decimal;
-use databend_common_expression::types::DecimalScalar;
-use databend_common_expression::types::DecimalSize;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
@@ -44,8 +33,19 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::VariantDataType;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+use databend_common_expression::VariantDataType;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::i256;
 use databend_common_hashtable::StackHashMap;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
@@ -56,23 +56,23 @@ use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
-use jsonb::keypath::KeyPath as JsonbKeyPath;
-use jsonb::keypath::KeyPaths as JsonbKeyPaths;
 use jsonb::Date as JsonbDate;
+use jsonb::Decimal64 as JsonbDecimal64;
 use jsonb::Decimal128 as JsonbDecimal128;
 use jsonb::Decimal256 as JsonbDecimal256;
-use jsonb::Decimal64 as JsonbDecimal64;
 use jsonb::Interval as JsonbInterval;
 use jsonb::Number as JsonbNumber;
 use jsonb::RawJsonb;
 use jsonb::Timestamp as JsonbTimestamp;
 use jsonb::Value as JsonbValue;
+use jsonb::keypath::KeyPath as JsonbKeyPath;
+use jsonb::keypath::KeyPaths as JsonbKeyPaths;
 use parquet::format::FileMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::write::WriteSettings;
 use crate::statistics::gen_columns_statistics;
 
 const SAMPLE_ROWS: usize = 10;
@@ -114,7 +114,7 @@ impl VirtualColumnBuilder {
             .unwrap_or_default()
         {
             return Err(ErrorCode::VirtualColumnError(
-                "Virtual column is an experimental feature, `set enable_experimental_virtual_column=1` to use this feature."
+                "Virtual column is an experimental feature, `set enable_experimental_virtual_column=1` to use this feature.",
             ));
         }
 
@@ -127,7 +127,9 @@ impl VirtualColumnBuilder {
             }
         }
         if variant_fields.is_empty() {
-            return Err(ErrorCode::VirtualColumnError("Virtual column only support variant type, but this table don't have variant type fields"));
+            return Err(ErrorCode::VirtualColumnError(
+                "Virtual column only support variant type, but this table don't have variant type fields",
+            ));
         }
         let mut virtual_paths = Vec::with_capacity(variant_fields.len());
         for _ in 0..variant_fields.len() {

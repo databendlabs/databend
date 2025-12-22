@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
@@ -38,7 +39,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnpivotName;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -49,15 +49,11 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
+use crate::AsyncFunctionRewriter;
 use crate::optimizer::ir::SExpr;
+use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::planner::QueryExecutor;
-use crate::AsyncFunctionRewriter;
-
-// A normalized IR for `SELECT` clause.
-#[derive(Debug, Default)]
-pub struct SelectList {}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -797,7 +793,7 @@ impl SelectRewriter {
         let columns = unpivot
             .column_names
             .iter()
-            .map(|name| (name.ident.to_owned()))
+            .map(|name| name.ident.to_owned())
             .collect::<Vec<_>>();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             star.exclude(columns.clone());

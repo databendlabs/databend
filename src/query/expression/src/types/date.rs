@@ -25,17 +25,17 @@ use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
 use num_traits::AsPrimitive;
 
-use super::number::SimpleDomain;
 use super::ArgType;
 use super::DataType;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::number::SimpleDomain;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::date_helper::DateConverter;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
 /// Minimum valid date, represented by the day offset from 1970-01-01.

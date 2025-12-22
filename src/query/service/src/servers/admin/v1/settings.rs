@@ -17,9 +17,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use fastrace::func_name;
+use poem::IntoResponse;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct SettingsItem {

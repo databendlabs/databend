@@ -19,10 +19,10 @@ use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::rule::constant::is_falsy;
-use crate::optimizer::optimizers::rule::constant::is_true;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::optimizers::rule::constant::is_falsy;
+use crate::optimizer::optimizers::rule::constant::is_true;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::RelOp;
@@ -40,11 +40,13 @@ fn remove_true_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
 
 fn normalize_falsy_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
     if predicates.iter().any(is_falsy) {
-        vec![ConstantExpr {
-            span: None,
-            value: Scalar::Boolean(false),
-        }
-        .into()]
+        vec![
+            ConstantExpr {
+                span: None,
+                value: Scalar::Boolean(false),
+            }
+            .into(),
+        ]
     } else {
         predicates
     }

@@ -15,12 +15,12 @@
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ExchangeSource;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::format_output_columns;
 
 pub struct ExchangeSourceFormatter<'a> {
     inner: &'a ExchangeSource,

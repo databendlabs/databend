@@ -16,14 +16,14 @@ use std::any::Any;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::optimizer::ir::SExpr;
 
-use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::explain::PlanStatsInfo;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 

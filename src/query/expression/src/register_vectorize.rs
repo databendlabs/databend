@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::EvalContext;
 use crate::types::nullable::NullableColumn;
 use crate::types::*;
 use crate::values::Value;
-use crate::EvalContext;
 
 pub fn vectorize_1_arg<I1: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
@@ -36,9 +36,9 @@ pub fn vectorize_1_arg<I1: AccessType, O: ReturnType>(
 
 pub fn vectorize_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(arg1), Value::Scalar(arg2)) => {
@@ -75,10 +75,15 @@ pub fn vectorize_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
 }
 
 pub fn vectorize_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
-        + Copy
-        + Send
-        + Sync,
+    func: impl Fn(
+        I1::ScalarRef<'_>,
+        I2::ScalarRef<'_>,
+        I3::ScalarRef<'_>,
+        &mut EvalContext,
+    ) -> O::Scalar
+    + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| {
         let generics = ctx.generics.to_vec();
@@ -110,15 +115,15 @@ pub fn vectorize_4_arg<
     O: ReturnType,
 >(
     func: impl Fn(
-            I1::ScalarRef<'_>,
-            I2::ScalarRef<'_>,
-            I3::ScalarRef<'_>,
-            I4::ScalarRef<'_>,
-            &mut EvalContext,
-        ) -> O::Scalar
-        + Copy
-        + Send
-        + Sync,
+        I1::ScalarRef<'_>,
+        I2::ScalarRef<'_>,
+        I3::ScalarRef<'_>,
+        I4::ScalarRef<'_>,
+        &mut EvalContext,
+    ) -> O::Scalar
+    + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
 {
     move |arg1, arg2, arg3, arg4, ctx| {
@@ -170,9 +175,9 @@ pub fn vectorize_with_builder_1_arg<I1: AccessType, O: ReturnType>(
 
 pub fn vectorize_with_builder_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut O::ColumnBuilder, &mut EvalContext)
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, ctx| {
         let generics = ctx.generics.to_vec();
@@ -201,14 +206,14 @@ pub fn vectorize_with_builder_3_arg<
     O: ReturnType,
 >(
     func: impl Fn(
-            I1::ScalarRef<'_>,
-            I2::ScalarRef<'_>,
-            I3::ScalarRef<'_>,
-            &mut O::ColumnBuilder,
-            &mut EvalContext,
-        ) + Copy
-        + Send
-        + Sync,
+        I1::ScalarRef<'_>,
+        I2::ScalarRef<'_>,
+        I3::ScalarRef<'_>,
+        &mut O::ColumnBuilder,
+        &mut EvalContext,
+    ) + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O> + Copy + Send + Sync {
     move |arg1, arg2, arg3, ctx| {
         let generics = ctx.generics.to_vec();
@@ -240,15 +245,15 @@ pub fn vectorize_with_builder_4_arg<
     O: ReturnType,
 >(
     func: impl Fn(
-            I1::ScalarRef<'_>,
-            I2::ScalarRef<'_>,
-            I3::ScalarRef<'_>,
-            I4::ScalarRef<'_>,
-            &mut O::ColumnBuilder,
-            &mut EvalContext,
-        ) + Copy
-        + Send
-        + Sync,
+        I1::ScalarRef<'_>,
+        I2::ScalarRef<'_>,
+        I3::ScalarRef<'_>,
+        I4::ScalarRef<'_>,
+        &mut O::ColumnBuilder,
+        &mut EvalContext,
+    ) + Copy
+    + Send
+    + Sync,
 ) -> impl Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O> + Copy + Send + Sync
 {
     move |arg1, arg2, arg3, arg4, ctx| {
@@ -279,9 +284,9 @@ pub fn vectorize_with_builder_4_arg<
 pub fn passthrough_nullable_1_arg<I1: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         if let Some(validity) = ctx.validity.as_ref() {
@@ -311,9 +316,9 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
     Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);
@@ -340,18 +345,18 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
 
 pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, arg3, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);
@@ -384,9 +389,9 @@ pub fn passthrough_nullable_4_arg<
     O: ReturnType,
 >(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, Value<I4>, &mut EvalContext) -> Value<O>
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -394,9 +399,9 @@ pub fn passthrough_nullable_4_arg<
     Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, arg3, arg4, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);
@@ -425,9 +430,9 @@ pub fn passthrough_nullable_4_arg<
 pub fn combine_nullable_1_arg<I1: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
 ) -> impl for<'a> Fn(Value<NullableType<I1>>, &mut EvalContext) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         if let Some(validity) = ctx.validity.as_ref() {
@@ -453,17 +458,17 @@ pub fn combine_nullable_1_arg<I1: AccessType, O: ReturnType>(
 
 pub fn combine_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, &mut EvalContext) -> Value<NullableType<O>>
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);
@@ -490,18 +495,18 @@ pub fn combine_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
 
 pub fn combine_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
-        + Copy
-        + Send
-        + Sync,
+    + Copy
+    + Send
+    + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
     Value<NullableType<I3>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, arg3, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);
@@ -535,15 +540,15 @@ pub fn combine_nullable_4_arg<
     O: ReturnType,
 >(
     func: impl for<'a> Fn(
-            Value<I1>,
-            Value<I2>,
-            Value<I3>,
-            Value<I4>,
-            &mut EvalContext,
-        ) -> Value<NullableType<O>>
-        + Copy
-        + Send
-        + Sync,
+        Value<I1>,
+        Value<I2>,
+        Value<I3>,
+        Value<I4>,
+        &mut EvalContext,
+    ) -> Value<NullableType<O>>
+    + Copy
+    + Send
+    + Sync,
 ) -> impl for<'a> Fn(
     Value<NullableType<I1>>,
     Value<NullableType<I2>>,
@@ -551,9 +556,9 @@ pub fn combine_nullable_4_arg<
     Value<NullableType<I4>>,
     &mut EvalContext,
 ) -> Value<NullableType<O>>
-       + Copy
-       + Send
-       + Sync {
++ Copy
++ Send
++ Sync {
     move |arg1, arg2, arg3, arg4, ctx| {
         let mut args_validity = arg1.validity(ctx.num_rows);
         args_validity = &args_validity & &arg2.validity(ctx.num_rows);

@@ -13,14 +13,6 @@
 // limitations under the License.
 
 use databend_common_base::base::uuid::Uuid;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Decimal128Type;
-use databend_common_expression::types::Decimal256As128Type;
-use databend_common_expression::types::Decimal64As128Type;
-use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -28,6 +20,14 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactoryHelper;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal64As128Type;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal256As128Type;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::vectorize_with_builder_1_arg;
 
 pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
     let factory = FunctionFactoryHelper::create_1_arg_passthrough_nullable(|_, arg| {

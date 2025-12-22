@@ -21,25 +21,25 @@ mod upsert_pb;
 
 use std::future::Future;
 
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_proto_conv::FromToProto;
+use futures::TryStreamExt;
 use futures::future::FutureExt;
 use futures::future::TryFutureExt;
 use futures::stream;
 use futures::stream::BoxStream;
 use futures::stream::StreamExt;
-use futures::TryStreamExt;
 use itertools::Itertools;
 use seq_marked::SeqValue;
 
@@ -524,12 +524,12 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-    use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
     use databend_common_meta_types::TxnReply;
     use databend_common_meta_types::TxnRequest;
     use databend_common_meta_types::UpsertKV;
+    use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use futures::TryStreamExt;
@@ -810,7 +810,8 @@ mod tests {
         let want = vec![
             "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/1))",
             "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/2))",
-            "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/3))"];
+            "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/3))",
+        ];
 
         assert_eq!(errors, want);
 

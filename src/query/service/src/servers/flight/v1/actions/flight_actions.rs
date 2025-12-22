@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
-use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -25,22 +25,22 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
-use crate::servers::flight::v1::actions::init_query_env::init_query_env;
-use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
-use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
-use crate::servers::flight::v1::actions::kill_query::kill_query;
-use crate::servers::flight::v1::actions::set_priority::set_priority;
-use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
-use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
-use crate::servers::flight::v1::actions::system_action::system_action;
-use crate::servers::flight::v1::actions::truncate_table::truncate_table;
-use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
 use crate::servers::flight::v1::actions::GET_RUNNING_QUERY_DUMP;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::actions::SYSTEM_ACTION;
+use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
+use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
+use crate::servers::flight::v1::actions::init_query_env::init_query_env;
+use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
+use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
+use crate::servers::flight::v1::actions::set_priority::set_priority;
+use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
+use crate::servers::flight::v1::actions::system_action::system_action;
+use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
+use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 
 pub struct FlightActions {
     #[allow(clippy::type_complexity)]

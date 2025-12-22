@@ -26,12 +26,12 @@ use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
-use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 
 impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
     FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>
@@ -178,7 +178,7 @@ struct FixedKeyProbeStream<Key: FixedKey + HashtableKeyable, const MATCHED: bool
     key_idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
-    keys: Box<(dyn KeyAccessor<Key = Key>)>,
+    keys: Box<dyn KeyAccessor<Key = Key>>,
     matched_num_rows: usize,
 }
 
@@ -267,7 +267,7 @@ struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MAT
     idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
-    keys: Box<(dyn KeyAccessor<Key = Key>)>,
+    keys: Box<dyn KeyAccessor<Key = Key>>,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
     matched_num_rows: usize,

@@ -20,10 +20,11 @@ use crate::ast::DescribeStreamStmt;
 use crate::ast::DropStreamStmt;
 use crate::ast::ShowStreamsStmt;
 use crate::ast::Statement;
+use crate::parser::Input;
+use crate::parser::common::IResult;
 use crate::parser::common::dot_separated_idents_1_to_2;
 use crate::parser::common::dot_separated_idents_1_to_3;
 use crate::parser::common::map_res;
-use crate::parser::common::IResult;
 use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
@@ -31,7 +32,6 @@ use crate::parser::query::travel_point;
 use crate::parser::statement::parse_create_option;
 use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
-use crate::parser::Input;
 
 pub fn create_stream(i: Input) -> IResult<Statement> {
     map_res(

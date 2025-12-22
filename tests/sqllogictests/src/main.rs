@@ -19,36 +19,36 @@ use std::time::Instant;
 
 use clap::Parser;
 use client::TTCClient;
-use futures_util::stream;
 use futures_util::StreamExt;
+use futures_util::stream;
 use rand::Rng;
-use sqllogictest::default_column_validator;
-use sqllogictest::default_validator;
-use sqllogictest::parse_file;
 use sqllogictest::DBOutput;
 use sqllogictest::Location;
 use sqllogictest::QueryExpect;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
+use sqllogictest::default_column_validator;
+use sqllogictest::default_validator;
+use sqllogictest::parse_file;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
 use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
-use crate::client::BodyFormat;
 use crate::client::Client;
 use crate::client::ClientType;
 use crate::client::HttpClient;
 use crate::client::MySQLClient;
+use crate::client::QueryResultFormat;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::util::ColumnType;
 use crate::util::collect_lazy_dir;
 use crate::util::get_files;
 use crate::util::lazy_prepare_data;
 use crate::util::lazy_run_dictionary_containers;
 use crate::util::run_ttc_container;
-use crate::util::ColumnType;
 
 mod arg;
 mod client;
@@ -69,7 +69,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
                 port: TTC_PORT_START,
-                body_format: BodyFormat::Arrow,
+                query_result_format: QueryResultFormat::Arrow,
             }),
             5,
         ),
@@ -77,7 +77,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
                 port: TTC_PORT_START + 1,
-                body_format: BodyFormat::Json,
+                query_result_format: QueryResultFormat::Json,
             }),
             5,
         ),
@@ -85,7 +85,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-go:latest".to_string(),
                 port: TTC_PORT_START + 2,
-                body_format: BodyFormat::Json,
+                query_result_format: QueryResultFormat::Json,
             }),
             5,
         ),
@@ -154,14 +154,14 @@ pub async fn main() -> Result<()> {
                         TTC_PORT_START,
                         args.port,
                         &mut containers,
-                        BodyFormat::Json,
+                        QueryResultFormat::Json,
                     )
                     .await?;
                 }
                 run_ttc_client(args.clone(), ClientType::Ttc {
                     image: handler.to_string(),
                     port: TTC_PORT_START,
-                    body_format: BodyFormat::Json,
+                    query_result_format: QueryResultFormat::Json,
                 })
                 .await?;
             }
@@ -203,9 +203,9 @@ async fn run_hybrid_client(
             ClientType::Ttc {
                 image,
                 port,
-                body_format,
+                query_result_format,
             } => {
-                run_ttc_container(image, *port, args.port, cs, *body_format).await?;
+                run_ttc_container(image, *port, args.port, cs, *query_result_format).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
@@ -247,7 +247,7 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
         ClientType::Ttc {
             image,
             port,
-            body_format: _,
+            query_result_format: _,
         } => {
             let conn = format!("127.0.0.1:{port}");
             client = Client::Ttc(TTCClient::create(image, &conn).await?);
@@ -308,15 +308,15 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             if !file_name.ends_with(".test") {
                 continue;
             }
-            if let Some(ref specific_file) = args.file {
-                if !specific_file.split(',').any(|f| f.eq(&file_name)) {
-                    continue;
-                }
+            if let Some(ref specific_file) = args.file
+                && !specific_file.split(',').any(|f| f.eq(&file_name))
+            {
+                continue;
             }
-            if let Some(ref skip_file) = args.skipped_file {
-                if skip_file.split(',').any(|f| f.eq(&file_name)) {
-                    continue;
-                }
+            if let Some(ref skip_file) = args.skipped_file
+                && skip_file.split(',').any(|f| f.eq(&file_name))
+            {
+                continue;
             }
             num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
                 .unwrap()

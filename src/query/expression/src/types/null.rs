@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::nullable::NullableDomain;
 use super::ArgType;
 use super::DataType;
 use super::ZeroSizeType;
 use super::ZeroSizeValueType;
+use super::nullable::NullableDomain;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CoreNull;

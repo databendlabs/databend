@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 
 const UNSIGNED_TYPES: [NumberDataType; 4] = [
     NumberDataType::UInt8,
@@ -31,11 +31,7 @@ const SIGNED_TYPES: [NumberDataType; 4] = [
 const FLOAT_TYPES: [NumberDataType; 2] = [NumberDataType::Float32, NumberDataType::Float64];
 
 fn wrap_nullable(ty: TableDataType, is_nullable: bool) -> TableDataType {
-    if is_nullable {
-        ty.wrap_nullable()
-    } else {
-        ty
-    }
+    if is_nullable { ty.wrap_nullable() } else { ty }
 }
 
 pub fn merge_type(
@@ -115,10 +111,10 @@ pub fn merge_schema(defined: TableSchema, guess: TableSchema) -> TableSchema {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
 
     use crate::table_functions::infer_schema::merge::merge_schema;
     use crate::table_functions::infer_schema::merge::merge_type;

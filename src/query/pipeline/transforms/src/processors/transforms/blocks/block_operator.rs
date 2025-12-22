@@ -20,8 +20,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_sql::evaluator::apply_cse;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::apply_cse;
 
 use crate::Transform;
 use crate::Transformer;

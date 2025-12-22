@@ -34,8 +34,7 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 pub use hnsw::HNSWIndex;
 use parquet::format::FileMetaData;
 pub use quantization::DistanceType;
-
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct VectorIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
     pub metadata: BTreeMap<String, String>,
@@ -50,6 +49,70 @@ pub struct VectorIndexFile {
 impl VectorIndexFile {
     pub fn create(name: String, data: Bytes) -> Self {
         Self { name, data }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializableVectorIndexFile {
+    name: String,
+    data: Vec<u8>,
+}
+
+impl TryFrom<&VectorIndexMeta> for Vec<u8> {
+    type Error = ErrorCode;
+
+    fn try_from(value: &VectorIndexMeta) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::encode_to_vec(value, bincode::config::standard()).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode vector index meta {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<Bytes> for VectorIndexMeta {
+    type Error = ErrorCode;
+
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+            .map(|(v, len)| {
+                assert_eq!(len, value.len());
+                v
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode vector index meta {:?}", e))
+            })
+    }
+}
+
+impl TryFrom<&VectorIndexFile> for Vec<u8> {
+    type Error = ErrorCode;
+
+    fn try_from(value: &VectorIndexFile) -> std::result::Result<Self, Self::Error> {
+        let serializable = SerializableVectorIndexFile {
+            name: value.name.clone(),
+            data: value.data.to_vec(),
+        };
+        bincode::serde::encode_to_vec(&serializable, bincode::config::standard()).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode vector index file {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<Bytes> for VectorIndexFile {
+    type Error = ErrorCode;
+
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+            .map(|(v, len)| {
+                assert_eq!(len, value.len());
+                v
+            })
+            .map(|v: SerializableVectorIndexFile| VectorIndexFile {
+                name: v.name,
+                data: v.data.into(),
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode vector index file {:?}", e))
+            })
     }
 }
 

@@ -26,31 +26,22 @@ use chrono::Utc;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::index_id_ident::IndexId;
-use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
-use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
-use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -131,9 +122,18 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::index_id_ident::IndexId;
+use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
@@ -144,6 +144,12 @@ use fastrace::func_name;
 use log::debug;
 use log::info;
 
+use crate::DEFAULT_MGET_SIZE;
+use crate::DatamaskApi;
+use crate::RowAccessPolicyApi;
+use crate::SchemaApi;
+use crate::SequenceApi;
+use crate::TableApi;
 use crate::deserialize_struct;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -152,12 +158,6 @@ use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::util::IdempotentKVTxnSender;
-use crate::DatamaskApi;
-use crate::RowAccessPolicyApi;
-use crate::SchemaApi;
-use crate::SequenceApi;
-use crate::TableApi;
-use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
 ///
@@ -3697,10 +3697,12 @@ impl SchemaApiTestSuite {
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;
-        assert!(table_info
-            .meta
-            .column_mask_policy_columns_ids
-            .contains_key(&number_column_id));
+        assert!(
+            table_info
+                .meta
+                .column_mask_policy_columns_ids
+                .contains_key(&number_column_id)
+        );
 
         // Drop the table (this deletes the table-policy reference), then drop the policy.
         util.drop_table_by_id().await?;

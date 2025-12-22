@@ -16,25 +16,25 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::DecimalSize;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
-use crate::hive_database::HiveDatabase;
 use crate::hive_database::HIVE_DATABASE_ENGINE;
+use crate::hive_database::HiveDatabase;
 use crate::hive_table::HIVE_TABLE_ENGINE;
 use crate::hive_table_options::HiveTableOptions;
 

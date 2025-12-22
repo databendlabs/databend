@@ -36,10 +36,10 @@ use itertools::Itertools;
 use sha2::Digest;
 use sha2::Sha256;
 
-use crate::normalize_identifier;
-use crate::plans::Plan;
 use crate::NameResolutionContext;
 use crate::Planner;
+use crate::normalize_identifier;
+use crate::plans::Plan;
 
 #[derive(Clone)]
 pub struct PlanCacheItem {

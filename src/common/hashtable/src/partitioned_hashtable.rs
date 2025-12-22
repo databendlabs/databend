@@ -110,12 +110,12 @@ impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32, const HIGH_BIT: boo
 }
 
 impl<
-        K: ?Sized + FastHash,
-        V,
-        Impl: HashtableLike<Key = K, Value = V>,
-        const BUCKETS_LG2: u32,
-        const HIGH_BIT: bool,
-    > HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+    K: ?Sized + FastHash,
+    V,
+    Impl: HashtableLike<Key = K, Value = V>,
+    const BUCKETS_LG2: u32,
+    const HIGH_BIT: bool,
+> HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;
@@ -196,9 +196,11 @@ impl<
         &mut self,
         key: &Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
-        let hash = key.fast_hash();
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert(key)
+        unsafe {
+            let hash = key.fast_hash();
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert(key)
+        }
     }
 
     #[inline(always)]
@@ -206,9 +208,11 @@ impl<
         &mut self,
         key: &Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let hash = key.fast_hash();
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert_and_entry_with_hash(key, hash)
+        unsafe {
+            let hash = key.fast_hash();
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert_and_entry_with_hash(key, hash)
+        }
     }
 
     #[inline(always)]
@@ -217,8 +221,10 @@ impl<
         key: &Self::Key,
         hash: u64,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert_and_entry_with_hash(key, hash)
+        unsafe {
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert_and_entry_with_hash(key, hash)
+        }
     }
 
     fn iter(&self) -> Self::Iterator<'_> {

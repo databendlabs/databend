@@ -39,8 +39,10 @@ macro_rules! impl_sliced {
         #[inline]
         #[must_use]
         pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self {
-            self.slice_unchecked(offset, length);
-            self
+            unsafe {
+                self.slice_unchecked(offset, length);
+                self
+            }
         }
     };
 }

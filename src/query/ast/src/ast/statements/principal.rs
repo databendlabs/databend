@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::QuotedString;
 use crate::ast::Identifier;
+use crate::ast::quote::QuotedString;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShareNameIdent {

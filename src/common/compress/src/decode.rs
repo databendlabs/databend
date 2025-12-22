@@ -32,10 +32,10 @@ use async_compression::util::PartialBuffer;
 use bytes::Buf;
 use bytes::BytesMut;
 use databend_common_exception::ErrorCode;
-use futures::io::BufReader;
-use futures::ready;
 use futures::AsyncBufRead;
 use futures::AsyncRead;
+use futures::io::BufReader;
+use futures::ready;
 use log::trace;
 use pin_project::pin_project;
 use zip::ZipArchive;
@@ -374,14 +374,13 @@ impl DecompressDecoder {
                 "Zip only supports single file",
             ));
         }
-        if memory_limit > 0 {
-            if let Some(size) = zip.decompressed_size() {
-                if size + compressed.len() as u128 > memory_limit as u128 / 2 {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "zip file {path} is too large, decompressed_size = {size}",
-                    )));
-                }
-            }
+        if memory_limit > 0
+            && let Some(size) = zip.decompressed_size()
+            && size + compressed.len() as u128 > memory_limit as u128 / 2
+        {
+            return Err(ErrorCode::BadBytes(format!(
+                "zip file {path} is too large, decompressed_size = {size}",
+            )));
         }
         let mut file = zip.by_index(0).map_err(|e| {
             ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
@@ -439,8 +438,8 @@ mod tests {
 
     use async_compression::futures::bufread::GzipEncoder;
     use async_compression::futures::bufread::ZlibEncoder;
-    use futures::io::Cursor;
     use futures::AsyncReadExt;
+    use futures::io::Cursor;
     use rand::prelude::*;
 
     use super::*;

@@ -17,16 +17,18 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::NumberType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
-use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_storage::Datum;
 
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -39,8 +41,6 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
-use crate::IndexType;
 
 // Constant table is a table with constant values.
 #[derive(Clone, Debug)]

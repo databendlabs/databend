@@ -20,13 +20,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::super::v0::statistics::Statistics;
-use crate::meta::monotonically_increased_timestamp;
-use crate::meta::trim_timestamp_to_milli_second;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
+use crate::meta::monotonically_increased_timestamp;
+use crate::meta::trim_timestamp_to_milli_second;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {

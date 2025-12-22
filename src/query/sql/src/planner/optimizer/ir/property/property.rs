@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::ColumnSet;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {
@@ -115,10 +115,9 @@ impl Distribution {
             | (Distribution::Broadcast, Distribution::Broadcast)
             | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
 
-            (
-                Distribution::NodeToNodeHash(ref keys),
-                Distribution::NodeToNodeHash(ref other_keys),
-            ) => keys == other_keys,
+            (Distribution::NodeToNodeHash(keys), Distribution::NodeToNodeHash(other_keys)) => {
+                keys == other_keys
+            }
             _ => false,
         }
     }
@@ -131,7 +130,7 @@ impl Display for Distribution {
             Distribution::Random => write!(f, "Random"),
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
-            Distribution::NodeToNodeHash(ref keys) => write!(
+            Distribution::NodeToNodeHash(keys) => write!(
                 f,
                 "Hash({})",
                 keys.iter()

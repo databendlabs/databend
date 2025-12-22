@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use crate::queue::event_desc::EventDesc;
 use crate::PermitEntry;
 use crate::PermitSeq;
+use crate::queue::event_desc::EventDesc;
 
 // TODO: consider adding a state `Waiting` when a semaphore enters waiting queue?
 /// The event of a semaphore permit,

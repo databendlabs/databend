@@ -15,8 +15,8 @@
 use std::net::SocketAddr;
 
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_types::node::Node;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::node::Node;
 use databend_common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;

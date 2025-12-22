@@ -327,13 +327,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(all_timezones)),
                 }),
-                ("group_by_two_level_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20000),
-                    desc: "Sets the number of keys in a GROUP BY operation that will trigger a two-level aggregation.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("max_inlist_to_or", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
@@ -407,6 +400,13 @@ impl DefaultSettings {
                 ("enable_cbo", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables cost-based optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_eager_aggregate", DefaultSettingValue { 
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Force apply rule eager aggregate.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -727,13 +727,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
-                ("efficiently_memory_group_by", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Memory is used efficiently, but this may cause performance degradation.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
@@ -1001,13 +994,6 @@ impl DefaultSettings {
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1556,10 +1542,10 @@ impl DefaultSettings {
             Some(conf) => {
                 let mut num_cpus = num_cpus::get() as u64;
 
-                if conf.storage.params.is_fs() {
-                    if let Ok(n) = std::thread::available_parallelism() {
-                        num_cpus = n.get() as u64;
-                    }
+                if conf.storage.params.is_fs()
+                    && let Ok(n) = std::thread::available_parallelism()
+                {
+                    num_cpus = n.get() as u64;
 
                     // Most of x86_64 CPUs have 2-way Hyper-Threading
                     #[cfg(target_arch = "x86_64")]

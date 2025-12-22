@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::hilbert_decompress;
 use databend_common_expression::hilbert_decompress_state_list;
 use databend_common_expression::hilbert_index;
-use databend_common_expression::FixedLengthEncoding;
 
 #[test]
 fn test_hilbert() -> Result<()> {

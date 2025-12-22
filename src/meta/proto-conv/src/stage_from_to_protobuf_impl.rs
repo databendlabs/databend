@@ -24,12 +24,12 @@ use databend_common_protos::pb;
 use mt::principal::FileFormatOptionsReader;
 use num::FromPrimitive;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::principal::StageParams {
     type PB = pb::stage_info::StageParams;

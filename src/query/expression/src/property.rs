@@ -16,19 +16,8 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use enum_as_inner::EnumAsInner;
 
-use crate::types::boolean::BooleanDomain;
-use crate::types::decimal::Decimal;
-use crate::types::decimal::DecimalDomain;
-use crate::types::decimal::DecimalScalar;
-use crate::types::i256;
-use crate::types::nullable::NullableDomain;
-use crate::types::number::NumberDomain;
-use crate::types::number::NumberScalar;
-use crate::types::number::SimpleDomain;
-use crate::types::number::F32;
-use crate::types::number::F64;
-use crate::types::string::StringDomain;
-use crate::types::timestamp_tz::TimestampTzType;
+use crate::ColumnBuilder;
+use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -42,11 +31,22 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
+use crate::types::boolean::BooleanDomain;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalDomain;
+use crate::types::decimal::DecimalScalar;
+use crate::types::i256;
+use crate::types::nullable::NullableDomain;
+use crate::types::number::F32;
+use crate::types::number::F64;
+use crate::types::number::NumberDomain;
+use crate::types::number::NumberScalar;
+use crate::types::number::SimpleDomain;
+use crate::types::string::StringDomain;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_type;
-use crate::ColumnBuilder;
-use crate::Scalar;
 
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {

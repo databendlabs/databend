@@ -14,21 +14,20 @@
 
 use std::future::Future;
 use std::pin::pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use databend_common_base::runtime::block_on;
-use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::Semaphore;
+use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
@@ -41,34 +40,6 @@ use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::oneshot;
-
-/// RAII wrapper for Permit that automatically updates timestamp on drop
-pub struct PermitGuard {
-    _permit: Permit,
-    meta_handle: Arc<HistoryMetaHandle>,
-    meta_key: String,
-}
-
-impl PermitGuard {
-    pub fn new(permit: Permit, meta_handle: Arc<HistoryMetaHandle>, meta_key: String) -> Self {
-        Self {
-            _permit: permit,
-            meta_handle,
-            meta_key,
-        }
-    }
-}
-
-impl Drop for PermitGuard {
-    fn drop(&mut self) {
-        let meta_handle = self.meta_handle.clone();
-        let meta_key = self.meta_key.clone();
-
-        block_on(async move {
-            let _ = meta_handle.update_last_execution_timestamp(&meta_key).await;
-        });
-    }
-}
 
 pub struct HeartbeatTaskGuard {
     _cancel: oneshot::Sender<()>,
@@ -276,38 +247,42 @@ impl HistoryMetaHandle {
         }
     }
 
-    /// Acquires a permit with automatic timestamp update on drop using RAII pattern.
-    /// Returns a PermitGuard that will automatically update the timestamp when dropped.
-    pub async fn acquire_with_guard(
+    /// Checks if enough time has passed since the last execution to perform a clean operation.
+    /// If enough time has passed, it updates the last execution timestamp atomically.
+    /// Returns `Ok(true)` if the clean operation should be performed, `Ok(false)` otherwise.
+    ///
+    /// Note: This function should only be used for clean operations, cleaning tasks is idempotence
+    /// and not critical if multiple nodes perform cleaning simultaneously.
+    pub async fn check_should_perform_clean(
         &self,
         meta_key: &str,
-        interval: u64,
-    ) -> Result<Option<PermitGuard>> {
-        if let Some(permit) = self.acquire(meta_key, interval).await? {
-            Ok(Some(PermitGuard::new(
-                permit,
-                Arc::new(HistoryMetaHandle {
-                    meta_client: self.meta_client.clone(),
-                    node_id: self.node_id.clone(),
-                }),
-                meta_key.to_string(),
-            )))
-        } else {
-            Ok(None)
-        }
-    }
+        interval_secs: u64,
+    ) -> Result<bool> {
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let last_ts_key = format!("{}/last_timestamp", meta_key);
 
-    /// Updating the last execution timestamp in the metadata.
-    pub async fn update_last_execution_timestamp(&self, meta_key: &str) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                format!("{}/last_timestamp", meta_key),
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
-                None,
-            ))
-            .await?;
-        Ok(())
+        let current = self.meta_client.get_kv(&last_ts_key).await?;
+
+        if let Some(v) = &current {
+            let last_ts: u64 = serde_json::from_slice(&v.data)?;
+            let enough_time =
+                now_ms - Duration::from_secs(interval_secs).as_millis() as u64 > last_ts;
+            if !enough_time {
+                // Not enough time has passed since last execution
+                return Ok(false);
+            }
+        }
+
+        let last_seq = current.map_or(0, |v| v.seq);
+
+        let condition = TxnCondition::eq_seq(last_ts_key.clone(), last_seq);
+        let operation = TxnOp::put(last_ts_key, serde_json::to_vec(&now_ms)?);
+        let txn_req = TxnRequest::new(vec![condition], vec![operation]);
+        let resp = self.meta_client.transaction(txn_req).await?;
+
+        // we don't retry on failure
+        // some other node has updated the timestamp and do the clean work
+        Ok(resp.success)
     }
 
     pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
@@ -363,8 +338,8 @@ impl HistoryMetaHandle {
 #[cfg(test)]
 mod tests {
     use std::ops::Deref;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use databend_common_base::runtime::spawn;
@@ -379,98 +354,6 @@ mod tests {
 
     pub async fn setup_meta_client() -> MetaStore {
         MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
-        let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
-
-        let node_id = "test_node_123".to_string();
-        let meta_handle = HistoryMetaHandle::new(meta_client, node_id);
-
-        // Test 1: Basic permit acquisition with interval 0 (no rate limiting)
-        let meta_key = "test/history_table/permit_guard";
-        let guard_result = meta_handle.acquire_with_guard(meta_key, 0).await?;
-        assert!(
-            guard_result.is_some(),
-            "Should acquire permit when interval is 0"
-        );
-
-        if let Some(guard) = guard_result {
-            // Verify that the guard contains the correct meta key
-            assert_eq!(guard.meta_key, meta_key);
-        }
-
-        // Same meta key, because we set the interval to 0, it should not block
-        let guard_result2 = meta_handle.acquire_with_guard(meta_key, 0).await?;
-
-        assert!(
-            guard_result2.is_some(),
-            "Should acquire permit again when interval is 0"
-        );
-
-        if let Some(guard) = guard_result2 {
-            // Verify that the guard contains the correct meta key
-            assert_eq!(guard.meta_key, meta_key);
-        }
-
-        // Test 2: Permit acquisition with interval > 0 (rate limiting)
-        let meta_key_rate_limited = "test/history_table/permit_guard_rate_limited";
-        let interval_seconds = 2;
-
-        // First acquisition should succeed
-        let first_guard_result = meta_handle
-            .acquire_with_guard(meta_key_rate_limited, interval_seconds)
-            .await?;
-        assert!(
-            first_guard_result.is_some(),
-            "First permit acquisition should succeed"
-        );
-
-        // Drop the first guard to trigger timestamp update
-        drop(first_guard_result);
-
-        // Immediate second acquisition should fail due to rate limiting
-        let second_guard_result = meta_handle
-            .acquire_with_guard(meta_key_rate_limited, interval_seconds)
-            .await?;
-        assert!(
-            second_guard_result.is_none(),
-            "Second permit acquisition should fail due to rate limiting"
-        );
-
-        // Test 3: Verify permit guard automatically updates timestamp on drop
-        let meta_key_timestamp = "test/history_table/permit_guard_timestamp";
-
-        // Get initial timestamp (should be None)
-        let initial_timestamp = meta_handle
-            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key_timestamp))
-            .await?;
-        assert!(
-            initial_timestamp.is_none(),
-            "Initial timestamp should be None"
-        );
-
-        // Acquire permit with guard
-        let guard = meta_handle
-            .acquire_with_guard(meta_key_timestamp, 0)
-            .await?;
-        assert!(guard.is_some(), "Should acquire permit");
-
-        // Drop guard to trigger timestamp update
-        drop(guard);
-
-        // Verify timestamp was updated
-        let updated_timestamp = meta_handle
-            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key_timestamp))
-            .await?;
-        assert!(
-            updated_timestamp.is_some(),
-            "Timestamp should be updated after guard drop"
-        );
-
-        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -626,6 +509,55 @@ mod tests {
         // Clean up: drop the successful guard to allow cleanup
         drop(guards);
         tokio::time::sleep(Duration::from_secs(1)).await;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_check_and_update_last_execution_timestamp() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let meta_handle = HistoryMetaHandle::new(meta_client, "test_node".to_string());
+        let meta_key = "test/history_table/check_update";
+        let interval_secs = 5;
+
+        // First time: key missing, should insert.
+        let first = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(first);
+        let ts_after_first = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should exist");
+
+        // Immediately again: should not update.
+        let second = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(!second);
+        let ts_after_second = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should still exist");
+        assert_eq!(ts_after_first, ts_after_second);
+
+        // Make the stored timestamp old enough, then it should update.
+        let old_ts = ts_after_first.saturating_sub((interval_secs + 1) * 1000);
+        meta_handle
+            .set_u64_to_meta(&format!("{}/last_timestamp", meta_key), old_ts)
+            .await?;
+
+        let third = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(third);
+        let ts_after_third = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should exist");
+        assert!(ts_after_third > ts_after_first);
 
         Ok(())
     }

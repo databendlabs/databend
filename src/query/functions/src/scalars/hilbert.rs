@@ -14,6 +14,16 @@
 
 use std::sync::Arc;
 
+use databend_common_expression::Column;
+use databend_common_expression::FixedLengthEncoding;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
 use databend_common_expression::hilbert_index;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
@@ -25,16 +35,6 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::Column;
-use databend_common_expression::FixedLengthEncoding;
-use databend_common_expression::Function;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::Value;
 
 /// Registers Hilbert curve related functions with the function registry.
 pub fn register(registry: &mut FunctionRegistry) {

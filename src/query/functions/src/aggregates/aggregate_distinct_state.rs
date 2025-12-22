@@ -20,8 +20,6 @@ use std::sync::Arc;
 use borsh::BorshSerialize;
 use bumpalo::Bump;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::*;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
@@ -30,6 +28,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::*;
 use databend_common_hashtable::HashSet as CommonHashSet;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::HashtableLike;
@@ -39,12 +39,12 @@ use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use super::batch_merge1;
-use super::batch_serialize1;
-use super::borsh_partial_deserialize;
 use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::borsh_partial_deserialize;
 
 pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;

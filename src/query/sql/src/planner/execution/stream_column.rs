@@ -21,18 +21,18 @@ use databend_common_catalog::plan::StreamColumnType;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_expression::TableSchema;
 
+use crate::ColumnBindingBuilder;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::evaluator::BlockOperator;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
-use crate::ColumnBindingBuilder;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 pub const CURRENT_BLOCK_ID_COL_NAME: &str = "_current_block_id";
 pub const CURRENT_BLOCK_ROW_NUM_COL_NAME: &str = "_current_block_row_num";

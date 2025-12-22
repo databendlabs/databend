@@ -19,10 +19,10 @@ use ahash::HashMap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::RelExpr;
-use crate::optimizer::ir::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 
 pub struct JoinRelation {
     s_expr: SExpr,

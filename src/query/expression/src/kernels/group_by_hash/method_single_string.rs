@@ -15,13 +15,13 @@
 use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
-use crate::types::binary::BinaryColumnIter;
-use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
 use crate::ProjectedBlock;
+use crate::types::BinaryColumn;
+use crate::types::binary::BinaryColumnIter;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleBinary {}
@@ -78,8 +78,10 @@ impl KeyAccessor for BinaryColumn {
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        debug_assert!(index + 1 < self.offsets().len());
-        self.index_unchecked(index)
+        unsafe {
+            debug_assert!(index + 1 < self.offsets().len());
+            self.index_unchecked(index)
+        }
     }
 
     fn len(&self) -> usize {

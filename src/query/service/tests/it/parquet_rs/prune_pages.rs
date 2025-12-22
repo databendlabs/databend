@@ -24,8 +24,8 @@ use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 
-use crate::parquet_rs::data::make_test_file_page;
 use crate::parquet_rs::data::Scenario;
+use crate::parquet_rs::data::make_test_file_page;
 use crate::parquet_rs::utils::create_parquet_test_fixture;
 use crate::parquet_rs::utils::get_data_source_plan;
 

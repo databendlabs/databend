@@ -25,8 +25,8 @@ use std::collections::HashMap;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
 use self::bp::Bitpacking;
 use self::delta_bp::DeltaBitpacking;
@@ -37,12 +37,12 @@ pub use self::freq::Freq;
 pub use self::one_value::OneValue;
 pub use self::rle::Rle;
 pub use self::traits::IntegerType;
-use super::basic::CommonCompression;
 use super::Compression;
+use super::basic::CommonCompression;
 use crate::error::Error;
 use crate::error::Result;
-use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
+use crate::read::read_basic::read_compress_header;
 use crate::write::WriteOptions;
 
 pub fn compress_integer<T: IntegerType>(

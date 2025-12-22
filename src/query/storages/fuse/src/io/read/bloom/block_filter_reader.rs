@@ -30,8 +30,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
@@ -41,8 +41,8 @@ use parquet::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
-use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 use crate::io::MetaReaders;
+use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 #[async_trait::async_trait]
 pub trait BloomBlockFilterReader {
     async fn read_block_filter(

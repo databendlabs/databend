@@ -22,11 +22,11 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
+use crate::ScopeLevel;
+use crate::SettingScope;
 use crate::settings::ChangeValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
-use crate::ScopeLevel;
-use crate::SettingScope;
 
 impl Settings {
     #[async_backtrace::framed]

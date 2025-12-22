@@ -16,14 +16,14 @@ use nom::Parser;
 use nom_rule::rule;
 
 use super::expr::literal_string;
-use crate::ast::statements::password_policy::AlterPasswordAction;
-use crate::ast::statements::password_policy::PasswordSetOptions;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::Statement;
+use crate::ast::statements::password_policy::AlterPasswordAction;
+use crate::ast::statements::password_policy::PasswordSetOptions;
 use crate::ast::*;
-use crate::parser::common::map_res;
 use crate::parser::common::IResult;
+use crate::parser::common::map_res;
 use crate::parser::common::*;
 use crate::parser::input::Input;
 use crate::parser::token::*;

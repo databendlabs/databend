@@ -19,11 +19,11 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_array::RecordBatch;
+use arrow_flight::FlightDescriptor;
 use arrow_flight::decode::FlightRecordBatchStream;
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
 use arrow_flight::flight_service_client::FlightServiceClient;
-use arrow_flight::FlightDescriptor;
 use arrow_schema::ArrowError;
 use arrow_select::concat::concat_batches;
 use databend_common_base::headers::HEADER_FUNCTION;
@@ -40,28 +40,28 @@ use databend_common_metrics::external_server::record_request_external_batch_rows
 use databend_common_metrics::external_server::record_request_external_duration;
 use databend_common_metrics::external_server::record_running_requests_external_finish;
 use databend_common_metrics::external_server::record_running_requests_external_start;
-use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream;
 use hyper_util::client::legacy::connect::HttpConnector;
 use itertools::Itertools;
+use tonic::Request;
+use tonic::Status;
 use tonic::metadata::KeyAndValueRef;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
 use tonic::metadata::MetadataValue;
-use tonic::transport::channel::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
-use tonic::Request;
-use tonic::Status;
+use tonic::transport::channel::Channel;
 
-use crate::types::DataType;
-use crate::variant_transform::contains_variant;
-use crate::variant_transform::transform_variant;
 use crate::BlockEntry;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
+use crate::types::DataType;
+use crate::variant_transform::contains_variant;
+use crate::variant_transform::transform_variant;
 
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
 const UDF_HTTP2_KEEP_ALIVE_INTERVAL_SEC: u64 = 60;
@@ -288,9 +288,7 @@ impl UDFFlightClient {
         if expect_return_type[0] != return_type {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
                 "UDF return type mismatch on UDF function {}, expected return type: {}, actual return type: {}",
-                func_name,
-                expect_return_type[0],
-                return_type
+                func_name, expect_return_type[0], return_type
             )));
         }
 

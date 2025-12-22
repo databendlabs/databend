@@ -17,9 +17,9 @@ use std::io;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 use tokio::sync::oneshot;
 
-use crate::raft_log_v004::callback::Callback;
 use crate::raft_log_v004::IODesc;
 use crate::raft_log_v004::RaftLogV004;
+use crate::raft_log_v004::callback::Callback;
 
 pub async fn blocking_flush(rl: &mut RaftLogV004) -> Result<(), io::Error> {
     let (tx, rx) = oneshot::channel();

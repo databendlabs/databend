@@ -22,10 +22,10 @@ use codeq::Encode;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use databend_common_meta_types::protobuf as pb;
 use futures::FutureExt;
 use log::info;
 use log::warn;
@@ -33,14 +33,14 @@ use seq_marked::SeqValue;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
+use crate::PermitEntry;
+use crate::PermitKey;
 use crate::acquirer::Permit;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::AcquireError;
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
 use crate::queue::PermitEvent;
-use crate::PermitEntry;
-use crate::PermitKey;
 
 #[derive(Clone, Debug)]
 pub(crate) enum SeqPolicy {

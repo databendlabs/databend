@@ -25,10 +25,10 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_users::role_util::find_all_related_roles;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
+use databend_common_users::role_util::find_all_related_roles;
 use databend_common_version::BUILD_INFO;
 
 pub const CATALOG_DEFAULT: &str = "default";

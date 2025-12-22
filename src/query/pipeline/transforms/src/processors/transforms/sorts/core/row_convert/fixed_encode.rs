@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::ColumnViewIter;
 use databend_common_expression::FixedLengthEncoding;
+use databend_common_expression::types::AccessType;
 
 use super::null_sentinel;
 

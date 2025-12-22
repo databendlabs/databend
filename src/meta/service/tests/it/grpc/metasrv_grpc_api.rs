@@ -15,14 +15,14 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_base::base::Stoppable;
+use databend_common_base::base::tokio;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use log::debug;
 use log::info;
 use pretty_assertions::assert_eq;

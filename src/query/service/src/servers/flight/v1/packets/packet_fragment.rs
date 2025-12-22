@@ -18,9 +18,9 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use serde::de::Error;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::de::Error;
 
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;

@@ -16,14 +16,14 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::eval_function;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
@@ -31,8 +31,8 @@ use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::Compression;
 
 use super::VirtualColumnReader;
-use crate::io::read::block::parquet::column_chunks_to_record_batch;
 use crate::BlockReadResult;
+use crate::io::read::block::parquet::column_chunks_to_record_batch;
 
 pub struct VirtualBlockReadResult {
     pub num_rows: usize,

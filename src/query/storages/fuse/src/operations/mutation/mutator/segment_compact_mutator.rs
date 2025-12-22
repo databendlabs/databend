@@ -27,15 +27,15 @@ use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
-use crate::io::read::read_segment_stats_in_parallel;
+use crate::FuseTable;
+use crate::TableContext;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::read::read_segment_stats_in_parallel;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
-use crate::FuseTable;
-use crate::TableContext;
 
 #[derive(Default)]
 pub struct SegmentCompactionState {

@@ -14,8 +14,8 @@
 
 use databend_common_expression::types::DataType;
 
-use crate::plans::AsyncFunctionArgument;
 use crate::IndexType;
+use crate::plans::AsyncFunctionArgument;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AsyncFunctionDesc {

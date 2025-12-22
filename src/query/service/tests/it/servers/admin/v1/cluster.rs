@@ -17,14 +17,14 @@ use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_query::servers::admin::v1::cluster::*;
 use databend_query::test_kits::*;
-use http::header;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
-use poem::get;
+use http::header;
 use poem::Endpoint;
 use poem::Request;
 use poem::Route;
+use poem::get;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]

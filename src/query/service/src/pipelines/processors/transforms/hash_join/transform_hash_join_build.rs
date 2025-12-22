@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,9 +26,9 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 use databend_common_storages_fuse::TableContext;
 
+use super::runtime_filter::RuntimeFilterLocalBuilder;
 use super::runtime_filter::build_and_push_down_runtime_filter;
 use super::runtime_filter::merge_join_runtime_filter_packets;
-use super::runtime_filter::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 

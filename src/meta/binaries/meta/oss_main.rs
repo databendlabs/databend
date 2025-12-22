@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(stmt_expr_attributes)]
+#![allow(clippy::collapsible_if)]
 
 mod entry;
 mod kvapi;

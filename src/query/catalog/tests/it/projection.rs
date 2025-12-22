@@ -16,10 +16,10 @@ use std::collections::BTreeMap;
 
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 use parquet::arrow::ArrowSchemaConverter;
 
 #[test]

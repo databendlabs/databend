@@ -14,9 +14,9 @@
 
 use std::intrinsics::unlikely;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use bytesize::ByteSize;
 use databend_common_exception::ErrorCode;
@@ -26,14 +26,14 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::core::algorithm::HeapSort;
-use super::core::algorithm::LoserTreeSort;
-use super::core::algorithm::SortAlgorithm;
 use super::core::Merger;
 use super::core::Rows;
 use super::core::SortedStream;
 use super::core::VariableRowConverter;
 use super::core::VariableRows;
+use super::core::algorithm::HeapSort;
+use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::SortAlgorithm;
 use super::sort_merge_base::MergeSort;
 use super::sort_merge_base::TransformSortMergeBase;
 use super::utils::has_order_field;

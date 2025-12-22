@@ -14,8 +14,8 @@
 
 use databend_common_exception::Result;
 
-use crate::plans::Plan;
 use crate::Binder;
+use crate::plans::Plan;
 
 impl Binder {
     pub async fn bind_report_issue(&mut self, sql: &str) -> Result<Plan> {

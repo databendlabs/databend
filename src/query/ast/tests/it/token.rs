@@ -15,8 +15,8 @@
 use std::fs::File;
 use std::io::Write;
 
-use databend_common_ast::parser::token::*;
 use databend_common_ast::Result;
+use databend_common_ast::parser::token::*;
 use goldenfile::Mint;
 
 fn run_lexer(file: &mut File, source: &str) {

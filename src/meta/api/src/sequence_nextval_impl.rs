@@ -15,9 +15,9 @@
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::OutOfSequenceRange;
 use databend_common_meta_app::app_error::SequenceError;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MetaError;
@@ -133,13 +133,13 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 
             if got_delta < delta {
                 return Err(KVAppError::AppError(AppError::SequenceError(
-                        SequenceError::OutOfSequenceRange(OutOfSequenceRange::new(
-                            self.ident.name(),
-                            format!(
-                                "{sequence_meta}: count: {count}; expected delta: {delta}, but got: {resp}",
-                            ),
-                        )),
-                    )));
+                    SequenceError::OutOfSequenceRange(OutOfSequenceRange::new(
+                        self.ident.name(),
+                        format!(
+                            "{sequence_meta}: count: {count}; expected delta: {delta}, but got: {resp}",
+                        ),
+                    )),
+                )));
             }
 
             Ok(Ok((resp.before, resp.after)))

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -28,13 +28,13 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
+use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use log::info;
 use log::warn;
 use opendal::Operator;

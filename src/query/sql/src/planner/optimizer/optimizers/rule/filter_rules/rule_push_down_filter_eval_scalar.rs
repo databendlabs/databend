@@ -22,13 +22,13 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::walk_expr_mut;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,

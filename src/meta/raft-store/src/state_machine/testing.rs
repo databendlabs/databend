@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use databend_common_meta_sled_store::openraft;
-use databend_common_meta_types::raft_types::new_log_id;
-use databend_common_meta_types::raft_types::Entry;
-use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::new_log_id;
 use maplit::btreeset;
-use openraft::entry::RaftEntry;
 use openraft::Membership;
+use openraft::entry::RaftEntry;
 
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::iter::once;
 
 use ahash::HashSet;
@@ -22,9 +22,6 @@ use ahash::HashSetExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -37,8 +34,11 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_common_functions::aggregates::eval_aggr;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::eval_aggr;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
@@ -48,8 +48,8 @@ use log::info;
 use crate::operations::replace_into::meta::DeletionByColumn;
 use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::column_hash::RowScalarValue;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch
@@ -441,10 +441,9 @@ impl Partitioner {
                 let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
                     .iter()
                     .filter_map(|(hashes, validity)| match validity {
-                        Some(v) if v.null_count() != 0 => {
-                            v.get(row_idx)
-                                .map(|v| if v { hashes.get(row_idx) } else { None })
-                        }
+                        Some(v) if v.null_count() != 0 => v
+                            .get(row_idx)
+                            .map(|v| if v { hashes.get(row_idx) } else { None }),
                         _ => Some(hashes.get(row_idx)),
                     })
                     .collect();
@@ -488,9 +487,9 @@ fn on_conflict_key_column_values(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::FromData;
     use databend_common_expression::types::NumberType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::FromData;
 
     use super::*;
 

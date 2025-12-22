@@ -15,12 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 
-use crate::client_config::make_request;
 use crate::client_config::ClientConfig;
-use crate::pb::task_service_client::TaskServiceClient;
+use crate::client_config::make_request;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
 use crate::pb::CreateTaskRequest;
@@ -33,6 +32,7 @@ use crate::pb::ExecuteTaskRequest;
 use crate::pb::ExecuteTaskResponse;
 use crate::pb::ShowTasksRequest;
 use crate::pb::ShowTasksResponse;
+use crate::pb::task_service_client::TaskServiceClient;
 
 pub(crate) const TASK_CLIENT_VERSION: &str = "v1";
 pub(crate) const TASK_CLIENT_VERSION_NAME: &str = "TASK_CLIENT_VERSION";

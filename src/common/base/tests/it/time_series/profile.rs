@@ -3,11 +3,11 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::thread;
 use std::time::Duration;
 
-use databend_common_base::runtime::compress_time_point;
 use databend_common_base::runtime::ProfilePoints;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_base::runtime::TimeSeriesProfiles;
+use databend_common_base::runtime::compress_time_point;
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

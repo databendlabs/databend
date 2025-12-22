@@ -14,10 +14,10 @@
 
 use std::sync::LazyLock;
 
-use databend_common_base::runtime::metrics::register_counter_family;
-use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::FamilyHistogram;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
 
 use crate::VecLabels;
 

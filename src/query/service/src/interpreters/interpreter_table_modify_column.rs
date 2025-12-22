@@ -20,7 +20,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
@@ -28,6 +27,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -40,14 +40,14 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::plans::ModifyColumnAction;
-use databend_common_sql::plans::ModifyTableColumnPlan;
-use databend_common_sql::plans::Plan;
-use databend_common_sql::resolve_type_name_by_str;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
+use databend_common_sql::plans::ModifyColumnAction;
+use databend_common_sql::plans::ModifyTableColumnPlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::resolve_type_name_by_str;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -61,9 +61,9 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
-use crate::interpreters::Interpreter;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -113,7 +113,7 @@ impl ModifyTableColumnInterpreter {
                 return Err(ErrorCode::UnknownDatamask(format!(
                     "Data mask policy {} not found",
                     mask_name
-                )))
+                )));
             }
         };
 

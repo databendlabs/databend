@@ -35,9 +35,9 @@ use object::CompressionFormat;
 use object::Object;
 use object::ObjectSection;
 
+use crate::elf::ElfFile;
 use crate::elf::dwarf_unit::Unit;
 use crate::elf::dwarf_unit::UnitAttrs;
-use crate::elf::ElfFile;
 
 #[derive(Debug)]
 pub struct CallLocation {
@@ -164,10 +164,10 @@ impl Dwarf {
             let head = self.debug_info.header_from_offset(debug_info_offset)?;
 
             let type_ = head.type_();
-            if matches!(type_, UnitType::Compilation | UnitType::Skeleton(_)) {
-                if let Some(unit) = self.get_unit(head)? {
-                    return Ok(Some(unit.find_frames(probe)?));
-                }
+            if matches!(type_, UnitType::Compilation | UnitType::Skeleton(_))
+                && let Some(unit) = self.get_unit(head)?
+            {
+                return Ok(Some(unit.find_frames(probe)?));
             }
         }
 
@@ -177,12 +177,11 @@ impl Dwarf {
     fn slow_find_frames(&self, probe: u64) -> gimli::Result<Vec<CallLocation>> {
         let mut units = self.debug_info.units();
         while let Some(head) = units.next()? {
-            if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_)) {
-                if let Some(unit) = self.get_unit(head)? {
-                    if unit.match_pc(probe) {
-                        return unit.find_frames(probe);
-                    }
-                }
+            if matches!(head.type_(), UnitType::Compilation | UnitType::Skeleton(_))
+                && let Some(unit) = self.get_unit(head)?
+                && unit.match_pc(probe)
+            {
+                return unit.find_frames(probe);
             }
         }
 

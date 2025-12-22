@@ -20,5 +20,5 @@ mod manager;
 pub use interface::Catalog;
 pub use interface::CatalogCreator;
 pub use interface::StorageDescription;
-pub use manager::CatalogManager;
 pub use manager::CATALOG_DEFAULT;
+pub use manager::CatalogManager;

@@ -20,9 +20,9 @@ use derive_visitor::DriveMut;
 use ethnum::i256;
 
 use super::quote::QuotedString;
-use crate::ast::quote::QuotedIdent;
-use crate::ast::WithOptions;
 use crate::Span;
+use crate::ast::WithOptions;
+use crate::ast::quote::QuotedIdent;
 
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

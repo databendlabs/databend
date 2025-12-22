@@ -25,13 +25,12 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType::Float32;
-use databend_common_expression::types::NumberDataType::Float64;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableDataType::Null;
 use databend_common_expression::TableDataType::Timestamp;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_expression::types::NumberDataType::Float32;
+use databend_common_expression::types::NumberDataType::Float64;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -41,21 +40,22 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::TablePartition;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
+use iceberg::TableCreation;
+use iceberg::TableIdent;
 use iceberg::arrow::arrow_schema_to_schema;
 use iceberg::spec::PartitionSpec;
 use iceberg::spec::Schema as IceSchema;
 use iceberg::spec::Schema as IcebergSchema;
 use iceberg::spec::Transform;
 use iceberg::spec::UnboundPartitionField;
-use iceberg::TableCreation;
-use iceberg::TableIdent;
 
-use crate::cache;
 use crate::IcebergMutableCatalog;
+use crate::cache;
 
 const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
@@ -351,7 +351,8 @@ fn build_identity_partition_spec(
         let origin_ty = &req_schema.field_with_name(col)?.data_type;
         if is_invalid_partition_type(origin_ty) {
             return Err(ErrorCode::TableOptionInvalid(format!(
-                "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field", col, origin_ty
+                "Partition key {} is {:?} type. Cannot set FLOAT, DOUBLE, DECIMAL, DATETIME as partition field",
+                col, origin_ty
             )));
         }
 

@@ -18,13 +18,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_sql::plans::RevokePrivilegePlan;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use log::debug;
 
-use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::validate_grant_object_exists;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;

@@ -15,15 +15,15 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 
+use crate::IndexType;
 use crate::plans::UDFField;
 use crate::plans::UDFType;
-use crate::IndexType;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 

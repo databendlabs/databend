@@ -28,12 +28,12 @@ use databend_common_sql::plans::JoinType;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
 
-use super::build_state::BuildState;
-use super::hash_join_probe_state::MergeIntoChunkPartialUnmodified;
 use super::HashJoinBuildState;
 use super::HashJoinProbeState;
 use super::HashJoinState;
 use super::TransformHashJoinProbe;
+use super::build_state::BuildState;
+use super::hash_join_probe_state::MergeIntoChunkPartialUnmodified;
 pub struct MatchedPtr(pub *mut AtomicU8);
 
 unsafe impl Send for MatchedPtr {}

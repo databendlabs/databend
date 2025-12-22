@@ -22,9 +22,9 @@ use databend_common_expression::SendableDataBlockStream;
 use futures::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sql::Planner;
 

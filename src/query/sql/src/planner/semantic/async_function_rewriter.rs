@@ -19,8 +19,11 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::AsyncFunction;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
@@ -29,10 +32,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
+use crate::plans::walk_expr_mut;
 
 pub(crate) struct AsyncFunctionRewriter {
     metadata: MetadataRef,
@@ -168,7 +168,7 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
         for (i, arg) in async_func.arguments.iter_mut().enumerate() {
             self.visit(arg)?;
 
-            let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
+            let new_column_ref = if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &async_func.display_name, i);

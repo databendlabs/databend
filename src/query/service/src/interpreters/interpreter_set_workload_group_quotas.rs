@@ -24,9 +24,9 @@ use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
 use databend_common_sql::plans::SetWorkloadGroupQuotasPlan;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_create_workload_group::to_quota_value;
 use crate::interpreters::util::AuditElement;
-use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

@@ -22,11 +22,11 @@ use databend_common_metrics::storage::metrics_inc_storage_http_requests_count;
 use futures::TryStreamExt;
 use http::Request;
 use http::Response;
-use opendal::raw::parse_content_encoding;
-use opendal::raw::parse_content_length;
+use opendal::Buffer;
 use opendal::raw::HttpBody;
 use opendal::raw::HttpFetch;
-use opendal::Buffer;
+use opendal::raw::parse_content_encoding;
+use opendal::raw::parse_content_length;
 use url::Url;
 
 pub struct StorageHttpClient {

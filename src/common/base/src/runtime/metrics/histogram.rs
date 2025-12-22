@@ -23,12 +23,12 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::registry::MAX_HISTOGRAM_BOUND;
 use crate::runtime::metrics::sample::HistogramCount;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
-use crate::runtime::metrics::ScopedRegistry;
 
 pub static BUCKET_SECONDS: [f64; 16] = [
     0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 300.0, 600.0, 1800.0, 3600.0, 7200.0,
@@ -115,7 +115,7 @@ impl Histogram {
         }
     }
 
-    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<Vec<(f64, u64)>>) {
+    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<'_, Vec<(f64, u64)>>) {
         let inner = self.inner.read();
         let sum = inner.sum;
         let count = inner.count;

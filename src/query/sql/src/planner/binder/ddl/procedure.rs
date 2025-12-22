@@ -24,28 +24,32 @@ use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::expr::type_name as parse_type_name_ast;
-use databend_common_ast::parser::run_parser;
-use databend_common_ast::parser::script::script_block_or_stmt;
-use databend_common_ast::parser::script::ScriptBlockOrStmt;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
+use databend_common_ast::parser::expr::type_name as parse_type_name_ast;
+use databend_common_ast::parser::run_parser;
+use databend_common_ast::parser::script::ScriptBlockOrStmt;
+use databend_common_ast::parser::script::script_block_or_stmt;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::procedure::ProcedureInfo;
 use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::procedure::ProcedureInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 
+use crate::BindContext;
+use crate::Binder;
+use crate::ScalarExpr;
+use crate::TypeChecker;
 use crate::binder::show::get_show_options;
 use crate::plans::CallProcedurePlan;
 use crate::plans::ConstantExpr;
@@ -57,10 +61,6 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
 use crate::resolve_type_name;
-use crate::BindContext;
-use crate::Binder;
-use crate::ScalarExpr;
-use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -78,7 +78,7 @@ impl Binder {
             _ => {
                 return Err(ErrorCode::InvalidArgument(
                     "immediate script must be a string",
-                ))
+                ));
             }
         };
 

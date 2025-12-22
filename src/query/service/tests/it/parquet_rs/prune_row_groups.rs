@@ -21,8 +21,8 @@ use databend_common_expression::TableSchema;
 use databend_common_storages_parquet::ParquetPruner;
 use parquet::file::metadata::ParquetMetaDataReader;
 
-use super::data::make_test_file_rg;
 use super::data::Scenario;
+use super::data::make_test_file_rg;
 use super::utils::get_data_source_plan;
 use crate::parquet_rs::utils::create_parquet_test_fixture;
 

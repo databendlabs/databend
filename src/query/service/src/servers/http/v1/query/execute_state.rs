@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use ExecuteState::*;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
@@ -37,14 +38,13 @@ use log::info;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
-use ExecuteState::*;
 
 use super::http_query::ResponseState;
 use super::sized_spsc::SizedChannelSender;
-use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
+use crate::interpreters::interpreter_plan_sql;
 use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;

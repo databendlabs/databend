@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -34,17 +34,17 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::TableLockIdent;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
-use futures::future::select;
 use futures::future::Either;
+use futures::future::select;
 use futures_util::StreamExt;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
 use crate::sessions::SessionManager;
 

@@ -18,22 +18,20 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::VariantDataType;
-use databend_common_frozen_api::frozen_api;
+use databend_common_expression::types::NumberDataType;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_frozen_api::frozen_api;
 use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::v0;
-use crate::meta::v1;
 use crate::meta::BlockHLLState;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
@@ -42,6 +40,8 @@ use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
+use crate::meta::v0;
+use crate::meta::v1;
 
 /// A segment comprises one or more blocks
 #[frozen_api("e19aba63")]

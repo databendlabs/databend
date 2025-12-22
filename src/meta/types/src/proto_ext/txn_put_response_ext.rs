@@ -17,9 +17,9 @@ use std::fmt::Formatter;
 
 use display_more::DisplayOptionExt;
 
-use crate::protobuf as pb;
 use crate::SeqV;
 use crate::TxnPutResponse;
+use crate::protobuf as pb;
 
 impl Display for TxnPutResponse {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {

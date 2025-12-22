@@ -14,14 +14,14 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_query::catalogs::default::ImmutableCatalog;
 use databend_query::catalogs::Catalog;
+use databend_query::catalogs::default::ImmutableCatalog;
 
 use crate::tests::create_catalog;
 

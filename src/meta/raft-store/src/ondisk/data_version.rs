@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use crate::ondisk::version_info::VersionInfo;
 use crate::ondisk::version_info::VERSION_INFOS;
+use crate::ondisk::version_info::VersionInfo;
 
 /// Available data versions this program can work upon.
 ///

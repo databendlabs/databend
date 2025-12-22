@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
+use std::sync::PoisonError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::sync::PoisonError;
 use std::time::SystemTime;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::error_info::NodeErrorType;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
@@ -36,14 +33,12 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_pipeline::core::port::connect;
-use databend_common_pipeline::core::port_trigger::DirectedEdge;
-use databend_common_pipeline::core::port_trigger::UpdateList;
-use databend_common_pipeline::core::port_trigger::UpdateTrigger;
-use databend_common_pipeline::core::profile::PlanScope;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
@@ -51,6 +46,11 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::port::connect;
+use databend_common_pipeline::core::port_trigger::DirectedEdge;
+use databend_common_pipeline::core::port_trigger::UpdateList;
+use databend_common_pipeline::core::port_trigger::UpdateTrigger;
+use databend_common_pipeline::core::profile::PlanScope;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
@@ -58,14 +58,13 @@ use log::trace;
 use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
+use petgraph::Direction;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use petgraph::Direction;
 
-use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::ProcessorAsyncTask;
@@ -74,6 +73,7 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
 enum State {
     Idle,
@@ -154,13 +154,15 @@ impl Node {
     }
 
     pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
-        self.updated_list.trigger(queue)
+        unsafe { self.updated_list.trigger(queue) }
     }
 
     pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger {
-        self.updated_list
-            .create_trigger(index)
-            .expect("Failed to create trigger")
+        unsafe {
+            self.updated_list
+                .create_trigger(index)
+                .expect("Failed to create trigger")
+        }
     }
 }
 
@@ -340,12 +342,14 @@ impl ExecutingGraph {
         capacity: usize,
         graph: &Arc<RunningGraph>,
     ) -> Result<ScheduleQueue> {
-        let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
-        for sink_index in locker.graph.externals(Direction::Outgoing) {
-            ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
-        }
+        unsafe {
+            let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
+            for sink_index in locker.graph.externals(Direction::Outgoing) {
+                ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
+            }
 
-        Ok(schedule_queue)
+            Ok(schedule_queue)
+        }
     }
 
     /// # Safety
@@ -357,100 +361,102 @@ impl ExecutingGraph {
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
-        let mut need_schedule_nodes = VecDeque::new();
-        let mut need_schedule_edges = VecDeque::new();
+        unsafe {
+            let mut need_schedule_nodes = VecDeque::new();
+            let mut need_schedule_edges = VecDeque::new();
 
-        need_schedule_nodes.push_back(index);
+            need_schedule_nodes.push_back(index);
 
-        while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
-            // To avoid lock too many times, we will try to cache lock.
-            let mut state_guard_cache = None;
-            let mut event_cause = EventCause::Other;
+            while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
+                // To avoid lock too many times, we will try to cache lock.
+                let mut state_guard_cache = None;
+                let mut event_cause = EventCause::Other;
 
-            if need_schedule_nodes.is_empty() {
-                let edge = need_schedule_edges.pop_front().unwrap();
-                let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
+                if need_schedule_nodes.is_empty() {
+                    let edge = need_schedule_edges.pop_front().unwrap();
+                    let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
-                event_cause = match edge {
-                    DirectedEdge::Source(index) => {
-                        EventCause::Input(locker.graph.edge_weight(index).unwrap().input_index)
+                    event_cause = match edge {
+                        DirectedEdge::Source(index) => {
+                            EventCause::Input(locker.graph.edge_weight(index).unwrap().input_index)
+                        }
+                        DirectedEdge::Target(index) => EventCause::Output(
+                            locker.graph.edge_weight(index).unwrap().output_index,
+                        ),
+                    };
+
+                    let node = &locker.graph[target_index];
+                    let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
+
+                    if matches!(*node_state, State::Idle) {
+                        state_guard_cache = Some(node_state);
+                        need_schedule_nodes.push_back(target_index);
+                    } else {
+                        node.processor.un_reacted(event_cause.clone())?;
                     }
-                    DirectedEdge::Target(index) => {
-                        EventCause::Output(locker.graph.edge_weight(index).unwrap().output_index)
-                    }
-                };
+                }
 
-                let node = &locker.graph[target_index];
-                let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
+                if let Some(schedule_index) = need_schedule_nodes.pop_front() {
+                    let node = &locker.graph[schedule_index];
+                    let (event, process_rows) = {
+                        let mut payload = node.tracking_payload.clone();
+                        payload.process_rows = AtomicUsize::new(0);
+                        let guard = ThreadTracker::tracking(payload);
 
-                if matches!(*node_state, State::Idle) {
-                    state_guard_cache = Some(node_state);
-                    need_schedule_nodes.push_back(target_index);
-                } else {
-                    node.processor.un_reacted(event_cause.clone())?;
+                        if state_guard_cache.is_none() {
+                            state_guard_cache = Some(node.state.lock().unwrap());
+                        }
+
+                        let event = node.processor.event(event_cause)?;
+                        let process_rows = ThreadTracker::process_rows();
+                        match guard.flush() {
+                            Ok(_) => Ok((event, process_rows)),
+                            Err(out_of_limit) => {
+                                Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
+                            }
+                        }
+                    }?;
+
+                    trace!(
+                        "node id: {:?}, name: {:?}, event: {:?}",
+                        node.processor.id(),
+                        node.processor.name(),
+                        event
+                    );
+                    let processor_state = match event {
+                        Event::Finished => {
+                            if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
+                                locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
+                            }
+
+                            State::Finished
+                        }
+                        Event::NeedData | Event::NeedConsume => State::Idle,
+                        Event::Sync => {
+                            schedule_queue.push_sync(ProcessorWrapper {
+                                processor: node.processor.clone(),
+                                graph: graph.clone(),
+                                process_rows,
+                            });
+                            State::Processing
+                        }
+                        Event::Async => {
+                            schedule_queue.push_async(ProcessorWrapper {
+                                processor: node.processor.clone(),
+                                graph: graph.clone(),
+                                process_rows,
+                            });
+                            State::Processing
+                        }
+                    };
+
+                    node.trigger(&mut need_schedule_edges);
+                    *state_guard_cache.unwrap() = processor_state;
                 }
             }
 
-            if let Some(schedule_index) = need_schedule_nodes.pop_front() {
-                let node = &locker.graph[schedule_index];
-                let (event, process_rows) = {
-                    let mut payload = node.tracking_payload.clone();
-                    payload.process_rows = AtomicUsize::new(0);
-                    let guard = ThreadTracker::tracking(payload);
-
-                    if state_guard_cache.is_none() {
-                        state_guard_cache = Some(node.state.lock().unwrap());
-                    }
-
-                    let event = node.processor.event(event_cause)?;
-                    let process_rows = ThreadTracker::process_rows();
-                    match guard.flush() {
-                        Ok(_) => Ok((event, process_rows)),
-                        Err(out_of_limit) => {
-                            Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
-                        }
-                    }
-                }?;
-
-                trace!(
-                    "node id: {:?}, name: {:?}, event: {:?}",
-                    node.processor.id(),
-                    node.processor.name(),
-                    event
-                );
-                let processor_state = match event {
-                    Event::Finished => {
-                        if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
-                            locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
-                        }
-
-                        State::Finished
-                    }
-                    Event::NeedData | Event::NeedConsume => State::Idle,
-                    Event::Sync => {
-                        schedule_queue.push_sync(ProcessorWrapper {
-                            processor: node.processor.clone(),
-                            graph: graph.clone(),
-                            process_rows,
-                        });
-                        State::Processing
-                    }
-                    Event::Async => {
-                        schedule_queue.push_async(ProcessorWrapper {
-                            processor: node.processor.clone(),
-                            graph: graph.clone(),
-                            process_rows,
-                        });
-                        State::Processing
-                    }
-                };
-
-                node.trigger(&mut need_schedule_edges);
-                *state_guard_cache.unwrap() = processor_state;
-            }
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
@@ -716,16 +722,18 @@ impl RunningGraph {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn init_schedule_queue(self: Arc<Self>, capacity: usize) -> Result<ScheduleQueue> {
-        ExecutingGraph::init_schedule_queue(&self.0, capacity, &self)
+        unsafe { ExecutingGraph::init_schedule_queue(&self.0, capacity, &self) }
     }
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
-        let mut schedule_queue = ScheduleQueue::with_capacity(0);
-        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
-        Ok(schedule_queue)
+        unsafe {
+            let mut schedule_queue = ScheduleQueue::with_capacity(0);
+            ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
+            Ok(schedule_queue)
+        }
     }
 
     pub(crate) fn get_node_tracking_payload(&self, pid: NodeIndex) -> &TrackingPayload {

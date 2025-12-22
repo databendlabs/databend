@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_config::GlobalConfig;
@@ -28,10 +28,10 @@ use itertools::Itertools;
 use serde::Deserializer;
 use serde::Serializer;
 
+use crate::SettingMode;
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
 use crate::settings_default::SettingRange;
-use crate::SettingMode;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum ScopeLevel {
@@ -278,8 +278,8 @@ impl<'a> IntoIterator for &'a Settings {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
 
     use dashmap::DashMap;
     use databend_common_exception::Result;

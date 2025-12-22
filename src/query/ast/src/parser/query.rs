@@ -14,15 +14,17 @@
 
 use std::collections::BTreeMap;
 
-use nom::error::context;
 use nom::Parser;
+use nom::error::context;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use crate::Range;
 use crate::ast::*;
+use crate::parser::ErrorKind;
 use crate::parser::common::*;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
@@ -33,8 +35,6 @@ use crate::parser::statement::hint;
 use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
-use crate::parser::ErrorKind;
-use crate::Range;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(

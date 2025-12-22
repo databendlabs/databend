@@ -59,7 +59,7 @@ impl NonEmptyString {
         &self.non_empty
     }
 
-    pub fn as_non_empty_str(&self) -> NonEmptyStr {
+    pub fn as_non_empty_str(&self) -> NonEmptyStr<'_> {
         NonEmptyStr::new(&self.non_empty).unwrap()
     }
 }

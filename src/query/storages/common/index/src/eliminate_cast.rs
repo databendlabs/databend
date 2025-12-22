@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 
 use databend_common_ast::Span;
-use databend_common_expression::expr::*;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
-use databend_common_expression::visit_expr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::ExprVisitor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
+use databend_common_expression::expr::*;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(super) fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {

@@ -27,10 +27,10 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
-use super::core::Bounds;
-use super::core::Rows;
 use super::SortCollectedMeta;
 use super::SortExchangeMeta;
+use super::core::Bounds;
+use super::core::Rows;
 use crate::HookTransform;
 use crate::HookTransformer;
 

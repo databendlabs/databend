@@ -29,7 +29,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
@@ -38,17 +37,18 @@ use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use log::info;
 use opendal::Operator;
 
+use crate::FuseSegmentFormat;
+use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::ColumnHLLAccumulator;
 use crate::statistics::RowOrientedSegmentBuilder;
 use crate::statistics::VirtualColumnAccumulator;
-use crate::FuseSegmentFormat;
-use crate::FuseTable;
 
 enum State<B: SegmentBuilder> {
     None,

@@ -21,10 +21,10 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::binder::AsyncFunctionDesc;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::binder::AsyncFunctionDesc;
+use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -34,8 +34,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsyncFunction {

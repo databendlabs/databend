@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
-use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
 use databend_common_base::runtime::TimeSeriesProfileName;
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -319,10 +319,12 @@ impl OutputPort {
 ///
 /// # Safety
 pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
-    let shared_status = SharedStatus::create();
+    unsafe {
+        let shared_status = SharedStatus::create();
 
-    input.set_shared(shared_status.clone());
-    output.set_shared(shared_status);
+        input.set_shared(shared_status.clone());
+        output.set_shared(shared_status);
+    }
 }
 
 #[cfg(test)]
@@ -332,13 +334,13 @@ mod tests {
 
     use databend_common_base::runtime::Thread;
     use databend_common_exception::ErrorCode;
-    use databend_common_expression::local_block_meta_serde;
     use databend_common_expression::BlockMetaInfo;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::local_block_meta_serde;
 
-    use crate::core::port::connect;
     use crate::core::InputPort;
     use crate::core::OutputPort;
+    use crate::core::port::connect;
 
     #[derive(Clone, Debug)]
     struct TestDataMeta {

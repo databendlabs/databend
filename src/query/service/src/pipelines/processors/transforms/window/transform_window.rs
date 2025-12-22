@@ -24,9 +24,17 @@ use std::sync::Arc;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SortColumnDescription;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::date_helper::EvalMonthsImpl;
+use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -36,24 +44,16 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
+use super::WindowFunctionInfo;
 use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
-use super::WindowFunctionInfo;
 use crate::physical_plans::LagLeadDefault;
 
 #[derive(Debug, Clone)]
@@ -983,7 +983,7 @@ impl TransformWindow {
                     cmp_v_timestamp.cmp(&ref_v_timestamp)
                 } else {
                     return Err(ErrorCode::IllegalDataType(
-                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval"
+                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval",
                     ));
                 }
             }
@@ -993,7 +993,7 @@ impl TransformWindow {
 
                 let Some(n) = offset.as_interval() else {
                     return Err(ErrorCode::IllegalDataType(
-                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval"
+                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval",
                     ));
                 };
                 let func_ctx = FunctionContext::default();
@@ -1004,7 +1004,11 @@ impl TransformWindow {
                 };
                 cmp_v.cmp(&ref_v)
             }
-            _ => return Err(ErrorCode::IllegalDataType("window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`")),
+            _ => {
+                return Err(ErrorCode::IllegalDataType(
+                    "window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`",
+                ));
+            }
         };
         Ok(ordering)
     }
@@ -1485,30 +1489,30 @@ mod tests {
 
     use databend_common_base::base::tokio;
     use databend_common_exception::Result;
-    use databend_common_expression::block_debug::assert_blocks_eq;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::Column;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::block_debug::assert_blocks_eq;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
-    use databend_common_pipeline::core::port::connect;
     use databend_common_pipeline::core::Event;
     use databend_common_pipeline::core::InputPort;
     use databend_common_pipeline::core::OutputPort;
     use databend_common_pipeline::core::Processor;
+    use databend_common_pipeline::core::port::connect;
     use databend_common_sql::plans::WindowFuncFrameUnits;
 
     use super::TransformWindow;
     use super::WindowBlock;
     use super::WindowSortDesc;
-    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
+    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
 
     fn get_ranking_transform_window(bounds: (FrameBound, FrameBound)) -> Result<TransformWindow> {
         let func = WindowFunctionInfo::DenseRank;

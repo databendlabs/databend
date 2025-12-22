@@ -17,9 +17,6 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_array::StringArray;
-use arrow_flight::encode::FlightDataEncoderBuilder;
-use arrow_flight::flight_service_server::FlightService;
-use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_flight::Action;
 use arrow_flight::ActionType;
 use arrow_flight::Criteria;
@@ -34,24 +31,27 @@ use arrow_flight::PollInfo;
 use arrow_flight::PutResult;
 use arrow_flight::SchemaResult;
 use arrow_flight::Ticket;
+use arrow_flight::encode::FlightDataEncoderBuilder;
+use arrow_flight::flight_service_server::FlightService;
+use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use futures::stream;
+use databend_common_expression::types::DataType;
+use databend_common_expression::udf_client::UDFFlightClient;
 use futures::Stream;
 use futures::StreamExt;
+use futures::stream;
 use tokio::time::timeout;
 use tokio_stream::wrappers::TcpListenerStream;
-use tonic::transport::Server;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
+use tonic::transport::Server;
 
 #[derive(Clone)]
 enum MockMode {

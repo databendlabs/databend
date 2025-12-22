@@ -24,14 +24,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
+use crate::BindContext;
+use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::plans::RefreshSelection;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]

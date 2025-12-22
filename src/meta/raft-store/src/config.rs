@@ -19,9 +19,9 @@ use std::path::Path;
 
 use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
-use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::raft_types::NodeId;
 
 use crate::ondisk::DATA_VERSION;
 use crate::raft_log_v004;
