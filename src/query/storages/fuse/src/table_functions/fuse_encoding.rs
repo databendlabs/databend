@@ -54,6 +54,10 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use futures::stream;
+use futures::stream::StreamExt;
+use futures::stream::TryStreamExt;
+use opendal::Operator;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::Encoding as ParquetEncoding;
 use parquet::format::Type as ParquetPhysicalType;
@@ -377,6 +381,86 @@ impl<'a> FuseEncodingImpl<'a> {
     }
 
     #[async_backtrace::framed]
+    async fn collect_parquet_block_rows_from_meta(
+        operator: Operator,
+        location: String,
+        file_size: u64,
+        storage_format: FuseStorageFormat,
+        table_name: Arc<String>,
+        fields: Arc<Vec<TableField>>,
+        column_id_to_index: Arc<HashMap<ColumnId, usize>>,
+        column_name_filter: Arc<Option<String>>,
+    ) -> Result<Vec<EncodingRow>> {
+        let file_meta = read_thrift_file_metadata(operator, &location, Some(file_size)).await?;
+        if file_meta.row_groups.len() != 1 {
+            return Err(ErrorCode::ParquetFileInvalid(format!(
+                "invalid parquet file {}, expects one row group but got {}",
+                location,
+                file_meta.row_groups.len()
+            )));
+        }
+        let row_group = &file_meta.row_groups[0];
+        let columns = &row_group.columns;
+        let mut block_rows = Vec::new();
+
+        for field in fields.iter() {
+            if field.is_nested() {
+                continue;
+            }
+            if !Self::filter_matches(column_name_filter.as_ref(), field.name()) {
+                continue;
+            }
+            let column_id = field.column_id;
+            let Some(column_idx) = column_id_to_index.get(&column_id) else {
+                continue;
+            };
+            let Some(column_chunk) = columns.get(*column_idx) else {
+                // Missing column caused by schema evolutions
+                continue;
+            };
+            let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
+                ErrorCode::ParquetFileInvalid(format!(
+                    "invalid parquet file {}, meta data of column {} is empty",
+                    location, column_id
+                ))
+            })?;
+
+            let compressed_size =
+                u64::try_from(chunk_meta.total_compressed_size).map_err(|_| {
+                    ErrorCode::ParquetFileInvalid(format!(
+                        "invalid parquet file {}, compressed size overflow for column {}",
+                        location,
+                        field.name()
+                    ))
+                })?;
+            let uncompressed_size =
+                u64::try_from(chunk_meta.total_uncompressed_size).map_err(|_| {
+                    ErrorCode::ParquetFileInvalid(format!(
+                        "invalid parquet file {}, uncompressed size overflow for column {}",
+                        location,
+                        field.name()
+                    ))
+                })?;
+
+            let physical_type = parquet_physical_type_to_string(chunk_meta.type_);
+            block_rows.push(EncodingRow {
+                table_name: table_name.as_str().to_string(),
+                storage_format,
+                block_location: location.clone(),
+                column_name: field.name().to_string(),
+                column_type: format!("{} ({})", field.data_type().sql_name(), physical_type),
+                validity_size: None,
+                compressed_size,
+                uncompressed_size,
+                level_one: parquet_encodings_to_string(&chunk_meta.encodings),
+                level_two: Some(parquet_codec_to_string(chunk_meta.codec)),
+            });
+        }
+
+        Ok(block_rows)
+    }
+
+    #[async_backtrace::framed]
     async fn collect_parquet_rows(
         &self,
         table: &'a FuseTable,
@@ -386,95 +470,70 @@ impl<'a> FuseEncodingImpl<'a> {
         rows: &mut Vec<EncodingRow>,
     ) -> Result<()> {
         let schema = table.schema();
-        let fields = schema.fields();
-        let column_id_to_index: HashMap<ColumnId, usize> = schema
-            .to_leaf_column_ids()
-            .into_iter()
-            .enumerate()
-            .map(|(idx, id)| (id, idx))
-            .collect();
+        let fields = Arc::new(schema.fields().clone());
+        let column_id_to_index: Arc<HashMap<ColumnId, usize>> = Arc::new(
+            schema
+                .to_leaf_column_ids()
+                .into_iter()
+                .enumerate()
+                .map(|(idx, id)| (id, idx))
+                .collect(),
+        );
+        let column_name_filter = Arc::new(self.column_name_filter.clone());
+        let table_name = Arc::new(table.name().to_string());
+        let storage_format = table.storage_format;
+        let mut max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        if max_io_requests == 0 {
+            max_io_requests = 1;
+        }
 
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, false)
                 .await?;
+            let mut block_locations = Vec::new();
             for segment in segments {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
-                    let file_meta = read_thrift_file_metadata(
-                        table.operator.clone(),
-                        &block.location.0,
-                        Some(block.file_size),
-                    )
-                    .await?;
-                    if file_meta.row_groups.len() != 1 {
-                        return Err(ErrorCode::ParquetFileInvalid(format!(
-                            "invalid parquet file {}, expects one row group but got {}",
-                            block.location.0,
-                            file_meta.row_groups.len()
-                        )));
-                    }
-                    let row_group = &file_meta.row_groups[0];
-                    let columns = &row_group.columns;
-
-                    for field in fields {
-                        if field.is_nested() {
-                            continue;
-                        }
-                        if !self.column_matches(field.name()) {
-                            continue;
-                        }
-                        let column_id = field.column_id;
-                        let Some(column_idx) = column_id_to_index.get(&column_id) else {
-                            continue;
-                        };
-                        let Some(column_chunk) = columns.get(*column_idx) else {
-                            // Missing column caused by schema evolutions
-                            continue;
-                        };
-                        let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
-                            ErrorCode::ParquetFileInvalid(format!(
-                                "invalid parquet file {}, meta data of column {} is empty",
-                                block.location.0, column_id
-                            ))
-                        })?;
-
-                        let compressed_size = u64::try_from(chunk_meta.total_compressed_size)
-                            .map_err(|_| {
-                                ErrorCode::ParquetFileInvalid(format!(
-                                "invalid parquet file {}, compressed size overflow for column {}",
-                                block.location.0,
-                                field.name()
-                            ))
-                            })?;
-                        let uncompressed_size = u64::try_from(chunk_meta.total_uncompressed_size)
-                            .map_err(|_| {
-                            ErrorCode::ParquetFileInvalid(format!(
-                                "invalid parquet file {}, uncompressed size overflow for column {}",
-                                block.location.0,
-                                field.name()
-                            ))
-                        })?;
-
-                        let physical_type = parquet_physical_type_to_string(chunk_meta.type_);
-                        rows.push(EncodingRow {
-                            table_name: table.name().to_string(),
-                            storage_format: table.storage_format,
-                            block_location: block.location.0.clone(),
-                            column_name: field.name().to_string(),
-                            column_type: format!(
-                                "{} ({})",
-                                field.data_type().sql_name(),
-                                physical_type
-                            ),
-                            validity_size: None,
-                            compressed_size,
-                            uncompressed_size,
-                            level_one: parquet_encodings_to_string(&chunk_meta.encodings),
-                            level_two: Some(parquet_codec_to_string(chunk_meta.codec)),
-                        });
-                    }
+                    block_locations.push((block.location.0.clone(), block.file_size));
                 }
+            }
+
+            if block_locations.is_empty() {
+                continue;
+            }
+
+            let table_operator = table.operator.clone();
+            let fields_arc = fields.clone();
+            let column_id_to_index_arc = column_id_to_index.clone();
+            let table_name_arc = table_name.clone();
+            let column_name_filter_arc = column_name_filter.clone();
+            let mut block_stream = stream::iter(block_locations.into_iter().map(
+                move |(location, file_size)| {
+                    let operator = table_operator.clone();
+                    let fields = fields_arc.clone();
+                    let column_id_to_index = column_id_to_index_arc.clone();
+                    let table_name = table_name_arc.clone();
+                    let column_name_filter = column_name_filter_arc.clone();
+                    async move {
+                        Self::collect_parquet_block_rows_from_meta(
+                            operator,
+                            location,
+                            file_size,
+                            storage_format,
+                            table_name,
+                            fields,
+                            column_id_to_index,
+                            column_name_filter,
+                        )
+                        .await
+                    }
+                },
+            ))
+            .buffer_unordered(max_io_requests);
+
+            while let Some(mut block_rows) = block_stream.try_next().await? {
+                rows.append(&mut block_rows);
             }
         }
         Ok(())
@@ -509,15 +568,16 @@ impl<'a> FuseEncodingImpl<'a> {
     }
 
     fn table_matches(&self, table_name: &str) -> bool {
-        match &self.table_name_filter {
-            Some(filter) => filter == table_name,
-            None => true,
-        }
+        Self::filter_matches(&self.table_name_filter, table_name)
     }
 
     fn column_matches(&self, column_name: &str) -> bool {
-        match &self.column_name_filter {
-            Some(filter) => filter == column_name,
+        Self::filter_matches(&self.column_name_filter, column_name)
+    }
+
+    fn filter_matches(filter: &Option<String>, value: &str) -> bool {
+        match filter {
+            Some(filter) => filter == value,
             None => true,
         }
     }
