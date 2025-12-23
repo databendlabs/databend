@@ -485,7 +485,7 @@ strum = "0.24.1"
 sub-cache = "0.2.1"
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.25.0"
+tantivy = "0.26.0"
 tantivy-common = "0.10.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.17.0"
@@ -651,9 +651,9 @@ recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "1
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/b41sh/tantivy", rev = "48fb0f7f3c393de67a0b46d8a3be50f085312fd4" }
-tantivy-common = { git = "https://github.com/b41sh/tantivy", rev = "48fb0f7f3c393de67a0b46d8a3be50f085312fd4", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/b41sh/tantivy-jieba", rev = "de314415bdcbf01ab10ab3f76b8eef7cdb6fadf1" }
-tantivy-query-grammar = { git = "https://github.com/b41sh/tantivy", rev = "48fb0f7f3c393de67a0b46d8a3be50f085312fd4", package = "tantivy-query-grammar" }
+tantivy = { git = "https://github.com/b41sh/tantivy", rev = "7cec26400695dc9d8299751c3b36e8b9eee6abbc" }
+tantivy-common = { git = "https://github.com/b41sh/tantivy", rev = "7cec26400695dc9d8299751c3b36e8b9eee6abbc", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/b41sh/tantivy-jieba", rev = "0d18ff7872af581fb799c07f32cbad84ac5993f7" }
+tantivy-query-grammar = { git = "https://github.com/b41sh/tantivy", rev = "7cec26400695dc9d8299751c3b36e8b9eee6abbc", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

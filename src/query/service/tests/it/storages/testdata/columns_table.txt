@@ -500,3 +500,5 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'webhook_options'                 | 'system'             | 'notifications'           | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'workload_groups'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 +-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+
+
+
