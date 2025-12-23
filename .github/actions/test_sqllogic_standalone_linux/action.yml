@@ -35,7 +35,6 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
-        TEST_EXT_ARGS: ${{ inputs.dirs == 'base' && '--skip_file 05_0016_ddl_stage_public_s3_list.test' || '' }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 
@@ -45,6 +44,6 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
-        TEST_EXT_ARGS: ${{ inputs.dirs == 'base' && '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test,05_0016_ddl_stage_public_s3_list.test' || '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test' }}
+        TEST_EXT_ARGS: '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test'
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-native.sh ${{ inputs.dirs }}

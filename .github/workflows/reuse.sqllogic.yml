@@ -81,23 +81,6 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}
 
-  public_s3_stage_list:
-    runs-on:
-      - self-hosted
-      - ${{ inputs.runner_arch }}
-      - Linux
-      - 2c8g
-      - "${{ inputs.runner_provider }}"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup_test
-        with:
-          artifacts: sqllogictests,meta,query
-      - name: Run public S3 stage list test (insecure disabled)
-        timeout-minutes: 10
-        shell: bash
-        run: bash ./scripts/ci/ci-run-sqllogic-tests-public-s3.sh
-
   standalone_udf_server:
     runs-on:
       - self-hosted
