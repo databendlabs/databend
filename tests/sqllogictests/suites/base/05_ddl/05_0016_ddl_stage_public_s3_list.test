@@ -1,0 +1,11 @@
+statement ok
+DROP STAGE IF EXISTS wizardbend_tpch
+
+statement ok
+CREATE OR REPLACE STAGE wizardbend_tpch URL='s3://wizardbend/TPC-H/1TB/customer/'
+
+statement ok
+LIST @wizardbend_tpch
+
+statement ok
+DROP STAGE IF EXISTS wizardbend_tpch
