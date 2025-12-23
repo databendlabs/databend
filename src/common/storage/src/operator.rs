@@ -421,6 +421,17 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.disable_config_load().disable_ec2_metadata();
     }
 
+    // If credential loading is disabled and no credentials are provided, use unsigned requests.
+    // This allows accessing public buckets reliably in environments where signing could be rejected.
+    if cfg.disable_credential_loader
+        && cfg.access_key_id.is_empty()
+        && cfg.secret_access_key.is_empty()
+        && cfg.security_token.is_empty()
+        && cfg.role_arn.is_empty()
+    {
+        builder = builder.allow_anonymous();
+    }
+
     // Enable virtual host style
     if cfg.enable_virtual_host_style {
         builder = builder.enable_virtual_host_style();
