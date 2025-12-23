@@ -23,7 +23,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::StringType;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline::core::LockGuard;
+use databend_common_pipeline::core::SharedLockGuard;
 
 use super::insert::format_insert_source;
 use crate::FormatOptions;
@@ -39,7 +39,7 @@ pub struct Replace {
     pub schema: TableSchemaRef,
     pub source: InsertInputSource,
     pub delete_when: Option<Expr>,
-    pub lock_guard: Option<Arc<LockGuard>>,
+    pub lock_guard: Option<SharedLockGuard>,
 }
 
 impl PartialEq for Replace {
