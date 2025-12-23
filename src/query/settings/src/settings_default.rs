@@ -281,6 +281,27 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("flight_client_keep_alive_time_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the idle time in seconds before a flight TCP connection sends keepalive probes. 0 disables keepalive.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("flight_client_keep_alive_interval_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the interval in seconds between two flight TCP keepalive probes. 0 disables keepalive.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("flight_client_keep_alive_retries", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the number of TCP keepalive retries for flight connections before declaring the peer unreachable. 0 disables keepalive.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
                     value: {
                         let result_timeout_secs = global_conf.as_ref().map(|conf| conf.query.http_handler_result_timeout_secs)

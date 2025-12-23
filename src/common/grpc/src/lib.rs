@@ -20,6 +20,7 @@ pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use dns_resolver::DNSService;
 pub use dns_resolver::GrpcConnectionError;
+pub use dns_resolver::TcpKeepAliveConfig;
 pub use grpc_token::GrpcClaim;
 pub use grpc_token::GrpcToken;
 
