@@ -41,5 +41,5 @@ message TagRefValue {
   // Payload assigned when the tag is set on an object. If the tag defined
   // `allowed_values`, this must match one of those entries; otherwise any string
   // (including empty) is permitted.
-  string value = 1;
+  string tag_allowed_value = 1;
 }

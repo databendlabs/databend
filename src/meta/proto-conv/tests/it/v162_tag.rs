@@ -45,7 +45,7 @@ fn test_decode_v162_tag_meta() -> anyhow::Result<()> {
 fn test_tag_ref_value() -> anyhow::Result<()> {
     let tag_ref_value_v162 = vec![10, 3, 100, 101, 118, 160, 6, 162, 1, 168, 6, 24];
     let want = || ObjectTagIdRefValue {
-        value: "dev".to_string(),
+        tag_allowed_value: "dev".to_string(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

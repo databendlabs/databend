@@ -16,19 +16,22 @@ use databend_common_exception::ErrorCode;
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
+    /// Keep a domain error here instead of reusing `UnknownError` so callers can
+    /// map it back to `ErrorCode::UnknownTag` without converting through the
+    /// tenant-key helpers.
     #[error("TAG with id {tag_id} does not exist.")]
     NotFound { tag_id: u64 },
 
     #[error(
         "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
     )]
-    HasReferences {
+    TagHasReferences {
         tag_name: String,
         reference_count: usize,
     },
 
     #[error("Invalid value '{tag_value}' for TAG with id {tag_id}{allowed_values_display}.")]
-    InvalidValue {
+    NotAllowedValue {
         tag_id: u64,
         tag_value: String,
         allowed_values_display: String,
@@ -43,14 +46,14 @@ impl TagError {
         Self::NotFound { tag_id }
     }
 
-    pub fn has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
-        Self::HasReferences {
+    pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
+        Self::TagHasReferences {
             tag_name: tag_name.into(),
             reference_count,
         }
     }
 
-    pub fn invalid_value(
+    pub fn not_allowed_value(
         tag_id: u64,
         tag_value: impl Into<String>,
         allowed_values: Option<Vec<String>>,
@@ -67,7 +70,7 @@ impl TagError {
             _ => String::new(),
         };
 
-        Self::InvalidValue {
+        Self::NotAllowedValue {
             tag_id,
             tag_value: tag_value.into(),
             allowed_values_display,
@@ -84,8 +87,8 @@ impl From<TagError> for ErrorCode {
         let s = value.to_string();
         match value {
             TagError::NotFound { .. } => ErrorCode::UnknownTag(s),
-            TagError::HasReferences { .. } => ErrorCode::TagHasReferences(s),
-            TagError::InvalidValue { .. } => ErrorCode::InvalidTagValue(s),
+            TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
+            TagError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
             TagError::ConcurrentModification => ErrorCode::TagConcurrentModification(s),
         }
     }

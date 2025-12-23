@@ -76,14 +76,16 @@ impl FromToProto for mt::ObjectTagIdRefValue {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(Self { value: p.value })
+        Ok(Self {
+            tag_allowed_value: p.tag_allowed_value,
+        })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            value: self.value.clone(),
+            tag_allowed_value: self.tag_allowed_value.clone(),
         })
     }
 }
