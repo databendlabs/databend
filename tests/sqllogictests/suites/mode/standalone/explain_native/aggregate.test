@@ -146,20 +146,16 @@ AggregateFinal
     ├── group by: [a]
     ├── aggregate functions: [max(b)]
     ├── estimated rows: 1.00
-    └── Filter
-        ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
-        ├── filters: [explain_agg_t1.a (#0) > 1]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.explain_agg_t1
-            ├── scan id: 0
-            ├── output columns: [a (#0), b (#1)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
-            └── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.explain_agg_t1
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
@@ -181,20 +177,16 @@ EvalScalar
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count(), max(b)]
             ├── estimated rows: 1.00
-            └── Filter
-                ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
-                ├── filters: [explain_agg_t1.a (#0) > 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── scan id: 0
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
+                └── estimated rows: 0.00
 
 query T
 explain select a, avg(b) from explain_agg_t1 group by a having a > 1 and max(b) > 10;
@@ -216,20 +208,16 @@ EvalScalar
             ├── group by: [a]
             ├── aggregate functions: [sum(b), count(), max(b)]
             ├── estimated rows: 1.00
-            └── Filter
-                ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
-                ├── filters: [explain_agg_t1.a (#0) > 1]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.explain_agg_t1
-                    ├── scan id: 0
-                    ├── output columns: [a (#0), b (#1)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [explain_agg_t1.a (#0) > 1], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 drop table explain_agg_t1;
