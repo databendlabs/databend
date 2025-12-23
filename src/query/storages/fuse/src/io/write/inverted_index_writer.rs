@@ -338,6 +338,7 @@ impl InvertedIndexWriter {
             TableCompression::Zstd,
             // No dictionary page for inverted index
             false,
+            false,
             None,
         )?;
 
