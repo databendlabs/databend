@@ -415,7 +415,6 @@ impl<'a> FuseEncodingImpl<'a> {
                 continue;
             };
             let Some(column_chunk) = columns.get(*column_idx) else {
-                // Missing column caused by schema evolutions
                 continue;
             };
             let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
@@ -424,7 +423,6 @@ impl<'a> FuseEncodingImpl<'a> {
                     location, column_id
                 ))
             })?;
-
             let compressed_size =
                 u64::try_from(chunk_meta.total_compressed_size).map_err(|_| {
                     ErrorCode::ParquetFileInvalid(format!(

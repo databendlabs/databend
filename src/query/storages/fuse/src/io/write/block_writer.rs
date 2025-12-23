@@ -91,13 +91,12 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
+            let parquet_options = write_settings.parquet_options();
             let result = blocks_to_parquet_with_stats(
                 &schema,
                 vec![block],
                 buf,
-                write_settings.table_compression,
-                write_settings.enable_parquet_dictionary,
-                None,
+                &parquet_options,
                 column_stats,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;

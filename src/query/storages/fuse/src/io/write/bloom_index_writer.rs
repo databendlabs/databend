@@ -25,6 +25,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -72,13 +73,12 @@ impl BloomIndexState {
             None
         };
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let options = ParquetWriteOptions::builder(TableCompression::None).build();
         let _ = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
             &mut data,
-            TableCompression::None,
-            false,
-            None,
+            &options,
         )?;
         let data_size = data.len() as u64;
         Ok(Self {

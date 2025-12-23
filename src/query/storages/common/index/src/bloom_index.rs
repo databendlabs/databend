@@ -684,6 +684,7 @@ impl BloomIndexBuilder {
     ) -> Result<Self> {
         let mut bloom_columns = Vec::with_capacity(bloom_columns_map.len());
         let mut ngram_columns = Vec::with_capacity(ngram_args.len());
+
         for (&index, field) in bloom_columns_map.iter() {
             bloom_columns.push(ColumnFilterBuilder {
                 index,
@@ -874,6 +875,22 @@ impl BloomIndexBuilder {
 
     pub fn columns_len(&self) -> usize {
         self.bloom_columns.len() + self.ngram_columns.len()
+    }
+
+    /// Peek the column distinct counts before finalizing the bloom index.
+    ///
+    /// This provides accurate NDV from the filter builders' digest sets,
+    /// which can be used for encoding decisions before building the filters.
+    pub fn peek_column_distinct_count(&self) -> HashMap<ColumnId, usize> {
+        let mut result = HashMap::with_capacity(self.bloom_columns.len());
+        for column in &self.bloom_columns {
+            if let FilterImplBuilder::Xor(builder) = &column.builder {
+                if let Some(len) = builder.peek_len() {
+                    result.insert(column.field.column_id, len);
+                }
+            }
+        }
+        result
     }
 }
 

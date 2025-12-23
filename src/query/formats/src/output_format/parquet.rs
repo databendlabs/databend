@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
 
@@ -54,14 +55,10 @@ impl OutputFormat for ParquetOutputFormat {
         }
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         // While unloading data as parquet, enable dictionary unconditionally, usually this leads to smaller size.
-        let _ = blocks_to_parquet(
-            &self.schema,
-            blocks,
-            &mut buf,
-            TableCompression::Zstd,
-            true,
-            None,
-        )?;
+        let options = ParquetWriteOptions::builder(TableCompression::Zstd)
+            .enable_dictionary(true)
+            .build();
+        let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, &options)?;
         Ok(buf)
     }
 }
