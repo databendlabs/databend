@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod settings;
-mod settings_default;
-mod settings_getter_setter;
-mod settings_global;
+use databend_common_grpc::TcpKeepAliveConfig;
+use databend_common_settings::FlightKeepAliveParams;
 
-pub use settings::ChangeValue;
-pub use settings::ScopeLevel;
-pub use settings::Settings;
-pub use settings_default::DefaultSettings;
-pub use settings_default::ReplaceIntoShuffleStrategy;
-pub use settings_default::SettingMode;
-pub use settings_default::SettingRange;
-pub use settings_default::SettingScope;
-pub use settings_getter_setter::FlightCompression;
-pub use settings_getter_setter::FlightKeepAliveParams;
-pub use settings_getter_setter::OutofMemoryBehavior;
+pub fn build_keep_alive_config(params: FlightKeepAliveParams) -> Option<TcpKeepAliveConfig> {
+    if params.is_disabled() {
+        None
+    } else {
+        Some(TcpKeepAliveConfig {
+            time: params.time,
+            interval: params.interval,
+            retries: params.retries,
+        })
+    }
+}

@@ -54,6 +54,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
+use databend_common_settings::FlightKeepAliveParams;
 use databend_common_settings::Settings;
 use databend_common_telemetry::report_node_telemetry;
 use databend_common_version::DATABEND_TELEMETRY_API_KEY;
@@ -74,6 +75,7 @@ use serde::Serialize;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
+use crate::servers::flight::keep_alive::build_keep_alive_config;
 
 pub struct ClusterDiscovery {
     local_id: String,
@@ -188,7 +190,9 @@ impl ClusterHelper for Cluster {
                     let mut attempt = 0;
 
                     loop {
-                        let mut conn = create_client(&config, &flight_address).await?;
+                        let mut conn =
+                            create_client(&config, &flight_address, flight_params.keep_alive)
+                                .await?;
                         match conn
                             .do_action::<_, Res>(
                                 path,
@@ -312,7 +316,13 @@ impl ClusterDiscovery {
 
                     if config.query.check_connection_before_schedule && node.id != self.local_id {
                         let start_at = Instant::now();
-                        if let Err(cause) = create_client(config, &node.flight_address).await {
+                        if let Err(cause) = create_client(
+                            config,
+                            &node.flight_address,
+                            FlightKeepAliveParams::default(),
+                        )
+                        .await
+                        {
                             warn!(
                                 "Cannot connect node [{:?}] after {:?}s, remove it in query. cause: {:?}",
                                 node.flight_address,
@@ -964,7 +974,11 @@ impl ClusterHeartbeat {
 }
 
 #[async_backtrace::framed]
-pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
+pub async fn create_client(
+    config: &InnerConfig,
+    address: &str,
+    keep_alive: FlightKeepAliveParams,
+) -> Result<FlightClient> {
     let timeout = if config.query.rpc_client_timeout_secs > 0 {
         Some(Duration::from_secs(config.query.rpc_client_timeout_secs))
     } else {
@@ -976,9 +990,16 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     } else {
         None
     };
+    let keep_alive_config = build_keep_alive_config(keep_alive);
 
     Ok(FlightClient::new(FlightServiceClient::new(
-        ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
+        ConnectionFactory::create_rpc_channel(
+            address.to_owned(),
+            timeout,
+            rpc_tls_config,
+            keep_alive_config,
+        )
+        .await?,
     )))
 }
 
@@ -987,6 +1008,7 @@ pub struct FlightParams {
     pub(crate) timeout: u64,
     pub(crate) retry_times: u64,
     pub(crate) retry_interval: u64,
+    pub(crate) keep_alive: FlightKeepAliveParams,
 }
 
 #[derive(Clone)]

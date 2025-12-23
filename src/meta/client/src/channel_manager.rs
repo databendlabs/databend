@@ -142,19 +142,24 @@ impl MetaChannelManager {
     async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
         info!("MetaChannelManager::build_channel to {}", addr);
 
-        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.tls_config.clone())
-            .await
-            .map_err(|e| match e {
-                GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
-                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
-                ),
-                GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
-                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
-                ),
-                GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
-                    ConnectionError::new(e, "while creating rpc channel"),
-                ),
-            })?;
+        let ch = ConnectionFactory::create_rpc_channel(
+            addr,
+            self.timeout,
+            self.tls_config.clone(),
+            None,
+        )
+        .await
+        .map_err(|e| match e {
+            GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
+                AnyError::new(&e).add_context(|| "while creating rpc channel"),
+            ),
+            GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
+                AnyError::new(&e).add_context(|| "while creating rpc channel"),
+            ),
+            GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
+                ConnectionError::new(e, "while creating rpc channel"),
+            ),
+        })?;
         Ok(ch)
     }
 }

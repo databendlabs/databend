@@ -54,14 +54,15 @@ async fn test_tls_rpc_server() -> Result<()> {
     });
 
     // normal case
-    let conn = ConnectionFactory::create_rpc_channel(listener_address, None, tls_conf).await?;
+    let conn =
+        ConnectionFactory::create_rpc_channel(listener_address, None, tls_conf, None).await?;
     let mut f_client = FlightServiceClient::new(conn);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_ok());
 
     // client access without tls enabled will be failed
     // - channel can still be created, but communication will be failed
-    let channel = ConnectionFactory::create_rpc_channel(listener_address, None, None).await?;
+    let channel = ConnectionFactory::create_rpc_channel(listener_address, None, None, None).await?;
     let mut f_client = FlightServiceClient::new(channel);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_err());
@@ -96,7 +97,7 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = ConnectionFactory::create_rpc_channel("fake:1234", None, Some(client_conf)).await;
+    let r = ConnectionFactory::create_rpc_channel("fake:1234", None, Some(client_conf), None).await;
     assert!(r.is_err());
     let e = r.unwrap_err();
     match e {
