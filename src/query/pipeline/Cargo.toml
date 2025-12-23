@@ -16,6 +16,7 @@ databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+parking_lot = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true }
 

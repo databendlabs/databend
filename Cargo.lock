@@ -4335,6 +4335,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
+ "parking_lot 0.12.3",
  "petgraph 0.6.5",
  "serde",
  "tokio",

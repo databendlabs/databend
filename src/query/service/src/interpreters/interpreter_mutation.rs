@@ -119,7 +119,11 @@ impl Interpreter for MutationInterpreter {
         // Execute hook.
         self.execute_hook(&mutation, &mut build_res).await;
 
-        build_res.main_pipeline.add_lock_guard(mutation.lock_guard);
+        let lock_guard = mutation
+            .lock_guard
+            .as_ref()
+            .and_then(|holder| holder.try_take());
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         Ok(build_res)
     }
