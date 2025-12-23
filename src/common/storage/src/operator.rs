@@ -409,6 +409,14 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Root.
         .root(&cfg.root);
 
+    if cfg.access_key_id.is_empty()
+        && cfg.secret_access_key.is_empty()
+        && cfg.security_token.is_empty()
+        && cfg.role_arn.is_empty()
+    {
+        builder = builder.allow_anonymous();
+    }
+
     if cfg.storage_class != S3StorageClass::Standard {
         // Apply S3 storage class to the operator.
         // Note: Some S3-compatible storage systems (e.g., MinIO) may not support
