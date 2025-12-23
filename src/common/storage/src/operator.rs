@@ -404,9 +404,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // It's safe to allow anonymous since opendal will prefer credentials when available.
-        // This enables accessing public buckets without explicit credentials.
-        .allow_anonymous()
+        // Don't enable it otherwise we will get Permission in stat unknown files
+        // .allow_anonymous()
         // Root.
         .root(&cfg.root);
 
@@ -420,6 +419,17 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Disable credential loader
     if cfg.disable_credential_loader {
         builder = builder.disable_config_load().disable_ec2_metadata();
+    }
+
+    // If credential loading is disabled and no credentials are provided, use unsigned requests.
+    // This allows accessing public buckets reliably in environments where signing could be rejected.
+    if cfg.disable_credential_loader
+        && cfg.access_key_id.is_empty()
+        && cfg.secret_access_key.is_empty()
+        && cfg.security_token.is_empty()
+        && cfg.role_arn.is_empty()
+    {
+        builder = builder.allow_anonymous();
     }
 
     // Enable virtual host style
@@ -617,10 +627,6 @@ pub async fn check_operator(
             match res {
                 Ok(_) => Ok(()),
                 Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
-                // PermissionDenied on the checker file is acceptable - it just means
-                // anonymous access is denied on this bucket, which is expected for private buckets.
-                // The actual data access will use proper credentials.
-                Err(e) if e.kind() == opendal::ErrorKind::PermissionDenied => Ok(()),
                 Err(e) => Err(e),
             }
         })
