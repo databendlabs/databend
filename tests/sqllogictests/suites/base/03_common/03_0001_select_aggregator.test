@@ -41,3 +41,10 @@ query II
 select n, count(distinct n), count(*) from (select cast(NULL as Nullable(Int32)) as n from numbers(3)) group by n
 ----
 NULL 0 3
+
+query II rowsort
+select k, count(distinct k) from (select number % 2 as k from numbers(4)) group by grouping sets((k),()) order by k
+----
+0 1
+1 1
+NULL 0

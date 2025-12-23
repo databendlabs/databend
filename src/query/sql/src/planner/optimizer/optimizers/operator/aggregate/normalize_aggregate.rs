@@ -102,7 +102,17 @@ impl RuleNormalizeAggregateOptimizer {
                 if distinct_on_group_key {
                     rewritten = true;
 
-                    let nullable = function.args[0].data_type()?.is_nullable_or_null();
+                    // Grouping sets rewrite will wrap grouping keys into nullable and inject NULLs
+                    // for sets where the key is absent, so treat them as nullable even if the
+                    // original column type is non-nullable.
+                    let mut nullable = function.args[0].data_type()?.is_nullable_or_null();
+                    if !nullable {
+                        if let Some(grouping_sets) = &aggregate.grouping_sets {
+                            if !grouping_sets.sets.is_empty() {
+                                nullable = true;
+                            }
+                        }
+                    }
 
                     let scalar = if nullable {
                         let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
