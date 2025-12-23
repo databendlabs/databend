@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_settings::FlightKeepAliveParams;
 use http::StatusCode;
 use poem::IntoResponse;
 use poem::web::Json;
@@ -65,6 +66,7 @@ async fn get_running_query_dump(query_id: &str) -> Result<HashMap<String, String
         timeout: 60,
         retry_times: 3,
         retry_interval: 3,
+        keep_alive: FlightKeepAliveParams::default(),
     };
     cluster
         .do_action::<_, String>(GET_RUNNING_QUERY_DUMP, message, flight_params)
