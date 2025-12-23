@@ -41,8 +41,8 @@ pub use ref_ident::TagIdObjectRefIdentRaw;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::id_ident::Resource;
 use crate::data_id::DataId;
+use crate::schema::tag::id_ident::Resource;
 use crate::tenant::Tenant;
 
 /// Metadata stored for each tag definition.
@@ -143,20 +143,20 @@ impl TaggableObject {
     }
 }
 
-/// Binds a set of values to tag IDs to a single object.
+/// Binds a set of values to tag IDs to a single taggable object.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TaggableObject,
+    pub taggable_object: TaggableObject,
     /// List of `(tag_id, tag_value)` pairs.
     pub tags: Vec<(u64, String)>,
 }
 
-/// Removes tag bindings from a single object by tag ID.
+/// Removes tag bindings from a single taggable object by tag ID.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnsetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TaggableObject,
+    pub taggable_object: TaggableObject,
     /// List of tag IDs to remove.
     pub tags: Vec<u64>,
 }
@@ -172,7 +172,7 @@ pub struct ObjectTagIdRefValue {
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
     /// is present, this string must match one of the configured entries,
     /// otherwise any string (including empty) is allowed.
-    pub value: String,
+    pub tag_allowed_value: String,
 }
 
 /// Value returned for each tag bound to an object.
@@ -187,7 +187,7 @@ pub struct ObjectTagValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagReferenceInfo {
     pub tag_id: u64,
-    pub object: TaggableObject,
+    pub taggable_object: TaggableObject,
     /// The tag value with sequence number for optimistic concurrency control.
     pub tag_value: SeqV<ObjectTagIdRefValue>,
 }

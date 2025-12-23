@@ -132,15 +132,6 @@ where
                 TagIdObjectRefIdent::new_generic(tenant.clone(), TagIdObjectRef::prefix(tag_id)),
                 2,
             );
-            // Check if tag has any references
-            let reference_count = self.list_pb_vec(&refs_dir).await?.len();
-            if reference_count > 0 {
-                return Ok(Err(TagError::has_references(
-                    name_ident.tag_name().to_string(),
-                    reference_count,
-                )));
-            }
-
             let mut txn = TxnRequest::default();
             let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
             let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
@@ -156,6 +147,14 @@ where
             let (success, _) = send_txn(self, txn).await?;
             if success {
                 return Ok(Ok(Some((id_seqv, meta_seqv))));
+            } else {
+                let reference_count = self.list_pb_vec(&refs_dir).await?.len();
+                if reference_count > 0 {
+                    return Ok(Err(TagError::tag_has_references(
+                        name_ident.tag_name().to_string(),
+                        reference_count,
+                    )));
+                }
             }
         }
     }
@@ -233,7 +232,7 @@ where
             // Check allowed_values: None means any value is allowed
             if let Some(allowed) = &meta_seqv.data.allowed_values {
                 if !allowed.contains(tag_value) {
-                    return Ok(Err(TagError::invalid_value(
+                    return Ok(Err(TagError::not_allowed_value(
                         *tag_id,
                         tag_value.clone(),
                         Some(allowed.clone()),
@@ -246,17 +245,17 @@ where
 
             let obj_ref_key = ObjectTagIdRefIdent::new_generic(
                 req.tenant.clone(),
-                ObjectTagIdRef::new(req.object.clone(), *tag_id),
+                ObjectTagIdRef::new(req.taggable_object.clone(), *tag_id),
             );
             let tag_ref_key = TagIdObjectRefIdent::new_generic(
                 req.tenant.clone(),
-                TagIdObjectRef::new(*tag_id, req.object.clone()),
+                TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
             );
 
             txn_ops.push(txn_op_put_pb(
                 &obj_ref_key,
                 &ObjectTagIdRefValue {
-                    value: tag_value.clone(),
+                    tag_allowed_value: tag_value.clone(),
                 },
                 None,
             )?);
@@ -287,11 +286,11 @@ where
         for tag_id in &req.tags {
             let obj_ref_key = ObjectTagIdRefIdent::new_generic(
                 req.tenant.clone(),
-                ObjectTagIdRef::new(req.object.clone(), *tag_id),
+                ObjectTagIdRef::new(req.taggable_object.clone(), *tag_id),
             );
             let tag_ref_key = TagIdObjectRefIdent::new_generic(
                 req.tenant.clone(),
-                TagIdObjectRef::new(*tag_id, req.object.clone()),
+                TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
             );
 
             txn_ops.push(txn_op_del(&obj_ref_key));
@@ -367,7 +366,7 @@ where
             .filter_map(|(obj, value_opt)| {
                 value_opt.map(|value_seqv| TagReferenceInfo {
                     tag_id,
-                    object: obj,
+                    taggable_object: obj,
                     tag_value: value_seqv,
                 })
             })

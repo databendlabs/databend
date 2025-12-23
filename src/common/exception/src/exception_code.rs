@@ -382,7 +382,7 @@ build_exceptions! {
     /// Tag has active references
     TagHasReferences(2752),
     /// Invalid value for tag
-    InvalidTagValue(2753),
+    NotAllowedTagValue(2753),
     /// Tag metadata was modified concurrently
     TagConcurrentModification(2754),
 }

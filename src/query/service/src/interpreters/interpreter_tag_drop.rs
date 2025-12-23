@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::schema::TagNameIdent;
@@ -55,17 +54,7 @@ impl Interpreter for DropTagInterpreter {
             .drop_tag(&TagNameIdent::new(&self.plan.tenant, &self.plan.name))
             .await?
         {
-            Ok(Some(_)) => Ok(PipelineBuildResult::create()),
-            Ok(None) => {
-                if self.plan.if_exists {
-                    Ok(PipelineBuildResult::create())
-                } else {
-                    Err(ErrorCode::UnknownTag(format!(
-                        "Tag '{}' does not exist",
-                        self.plan.name
-                    )))
-                }
-            }
+            Ok(_) => Ok(PipelineBuildResult::create()),
             Err(e) => Err(e.into()),
         }
     }
