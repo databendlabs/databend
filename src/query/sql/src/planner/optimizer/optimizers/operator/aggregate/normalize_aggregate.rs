@@ -103,14 +103,15 @@ impl RuleNormalizeAggregateOptimizer {
                     rewritten = true;
 
                     let nullable = function.args[0].data_type()?.is_nullable_or_null();
-                    let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "is_not_null".to_string(),
-                        params: vec![],
-                        arguments: vec![function.args[0].clone()],
-                    });
 
                     let scalar = if nullable {
+                        let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "is_not_null".to_string(),
+                            params: vec![],
+                            arguments: vec![function.args[0].clone()],
+                        });
+
                         ScalarExpr::FunctionCall(FunctionCall {
                             span: None,
                             func_name: "if".to_string(),
