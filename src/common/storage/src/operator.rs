@@ -421,12 +421,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.disable_config_load().disable_ec2_metadata();
     }
 
-    // Force anonymous (unsigned) requests only when credential loader is disabled and no explicit
-    // credentials are provided. This is mainly for external stages to read public buckets safely
-    // without accidentally using the tenant role from the environment (env/profile/IMDS/IRSA).
-    //
-    // Don't enable it when credential loader is allowed, otherwise it would bypass the default
-    // credential chain that internal storage configurations may rely on.
+    // If credential loading is disabled and no credentials are provided, use unsigned requests.
+    // This allows accessing public buckets reliably in environments where signing could be rejected.
     if cfg.disable_credential_loader
         && cfg.access_key_id.is_empty()
         && cfg.secret_access_key.is_empty()
