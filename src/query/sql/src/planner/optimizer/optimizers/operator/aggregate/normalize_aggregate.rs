@@ -22,7 +22,9 @@ use crate::optimizer::Optimizer;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -54,6 +56,7 @@ impl RuleNormalizeAggregateOptimizer {
         let mut work_expr = None;
         let mut alias_functions_index = vec![];
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());
+        let mut post_aggregate_scalars = Vec::new();
 
         let mut rewritten = false;
 
@@ -80,10 +83,11 @@ impl RuleNormalizeAggregateOptimizer {
                     continue;
                 }
 
-                // rewrite count(distinct items) to count() if items in group by
-                let distinct_eliminated = ((function.distinct && function.func_name == "count")
+                // rewrite count(distinct item)/uniq/count_distinct on grouping key to 1 (or 0 if null)
+                let distinct_on_group_key = ((function.distinct && function.func_name == "count")
                     || function.func_name == "uniq"
                     || function.func_name == "count_distinct")
+                    && function.args.len() == 1
                     && function.args.iter().all(|expr| {
                         if let ScalarExpr::BoundColumnRef(r) = expr {
                             aggregate
@@ -95,16 +99,46 @@ impl RuleNormalizeAggregateOptimizer {
                         }
                     });
 
-                if distinct_eliminated {
+                if distinct_on_group_key {
                     rewritten = true;
-                    let mut new_function = function.clone();
-                    new_function.args = vec![];
-                    new_function.func_name = "count".to_string();
 
-                    new_aggregate_functions.push(ScalarItem {
-                        index: aggregate_function.index,
-                        scalar: ScalarExpr::AggregateFunction(new_function),
+                    let nullable = function.args[0].data_type()?.is_nullable_or_null();
+                    let not_null_check = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "is_not_null".to_string(),
+                        params: vec![],
+                        arguments: vec![function.args[0].clone()],
                     });
+
+                    let scalar = if nullable {
+                        ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "if".to_string(),
+                            params: vec![],
+                            arguments: vec![
+                                not_null_check,
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: None,
+                                    value: 1u64.into(),
+                                }),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: None,
+                                    value: 0u64.into(),
+                                }),
+                            ],
+                        })
+                    } else {
+                        ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: None,
+                            value: 1u64.into(),
+                        })
+                    };
+
+                    post_aggregate_scalars.push(ScalarItem {
+                        index: aggregate_function.index,
+                        scalar,
+                    });
+
                     continue;
                 }
             }
@@ -130,12 +164,10 @@ impl RuleNormalizeAggregateOptimizer {
             Arc::new(s_expr.child(0)?.clone()),
         );
 
+        let mut scalar_items = Vec::new();
+
         if let Some((work_index, work_c)) = work_expr {
-            if alias_functions_index.len() < 2 {
-                return Ok(new_aggregate);
-            }
-            if !alias_functions_index.is_empty() {
-                let mut scalar_items = Vec::with_capacity(alias_functions_index.len());
+            if alias_functions_index.len() >= 2 {
                 for (alias_function_index, _alias_function) in alias_functions_index {
                     scalar_items.push(ScalarItem {
                         index: alias_function_index,
@@ -156,21 +188,24 @@ impl RuleNormalizeAggregateOptimizer {
                         }),
                     })
                 }
-
-                new_aggregate = SExpr::create_unary(
-                    Arc::new(
-                        EvalScalar {
-                            items: scalar_items,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(new_aggregate),
-                );
             }
-            Ok(new_aggregate)
-        } else {
-            Ok(new_aggregate)
         }
+
+        scalar_items.extend(post_aggregate_scalars.into_iter());
+
+        if !scalar_items.is_empty() {
+            new_aggregate = SExpr::create_unary(
+                Arc::new(
+                    EvalScalar {
+                        items: scalar_items,
+                    }
+                    .into(),
+                ),
+                Arc::new(new_aggregate),
+            );
+        }
+
+        Ok(new_aggregate)
     }
 }
 

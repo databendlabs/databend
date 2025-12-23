@@ -30,3 +30,14 @@ select sum(a), sum(b), sum(c), sum(e) from ( select (number % 8)::UInt64 as a,(n
 ----
 342 396 450 100
 
+query III
+select k, count(distinct k), count(*) from (select number % 3 as k from numbers(5)) group by k order by k
+----
+0 1 2
+1 1 2
+2 1 1
+
+query II
+select n, count(distinct n), count(*) from (select cast(NULL as Nullable(Int32)) as n from numbers(3)) group by n
+----
+NULL 0 3
