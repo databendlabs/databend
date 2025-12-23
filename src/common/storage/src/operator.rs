@@ -421,10 +421,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.disable_config_load().disable_ec2_metadata();
     }
 
-    // If credential loading is disabled and no credentials are provided, use unsigned requests.
-    // This allows accessing public buckets reliably in environments where signing could be rejected.
-    if cfg.disable_credential_loader
-        && cfg.access_key_id.is_empty()
+    // Enable anonymous access when no explicit credentials are provided.
+    // This allows accessing public S3 buckets without requiring IAM permissions.
+    // OpenDAL will prefer credentials from environment/EC2 metadata when available,
+    // and fall back to unsigned requests only when no credentials can be obtained.
+    if cfg.access_key_id.is_empty()
         && cfg.secret_access_key.is_empty()
         && cfg.security_token.is_empty()
         && cfg.role_arn.is_empty()
