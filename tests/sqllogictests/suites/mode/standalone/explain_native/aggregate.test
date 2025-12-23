@@ -123,20 +123,16 @@ AggregateFinal
     ├── group by: [a]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
-    └── Filter
-        ├── output columns: [explain_agg_t1.a (#0)]
-        ├── filters: [explain_agg_t1.a (#0) > 3]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.explain_agg_t1
-            ├── scan id: 0
-            ├── output columns: [a (#0)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
-            └── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.explain_agg_t1
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [explain_agg_t1.a (#0) > 3], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select a, max(b) from explain_agg_t1 group by a having a > 1;
