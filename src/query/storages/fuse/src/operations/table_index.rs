@@ -176,7 +176,7 @@ pub async fn do_refresh_table_index(
     }
 
     let settings = ReadSettings::from_ctx(&ctx)?;
-    let write_settings = fuse_table.get_write_settings();
+    let write_settings = fuse_table.get_write_settings_with_ctx(&ctx)?;
     let storage_format = write_settings.storage_format;
 
     pipeline.add_source(

@@ -87,6 +87,11 @@ impl FilterBuilder for BloomBuilder {
         }
         Ok(filter)
     }
+
+    fn peek_len(&self) -> Option<usize> {
+        // Return the accurate NDV from the digest HashSet
+        Some(self.inner.len())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -97,7 +97,7 @@ impl MatchedAggregator {
         let target_table_schema =
             Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let data_accessor = table.get_operator();
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_ctx(&ctx)?;
         let update_stream_columns = table.change_tracking_enabled();
         let read_settings = ReadSettings::from_ctx(&ctx)?;
 

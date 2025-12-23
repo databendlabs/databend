@@ -109,7 +109,7 @@ impl FuseTable {
             ctx: ctx.clone(),
             meta_locations: self.meta_location_generator().clone(),
             source_schema: new_schema,
-            write_settings: self.get_write_settings(),
+            write_settings: self.get_write_settings_with_ctx(&ctx)?,
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,

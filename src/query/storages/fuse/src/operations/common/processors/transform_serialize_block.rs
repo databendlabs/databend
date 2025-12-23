@@ -185,11 +185,12 @@ impl TransformSerializeBlock {
             true
         };
 
+        let write_settings = table.get_write_settings_with_ctx(&ctx)?;
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
             source_schema,
-            write_settings: table.get_write_settings(),
+            write_settings,
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,

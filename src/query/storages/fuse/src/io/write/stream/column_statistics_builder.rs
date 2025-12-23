@@ -80,6 +80,10 @@ pub trait ColumnStatsOps {
     fn finalize(self) -> Result<ColumnStatistics>;
 }
 
+pub trait ColumnStatsPeek {
+    fn peek(&self) -> Result<Option<ColumnStatistics>>;
+}
+
 impl<T, A> ColumnStatsOps for GenericColumnStatisticsBuilder<T, A>
 where
     T: ValueType + Send + Sync,
@@ -333,7 +337,7 @@ where
     fn finalize(self) -> Result<ColumnStatistics> {
         let min = if let Some(v) = self.min {
             let v = A::value_to_scalar(v);
-            // safe upwrap.
+            // Safe unwrap: `Trim for Scalar` always returns Some<> (strings are truncated, numerics passthrough)
             T::upcast_scalar_with_type(v, &self.data_type)
                 .trim_min()
                 .unwrap()
@@ -360,5 +364,63 @@ where
             self.in_memory_size as u64,
             None,
         ))
+    }
+
+    fn snapshot(&self) -> Result<Option<ColumnStatistics>> {
+        if self.min.is_none() && self.max.is_none() && self.null_count == 0 {
+            return Ok(None);
+        }
+        let min = if let Some(v) = &self.min {
+            let v = A::value_to_scalar(v.clone());
+            // Safe unwrap: `Trim for Scalar` always returns Some (strings truncate, numerics passthrough)
+            T::upcast_scalar_with_type(v, &self.data_type)
+                .trim_min()
+                .unwrap()
+        } else {
+            Scalar::Null
+        };
+        let max = if let Some(v) = &self.max {
+            let v = A::value_to_scalar(v.clone());
+            if let Some(v) = T::upcast_scalar_with_type(v, &self.data_type).trim_max() {
+                v
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Unable to trim string: first 16 chars are all replacement_point".to_string(),
+                ));
+            }
+        } else {
+            Scalar::Null
+        };
+        Ok(Some(ColumnStatistics::new(
+            min,
+            max,
+            self.null_count as u64,
+            self.in_memory_size as u64,
+            None,
+        )))
+    }
+}
+
+impl ColumnStatsPeek for ColumnStatisticsBuilder {
+    fn peek(&self) -> Result<Option<ColumnStatistics>> {
+        match self {
+            ColumnStatisticsBuilder::Int8(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Int16(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Int32(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Int64(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::UInt8(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::UInt16(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::UInt32(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::UInt64(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Float32(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Float64(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::String(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Date(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Timestamp(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::TimestampTz(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Decimal64(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Decimal128(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Decimal256(inner) => inner.snapshot(),
+        }
     }
 }

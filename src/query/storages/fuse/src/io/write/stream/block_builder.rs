@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_blocks::EncodingStatsProvider;
 use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
@@ -52,6 +53,8 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -89,7 +92,8 @@ impl UninitializedArrowWriter {
         let writer_properties = build_parquet_writer_properties(
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
-            Some(cols_ndv_info),
+            write_settings.enable_parquet_delta_binary_packed_heuristic_rule,
+            Some(&cols_ndv_info),
             None,
             num_rows,
             self.table_schema.as_ref(),
@@ -150,17 +154,36 @@ impl ArrowParquetWriter {
 
 pub struct ColumnsNdvInfo {
     cols_ndv: HashMap<ColumnId, usize>,
+    cols_stats: StatisticsOfColumns,
     num_rows: usize,
 }
 
 impl ColumnsNdvInfo {
-    fn new(num_rows: usize, cols_ndv: HashMap<ColumnId, usize>) -> Self {
-        Self { cols_ndv, num_rows }
+    fn new(
+        num_rows: usize,
+        cols_ndv: HashMap<ColumnId, usize>,
+        cols_stats: StatisticsOfColumns,
+    ) -> Self {
+        Self {
+            cols_ndv,
+            cols_stats,
+            num_rows,
+        }
+    }
+
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
+        self.cols_stats.get(column_id)
     }
 }
 impl NdvProvider for ColumnsNdvInfo {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.cols_ndv.get(column_id).map(|v| *v as u64)
+    }
+}
+
+impl EncodingStatsProvider for ColumnsNdvInfo {
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
+        self.column_stats(column_id)
     }
 }
 
@@ -385,8 +408,17 @@ impl StreamBlockBuilder {
             // block's NDV stats to heuristically configure the parquet writer.
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
             cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+
+            // Override HLL-estimated NDV with accurate counts from bloom index builders
+            // This provides precise cardinality for encoding decisions (e.g., delta_binary_packed)
+            let bloom_ndv = self.bloom_index_builder.peek_column_distinct_count();
+            for (col_id, accurate_ndv) in bloom_ndv {
+                cols_ndv.insert(col_id, accurate_ndv);
+            }
+
+            let cols_stats = self.column_stats_state.peek_column_stats()?;
             self.block_writer
-                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
+                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv, cols_stats))?;
         }
 
         self.block_writer
@@ -557,7 +589,7 @@ impl StreamBlockProperties {
             ..schema.as_ref().clone()
         });
 
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_ctx(&ctx)?;
 
         let bloom_columns_map = table
             .bloom_index_cols

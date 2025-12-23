@@ -58,4 +58,12 @@ pub trait FilterBuilder {
 
     /// Build the filter with added keys.
     fn build(&mut self) -> Result<Self::Filter, Self::Error>;
+
+    /// Peek the number of unique keys added so far (before building).
+    ///
+    /// Returns `None` if the implementation does not track key count.
+    /// This is useful for obtaining accurate NDV before finalizing the filter.
+    fn peek_len(&self) -> Option<usize> {
+        None
+    }
 }

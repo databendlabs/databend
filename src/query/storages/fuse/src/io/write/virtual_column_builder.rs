@@ -714,12 +714,12 @@ impl VirtualColumnBuilder {
             gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let parquet_options = write_settings.parquet_options();
         let file_meta = blocks_to_parquet_with_stats(
             virtual_block_schema.as_ref(),
             vec![virtual_block],
             &mut data,
-            write_settings.table_compression,
-            write_settings.enable_parquet_dictionary,
+            &parquet_options,
             metadata,
             Some(&columns_statistics),
         )?;
