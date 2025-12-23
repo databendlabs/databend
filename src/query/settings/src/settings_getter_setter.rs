@@ -776,6 +776,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
     }
 
+    pub fn get_enable_parquet_delta_binary_packed_heuristic_rule(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_delta_binary_packed_heuristic_rule")? != 0)
+    }
+
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
     }

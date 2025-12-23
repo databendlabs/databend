@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
@@ -19,8 +20,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -34,6 +40,10 @@ use parquet::schema::types::ColumnPath;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
+// NDV must be close to row count (~90%+). Empirical value based on experiments and operational experience.
+const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.9;
+// Span (max - min + 1) should be close to NDV. Empirical value based on experiments and operational experience.
+const DELTA_RANGE_TOLERANCE: f64 = 1.05;
 
 /// Parquet page size hard limit (~2GB). Arrow-rs 56.2.0+ errors if exceeded.
 const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 << 20);
@@ -43,23 +53,67 @@ const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 << 20);
 pub const MAX_BATCH_MEMORY_SIZE: usize = 1 << 26; // 64MB
 
 /// Serialize data blocks to parquet format.
+#[derive(Clone, Debug)]
+pub struct ParquetWriteOptions {
+    pub compression: TableCompression,
+    pub enable_dictionary: bool,
+    pub enable_delta_binary_packed_heuristic_rule: bool,
+    pub metadata: Option<Vec<KeyValue>>,
+}
+
+impl ParquetWriteOptions {
+    pub fn builder(compression: TableCompression) -> ParquetWriteOptionsBuilder {
+        ParquetWriteOptionsBuilder {
+            compression,
+            enable_dictionary: false,
+            enable_delta_binary_packed_heuristic_rule: false,
+            metadata: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ParquetWriteOptionsBuilder {
+    compression: TableCompression,
+    enable_dictionary: bool,
+    enable_delta_binary_packed_heuristic_rule: bool,
+    metadata: Option<Vec<KeyValue>>,
+}
+
+impl ParquetWriteOptionsBuilder {
+    pub fn enable_dictionary(mut self, enable: bool) -> Self {
+        self.enable_dictionary = enable;
+        self
+    }
+
+    pub fn enable_delta_binary_packed_heuristic_rule(mut self, enable: bool) -> Self {
+        self.enable_delta_binary_packed_heuristic_rule = enable;
+        self
+    }
+
+    pub fn metadata(mut self, metadata: Option<Vec<KeyValue>>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    pub fn build(self) -> ParquetWriteOptions {
+        ParquetWriteOptions {
+            compression: self.compression,
+            enable_dictionary: self.enable_dictionary,
+            enable_delta_binary_packed_heuristic_rule: self
+                .enable_delta_binary_packed_heuristic_rule,
+            metadata: self.metadata,
+        }
+    }
+}
+
 pub fn blocks_to_parquet(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
-    compression: TableCompression,
-    enable_dictionary: bool,
-    metadata: Option<Vec<KeyValue>>,
+    options: &ParquetWriteOptions,
 ) -> Result<FileMetaData> {
-    blocks_to_parquet_with_stats(
-        table_schema,
-        blocks,
-        write_buffer,
-        compression,
-        enable_dictionary,
-        metadata,
-        None,
-    )
+    blocks_to_parquet_with_stats(table_schema, blocks, write_buffer, options, None)
 }
 
 /// Serialize blocks while optionally tuning dictionary behavior via NDV statistics.
@@ -67,18 +121,14 @@ pub fn blocks_to_parquet(
 /// * `table_schema` - Logical schema used to build Arrow batches.
 /// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
 /// * `write_buffer` - Destination buffer that receives the serialized Parquet bytes.
-/// * `compression` - Compression algorithm specified by table-level settings.
-/// * `enable_dictionary` - Enables dictionary encoding globally before per-column overrides.
-/// * `metadata` - Additional user metadata embedded into the Parquet footer.
+/// * `options` - Parquet writer options controlling compression, dictionary, delta heuristics.
 /// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
 ///   before ArrowWriter instantiation disables further changes.
 pub fn blocks_to_parquet_with_stats(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
-    compression: TableCompression,
-    enable_dictionary: bool,
-    metadata: Option<Vec<KeyValue>>,
+    options: &ParquetWriteOptions,
     column_stats: Option<&StatisticsOfColumns>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
@@ -87,12 +137,16 @@ pub fn blocks_to_parquet_with_stats(
     // the streaming writer and only rely on the first block's NDV (and row count) snapshot.
     let num_rows = blocks[0].num_rows();
     let arrow_schema = Arc::new(table_schema.into());
+    let column_metrics = column_stats.map(ColumnStatsView);
 
     let props = build_parquet_writer_properties(
-        compression,
-        enable_dictionary,
-        column_stats,
-        metadata,
+        options.compression,
+        options.enable_dictionary,
+        options.enable_delta_binary_packed_heuristic_rule,
+        column_metrics
+            .as_ref()
+            .map(|view| view as &dyn EncodingStatsProvider),
+        options.metadata.clone(),
         num_rows,
         table_schema,
     );
@@ -170,7 +224,8 @@ pub fn write_batch_with_page_limit<W: std::io::Write + Send>(
 pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,
-    cols_stats: Option<impl NdvProvider>,
+    enable_parquet_delta_binary_packed_heuristic_rule: bool,
+    column_metrics: Option<&dyn EncodingStatsProvider>,
     metadata: Option<Vec<KeyValue>>,
     num_rows: usize,
     table_schema: &TableSchema,
@@ -182,30 +237,113 @@ pub fn build_parquet_writer_properties(
         .set_encoding(Encoding::PLAIN)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
-        .set_key_value_metadata(metadata);
+        .set_key_value_metadata(metadata)
+        .set_dictionary_enabled(enable_dictionary);
+
+    if enable_dictionary || enable_parquet_delta_binary_packed_heuristic_rule {
+        builder = builder.set_writer_version(WriterVersion::PARQUET_2_0);
+    }
+
+    let mut column_paths_cache: Option<HashMap<ColumnId, ColumnPath>> = None;
 
     if enable_dictionary {
-        // Enable dictionary for all columns
-        builder = builder
-            .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_dictionary_enabled(true);
-        if let Some(cols_stats) = cols_stats {
-            // Disable dictionary of columns that have high cardinality
-            for (column_id, components) in table_schema_arrow_leaf_paths(table_schema) {
-                if let Some(ndv) = cols_stats.column_ndv(&column_id) {
-                    if num_rows > 0
-                        && (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD
-                    {
-                        builder = builder
-                            .set_column_dictionary_enabled(ColumnPath::from(components), false);
-                    }
-                }
+        if let Some(metrics) = column_metrics {
+            builder = disable_dictionary_for_high_cardinality_columns(
+                builder,
+                metrics,
+                table_schema,
+                num_rows,
+                &mut column_paths_cache,
+            );
+        }
+    }
+
+    if enable_parquet_delta_binary_packed_heuristic_rule {
+        if let Some(metrics) = column_metrics {
+            builder = apply_delta_binary_packed_heuristic(
+                builder,
+                metrics,
+                table_schema,
+                num_rows,
+                &mut column_paths_cache,
+            );
+        }
+    }
+
+    builder.build()
+}
+
+fn ensure_column_paths<'a>(
+    table_schema: &TableSchema,
+    cache: &'a mut Option<HashMap<ColumnId, ColumnPath>>,
+) -> &'a HashMap<ColumnId, ColumnPath> {
+    if cache.is_none() {
+        *cache = Some(
+            table_schema_arrow_leaf_paths(table_schema)
+                .into_iter()
+                .map(|(id, path)| (id, ColumnPath::from(path)))
+                .collect(),
+        );
+    }
+    cache.as_ref().unwrap()
+}
+
+fn disable_dictionary_for_high_cardinality_columns(
+    mut builder: parquet::file::properties::WriterPropertiesBuilder,
+    metrics: &dyn EncodingStatsProvider,
+    table_schema: &TableSchema,
+    num_rows: usize,
+    column_paths_cache: &mut Option<HashMap<ColumnId, ColumnPath>>,
+) -> parquet::file::properties::WriterPropertiesBuilder {
+    if num_rows == 0 {
+        return builder;
+    }
+    let column_paths = ensure_column_paths(table_schema, column_paths_cache);
+    for (column_id, column_path) in column_paths.iter() {
+        if let Some(ndv) = metrics.column_ndv(column_id) {
+            if (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD {
+                builder = builder.set_column_dictionary_enabled(column_path.clone(), false);
             }
         }
-        builder.build()
-    } else {
-        builder.set_dictionary_enabled(false).build()
     }
+    builder
+}
+
+fn apply_delta_binary_packed_heuristic(
+    mut builder: parquet::file::properties::WriterPropertiesBuilder,
+    metrics: &dyn EncodingStatsProvider,
+    table_schema: &TableSchema,
+    num_rows: usize,
+    column_paths_cache: &mut Option<HashMap<ColumnId, ColumnPath>>,
+) -> parquet::file::properties::WriterPropertiesBuilder {
+    for field in table_schema.leaf_fields() {
+        // Restrict the DBP heuristic to native INT32/UINT32 columns for now.
+        // INT64 columns with high zero bits already compress well with PLAIN+Zstd, and other
+        // widths need more validation before enabling DBP.
+        if !matches!(
+            field.data_type().remove_nullable(),
+            TableDataType::Number(NumberDataType::Int32)
+                | TableDataType::Number(NumberDataType::UInt32)
+        ) {
+            continue;
+        }
+        let column_id = field.column_id();
+        let Some(stats) = metrics.column_stats(&column_id) else {
+            continue;
+        };
+        let Some(ndv) = metrics.column_ndv(&column_id) else {
+            continue;
+        };
+        if should_apply_delta_binary_packed(stats, ndv, num_rows) {
+            let column_paths = ensure_column_paths(table_schema, column_paths_cache);
+            if let Some(path) = column_paths.get(&column_id) {
+                builder = builder
+                    .set_column_dictionary_enabled(path.clone(), false)
+                    .set_column_encoding(path.clone(), Encoding::DELTA_BINARY_PACKED);
+            }
+        }
+    }
+    builder
 }
 
 /// Provides per column NDV statistics
@@ -216,6 +354,69 @@ pub trait NdvProvider {
 impl NdvProvider for &StatisticsOfColumns {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.get(column_id).and_then(|item| item.distinct_of_values)
+    }
+}
+
+pub trait EncodingStatsProvider: NdvProvider {
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics>;
+}
+
+struct ColumnStatsView<'a>(&'a StatisticsOfColumns);
+
+impl<'a> NdvProvider for ColumnStatsView<'a> {
+    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+        self.0
+            .get(column_id)
+            .and_then(|item| item.distinct_of_values)
+    }
+}
+
+impl<'a> EncodingStatsProvider for ColumnStatsView<'a> {
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
+        self.0.get(column_id)
+    }
+}
+
+/// Evaluate whether Delta Binary Packed (DBP) is worth enabling for a 32-bit integer column.
+///
+/// The DBP heuristic rule is intentionally conservative:
+/// - DBP is only considered when the block looks like a contiguous INT32/UINT32 range (no NULLs).
+/// - NDV must be very close to the row count (`DELTA_HIGH_CARDINALITY_RATIO`).
+/// - The `[min, max]` span should be close to NDV (`DELTA_RANGE_TOLERANCE`).
+///   Experiments show that such blocks shrink dramatically after DBP + compression while decode CPU
+///   remains affordable, yielding the best IO + CPU trade-off.
+fn should_apply_delta_binary_packed(stats: &ColumnStatistics, ndv: u64, num_rows: usize) -> bool {
+    // Nulls weaken the contiguous-range signal, so we avoid the heuristic when they exist.
+    if num_rows == 0 || ndv == 0 || stats.null_count > 0 {
+        return false;
+    }
+    let Some(min) = scalar_to_i64(&stats.min) else {
+        return false;
+    };
+    let Some(max) = scalar_to_i64(&stats.max) else {
+        return false;
+    };
+    // Degenerate spans (single value) already compress well without DBP.
+    if max <= min {
+        return false;
+    }
+    // Use ratio-based heuristics instead of absolute NDV threshold to decouple from block size.
+    let ndv_ratio = ndv as f64 / num_rows as f64;
+    if ndv_ratio < DELTA_HIGH_CARDINALITY_RATIO {
+        return false;
+    }
+    let span = (max - min + 1) as f64;
+    let contiguous_ratio = span / ndv as f64;
+    contiguous_ratio <= DELTA_RANGE_TOLERANCE
+}
+
+fn scalar_to_i64(val: &Scalar) -> Option<i64> {
+    // Only 32-bit integers reach the delta heuristic (see matches! check above),
+    // so we deliberately reject other widths to avoid misinterpreting large values.
+    match val {
+        Scalar::Number(NumberScalar::Int32(v)) => Some(*v as i64),
+        Scalar::Number(NumberScalar::UInt32(v)) => Some(*v as i64),
+        _ => None,
     }
 }
 
@@ -241,6 +442,12 @@ mod tests {
     impl NdvProvider for TestNdvProvider {
         fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
             self.ndv.get(column_id).copied()
+        }
+    }
+
+    impl EncodingStatsProvider for TestNdvProvider {
+        fn column_stats(&self, _column_id: &ColumnId) -> Option<&ColumnStatistics> {
+            None
         }
     }
 
@@ -281,10 +488,12 @@ mod tests {
             .map(|(id, path)| (id, ColumnPath::from(path)))
             .collect();
 
+        let provider = TestNdvProvider { ndv };
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
             true,
-            Some(TestNdvProvider { ndv }),
+            false,
+            Some(&provider),
             None,
             1000,
             &schema,
@@ -320,7 +529,8 @@ mod tests {
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
             false,
-            None::<TestNdvProvider>,
+            false,
+            None,
             None,
             1000,
             &schema,
