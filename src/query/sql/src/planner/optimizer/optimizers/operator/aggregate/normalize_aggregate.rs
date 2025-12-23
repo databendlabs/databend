@@ -191,7 +191,7 @@ impl RuleNormalizeAggregateOptimizer {
             }
         }
 
-        scalar_items.extend(post_aggregate_scalars.into_iter());
+        scalar_items.extend(post_aggregate_scalars);
 
         if !scalar_items.is_empty() {
             new_aggregate = SExpr::create_unary(
