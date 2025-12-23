@@ -4351,6 +4351,7 @@ dependencies = [
  "async-backtrace",
  "async-channel",
  "async-trait",
+ "bumpalo",
  "bytesize 2.0.1",
  "databend-common-ast",
  "databend-common-base",

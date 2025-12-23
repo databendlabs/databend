@@ -54,7 +54,6 @@ use super::WindowFunctionInfo;
 use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
-use crate::physical_plans::LagLeadDefault;
 
 #[derive(Debug, Clone)]
 pub struct WindowSortDesc {
@@ -563,9 +562,8 @@ impl TransformWindow {
             WindowFunctionImpl::LagLead(ll) => {
                 let value = if self.frame_start == self.frame_end {
                     match &ll.default {
-                        LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => self.blocks
-                            [self.current_row.block - self.first_block]
+                        None => Scalar::Null,
+                        Some(col) => self.blocks[self.current_row.block - self.first_block]
                             .block
                             .get_by_offset(*col)
                             .index(self.current_row.row)
@@ -1632,12 +1630,7 @@ mod tests {
     use databend_common_pipeline::core::port::connect;
     use databend_common_sql::plans::WindowFuncFrameUnits;
 
-    use super::TransformWindow;
-    use super::WindowBlock;
-    use super::WindowSortDesc;
-    use crate::pipelines::processors::transforms::window::FrameBound;
-    use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
-    use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
+    use super::*;
 
     fn get_ranking_transform_window(bounds: (FrameBound, FrameBound)) -> Result<TransformWindow> {
         let func = WindowFunctionInfo::DenseRank;
