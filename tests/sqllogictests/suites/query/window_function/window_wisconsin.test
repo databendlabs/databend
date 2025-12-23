@@ -30,7 +30,7 @@ SELECT COUNT(*) OVER () FROM tenk1
 10
 10
 
-query RII
+query III
 SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE unique2 < 10 order by ten, unique2
 ----
 0	0	0
