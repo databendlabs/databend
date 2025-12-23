@@ -13,7 +13,7 @@
 // limitations under the License.
 
 macro_rules! try_dispatch {
-    ($input:expr, $return_if_ok:literal, $($pat:pat => $body:expr),+ $(,)?) => {{
+    ($input:expr_2021, $return_if_ok:literal, $($pat:pat => $body:expr_2021),+ $(,)?) => {{
         if let Some(token_0) = $input.tokens.first() {
             use TokenKind::*;
 
@@ -48,13 +48,13 @@ pub mod statement;
 pub mod stream;
 pub mod token;
 
+pub use common::IResult;
 pub use common::match_text;
 pub use common::match_token;
-pub use common::IResult;
-pub use error::display_parser_error;
 pub use error::Backtrace;
 pub use error::Error;
 pub use error::ErrorKind;
+pub use error::display_parser_error;
 pub use error_suggestion::suggest_correction;
 pub use input::Dialect;
 pub use input::Input;

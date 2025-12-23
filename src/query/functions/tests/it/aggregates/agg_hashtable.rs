@@ -26,35 +26,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::cloned_ref_to_slice_refs)]
+
 use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_expression::block_debug::assert_block_value_sort_eq;
-use databend_common_expression::get_states_layout;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalSize;
-use databend_common_expression::types::Float32Type;
-use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::Int16Type;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::Int8Type;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::F32;
-use databend_common_expression::types::F64;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::get_states_layout;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int8Type;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::i256;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::DecimalSumState;
 use itertools::Itertools;
@@ -65,19 +67,22 @@ fn test_agg_hashtable() {
     let factory = AggregateFunctionFactory::instance();
     let m: usize = 4;
     for n in [100, 1000, 10_000, 100_000] {
-        let columns = vec![
-            StringType::from_data((0..n).map(|x| format!("{}", x % m)).collect_vec()),
-            Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()),
-            Int32Type::from_data((0..n).map(|x| (x % m) as i32).collect_vec()),
-            Int16Type::from_data((0..n).map(|x| (x % m) as i16).collect_vec()),
-            Int8Type::from_data((0..n).map(|x| (x % m) as i8).collect_vec()),
-            Float32Type::from_data((0..n).map(|x| F32::from((x % m) as f32)).collect_vec()),
-            Float64Type::from_data((0..n).map(|x| F64::from((x % m) as f64)).collect_vec()),
-            BooleanType::from_data((0..n).map(|x| (x % m) != 0).collect_vec()),
+        let columns = [
+            StringType::from_data((0..n).map(|x| format!("{}", x % m)).collect_vec()).into(),
+            Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()).into(),
+            Int32Type::from_data((0..n).map(|x| (x % m) as i32).collect_vec()).into(),
+            Int16Type::from_data((0..n).map(|x| (x % m) as i16).collect_vec()).into(),
+            Int8Type::from_data((0..n).map(|x| (x % m) as i8).collect_vec()).into(),
+            Float32Type::from_data((0..n).map(|x| F32::from((x % m) as f32)).collect_vec()).into(),
+            Float64Type::from_data((0..n).map(|x| F64::from((x % m) as f64)).collect_vec()).into(),
+            BooleanType::from_data((0..n).map(|x| (x % m) != 0).collect_vec()).into(),
+            BlockEntry::new_const_column_arg::<StringType>("a".to_string(), n),
+            BlockEntry::new_const_column_arg::<NullableType<StringType>>(None, n),
+            BlockEntry::new_const_column_arg::<NullableType<Int8Type>>(Some(4), n),
         ];
 
-        let group_columns = columns.clone();
-        let group_types: Vec<_> = group_columns.iter().map(|c| c.data_type()).collect();
+        let group_columns = columns.to_vec();
+        let group_types = columns.iter().map(|c| c.data_type()).collect::<Vec<_>>();
 
         let aggrs = vec![
             factory
@@ -94,10 +99,7 @@ fn test_agg_hashtable() {
                 .unwrap(),
         ];
 
-        let params: Vec<Vec<BlockEntry>> = aggrs
-            .iter()
-            .map(|_| vec![columns[1].clone().into()])
-            .collect();
+        let params = aggrs.iter().map(|_| vec![columns[1].clone()]).collect_vec();
         let params = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
@@ -109,12 +111,10 @@ fn test_agg_hashtable() {
         );
 
         let mut state = ProbeState::default();
-        let group_block_entries: Vec<BlockEntry> =
-            group_columns.iter().map(|c| c.clone().into()).collect();
         let _ = hashtable
             .add_groups(
                 &mut state,
-                (&group_block_entries).into(),
+                (&group_columns).into(),
                 &params,
                 (&[]).into(),
                 n,
@@ -128,13 +128,10 @@ fn test_agg_hashtable() {
             Arc::new(Bump::new()),
         );
 
-        let mut state2 = ProbeState::default();
-        let group_block_entries2: Vec<BlockEntry> =
-            group_columns.iter().map(|c| c.clone().into()).collect();
         let _ = hashtable2
             .add_groups(
-                &mut state2,
-                (&group_block_entries2).into(),
+                &mut state,
+                (&group_columns).into(),
                 &params,
                 (&[]).into(),
                 n,
@@ -171,20 +168,23 @@ fn test_agg_hashtable() {
         let rows = n as i64;
         let urows = rows as u64;
 
-        let mut expected_results: Vec<Column> =
-            group_columns.iter().map(|c| c.slice(0..m)).collect();
+        let mut expected_results = group_columns
+            .iter()
+            .map(|c| c.slice(0..m))
+            .collect::<Vec<_>>();
 
         expected_results.extend_from_slice(&[
-            Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()),
-            Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()),
+            Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()).into(),
+            Int64Type::from_data_with_validity(vec![0, 1, 2, 3], validities.clone()).into(),
             Int64Type::from_data_with_validity(
                 vec![0, rows / 2, rows, rows / 2 * 3],
                 validities.clone(),
-            ),
-            UInt64Type::from_data(vec![urows / 2, urows / 2, urows / 2, urows / 2]),
+            )
+            .into(),
+            UInt64Type::from_data(vec![urows / 2, urows / 2, urows / 2, urows / 2]).into(),
         ]);
 
-        let block_expected = DataBlock::new_from_columns(expected_results.clone());
+        let block_expected = DataBlock::new(expected_results.clone(), expected_results[0].len());
         assert_block_value_sort_eq(&block, &block_expected);
     }
 }

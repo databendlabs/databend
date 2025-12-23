@@ -27,11 +27,11 @@ use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::ast::WindowRef;
 use databend_common_ast::ast::WindowSpec;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::ALL_FLOAT_TYPES;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use rand::Rng;
 

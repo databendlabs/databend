@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_sql::plans::RenameDatabasePlan;
 
 use crate::interpreters::Interpreter;

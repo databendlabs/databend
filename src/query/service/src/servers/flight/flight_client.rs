@@ -15,29 +15,29 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::Action;
 use arrow_flight::FlightData;
 use arrow_flight::Ticket;
+use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
-use fastrace::Span;
 use futures::StreamExt;
 use futures_util::future::Either;
 use serde::Deserialize;
 use serde::Serialize;
-use tonic::metadata::AsciiMetadataKey;
-use tonic::metadata::AsciiMetadataValue;
-use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
 use tonic::Streaming;
+use tonic::metadata::AsciiMetadataKey;
+use tonic::metadata::AsciiMetadataValue;
+use tonic::transport::channel::Channel;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::servers::flight::request_builder::RequestBuilder;

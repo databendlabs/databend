@@ -17,15 +17,15 @@ databend_common_tracing::register_module_tag!("[QUERY-CTX]");
 
 use std::any::Any;
 use std::cmp::min;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -34,21 +34,21 @@ use std::time::UNIX_EPOCH;
 use async_channel::Receiver;
 use async_channel::Sender;
 use chrono_tz::Tz;
-use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use dashmap::mapref::multiple::RefMulti;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::JoinHandle;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
@@ -88,6 +88,8 @@ use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -97,8 +99,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -111,7 +111,6 @@ use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
-use databend_common_storage::init_stage_operator;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
@@ -120,6 +119,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
+use databend_common_storage::init_stage_operator;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
@@ -132,16 +132,16 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use jiff::tz::TimeZone;
 use jiff::Zoned;
+use jiff::tz::TimeZone;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -154,14 +154,14 @@ use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
-use crate::sessions::query_affect::QueryAffect;
-use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::spillers;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
@@ -1479,12 +1479,10 @@ impl TableContext for QueryContext {
             let stream = StreamTable::try_from_table(table.as_ref())?;
             let actual_batch_limit = stream.max_batch_size();
             if actual_batch_limit != final_batch_size {
-                return Err(ErrorCode::StorageUnsupported(
-                    format!(
-                        "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
-                        actual_batch_limit, final_batch_size
-                    )
-                ));
+                return Err(ErrorCode::StorageUnsupported(format!(
+                    "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
+                    actual_batch_limit, final_batch_size
+                )));
             }
         } else if max_batch_size.is_some() {
             return Err(ErrorCode::StorageUnsupported(
@@ -2028,6 +2026,7 @@ impl TableContext for QueryContext {
                         copy_into_table_options: Default::default(),
                         stage_root,
                         is_variant: true,
+                        parquet_metas: None,
                     };
                     StageTable::try_create(info)
                 }
@@ -2039,7 +2038,7 @@ impl TableContext for QueryContext {
                     _ => {
                         return Err(ErrorCode::SemanticError(
                             "Query from ORC file only support $1 as column position",
-                        ))
+                        ));
                     }
                 };
                 let schema = Arc::new(TableSchema::empty());
@@ -2048,12 +2047,10 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
                     stage_root,
                     is_variant,
+                    is_select: true,
+                    ..Default::default()
                 };
                 OrcTable::try_create(self, info).await
             }
@@ -2067,12 +2064,10 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
                     is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
-                    stage_root,
                     is_variant: true,
+                    stage_root,
+                    ..Default::default()
                 };
                 StageTable::try_create(info)
             }
@@ -2104,12 +2099,9 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
                     is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
                     stage_root,
-                    is_variant: false,
+                    ..Default::default()
                 };
                 StageTable::try_create(info)
             }

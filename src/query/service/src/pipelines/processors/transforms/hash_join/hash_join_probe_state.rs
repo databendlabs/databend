@@ -14,18 +14,15 @@
 
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::and_validities;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -36,6 +33,9 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::arrow::and_validities;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
@@ -46,13 +46,13 @@ use parking_lot::RwLock;
 
 use super::ProbeState;
 use super::ProcessState;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
-use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sql::planner::plans::JoinType;
 

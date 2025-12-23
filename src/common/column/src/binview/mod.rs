@@ -31,15 +31,15 @@ pub use builder::BinaryViewColumnBuilder;
 use either::Either;
 pub use iterator::BinaryViewColumnIter;
 use private::Sealed;
-use view::validate_utf8_only;
 pub use view::CheckUTF8;
 pub use view::View;
+use view::validate_utf8_only;
 
 use crate::binary::BinaryColumn;
 use crate::binary::BinaryColumnBuilder;
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Result;
 use crate::impl_sliced;
@@ -79,7 +79,7 @@ impl ViewType for str {
 
     #[inline(always)]
     unsafe fn from_bytes_unchecked(slice: &[u8]) -> &Self {
-        std::str::from_utf8_unchecked(slice)
+        unsafe { std::str::from_utf8_unchecked(slice) }
     }
 
     #[inline(always)]
@@ -255,8 +255,10 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// Assumes that the `i < self.len`.
     #[inline]
     pub unsafe fn value_unchecked(&self, i: usize) -> &T {
-        let v = self.views.get_unchecked(i);
-        T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        }
     }
 
     /// same as value_unchecked
@@ -264,8 +266,10 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// Assumes that the `i < self.len`.
     #[inline]
     pub unsafe fn index_unchecked(&self, i: usize) -> &T {
-        let v = self.views.get_unchecked(i);
-        T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        }
     }
 
     /// same as value_unchecked, yet it will return bytes
@@ -273,12 +277,14 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// Assumes that the `i < self.len`.
     #[inline]
     pub unsafe fn index_unchecked_bytes(&self, i: usize) -> &[u8] {
-        let v = self.views.get_unchecked(i);
-        v.get_slice_unchecked(&self.buffers)
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            v.get_slice_unchecked(&self.buffers)
+        }
     }
 
     /// Returns an iterator of `&[u8]` over every element of this array, ignoring the validity
-    pub fn iter(&self) -> BinaryViewColumnIter<T> {
+    pub fn iter(&self) -> BinaryViewColumnIter<'_, T> {
         BinaryViewColumnIter::new(self)
     }
 
@@ -419,9 +425,11 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
-        debug_assert!(offset + length <= self.len());
-        self.views.slice_unchecked(offset, length);
-        self.total_bytes_len = OnceLock::new();
+        unsafe {
+            debug_assert!(offset + length <= self.len());
+            self.views.slice_unchecked(offset, length);
+            self.total_bytes_len = OnceLock::new();
+        }
     }
 
     impl_sliced!();

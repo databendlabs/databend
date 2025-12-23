@@ -28,16 +28,16 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::NumberScalar;
 
-use crate::binder::table_args::bind_table_args;
-use crate::binder::util::TableIdentifier;
-use crate::binder::Binder;
-use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 use crate::ScalarBinder;
+use crate::binder::Binder;
+use crate::binder::table_args::bind_table_args;
+use crate::binder::util::TableIdentifier;
+use crate::optimizer::ir::SExpr;
 
 impl Binder {
     pub(crate) fn bind_obfuscate(

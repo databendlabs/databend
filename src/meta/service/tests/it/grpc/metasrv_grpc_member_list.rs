@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::Duration;
+use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_version::BUILD_INFO;
 use databend_meta::message::ForwardRequest;

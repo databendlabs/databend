@@ -56,15 +56,15 @@
 use std::ops::RangeInclusive;
 
 use thiserror::Error;
-use zerocopy::little_endian::U64;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
 use zerocopy::IntoBytes;
 use zerocopy::KnownLayout;
+use zerocopy::little_endian::U64;
 
+use super::bitpacking::BitWriter;
 use super::bitpacking::make_bitmask;
 use super::bitpacking::packed_bits;
-use super::bitpacking::BitWriter;
 
 /// The size of the tail padding.
 /// These extra 7 bytes after the last chunk allows the decompressor to safely

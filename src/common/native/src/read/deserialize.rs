@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::Column;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 
-use super::array::*;
 use super::PageIterator;
+use super::array::*;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;

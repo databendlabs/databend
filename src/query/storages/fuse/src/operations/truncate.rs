@@ -24,11 +24,11 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::FuseTable;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TruncateGenerator;
-use crate::FuseTable;
 
 impl FuseTable {
     #[inline]

@@ -101,7 +101,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .and_then(AggIndexMeta::downcast_ref_from)
             .copied();
 
-        let block = block.consume_convert_to_full();
         if let Some(meta) = meta
             && meta.is_agg
         {
@@ -230,7 +229,6 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if !block.is_empty() {
-            let block = block.consume_convert_to_full();
             self.to_merge_data.push(block);
         }
 

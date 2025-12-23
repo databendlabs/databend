@@ -19,6 +19,7 @@ use crate::kvapi::KeyError;
 use crate::kvapi::KeyParser;
 use crate::kvapi::Value;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FooKey {
     pub(crate) a: u64,
@@ -41,6 +42,7 @@ impl KeyCodec for FooKey {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct FooValue;
 

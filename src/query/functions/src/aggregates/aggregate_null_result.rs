@@ -17,16 +17,16 @@ use std::fmt;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
 
 use super::AggrState;
 use super::AggrStateLoc;

@@ -26,10 +26,10 @@ use aggregator::Aggregators;
 pub use aggregator_common::*;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate as aggregate_function;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::aggregate as aggregate_function;
+use databend_common_expression::types::DataType;
 
 trait StateSerde {
     fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem>;

@@ -20,6 +20,12 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
+use crate::BlockEntry;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
+use crate::SELECTIVITY_THRESHOLD;
+use crate::Value;
 use crate::types::binary::BinaryColumn;
 use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
@@ -29,12 +35,6 @@ use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_number_mapped_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::DataBlock;
-use crate::Value;
-use crate::SELECTIVITY_THRESHOLD;
 
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 

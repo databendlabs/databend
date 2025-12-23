@@ -22,12 +22,18 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::Result;
 
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::ScalarExpr;
+use crate::Visibility;
+use crate::binder::Binder;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::bind::MutationStrategy;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
-use crate::binder::Binder;
 use crate::optimizer::ir::Matcher;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -37,12 +43,6 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
-use crate::BindContext;
-use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 impl Binder {
     #[async_backtrace::framed]

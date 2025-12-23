@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_catalog::plan::InternalColumnType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumnBuilder;
 
 pub fn add_internal_columns(
     internal_columns: &[InternalColumnType],

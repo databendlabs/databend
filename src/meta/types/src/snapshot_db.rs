@@ -21,9 +21,9 @@ use std::sync::Arc;
 use futures_util::stream::BoxStream;
 use log::info;
 use openraft::SnapshotId;
-use rotbl::v001::stat::RotblStat;
 use rotbl::v001::Rotbl;
 use rotbl::v001::SeqMarked;
+use rotbl::v001::stat::RotblStat;
 
 use crate::raft_types::SnapshotMeta;
 use crate::sys_data::SysData;

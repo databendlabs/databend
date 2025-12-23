@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::group_hash_value_spread;
-use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
+use databend_common_expression::group_hash_value_spread;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_common_pipeline::basic::Exchange;
 
 use super::WindowPartitionMeta;
@@ -170,10 +170,10 @@ impl WindowPartitionTopNExchange {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::StringType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
 
     use super::*;
 

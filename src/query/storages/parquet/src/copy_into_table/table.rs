@@ -30,15 +30,15 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storage::init_stage_operator;
 use databend_common_storage::FileStatus;
+use databend_common_storage::init_stage_operator;
 use parquet::file::metadata::FileMetaData;
 
+use crate::ParquetPart;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::copy_into_table::source::ParquetCopySource;
 use crate::meta::read_metas_in_parallel_for_copy;
 use crate::partition::ParquetRowGroupPart;
-use crate::ParquetPart;
 
 pub struct ParquetTableForCopy {}
 
@@ -49,12 +49,6 @@ impl ParquetTableForCopy {
         ctx: Arc<dyn TableContext>,
         _push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let settings = ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-        let max_memory_usage = settings.get_max_memory_usage()?;
-
-        let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        // User set the files.
         let files = stage_table_info.files_to_copy.as_ref().expect(
             "ParquetTableForCopy::do_read_partitions must be called with files_to_copy set",
         );
@@ -64,9 +58,19 @@ impl ParquetTableForCopy {
             .map(|f| (f.path.clone(), f.size))
             .collect::<Vec<_>>();
         let total_size = file_infos.iter().map(|(_, size)| *size as usize).sum();
-        let metas =
+
+        let metas = if let Some(v) = &stage_table_info.parquet_metas {
+            v.clone()
+        } else {
+            let settings = ctx.get_settings();
+            let max_threads = settings.get_max_threads()? as usize;
+            let max_memory_usage = settings.get_max_memory_usage()?;
+
+            let operator = init_stage_operator(&stage_table_info.stage_info)?;
             read_metas_in_parallel_for_copy(&operator, &file_infos, max_threads, max_memory_usage)
-                .await?;
+                .await?
+        };
+
         let mut schemas = vec![];
         let mut parts = vec![];
         let copy_status = ctx.get_copy_status();

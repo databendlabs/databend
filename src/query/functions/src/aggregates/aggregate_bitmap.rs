@@ -24,15 +24,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::DecimalType;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::Number;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::*;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -40,15 +31,19 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
-use databend_common_io::prelude::BinaryWrite;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
-use super::assert_arguments;
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::assert_variadic_params;
-use super::extract_number_param;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -56,6 +51,11 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateAddrs;
+use super::assert_arguments;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
+use super::extract_number_param;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(Clone)]
@@ -250,7 +250,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let view = entries[0].downcast::<BitmapType>().unwrap();
-        if view.len() == 0 {
+        if view.is_empty() {
             return Ok(());
         }
 
@@ -388,7 +388,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<BitmapAggState>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
@@ -447,7 +447,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let view = entries[0].downcast::<NumberType<NUM>>().unwrap();
-        if view.len() == 0 {
+        if view.is_empty() {
             return Ok(());
         }
         let state = place.get::<BitmapAggState>();
@@ -575,7 +575,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<BitmapAggState>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
@@ -706,11 +706,18 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let predicate = self.get_filter_bitmap(columns);
-        let entry = columns[0].to_column().filter(&predicate).into();
+        let predicate = self.get_filter_bitmap(block);
+        let entry = match &block[0] {
+            BlockEntry::Const(scalar, data_type, _) => BlockEntry::new_const_column(
+                data_type.clone(),
+                scalar.clone(),
+                predicate.true_count(),
+            ),
+            BlockEntry::Column(column) => column.filter(&predicate).into(),
+        };
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();

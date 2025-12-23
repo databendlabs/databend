@@ -79,7 +79,7 @@ impl GraphLinks {
         Self::try_new(data.to_vec(), |x| GraphLinksView::load(x, format))
     }
 
-    fn view(&self) -> &GraphLinksView {
+    fn view(&self) -> &GraphLinksView<'_> {
         self.borrow_dependent()
     }
 
@@ -105,7 +105,7 @@ impl GraphLinks {
     }
 
     #[inline]
-    pub fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator {
+    pub fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator<'_> {
         self.view().links(point_id, level)
     }
 

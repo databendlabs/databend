@@ -17,11 +17,11 @@ use std::io::Read;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 
-use crate::meta::load_json;
 use crate::meta::CompactSegmentInfo;
 use crate::meta::SegmentInfo;
 use crate::meta::SegmentInfoV3;
 use crate::meta::SegmentInfoVersion;
+use crate::meta::load_json;
 use crate::readers::VersionedReader;
 
 impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {

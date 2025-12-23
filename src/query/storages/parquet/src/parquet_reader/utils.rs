@@ -17,16 +17,16 @@ use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
-use parquet::arrow::parquet_to_arrow_schema_by_columns;
+use databend_common_expression::types::Bitmap;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::schema::types::SchemaDescriptor;
 
 pub type DataBlockIterator = Box<dyn Iterator<Item = Result<DataBlock>> + Send>;

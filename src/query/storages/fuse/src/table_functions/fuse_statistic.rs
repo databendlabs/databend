@@ -17,14 +17,11 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -32,14 +29,17 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::decode_column_hll;
 
-use crate::table_functions::string_literal;
+use crate::FuseTable;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::FuseTable;
+use crate::table_functions::string_literal;
 
 pub struct FuseStatsArgs {
     catalog_name: Option<String>,

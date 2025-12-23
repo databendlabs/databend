@@ -14,30 +14,29 @@
 
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
 
-use super::group_hash_columns;
+use super::BATCH_SIZE;
+use super::Entry;
+use super::HashTableConfig;
+use super::LOAD_FACTOR;
+use super::MAX_PAGE_SIZE;
+use super::Payload;
+use super::group_hash_entries;
 use super::hash_index::AdapterImpl;
 use super::hash_index::HashIndex;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
-use super::Entry;
-use super::HashTableConfig;
-use super::Payload;
-use super::LOAD_FACTOR;
-use super::MAX_PAGE_SIZE;
-use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-
-const BATCH_ADD_SIZE: usize = 2048;
+use crate::types::DataType;
 
 pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
@@ -129,12 +128,12 @@ impl AggregateHashTable {
         agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
-        if row_count <= BATCH_ADD_SIZE {
+        if row_count <= BATCH_SIZE {
             self.add_groups_inner(state, group_columns, params, agg_states, row_count)
         } else {
             let mut new_count = 0;
-            for start in (0..row_count).step_by(BATCH_ADD_SIZE) {
-                let end = (start + BATCH_ADD_SIZE).min(row_count);
+            for start in (0..row_count).step_by(BATCH_SIZE) {
+                let end = (start + BATCH_SIZE).min(row_count);
                 let step_group_columns = group_columns
                     .iter()
                     .map(|entry| entry.slice(start..end))
@@ -188,11 +187,11 @@ impl AggregateHashTable {
         }
 
         state.row_count = row_count;
-        group_hash_columns(group_columns, &mut state.group_hashes);
+        group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
 
         let new_group_count = if self.direct_append {
-            for idx in 0..row_count {
-                state.empty_vector[idx] = idx;
+            for i in 0..row_count {
+                state.empty_vector[i] = i.into();
             }
             self.payload.append_rows(state, row_count, group_columns);
             row_count
@@ -232,7 +231,7 @@ impl AggregateHashTable {
 
         if self.config.partial_agg {
             // check size
-            if self.hash_index.count + BATCH_ADD_SIZE > self.hash_index.resize_threshold()
+            if self.hash_index.count + BATCH_SIZE > self.hash_index.resize_threshold()
                 && self.hash_index.capacity >= self.config.max_partial_capacity
             {
                 self.clear_ht();

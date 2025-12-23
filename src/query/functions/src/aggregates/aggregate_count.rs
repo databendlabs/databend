@@ -17,15 +17,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberColumnBuilder;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::UnaryType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -34,15 +25,24 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::utils::column_merge_validity;
 
-use super::assert_params;
-use super::assert_variadic_arguments;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::assert_params;
+use super::assert_variadic_arguments;
 
 struct AggregateCountState {
     count: u64,
@@ -99,16 +99,17 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let nulls = if columns.is_empty() {
+        let nulls = if block.is_empty() {
             validity.map(|v| v.null_count()).unwrap_or(0)
         } else {
-            match &columns[0].to_column() {
-                Column::Nullable(c) => validity
+            match &block[0] {
+                BlockEntry::Const(Scalar::Null, DataType::Nullable(_), n) => *n,
+                BlockEntry::Column(Column::Nullable(c)) => validity
                     .map(|v| v & (&c.validity))
                     .unwrap_or_else(|| c.validity.clone())
                     .null_count(),

@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -158,9 +158,9 @@ impl NdvProvider for &StatisticsOfColumns {
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_expression::types::number::NumberDataType;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
 

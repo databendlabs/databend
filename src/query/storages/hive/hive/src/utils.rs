@@ -17,9 +17,9 @@ use std::fmt::Debug;
 use databend_common_catalog::partition_columns::str_to_scalar;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
+use databend_common_expression::types::DataType;
 use databend_storages_common_pruner::partition_prunner::FetchPartitionScalars;
 use volo_thrift::MaybeException;
 

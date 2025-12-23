@@ -99,14 +99,16 @@ impl UpdateList {
     ///
     /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
     pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
-        let inner = &mut *self.inner.get();
+        unsafe {
+            let inner = &mut *self.inner.get();
 
-        for trigger in &inner.updated_triggers {
-            UpdateTrigger::trigger_version(trigger.get());
-        }
+            for trigger in &inner.updated_triggers {
+                UpdateTrigger::trigger_version(trigger.get());
+            }
 
-        while let Some(index) = inner.updated_edges.pop() {
-            queue.push_front(index);
+            while let Some(index) = inner.updated_edges.pop() {
+                queue.push_front(index);
+            }
         }
     }
 
@@ -120,16 +122,18 @@ impl UpdateList {
         self: &Arc<Self>,
         edge_index: EdgeIndex,
     ) -> Result<*mut UpdateTrigger> {
-        let inner = &mut *self.inner.get();
-        let update_trigger = UpdateTrigger::create(edge_index, self.inner.get());
-        inner
-            .updated_triggers
-            .push(Arc::new(UnsafeCell::new(update_trigger)));
-        inner
-            .updated_triggers
-            .last()
-            .map(|trigger| trigger.get())
-            .ok_or_else(|| ErrorCode::Internal("Failed to get last trigger after push"))
+        unsafe {
+            let inner = &mut *self.inner.get();
+            let update_trigger = UpdateTrigger::create(edge_index, self.inner.get());
+            inner
+                .updated_triggers
+                .push(Arc::new(UnsafeCell::new(update_trigger)));
+            inner
+                .updated_triggers
+                .last()
+                .map(|trigger| trigger.get())
+                .ok_or_else(|| ErrorCode::Internal("Failed to get last trigger after push"))
+        }
     }
 }
 
@@ -158,7 +162,9 @@ impl UpdateTrigger {
     ///
     /// *mut UpdateTrigger must be a safe pointer
     pub unsafe fn trigger_version(self_: *mut UpdateTrigger) {
-        (*self_).prev_version = (*self_).version;
+        unsafe {
+            (*self_).prev_version = (*self_).version;
+        }
     }
 
     /// Trigger node input edge. Executor will schedule this edge.
@@ -168,12 +174,14 @@ impl UpdateTrigger {
     /// *mut UpdateTrigger must be a safe pointer
     #[inline(always)]
     pub unsafe fn update_input(self_: &*mut UpdateTrigger) {
-        if !self_.is_null() {
-            let self_ = &mut **self_;
-            if self_.version == self_.prev_version {
-                self_.version += 1;
-                let inner = &mut *self_.update_list;
-                inner.updated_edges.push(DirectedEdge::Target(self_.index));
+        unsafe {
+            if !self_.is_null() {
+                let self_ = &mut **self_;
+                if self_.version == self_.prev_version {
+                    self_.version += 1;
+                    let inner = &mut *self_.update_list;
+                    inner.updated_edges.push(DirectedEdge::Target(self_.index));
+                }
             }
         }
     }
@@ -185,12 +193,14 @@ impl UpdateTrigger {
     /// *mut UpdateTrigger must be a safe pointer
     #[inline(always)]
     pub unsafe fn update_output(self_: &*mut UpdateTrigger) {
-        if !self_.is_null() {
-            let self_ = &mut **self_;
-            if self_.version == self_.prev_version {
-                self_.version += 1;
-                let inner = &mut *self_.update_list;
-                inner.updated_edges.push(DirectedEdge::Source(self_.index));
+        unsafe {
+            if !self_.is_null() {
+                let self_ = &mut **self_;
+                if self_.version == self_.prev_version {
+                    self_.version += 1;
+                    let inner = &mut *self_.update_list;
+                    inner.updated_edges.push(DirectedEdge::Source(self_.index));
+                }
             }
         }
     }

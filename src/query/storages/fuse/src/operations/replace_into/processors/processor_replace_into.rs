@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -29,6 +28,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::types::BooleanType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;

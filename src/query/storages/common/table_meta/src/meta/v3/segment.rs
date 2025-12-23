@@ -20,12 +20,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::frozen;
-use crate::meta::format::decode_segment_header;
-use crate::meta::format::read_and_deserialize;
-use crate::meta::format::SegmentHeader;
 use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Versioned;
+use crate::meta::format::SegmentHeader;
+use crate::meta::format::decode_segment_header;
+use crate::meta::format::read_and_deserialize;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different

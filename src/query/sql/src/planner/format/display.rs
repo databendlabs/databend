@@ -16,15 +16,15 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::ColumnEntry;
+use crate::IndexType;
+use crate::Metadata;
+use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
-use crate::ColumnEntry;
-use crate::IndexType;
-use crate::Metadata;
-use crate::ScalarExpr;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {
@@ -86,14 +86,13 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => {
                 let table = self.metadata.table(column.table_index);
-                let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{db}.{table}.{column} (#{id})")
+                format!("{table}.{column} (#{id})")
             }
             ColumnEntry::DerivedColumn(column) => {
-                let column = column.alias.as_str();
-                format!("derived.{column} (#{id})")
+                let alias = &column.alias;
+                format!("{alias} (#{id})")
             }
             ColumnEntry::InternalColumn(column) => {
                 let column = column.internal_column.column_name.as_str();

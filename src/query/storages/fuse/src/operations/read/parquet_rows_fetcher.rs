@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::sync::Arc;
 
 use databend_common_base::runtime::spawn;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::block_idx_in_segment;
 use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::split_row_id;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -46,12 +46,12 @@ use itertools::Itertools;
 
 use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
-use crate::io::BlockReader;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
+use crate::io::BlockReader;
+use crate::io::CompactSegmentInfoReader;
+use crate::io::MetaReaders;
 
 pub struct RowsFetchMetadataImpl {
     // Average bytes per row
@@ -251,7 +251,7 @@ impl ParquetRowsFetcher {
         metadata: Arc<RowsFetchMetadataImpl>,
         final_index: u32,
         take_indices: Vec<BlockRowIndex>,
-    ) -> impl Future<Output = Result<(u32, DataBlock)>> {
+    ) -> impl Future<Output = Result<(u32, DataBlock)>> + use<> {
         {
             let settings = self.settings;
             let reader = self.reader.clone();

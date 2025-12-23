@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
@@ -62,6 +62,7 @@ pub struct ReadParquetDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    read_settings: ReadSettings,
     stats: Arc<ReadStats>,
     unfinished_processors_count: Arc<AtomicU64>,
 }
@@ -80,6 +81,7 @@ impl ReadParquetDataTransform {
         unfinished_processors_count: Arc<AtomicU64>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let read_settings = ReadSettings::from_ctx(&ctx)?;
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
@@ -91,6 +93,7 @@ impl ReadParquetDataTransform {
                 table_schema,
                 scan_id: table_index,
                 context: ctx,
+                read_settings,
                 stats,
                 unfinished_processors_count,
             },
@@ -154,7 +157,7 @@ impl AsyncTransform for ReadParquetDataTransform {
 
                         fuse_part_infos.push(part.clone());
                         let block_reader = self.block_reader.clone();
-                        let settings = ReadSettings::from_ctx(&self.context)?;
+                        let settings = self.read_settings;
                         let index_reader = self.index_reader.clone();
                         let virtual_reader = self.virtual_reader.clone();
 
@@ -230,7 +233,10 @@ impl AsyncTransform for ReadParquetDataTransform {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!(
+                "RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}",
+                self.scan_id, blocks_total, blocks_pruned
+            );
         }
         Ok(())
     }

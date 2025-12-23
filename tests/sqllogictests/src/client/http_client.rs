@@ -18,18 +18,18 @@ use std::time::Duration;
 use std::time::Instant;
 
 use regex::Regex;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 
 use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
-use crate::util::parser_rows;
 use crate::util::ColumnType;
 use crate::util::HttpSessionConf;
+use crate::util::parser_rows;
 
 pub struct HttpClient {
     pub client: Client,

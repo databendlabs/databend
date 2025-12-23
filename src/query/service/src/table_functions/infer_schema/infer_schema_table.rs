@@ -30,12 +30,12 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
@@ -46,21 +46,21 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::resolve_file_location;
-use databend_common_storage::init_stage_operator;
+use databend_common_storage::Scheme;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storage::init_stage_operator;
 use databend_common_storages_stage::BytesReader;
 use databend_common_storages_stage::Decompressor;
 use databend_common_storages_stage::InferSchemaPartInfo;
 use databend_common_storages_stage::LoadContext;
 use databend_common_users::Object;
 use databend_storages_common_stage::SingleFilePartition;
-use opendal::Scheme;
 
 use super::parquet::ParquetInferSchemaSource;
 use crate::sessions::TableContext;
+use crate::table_functions::TableFunction;
 use crate::table_functions::infer_schema::separator::InferSchemaSeparator;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
-use crate::table_functions::TableFunction;
 
 pub(crate) const INFER_SCHEMA: &str = "infer_schema";
 
@@ -240,16 +240,9 @@ impl Table for InferSchemaTable {
                 Self::build_read_stage_source(ctx.clone(), pipeline, &info.stage_info)?;
 
                 let stage_table_info = StageTableInfo {
-                    stage_root: "".to_string(),
                     stage_info: info.stage_info.clone(),
-                    schema: Arc::new(Default::default()),
-                    default_exprs: None,
                     files_info: info.files_info.clone(),
-                    files_to_copy: None,
-                    duplicated_files_detected: vec![],
-                    is_select: false,
-                    copy_into_table_options: Default::default(),
-                    is_variant: false,
+                    ..Default::default()
                 };
 
                 let load_ctx = Arc::new(LoadContext::try_create_for_copy(

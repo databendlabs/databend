@@ -22,7 +22,6 @@ use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
 use arrow_schema::SchemaRef as ArrowSchemaRef;
 use arrow_schema::TimeUnit;
-use deltalake::kernel::error::Error;
 use deltalake::kernel::ArrayType;
 use deltalake::kernel::DataType;
 use deltalake::kernel::MapType;
@@ -30,6 +29,7 @@ use deltalake::kernel::MetadataValue;
 use deltalake::kernel::PrimitiveType;
 use deltalake::kernel::StructField;
 use deltalake::kernel::StructType;
+use deltalake::kernel::error::Error;
 use itertools::Itertools;
 
 pub(crate) const LIST_ARRAY_ROOT: &str = "element";

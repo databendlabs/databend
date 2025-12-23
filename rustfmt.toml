@@ -1,5 +1,4 @@
-edition = "2021"
-style_edition = "2021"
+edition = "2024"
 reorder_imports = true
 imports_granularity = "Item"
 group_imports = "StdExternalCrate"

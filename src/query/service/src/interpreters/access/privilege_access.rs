@@ -16,8 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -33,16 +33,17 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
+use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
-use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
+use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::ModifyColumnAction;
@@ -50,10 +51,9 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
-use databend_common_sql::Planner;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
@@ -210,12 +210,10 @@ impl PrivilegeAccess {
                         UserPrivilegeType::Select | UserPrivilegeType::Drop
                     )
                 {
-                    return Err(ErrorCode::PermissionDenied(
-                        format!(
-                            "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
-                            privilege
-                        ),
-                    ));
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
+                        privilege
+                    )));
                 }
             }
             (None, None, Some(stage_name)) => {
@@ -531,8 +529,7 @@ impl PrivilegeAccess {
                             } else {
                                 Some(Err(ErrorCode::PermissionDenied(format!(
                                     "Permission denied: Ownership is required on WAREHOUSE '{}' for user {}",
-                                    warehouse,
-                                    current_user
+                                    warehouse, current_user
                                 ))))
                             }
                         }

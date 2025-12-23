@@ -14,8 +14,8 @@
 
 use std::sync::LazyLock;
 
-use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
 use databend_common_base::runtime::metrics::FamilyHistogram;
+use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
 
 static COMPACT_HOOK_EXECUTION_MS: LazyLock<FamilyHistogram<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_histogram_family_in_milliseconds("compact_hook_execution_ms"));

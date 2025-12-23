@@ -48,10 +48,10 @@ impl QuotaValueStmt {
 
         if v.ends_with('%') {
             let num = v.trim_end_matches('%').trim();
-            if let Ok(value) = num.parse::<usize>() {
-                if value <= 100 {
-                    return Some(QuotaValueStmt::Percentage(value));
-                }
+            if let Ok(value) = num.parse::<usize>()
+                && value <= 100
+            {
+                return Some(QuotaValueStmt::Percentage(value));
             }
         }
         None

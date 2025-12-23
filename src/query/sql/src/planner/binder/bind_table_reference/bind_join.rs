@@ -15,28 +15,32 @@
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
-use databend_common_ast::ast::split_conjunctions_expr;
-use databend_common_ast::ast::split_equivalent_predicate_expr;
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
-use databend_common_ast::Span;
+use databend_common_ast::ast::split_conjunctions_expr;
+use databend_common_ast::ast::split_equivalent_predicate_expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::wrap_nullable;
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnSet;
+use crate::MetadataRef;
 use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
+use crate::binder::wrap_nullable;
 use crate::normalize_identifier;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
-use crate::optimizer::OptimizerContext;
-use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::Binder;
+use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -48,10 +52,6 @@ use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Visitor;
-use crate::BindContext;
-use crate::ColumnBinding;
-use crate::ColumnSet;
-use crate::MetadataRef;
 
 pub struct JoinConditions {
     pub(crate) left_conditions: Vec<ScalarExpr>,

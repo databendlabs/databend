@@ -17,11 +17,15 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 
+use crate::ColumnEntry;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::Metadata;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::RelExpr;
@@ -48,10 +52,6 @@ use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::UnionAll;
 use crate::plans::Window;
-use crate::ColumnEntry;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::Metadata;
 
 impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
@@ -798,14 +798,13 @@ impl SubqueryDecorrelatorOptimizer {
             .map(|child| Ok(self.clone_outer_recursive(child)?.into()))
             .collect::<Result<_>>()?;
 
-        Ok(SExpr {
-            plan: Arc::new(self.clone_outer_plan(outer.plan())?),
+        Ok(SExpr::create(
+            self.clone_outer_plan(outer.plan())?,
             children,
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: Default::default(),
-        })
+            None,
+            None,
+            None,
+        ))
     }
 
     fn clone_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
@@ -861,7 +860,7 @@ impl SubqueryDecorrelatorOptimizer {
                 if aggregate.grouping_sets.is_some() {
                     return Err(ErrorCode::Unimplemented(
                         "join left plan can't contain aggregate with GROUPING SETS to dcorrelated join right plan",
-                   ));
+                    ));
                 }
                 aggregate.into()
             }
@@ -869,7 +868,7 @@ impl SubqueryDecorrelatorOptimizer {
                 return Err(ErrorCode::Unimplemented(format!(
                     "join left plan can't contain {:?} to dcorrelated join right plan",
                     plan.rel_op()
-                )))
+                )));
             }
         };
         Ok(op)

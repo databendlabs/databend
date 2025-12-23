@@ -27,8 +27,8 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
-use crate::operations::merge_into::mutator::MutationSplitMutator;
 use crate::operations::BlockMetaIndex;
+use crate::operations::merge_into::mutator::MutationSplitMutator;
 
 // There are two kinds of usage for this processor:
 // 1. we will receive a probed datablock from join, and split it by rowid into matched block and unmatched block

@@ -27,19 +27,19 @@ use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use log::info;
 use log::warn;
-use poem::web::cookie::Cookie;
-use poem::web::cookie::CookieJar;
 use poem::Request;
 use poem::Response;
+use poem::web::cookie::Cookie;
+use poem::web::cookie::CookieJar;
 use serde::Deserializer;
 use serde::Serializer;
 use uuid::Uuid;
 
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::json_header::decode_json_header;
 use crate::servers::http::middleware::json_header::encode_json_header;
-use crate::servers::http::middleware::ClientCapabilities;
-use crate::servers::http::v1::unix_ts;
 use crate::servers::http::v1::ClientSessionManager;
+use crate::servers::http::v1::unix_ts;
 
 const COOKIE_LAST_REFRESH_TIME: &str = "last_refresh_time";
 const COOKIE_SESSION_ID: &str = "session_id";
@@ -232,9 +232,9 @@ impl ClientSession {
             }
             Err(err) => {
                 warn!(
-                        "Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
-                        err.duration()
-                    );
+                    "Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
+                    err.duration()
+                );
             }
         }
         Ok(())

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::i256;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
+use databend_common_expression::types::i256;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use parquet::data_type::AsBytes;
 use parquet::data_type::ByteArray;

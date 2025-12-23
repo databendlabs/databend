@@ -16,8 +16,8 @@ use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
 use crate::error::Result;
-use crate::nested::create_map;
 use crate::nested::NestedState;
+use crate::nested::create_map;
 use crate::read::deserialize::DynIter;
 
 /// An iterator adapter over [`DynIter`] assumed to be encoded as Map columns

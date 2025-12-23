@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::StringType;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

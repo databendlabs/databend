@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::wkb::make_point;
 

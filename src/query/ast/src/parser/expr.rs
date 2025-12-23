@@ -14,30 +14,30 @@
 
 use ethnum::i256;
 use itertools::Itertools;
+use nom::Parser;
 use nom::combinator::consumed;
 use nom::combinator::verify;
 use nom::error::context;
-use nom::Parser;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use crate::Span;
 use crate::ast::quote::AtString;
 use crate::ast::*;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::parser::common::*;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::Error;
-use crate::parser::ErrorKind;
 use crate::span::merge_span;
-use crate::Span;
 
 macro_rules! with_span {
-    ($parser:expr) => {
+    ($parser:expr_2021) => {
         map(consumed($parser), |(span, elem)| WithSpan { span, elem })
     };
 }
@@ -873,13 +873,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::DotAccess { key } => {
                 // `database.table.column` is parsed into [database] [.table] [.column],
                 // so we need to transform it into the right `ColumnRef` form.
-                if let Expr::ColumnRef { column, .. } = &mut lhs {
-                    if let ColumnID::Name(name) = &column.column {
-                        column.database = column.table.take();
-                        column.table = Some(name.clone());
-                        column.column = key.clone();
-                        return Ok(lhs);
-                    }
+                if let Expr::ColumnRef { column, .. } = &mut lhs
+                    && let ColumnID::Name(name) = &column.column
+                {
+                    column.database = column.table.take();
+                    column.table = Some(name.clone());
+                    column.column = key.clone();
+                    return Ok(lhs);
                 }
 
                 match key {
@@ -1786,7 +1786,7 @@ fn return_op<T>(i: Input, start: usize, op: T) -> IResult<T> {
 }
 
 macro_rules! op_branch {
-    ($i:ident, $token_0:ident, $($kind:ident => $op:expr),+ $(,)?) => {
+    ($i:ident, $token_0:ident, $($kind:ident => $op:expr_2021),+ $(,)?) => {
         match $token_0.kind {
             $(
                 TokenKind::$kind => return return_op($i, 1, $op),
@@ -1854,7 +1854,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
                     return_op(i, 2, BinaryOperator::LikeAny(None))
                 } else {
                     return_op(i, 1, BinaryOperator::Like(None))
-                }
+                };
             }
             NOT => match i.tokens.get(1).map(|first| first.kind) {
                 Some(LIKE) => {
@@ -1876,7 +1876,12 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             _ => (),
         }
     }
-    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ..."))))
+    Err(nom::Err::Error(Error::from_error_kind(
+        i,
+        ErrorKind::Other(
+            "expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...",
+        ),
+    )))
 }
 
 pub fn json_op(i: Input) -> IResult<JsonOperator> {
@@ -1897,7 +1902,12 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
             HashMinus => JsonOperator::HashMinus,
         );
     }
-    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ..."))))
+    Err(nom::Err::Error(Error::from_error_kind(
+        i,
+        ErrorKind::Other(
+            "expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ...",
+        ),
+    )))
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
@@ -1931,10 +1941,15 @@ pub fn literal(i: Input) -> IResult<Literal> {
         NULL => null.parse(i),
     );
 
-    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ..."))))
+    Err(nom::Err::Error(Error::from_error_kind(
+        i,
+        ErrorKind::Other(
+            "expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...",
+        ),
+    )))
 }
 
-pub fn literal_hex_str(i: Input) -> IResult<&str> {
+pub fn literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
     // 0XFFFF
     let mysql_hex = map(
         rule! {
@@ -2504,10 +2519,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 
 fn map_access_dot_number(i: Input) -> IResult<MapAccessor> {
     map_res(rule! { LiteralFloat }, |key| {
-        if key.text().starts_with('.') {
-            if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                return Ok(MapAccessor::DotNumber { key });
-            }
+        if key.text().starts_with('.')
+            && let Ok(key) = (key.text()[1..]).parse::<u64>()
+        {
+            return Ok(MapAccessor::DotNumber { key });
         }
         Err(nom::Err::Error(ErrorKind::ExpectText(".")))
     })

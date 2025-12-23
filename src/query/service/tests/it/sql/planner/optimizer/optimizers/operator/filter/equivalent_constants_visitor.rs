@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_sql::optimizer::optimizers::operator::EquivalentConstantsVisitor;
-use databend_common_sql::plans::VisitorMut;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::Metadata;
@@ -29,6 +27,8 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
+use databend_common_sql::optimizer::optimizers::operator::EquivalentConstantsVisitor;
+use databend_common_sql::plans::VisitorMut;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;

@@ -20,16 +20,6 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BuilderExt;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::PairType;
-use databend_common_expression::types::TernaryType;
-use databend_common_expression::types::UnaryType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::types::F64;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -38,13 +28,23 @@ use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BuilderExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::PairType;
+use databend_common_expression::types::TernaryType;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
 
-use super::get_states_layout;
 use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StatesLayout;
+use super::get_states_layout;
 use crate::BUILTIN_FUNCTIONS;
 
 pub(super) fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
@@ -173,29 +173,6 @@ pub fn eval_aggr(
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_inner(name, params, entries, rows, false, sort_descs)
-}
-
-pub fn eval_aggr_for_test(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    with_serialize: bool,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
-    eval_aggr_inner(name, params, entries, rows, with_serialize, sort_descs)
-}
-
-#[inline]
-fn eval_aggr_inner(
-    name: &str,
-    params: Vec<Scalar>,
-    entries: &[BlockEntry],
-    rows: usize,
-    with_serialize: bool,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments = entries.iter().map(BlockEntry::data_type).collect();
 
@@ -205,15 +182,6 @@ fn eval_aggr_inner(
     let eval = EvalAggr::new(func.clone());
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
     func.accumulate(state, entries.into(), None, rows)?;
-    if with_serialize {
-        let data_type = func.serialize_data_type();
-        let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-        let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-        func.batch_serialize(&[eval.addr], state.loc, builders)?;
-        func.init_state(state);
-        let column = builder.build();
-        func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
-    }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state, false, &mut builder)?;
     Ok((builder.build(), data_type))

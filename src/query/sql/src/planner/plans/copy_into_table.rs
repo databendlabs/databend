@@ -24,13 +24,13 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -147,6 +147,7 @@ pub struct CopyIntoTablePlan {
 
     pub dedup_full_path: bool,
     pub path_prefix: Option<String>,
+    pub enable_schema_evolution: bool,
 }
 
 fn get_path_prefix(op: &Operator) -> String {

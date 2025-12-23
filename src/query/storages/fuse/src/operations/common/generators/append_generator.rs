@@ -19,11 +19,11 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -35,8 +35,8 @@ use log::warn;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::operations::common::SnapshotMerged;
-use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::TableStatsGenerator;
+use crate::statistics::reducers::merge_statistics_mut;
 
 #[derive(Clone)]
 pub struct AppendGenerator {

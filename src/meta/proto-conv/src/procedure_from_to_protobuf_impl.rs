@@ -17,17 +17,17 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_expression::TableDataType;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::TableDataType;
 use databend_common_meta_app as mt;
 use databend_common_protos::pb;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::principal::ProcedureIdentity {
     type PB = pb::ProcedureIdentity;

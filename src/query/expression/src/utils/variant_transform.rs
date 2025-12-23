@@ -14,16 +14,16 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use jsonb::parse_owned_jsonb;
 use jsonb::RawJsonb;
+use jsonb::parse_owned_jsonb;
 
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::Value;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 pub fn contains_variant(data_type: &DataType) -> bool {
     match data_type {

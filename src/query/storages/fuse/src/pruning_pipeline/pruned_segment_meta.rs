@@ -16,16 +16,16 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
-use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_common_expression::local_block_meta_serde;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 
+use crate::SegmentLocation;
 use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
 use crate::io::read::SegmentReader;
-use crate::SegmentLocation;
 
 pub struct PrunedCompactSegmentMeta {
     pub segments: (SegmentLocation, Arc<CompactSegmentInfo>),

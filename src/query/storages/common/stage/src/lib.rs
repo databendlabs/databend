@@ -1,4 +1,3 @@
-#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#![feature(box_patterns)]
+#![allow(clippy::cloned_ref_to_slice_refs)]
 
 mod read;
 mod write;

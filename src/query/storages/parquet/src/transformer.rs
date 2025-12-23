@@ -216,7 +216,10 @@ impl RecordBatchTransformer {
             let target_type = target_field.data_type();
 
             let Some((source_field, source_index)) = source_map.get(field_id) else {
-                return Err(ErrorCode::TableSchemaMismatch(format!("The field with field_id: {field_id} does not exist in the source schema: {:#?}.", source)));
+                return Err(ErrorCode::TableSchemaMismatch(format!(
+                    "The field with field_id: {field_id} does not exist in the source schema: {:#?}.",
+                    source
+                )));
             };
 
             sources.push(
@@ -254,10 +257,10 @@ mod test {
     use arrow_schema::Field;
     use arrow_schema::Fields;
     use arrow_schema::Schema;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
     use parquet::arrow::PARQUET_FIELD_ID_META_KEY;
 
     use crate::transformer::RecordBatchTransformer;

@@ -17,14 +17,14 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
-use futures_util::io;
 use futures_util::AsyncWriteExt;
+use futures_util::io;
 use http::StatusCode;
+use poem::Request;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Multipart;
-use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 

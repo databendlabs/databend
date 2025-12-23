@@ -19,12 +19,12 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_users::Object;
+use poem::IntoResponse;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -34,12 +34,12 @@ use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
-    pub table: Option<TableDetails>,
+    pub table: Option<TableDetail>,
     pub warnings: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
-pub struct TableDetails {
+pub struct TableDetail {
     pub name: String,
     pub database: String,
     pub catalog: String,
@@ -122,7 +122,7 @@ async fn handle(
     });
 
     Ok(GetDatabaseTableResponse {
-        table: Some(TableDetails {
+        table: Some(TableDetail {
             name: tbl.name().to_string(),
             database: db.name().to_string(),
             catalog: catalog.name().to_string(),

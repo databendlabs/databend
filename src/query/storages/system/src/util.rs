@@ -14,11 +14,11 @@
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::expr::*;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_string;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
@@ -52,9 +52,14 @@ pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
         Expr::FunctionCall(FunctionCall { function, args, .. }) => {
             if function.signature.name == "gt" || function.signature.name == "gte" {
                 match args.as_slice() {
-                    [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })]
-                    | [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                    {
+                    [
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                        Expr::Constant(Constant { scalar, .. }),
+                    ]
+                    | [
+                        Expr::Constant(Constant { scalar, .. }),
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                    ] => {
                         visitor(id, scalar);
                     }
                     _ => {}
@@ -83,9 +88,14 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
         Expr::FunctionCall(FunctionCall { function, args, .. }) => {
             if function.signature.name == "lt" || function.signature.name == "lte" {
                 match args.as_slice() {
-                    [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })]
-                    | [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                    {
+                    [
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                        Expr::Constant(Constant { scalar, .. }),
+                    ]
+                    | [
+                        Expr::Constant(Constant { scalar, .. }),
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                    ] => {
                         visitor(id, scalar);
                     }
                     _ => {}

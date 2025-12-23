@@ -49,7 +49,7 @@ unsafe impl Allocator for StdAllocator {
 
     #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        System.deallocate(ptr, layout)
+        unsafe { System.deallocate(ptr, layout) }
     }
 
     #[inline(always)]
@@ -59,7 +59,7 @@ unsafe impl Allocator for StdAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        System.grow(ptr, old_layout, new_layout)
+        unsafe { System.grow(ptr, old_layout, new_layout) }
     }
 
     #[inline(always)]
@@ -69,7 +69,7 @@ unsafe impl Allocator for StdAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        System.grow_zeroed(ptr, old_layout, new_layout)
+        unsafe { System.grow_zeroed(ptr, old_layout, new_layout) }
     }
 
     #[inline(always)]
@@ -79,6 +79,6 @@ unsafe impl Allocator for StdAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        System.shrink(ptr, old_layout, new_layout)
+        unsafe { System.shrink(ptr, old_layout, new_layout) }
     }
 }

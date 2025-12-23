@@ -18,8 +18,8 @@ use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Table;
 use databend_common_exception::Result;
-use terminal_size::terminal_size;
 use terminal_size::Width;
+use terminal_size::terminal_size;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::DataBlock;

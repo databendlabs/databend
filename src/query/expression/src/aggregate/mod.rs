@@ -27,9 +27,9 @@ mod payload_row;
 mod probe_state;
 mod row_ptr;
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
@@ -39,8 +39,9 @@ use hash_index::Entry;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
-pub use probe_state::*;
-use row_ptr::RowPtr;
+pub use probe_state::ProbeState;
+use probe_state::*;
+use row_ptr::*;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;

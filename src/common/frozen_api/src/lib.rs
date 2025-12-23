@@ -19,8 +19,8 @@
 //! ## Usage
 //!
 //! ```rust
-//! use databend_common_frozen_api::frozen_api;
 //! use databend_common_frozen_api::FrozenAPI;
+//! use databend_common_frozen_api::frozen_api;
 //!
 //! // Child structs: must derive FrozenAPI
 //! #[derive(FrozenAPI)]
@@ -48,16 +48,16 @@
 //! **Rule**: If struct uses `#[frozen_api]`, it and ALL its custom field types must `#[derive(FrozenAPI)]`.
 
 use proc_macro::TokenStream;
-use quote::quote;
 use quote::ToTokens;
+use quote::quote;
 use sha2::Digest;
 use sha2::Sha256;
-use syn::parse_macro_input;
 use syn::Data;
 use syn::DeriveInput;
 use syn::Fields;
 use syn::LitStr;
 use syn::Type;
+use syn::parse_macro_input;
 
 /// Compile-time API freezing macro that prevents accidental breaking changes.
 #[proc_macro_attribute]
@@ -269,10 +269,10 @@ fn has_custom_types_in_field(ty: &Type) -> bool {
                 // Check generic arguments
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
-                        if let syn::GenericArgument::Type(inner_type) = arg {
-                            if has_custom_types_in_field(inner_type) {
-                                return true;
-                            }
+                        if let syn::GenericArgument::Type(inner_type) = arg
+                            && has_custom_types_in_field(inner_type)
+                        {
+                            return true;
                         }
                     }
                 }

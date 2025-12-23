@@ -18,17 +18,17 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
-use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SecureFilter {

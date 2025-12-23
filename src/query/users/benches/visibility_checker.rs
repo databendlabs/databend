@@ -17,9 +17,9 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
-use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 fn main() {
     divan::main();
@@ -55,7 +55,7 @@ fn create_realistic_test_data(
     let mut tables_per_db = vec![0usize; num_databases];
     for _ in 0..total_tables {
         // Use power-law distribution: top 20% DBs contain 80% tables
-        let db_idx = if rng.gen::<f64>() < 0.8 {
+        let db_idx = if rng.r#gen::<f64>() < 0.8 {
             // 80% of tables go to top 20% of DBs
             rng.gen_range(0..(num_databases / 5).max(1))
         } else {

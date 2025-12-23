@@ -16,8 +16,6 @@ use std::collections::HashSet;
 
 use databend_common_column::bitmap::MutableBitmap;
 
-use crate::arrow::bitmap_into_mut;
-use crate::types::BooleanType;
 use crate::ColumnIndex;
 use crate::Constant;
 use crate::ConstantFolder;
@@ -26,6 +24,8 @@ use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::Scalar;
 use crate::Value;
+use crate::arrow::bitmap_into_mut;
+use crate::types::BooleanType;
 
 pub struct FilterHelpers;
 

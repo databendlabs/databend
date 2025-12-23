@@ -15,9 +15,9 @@
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::Result;
 
+use crate::BindContext;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
-use crate::BindContext;
 
 impl Binder {
     pub(crate) fn bind_table_reference(

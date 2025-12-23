@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::core::PipeItem;
 use crate::core::port::InputPort;
 use crate::core::port::OutputPort;
 use crate::core::processor::Event;
 use crate::core::processor::EventCause;
 use crate::core::processor::Processor;
 use crate::core::processor::ProcessorPtr;
-use crate::core::PipeItem;
 
 #[derive(PartialEq)]
 enum PortStatus {
@@ -231,11 +231,11 @@ mod tests {
     use databend_common_expression::DataBlock;
 
     use crate::basic::resize_processor::ResizeProcessor;
-    use crate::core::port::connect;
     use crate::core::EventCause;
     use crate::core::InputPort;
     use crate::core::OutputPort;
     use crate::core::Processor;
+    use crate::core::port::connect;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_resize_output_finish() -> databend_common_exception::Result<()> {

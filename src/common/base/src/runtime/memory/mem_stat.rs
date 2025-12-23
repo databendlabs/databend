@@ -14,19 +14,19 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicI64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
 
 use bytesize::ByteSize;
 
 use crate::base::GlobalSequence;
-use crate::runtime::memory::memory_manager::QueriesMemoryManager;
-use crate::runtime::memory::memory_manager::GLOBAL_QUERIES_MANAGER;
 use crate::runtime::LimitMemGuard;
+use crate::runtime::memory::memory_manager::GLOBAL_QUERIES_MANAGER;
+use crate::runtime::memory::memory_manager::QueriesMemoryManager;
 
 /// The program mem stat
 ///
@@ -434,9 +434,9 @@ mod tests {
 
     use databend_common_exception::Result;
 
-    use crate::runtime::memory::mem_stat::ParentMemStat;
-    use crate::runtime::memory::mem_stat::MINIMUM_MEMORY_LIMIT;
     use crate::runtime::MemStat;
+    use crate::runtime::memory::mem_stat::MINIMUM_MEMORY_LIMIT;
+    use crate::runtime::memory::mem_stat::ParentMemStat;
 
     #[test]
     fn test_single_level_mem_stat() -> Result<()> {
@@ -457,9 +457,11 @@ mod tests {
         mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(mem_stat
-            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-            .is_err());
+        assert!(
+            mem_stat
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+                .is_err()
+        );
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
@@ -530,9 +532,11 @@ mod tests {
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
 
         mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(mem_stat
-            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-            .is_ok());
+        assert!(
+            mem_stat
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+                .is_ok()
+        );
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
@@ -540,9 +544,11 @@ mod tests {
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
 
         child_mem_stat.record_memory::<false>(1, 1).unwrap();
-        assert!(child_mem_stat
-            .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
-            .is_err());
+        assert!(
+            child_mem_stat
+                .record_memory::<false>(MINIMUM_MEMORY_LIMIT, MINIMUM_MEMORY_LIMIT)
+                .is_err()
+        );
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1 + MINIMUM_MEMORY_LIMIT
@@ -562,9 +568,11 @@ mod tests {
         );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT * 2, false);
 
-        assert!(child_mem_stat
-            .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
-            .is_err());
+        assert!(
+            child_mem_stat
+                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
+                .is_err()
+        );
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
 
@@ -578,9 +586,11 @@ mod tests {
         );
         child_mem_stat.set_limit(MINIMUM_MEMORY_LIMIT, false);
 
-        assert!(child_mem_stat
-            .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
-            .is_err());
+        assert!(
+            child_mem_stat
+                .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
+                .is_err()
+        );
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         // assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);

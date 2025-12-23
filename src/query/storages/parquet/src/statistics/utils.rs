@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use arrow_buffer::i256;
-use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::decimal::DecimalScalar;
 use parquet::data_type::AsBytes;
 use parquet::data_type::FixedLenByteArray;
 

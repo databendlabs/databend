@@ -19,8 +19,6 @@ use std::time::Instant;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -29,6 +27,8 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RawExpr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Value;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::BooleanType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
@@ -37,15 +37,15 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_sql::IndexType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MatchExpr;
-use databend_common_sql::IndexType;
 use databend_common_storage::MutationStatus;
 
+use crate::operations::BlockMetaIndex;
 use crate::operations::common::MutationLogs;
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
-use crate::operations::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SourceFullMatched;

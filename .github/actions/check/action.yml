@@ -32,21 +32,12 @@ runs:
       shell: bash
       run: cargo fmt --all -- --check
 
-    - name: Check unused deps
-      shell: bash
-      run: cargo machete
-
     - name: Check toml format
       shell: bash
       run: |
         taplo check
         taplo fmt --check
 
-    # - name: Audit dependencies
-    #   shell: bash
-    #   if: "!contains(github.event.head_commit.message, 'skip audit')"
-    #   run: cargo audit --db ./target/advisory-db
-
     - name: Clippy
       shell: bash
-      run: cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps clippy --workspace --all-targets --all-features -- -D warnings
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings

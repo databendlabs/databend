@@ -17,18 +17,18 @@ use std::io::Cursor;
 
 use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::MetaHLL;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::meta::ColumnStatistics;
+use crate::meta::SegmentStatistics;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
-use crate::meta::ColumnStatistics;
-use crate::meta::SegmentStatistics;
 
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;

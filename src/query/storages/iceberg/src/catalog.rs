@@ -28,9 +28,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::UDTFServer;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -104,8 +103,9 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -121,8 +121,8 @@ use iceberg_catalog_rest::RestCatalogConfig;
 use iceberg_catalog_s3tables::S3TablesCatalog;
 use iceberg_catalog_s3tables::S3TablesCatalogConfig;
 
-use crate::database::IcebergDatabase;
 use crate::IcebergTable;
+use crate::database::IcebergDatabase;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -28,8 +28,8 @@ use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::sessions::QueryContext;
 use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;

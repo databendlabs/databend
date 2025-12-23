@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::expr;
 use databend_common_expression::Cast;
 use databend_common_expression::Expr;
+use databend_common_expression::expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use log::debug;
 

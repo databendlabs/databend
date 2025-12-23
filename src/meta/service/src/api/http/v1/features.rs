@@ -19,10 +19,10 @@ use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiv
 use http::StatusCode;
 use log::info;
 use log::warn;
+use poem::IntoResponse;
 use poem::web::Data;
 use poem::web::Json;
 use poem::web::Query;
-use poem::IntoResponse;
 
 use crate::meta_node::errors::MetaNodeStopped;
 use crate::meta_node::meta_handle::MetaHandle;

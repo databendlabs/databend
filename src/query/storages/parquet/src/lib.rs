@@ -13,17 +13,20 @@
 // limitations under the License.
 
 #![allow(internal_features)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::redundant_iter_cloned,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args
+)]
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(let_chains)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(box_patterns)]
-#![feature(result_flattening)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 
@@ -46,16 +49,17 @@ mod parquet_variant_table;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
+pub use meta::read_metas_in_parallel_for_copy;
 pub use parquet_part::DeleteTask;
 pub use parquet_part::DeleteType;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
-pub use parquet_reader::read_all;
 pub use parquet_reader::InMemoryRowGroup;
 pub use parquet_reader::InmMemoryFile;
 pub use parquet_reader::ParquetFileReader;
 pub use parquet_reader::ParquetReaderBuilder;
 pub use parquet_reader::ParquetWholeFileReader;
+pub use parquet_reader::read_all;
 pub use parquet_table::ParquetTable;
 pub use parquet_variant_table::ParquetVariantTable;
 // for it test

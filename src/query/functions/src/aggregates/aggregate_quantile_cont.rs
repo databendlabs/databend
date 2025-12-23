@@ -14,11 +14,6 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::array::ArrayColumnBuilderMut;
-use databend_common_expression::types::decimal::Decimal;
-use databend_common_expression::types::*;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -26,13 +21,13 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateAddr;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
-use super::batch_serialize1;
-use super::get_levels;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
@@ -41,6 +36,11 @@ use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::get_levels;
 
 const MEDIAN: u8 = 0;
 const QUANTILE_CONT: u8 = 1;
@@ -320,10 +320,12 @@ where
     T::Scalar: Decimal,
 {
     fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
-        vec![DataType::Array(Box::new(DataType::Decimal(
-            T::Scalar::default_decimal_size(),
-        )))
-        .into()]
+        vec![
+            DataType::Array(Box::new(DataType::Decimal(
+                T::Scalar::default_decimal_size(),
+            )))
+            .into(),
+        ]
     }
 
     fn batch_serialize(

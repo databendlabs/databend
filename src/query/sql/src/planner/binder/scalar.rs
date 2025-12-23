@@ -17,14 +17,14 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::types::DataType;
 
+use crate::MetadataRef;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {

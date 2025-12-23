@@ -21,16 +21,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::Number;
-use databend_common_expression::types::number::F64;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::UnaryType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -38,11 +28,18 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::aggregator_common::assert_binary_arguments;
-use super::aggregator_common::assert_params;
-use super::borsh_partial_deserialize;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -50,6 +47,9 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::aggregator_common::assert_binary_arguments;
+use super::aggregator_common::assert_params;
+use super::borsh_partial_deserialize;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct AggregateCovarianceState {

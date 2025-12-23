@@ -19,12 +19,12 @@ use std::fmt::Formatter;
 use databend_common_exception::ErrorCode;
 use http::StatusCode;
 use jwt_simple::prelude::Deserialize;
-use poem::error::ResponseError;
-use poem::web::Json;
 use poem::IntoResponse;
 use poem::Response;
-use serde::de::StdError;
+use poem::error::ResponseError;
+use poem::web::Json;
 use serde::Serialize;
+use serde::de::StdError;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct QueryError {

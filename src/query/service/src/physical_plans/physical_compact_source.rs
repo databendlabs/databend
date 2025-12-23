@@ -30,24 +30,24 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::StreamContext;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactLazyPartInfo;
 use databend_common_storages_fuse::operations::CompactTransform;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::physical_plans::physical_plan::IPhysicalPlan;
-use crate::physical_plans::physical_plan::PhysicalPlan;
-use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -16,6 +16,6 @@ mod query_executor;
 mod stream_column;
 
 pub use query_executor::QueryExecutor;
-pub use stream_column::StreamContext;
 pub use stream_column::CURRENT_BLOCK_ID_COL_NAME;
 pub use stream_column::CURRENT_BLOCK_ROW_NUM_COL_NAME;
+pub use stream_column::StreamContext;

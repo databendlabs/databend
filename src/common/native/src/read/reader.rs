@@ -19,14 +19,14 @@ use std::io::SeekFrom;
 use databend_common_expression::TableSchema;
 use opendal::Reader;
 
-use super::read_basic::read_u32;
-use super::read_basic::read_u64;
 use super::NativeReadBuf;
 use super::PageIterator;
-use crate::error::Error;
-use crate::error::Result;
+use super::read_basic::read_u32;
+use super::read_basic::read_u64;
 use crate::ColumnMeta;
 use crate::PageMeta;
+use crate::error::Error;
+use crate::error::Result;
 
 const DEFAULT_FOOTER_SIZE: u64 = 64 * 1024;
 

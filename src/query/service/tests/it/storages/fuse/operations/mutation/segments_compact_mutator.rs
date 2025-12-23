@@ -22,38 +22,37 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberColumn;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::Value;
+use databend_common_expression::types::number::NumberColumn;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::io::serialize_block;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
+use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::CompactOptions;
 use databend_common_storages_fuse::operations::SegmentCompactMutator;
 use databend_common_storages_fuse::operations::SegmentCompactionState;
 use databend_common_storages_fuse::operations::SegmentCompactor;
+use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
-use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
-use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -61,9 +60,10 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use futures_util::TryStreamExt;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
@@ -735,10 +735,11 @@ impl CompactSegmentTestFixture {
                     } else {
                         cluster_key_id.map(|v| {
                             let val = block.get_by_offset(0);
-                            let left = vec![unsafe { val.value().index_unchecked(0) }.to_owned()];
-                            let right =
-                                vec![unsafe { val.index_unchecked(val.value().len() - 1) }
-                                    .to_owned()];
+                            let left_value = unsafe { val.index_unchecked(0) }.to_owned();
+                            let right_value =
+                                unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
+                            let left = vec![left_value];
+                            let right = vec![right_value];
                             let level = if left.eq(&right)
                                 && block.num_rows() >= thresholds.block_per_segment
                             {

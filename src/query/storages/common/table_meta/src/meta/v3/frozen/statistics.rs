@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use databend_common_expression::converts::meta::LegacyScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::converts::meta::LegacyScalar;
 
 // the following types are supposed to be frozen
 

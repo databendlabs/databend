@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
-use databend_query::sql::normalize_identifier;
 use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
+use databend_query::sql::normalize_identifier;
 use derive_visitor::DriveMut;
 
 // typos:off

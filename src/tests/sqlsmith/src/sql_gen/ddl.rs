@@ -31,8 +31,8 @@ use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::DataType;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 
 use crate::sql_gen::SqlGenerator;
 

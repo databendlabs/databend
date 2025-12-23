@@ -18,13 +18,19 @@ use std::sync::Arc;
 use databend_common_base::base::OrderedFloat;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
+use databend_common_sql::ColumnBinding;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::Planner;
+use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::planner::plans::Filter;
 use databend_common_sql::planner::Binder;
 use databend_common_sql::planner::Metadata;
+use databend_common_sql::planner::plans::Filter;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::BoundColumnRef;
@@ -40,12 +46,7 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
-use databend_common_sql::ColumnBinding;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
-use databend_common_sql::NameResolutionContext;
-use databend_common_sql::Planner;
-use databend_common_sql::Visibility;
+use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 
@@ -69,11 +70,12 @@ pub async fn execute_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<()> {
 
 /// Get raw plan from SQL
 pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
+    let settings = ctx.get_settings();
     let planner = Planner::new(ctx.clone());
     let extras = planner.parse_sql(sql)?;
 
     let metadata = Arc::new(parking_lot::RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::default();
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
     let binder = Binder::new(
         ctx.clone(),

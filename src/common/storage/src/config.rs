@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use databend_common_auth::RefreshableToken;
 use databend_common_auth::TokenFile;
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;

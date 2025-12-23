@@ -21,13 +21,13 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
+use crate::binder::Binder;
+use crate::binder::MutationStrategy;
 use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
-use crate::binder::Binder;
-use crate::binder::MutationStrategy;
 use crate::plans::Plan;
-use crate::BindContext;
 
 // Merge into strategies:
 // 1. Insert only: target right-anti join source.

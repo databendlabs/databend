@@ -45,7 +45,7 @@ use opendal::Operator;
 use parquet::format::FileMetaData;
 use parquet::thrift::TSerializable;
 
-use self::thrift_file_meta_read::read_thrift_file_metadata;
+pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
@@ -53,8 +53,8 @@ pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<
 pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
-pub type InvertedIndexMetaReader = InMemoryCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
-pub type VectorIndexMetaReader = InMemoryCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
+pub type InvertedIndexMetaReader = HybridCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
+pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
 pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;

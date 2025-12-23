@@ -23,17 +23,17 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
-use super::core::algorithm::SortAlgorithm;
-use super::sort_spill::OutputData;
-use super::sort_spill::SortSpill;
 use super::Base;
 use super::SortBound;
 use super::SortBoundNext;
 use super::SortCollectedMeta;
-use crate::traits::DataBlockSpill;
+use super::core::algorithm::SortAlgorithm;
+use super::sort_spill::OutputData;
+use super::sort_spill::SortSpill;
 use crate::HookTransform;
 use crate::HookTransformer;
 use crate::MemorySettings;
+use crate::traits::DataBlockSpill;
 
 pub struct TransformSortRestore<A: SortAlgorithm, S: DataBlockSpill> {
     input: Vec<SortCollectedMeta>,

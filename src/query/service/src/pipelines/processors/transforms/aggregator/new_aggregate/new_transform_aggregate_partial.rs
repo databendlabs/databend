@@ -21,37 +21,37 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::StringType;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::StringType;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
 
@@ -327,7 +327,6 @@ impl NewTransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
         let block_bytes = block.memory_size();

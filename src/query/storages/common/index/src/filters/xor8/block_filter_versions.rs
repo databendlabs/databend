@@ -15,8 +15,8 @@
 use std::marker::PhantomData;
 
 use databend_common_exception::ErrorCode;
-use databend_storages_common_table_meta::meta::testify_version;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::testify_version;
 
 use crate::filters::BlockFilter;
 

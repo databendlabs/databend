@@ -20,16 +20,29 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SimpleDomainCmp;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::Value;
 use databend_common_expression::aggregate::AggrState;
 use databend_common_expression::aggregate::AggregateFunctionRef;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
-use databend_common_expression::types::array::ArrayColumnBuilder;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::number::SimpleDomain;
-use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -50,30 +63,17 @@ use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
-use databend_common_expression::Domain;
-use databend_common_expression::EvalContext;
-use databend_common_expression::Function;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::SimpleDomainCmp;
-use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::KeysRef;
 use databend_common_hashtable::StackHashMap;
@@ -1181,7 +1181,7 @@ impl<'a> ArrayAggEvaluator<'a> {
         }
     }
 
-    fn state(&self) -> AggrState {
+    fn state(&self) -> AggrState<'_> {
         AggrState::new(self.addr, &self.state_layout.states_loc[0])
     }
 
@@ -1232,7 +1232,7 @@ impl ArrayAggDesc {
         })
     }
 
-    fn create_evaluator(&self) -> ArrayAggEvaluator {
+    fn create_evaluator(&self) -> ArrayAggEvaluator<'_> {
         ArrayAggEvaluator::new(&self.func, &self.state_layout)
     }
 }

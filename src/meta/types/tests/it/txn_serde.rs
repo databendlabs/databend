@@ -14,10 +14,10 @@
 
 use std::time::Duration;
 
-use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::protobuf::BooleanExpression;
 
 #[test]
 fn test_txn_request_serde() -> anyhow::Result<()> {

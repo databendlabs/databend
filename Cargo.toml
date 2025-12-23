@@ -3,11 +3,13 @@ version = "0.1.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [workspace]
 resolver = "2"
 members = [
+    "src/bendpy",
+    "src/bendsave",
     "src/binaries",
     "src/common/auth",
     "src/common/base",
@@ -15,7 +17,6 @@ members = [
     "src/common/cache",
     "src/common/cloud_control",
     "src/common/column",
-    "src/common/native",
     "src/common/compress",
     "src/common/exception",
     "src/common/frozen_api",
@@ -23,41 +24,54 @@ members = [
     "src/common/hashtable",
     "src/common/http",
     "src/common/io",
-    "src/common/metrics",
-    "src/common/tracing",
-    "src/common/storage",
-    "src/common/vector",
-    "src/common/timezone",
     "src/common/license",
+    "src/common/metrics",
+    "src/common/native",
+    "src/common/storage",
+    "src/common/telemetry",
+    "src/common/timezone",
+    "src/common/tracing",
+    "src/common/vector",
     "src/common/version",
+    "src/meta/*",
     "src/query/ast",
+    "src/query/catalog",
     "src/query/codegen",
     "src/query/config",
-    "src/query/catalog",
     "src/query/datavalues",
+    "src/query/ee_features/attach_table",
+    "src/query/ee_features/data_mask",
+    "src/query/ee_features/resources_management",
+    "src/query/ee_features/storage_encryption",
+    "src/query/ee_features/stream_handler",
+    "src/query/ee_features/vacuum_handler",
+    "src/query/ee_features/virtual_column",
+    "src/query/ee",
     "src/query/expression",
     "src/query/formats",
     "src/query/functions",
     "src/query/functions",
-    "src/query/functions/src/scalars/mathematics",
-    "src/query/functions/src/scalars/geographic",
-    "src/query/functions/src/scalars/timestamp",
-    "src/query/functions/src/scalars/numeric_basic_arithmetic",
     "src/query/functions/src/scalars/arithmetic",
+    "src/query/functions/src/scalars/geographic",
     "src/query/functions/src/scalars/integer_arithmetic",
+    "src/query/functions/src/scalars/mathematics",
+    "src/query/functions/src/scalars/numeric_basic_arithmetic",
+    "src/query/functions/src/scalars/timestamp",
     "src/query/management",
     "src/query/pipeline",
     "src/query/pipeline/transforms",
     "src/query/script",
+    "src/query/service",
     "src/query/settings",
     "src/query/sql",
+    "src/query/storages/basic",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
     "src/query/storages/common/index",
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
-    "src/query/storages/common/stage",
     "src/query/storages/common/session",
+    "src/query/storages/common/stage",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
     "src/query/storages/factory",
@@ -65,48 +79,14 @@ members = [
     "src/query/storages/hive/hive",
     "src/query/storages/iceberg",
     "src/query/storages/information_schema",
-    "src/query/storages/basic",
     "src/query/storages/orc",
+    "src/query/storages/parquet",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",
-    "src/query/storages/parquet",
     "src/query/users",
-    "src/query/ee_features/attach_table",
-    "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/data_mask",
-    "src/query/ee_features/storage_encryption",
-    "src/query/ee_features/stream_handler",
-    "src/query/ee_features/virtual_column",
-    "src/query/ee_features/resources_management",
-    "src/query/service",
-    "src/query/ee",
-    "src/meta/api",
-    "src/meta/app",
-    "src/meta/app-types",
-    "src/meta/binaries",
-    "src/meta/cache",
-    "src/meta/client",
-    "src/meta/control",
-    "src/meta/ee",
-    "src/meta/kvapi",
-    "src/meta/kvapi-test-suite",
-    "src/meta/process",
-    "src/meta/proto-conv",
-    "src/meta/protos",
-    "src/meta/raft-store",
-    "src/meta/semaphore",
-    "src/meta/sled-store",
-    "src/meta/stoerr",
-    "src/meta/store",
-    "src/meta/types",
-    "src/meta/service",
-    "tests/sqllogictests",
     "src/tests/sqlsmith",
-    "src/bendsave",
-    "src/bendpy",
-    "src/meta/app-storage",
-    "src/common/telemetry",
+    "tests/sqllogictests",
 ]
 
 # Workspace dependencies
@@ -332,13 +312,13 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 lru = "0.12"
 
 ## in branch dev
-iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403", features = [
+iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
-iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
+iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
+iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
+iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -387,9 +367,9 @@ num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
-object_store_opendal = { version = "0.54.1" }
+object_store_opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
 once_cell = "1.15.0"
-opendal = { version = "0.54.1", features = [
+opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -407,6 +387,8 @@ opendal = { version = "0.54.1", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
+opendal-layer-immutable-index = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
+opendal-layer-observe-metrics-common = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
@@ -613,6 +595,14 @@ inherits = "release"
 overflow-checks = true
 incremental = false
 debug-assertions = true
+
+[profile.unit-test]
+inherits = "test"
+opt-level = 0
+codegen-units = 16
+lto = false
+debug = true
+panic = "abort"
 
 # [profile.release.package]
 # databend-query = { codegen-units = 4 }

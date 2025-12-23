@@ -30,6 +30,7 @@ use databend_common_sql::IndexType;
 use log::debug;
 
 use super::native_data_source::NativeDataSource;
+use crate::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
@@ -37,7 +38,6 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-use crate::FuseBlockPartInfo;
 
 pub struct ReadNativeDataTransform {
     func_ctx: FunctionContext,

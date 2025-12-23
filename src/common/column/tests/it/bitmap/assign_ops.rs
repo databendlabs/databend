@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::bitmap::binary_assign;
-use databend_common_column::bitmap::unary_assign;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::bitmap::binary_assign;
+use databend_common_column::bitmap::unary_assign;
 use proptest::prelude::*;
 
 use crate::bitmap::bitmap_strategy;

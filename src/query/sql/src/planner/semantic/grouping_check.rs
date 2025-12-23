@@ -15,13 +15,13 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-use crate::BindContext;
+use crate::plans::walk_expr_mut;
 
 /// Check validity of scalar expression in a grouping context.
 /// The matched grouping item will be replaced with a BoundColumnRef

@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::ClientConfig;
+use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::pb::schedule_options::ScheduleType;
 use databend_common_exception::Result;
 

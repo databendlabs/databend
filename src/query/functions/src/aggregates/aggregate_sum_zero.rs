@@ -18,8 +18,13 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberColumnBuilder;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -28,21 +33,15 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::AggrStateRegistry;
-use databend_common_expression::AggrStateType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
-use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::number::NumberColumnBuilder;
 
-use super::assert_params;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::assert_params;
 use crate::aggregates::assert_unary_arguments;
 
 struct AggregateSumZeroState {
@@ -109,17 +108,17 @@ impl AggregateFunction for AggregateSumZeroFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateSumZeroState>();
-        let column = columns[0].to_column();
-        if column.is_nullable() {
-            let c = NullableType::<UInt64Type>::try_downcast_column(&column).unwrap();
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            let c = entry.downcast::<NullableType<UInt64Type>>().unwrap();
             c.iter().flatten().for_each(|v| state.sum += v);
         } else {
-            let c = UInt64Type::try_downcast_column(&column).unwrap();
+            let c = entry.downcast::<UInt64Type>().unwrap();
             let sum: u64 = c.iter().sum();
             state.sum += sum;
         }
@@ -130,13 +129,12 @@ impl AggregateFunction for AggregateSumZeroFunction {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = columns[0].to_column();
-
-        if column.is_nullable() {
-            let c = NullableType::<UInt64Type>::try_downcast_column(&column).unwrap();
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            let c = entry.downcast::<NullableType<UInt64Type>>().unwrap();
             for (v, place) in c.iter().zip(places.iter()) {
                 if let Some(v) = v {
                     let state = AggrState::new(*place, loc).get::<AggregateSumZeroState>();
@@ -144,7 +142,7 @@ impl AggregateFunction for AggregateSumZeroFunction {
                 }
             }
         } else {
-            let c = UInt64Type::try_downcast_column(&column).unwrap();
+            let c = entry.downcast::<UInt64Type>().unwrap();
             for (v, place) in c.iter().zip(places.iter()) {
                 let state = AggrState::new(*place, loc).get::<AggregateSumZeroState>();
                 state.sum += v;
@@ -153,17 +151,17 @@ impl AggregateFunction for AggregateSumZeroFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, block: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<AggregateSumZeroState>();
-        let c = columns[0].to_column();
-        if c.is_nullable() {
-            let c = NullableType::<UInt64Type>::try_downcast_column(&c).unwrap();
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            let c = entry.downcast::<NullableType<UInt64Type>>().unwrap();
             if let Some(Some(v)) = c.index(row) {
                 state.sum += v;
             }
         } else {
-            let c = UInt64Type::try_downcast_column(&c).unwrap();
-            state.sum += c[row];
+            let c = entry.downcast::<UInt64Type>().unwrap();
+            state.sum += c.index(row).unwrap();
         }
         Ok(())
     }

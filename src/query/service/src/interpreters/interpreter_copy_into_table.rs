@@ -13,16 +13,31 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::Field;
+use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::FromData;
+use databend_common_expression::RemoteDefaultExpr;
+use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::Pipeline;
@@ -30,17 +45,22 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storage::StageFileInfo;
+use databend_common_storage::init_stage_operator;
+use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
 use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use itertools::Itertools;
 use log::debug;
 use log::info;
 
-use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CopyIntoTable;
 use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::Exchange;
@@ -100,10 +120,15 @@ impl CopyIntoTableInterpreter {
     #[async_backtrace::framed]
     pub async fn build_physical_plan(
         &self,
-        table_info: TableInfo,
+        mut table_info: TableInfo,
         plan: &CopyIntoTablePlan,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(
+        PhysicalPlan,
+        Vec<UpdateStreamMetaReq>,
+        Option<TableSchemaRef>,
+    )> {
+        let mut new_schema = None;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
@@ -122,7 +147,14 @@ impl CopyIntoTableInterpreter {
                 Some(result_columns),
             )
         } else {
-            let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
+            let mut stage_table_info = plan.stage_table_info.clone();
+            if plan.enable_schema_evolution {
+                new_schema = Self::infer_schema(&mut stage_table_info, self.ctx.clone())
+                    .await
+                    .map_err(|e| e.with_context("infer_schema"))?;
+            }
+
+            let stage_table = StageTable::try_create(stage_table_info)?;
 
             let data_source_plan = stage_table
                 .read_plan(self.ctx.clone(), None, None, false, false)
@@ -147,10 +179,19 @@ impl CopyIntoTableInterpreter {
             )
         };
 
+        let mut required_values_schema = plan.required_values_schema.clone();
+        let mut required_source_schema = plan.required_source_schema.clone();
+        if let Some(schema) = &new_schema {
+            table_info.meta.schema = schema.clone();
+            let data_schema: DataSchema = schema.into();
+            required_source_schema = Arc::new(data_schema);
+            required_values_schema = required_source_schema.clone();
+        }
+
         let mut root = PhysicalPlan::new(CopyIntoTable {
-            required_values_schema: plan.required_values_schema.clone(),
+            required_values_schema,
             values_consts: plan.values_consts.clone(),
-            required_source_schema: plan.required_source_schema.clone(),
+            required_source_schema,
             stage_table_info: plan.stage_table_info.clone(),
             table_info,
             write_mode: plan.write_mode,
@@ -176,7 +217,108 @@ impl CopyIntoTableInterpreter {
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
 
-        Ok((root, update_stream_meta_reqs))
+        Ok((root, update_stream_meta_reqs, new_schema))
+    }
+
+    async fn infer_schema(
+        stage_table_info: &mut StageTableInfo,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableSchemaRef>> {
+        #[allow(clippy::single_match)]
+        match &stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => {
+                let settings = ctx.get_settings();
+                let max_threads = settings.get_max_threads()? as usize;
+                let max_memory_usage = settings.get_max_memory_usage()?;
+
+                let operator = init_stage_operator(&stage_table_info.stage_info)?;
+                // User set the files.
+                let files = stage_table_info.files_to_copy.as_ref().expect(
+                    "ParquetTableForCopy::do_read_partitions must be called with files_to_copy set",
+                );
+                let file_infos = files
+                    .iter()
+                    .filter(|f| f.size > 0)
+                    .map(|f| (f.path.clone(), f.size))
+                    .collect::<Vec<_>>();
+                ctx.set_status_info("[TABLE-SCAN] Infer Parquet Schemas");
+                let metas = read_metas_in_parallel_for_copy(
+                    &operator,
+                    &file_infos,
+                    max_threads,
+                    max_memory_usage,
+                )
+                .await?;
+
+                let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+                    == Some(ColumnMatchMode::CaseSensitive);
+
+                let mut new_schema = stage_table_info.schema.as_ref().to_owned();
+                let old_fields: HashMap<String, TableDataType> = stage_table_info
+                    .schema
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        (
+                            if case_sensitive {
+                                f.name.clone()
+                            } else {
+                                f.name.to_lowercase()
+                            },
+                            f.data_type.clone(),
+                        )
+                    })
+                    .collect::<_>();
+                let mut new_fields: HashMap<String, Field> = HashMap::new();
+                for meta in &metas {
+                    let arrow_schema = infer_schema_with_extension(meta.meta.file_metadata())?;
+                    for field in arrow_schema.fields().clone().into_iter() {
+                        let name = if case_sensitive {
+                            field.name().clone()
+                        } else {
+                            field.name().to_lowercase()
+                        };
+                        if !old_fields.contains_key(&name) {
+                            if let Some(f) = new_fields.get_mut(&name) {
+                                if f.data_type() != field.data_type() {
+                                    return Err(ErrorCode::BadBytes(format!(
+                                        "data type of {name} mismatch: {} and {}",
+                                        f.data_type(),
+                                        field.data_type()
+                                    )));
+                                }
+                            } else {
+                                new_fields.insert(name, field.as_ref().clone());
+                            }
+                        }
+                    }
+                }
+
+                stage_table_info.parquet_metas = Some(metas);
+                if new_fields.is_empty() {
+                    return Ok(None);
+                } else {
+                    let new_fields: Vec<_> = new_fields.into_iter().sorted().collect();
+                    for (_, f) in new_fields {
+                        let mut tf: TableField = (&f).try_into()?;
+                        tf.data_type = tf.data_type.wrap_nullable();
+                        if let Some(exprs) = &mut stage_table_info.default_exprs {
+                            exprs.push(RemoteDefaultExpr::RemoteExpr(RemoteExpr::Constant {
+                                scalar: Scalar::Null,
+                                data_type: DataType::Null,
+                                span: Span::default(),
+                            }))
+                        }
+                        new_schema.add_column(&tf, new_schema.num_fields())?;
+                    }
+                    let schema = Arc::new(new_schema);
+                    stage_table_info.schema = schema.clone();
+                    return Ok(Some(schema));
+                }
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
@@ -234,9 +376,10 @@ impl CopyIntoTableInterpreter {
         deduplicated_label: Option<String>,
         path_prefix: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
+        new_schema: Option<TableSchemaRef>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
-        let to_table = ctx
+        let mut to_table = ctx
             .get_table(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
@@ -244,8 +387,28 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
 
+        let mut prev_snapshot_id = None;
+
         // Commit.
         {
+            let mut table_info = to_table.get_table_info().clone();
+            if let Some(new_schema) = new_schema {
+                let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
+                let base_snapshot = fuse_table.read_table_snapshot().await?;
+                prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
+
+                table_info.meta.fill_field_comments();
+                while table_info.meta.field_comments.len() < new_schema.fields.len() {
+                    table_info.meta.field_comments.push("".to_string());
+                }
+                table_info.meta.schema = new_schema;
+                to_table = FuseTable::create_and_refresh_table_info(
+                    table_info,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )?
+                .into();
+            }
+
             let copied_files_meta_req = PipelineBuilder::build_upsert_copied_files_to_meta_req(
                 ctx.clone(),
                 to_table.as_ref(),
@@ -260,7 +423,7 @@ impl CopyIntoTableInterpreter {
                 copied_files_meta_req,
                 update_stream_meta,
                 plan.write_mode.is_overwrite(),
-                None,
+                prev_snapshot_id,
                 deduplicated_label,
                 table_meta_timestamps,
             )?;
@@ -371,7 +534,7 @@ impl Interpreter for CopyIntoTableInterpreter {
             .ctx
             .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
 
-        let (physical_plan, update_stream_meta) = self
+        let (physical_plan, update_stream_meta, new_schema) = self
             .build_physical_plan(
                 to_table.get_table_info().clone(),
                 &self.plan,
@@ -403,6 +566,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 self.plan.path_prefix.clone(),
                 table_meta_timestamps,
+                new_schema,
             )
             .await?;
         }

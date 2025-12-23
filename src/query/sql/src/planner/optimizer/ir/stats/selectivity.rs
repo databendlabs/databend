@@ -12,26 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::cmp::Ordering;
+use std::cmp::max;
 use std::collections::HashSet;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::Datum;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_storage::Datum;
 use databend_common_storage::F64;
 
+use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::Statistics;
@@ -40,7 +41,6 @@ use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::IndexType;
 
 /// A default selectivity factor for a predicate
 /// that we cannot estimate the selectivity for it.

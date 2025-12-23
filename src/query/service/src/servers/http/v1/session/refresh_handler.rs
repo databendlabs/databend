@@ -14,15 +14,15 @@
 
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
+use poem::IntoResponse;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
-use poem::IntoResponse;
 
 use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
+use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 use crate::servers::http::v1::session::login_handler::TokensInfo;
-use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
 struct RefreshRequest {

@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::F32;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::BlockMetaIndex;
@@ -314,13 +314,13 @@ fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_expression::types::number::NumberDataType;
-    use databend_common_expression::types::DataType;
     use databend_common_expression::ColumnId;
+    use databend_common_expression::SEARCH_SCORE_COL_NAME;
     use databend_common_expression::Scalar;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
-    use databend_common_expression::SEARCH_SCORE_COL_NAME;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::number::NumberDataType;
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;

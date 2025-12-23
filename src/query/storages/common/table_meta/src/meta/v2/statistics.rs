@@ -16,21 +16,21 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use databend_common_expression::converts::datavalues::from_scalar;
-use databend_common_expression::converts::meta::IndexScalar;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::converts::datavalues::from_scalar;
+use databend_common_expression::converts::meta::IndexScalar;
+use databend_common_expression::types::DataType;
 use databend_common_frozen_api::FrozenAPI;
 use log::info;
 use serde::de::Error;
 
-use crate::meta::supported_stat_type;
-use crate::meta::v0;
 use crate::meta::Location;
 use crate::meta::RawBlockHLL;
+use crate::meta::supported_stat_type;
+use crate::meta::v0;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
 pub struct ColumnStatistics {

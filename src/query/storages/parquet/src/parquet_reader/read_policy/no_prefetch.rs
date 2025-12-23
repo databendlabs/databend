@@ -18,11 +18,11 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TopKSorter;
+use parquet::arrow::FieldLevels;
+use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
-use parquet::arrow::FieldLevels;
-use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::policy::ReadPolicy;
@@ -31,9 +31,9 @@ use super::policy::ReadPolicyImpl;
 use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::read_policy::utils::read_all;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
+use crate::parquet_reader::utils::FieldPaths;
 use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::parquet_reader::utils::FieldPaths;
 use crate::transformer::RecordBatchTransformer;
 
 pub struct NoPretchPolicyBuilder {

@@ -22,9 +22,9 @@ use std::time::Duration;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::immutable_compactor::InMemoryCompactor;
+use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
-use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::raft_types::NodeId;
@@ -40,8 +40,8 @@ use log::info;
 use seq_marked::InternalSeq;
 use tokio::sync::oneshot;
 
-use crate::metrics::raft_metrics;
 use crate::metrics::SnapshotBuilding;
+use crate::metrics::raft_metrics;
 
 mod raft_state_machine_impl;
 

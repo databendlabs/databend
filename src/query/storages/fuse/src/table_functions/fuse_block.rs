@@ -16,11 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -29,14 +24,19 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::function_template::TableMetaFunc;
 use crate::table_functions::TableMetaFuncTemplate;
-use crate::FuseTable;
+use crate::table_functions::function_template::TableMetaFunc;
 
 pub struct FuseBlock;
 pub type FuseBlockFunc = TableMetaFuncTemplate<FuseBlock>;

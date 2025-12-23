@@ -24,24 +24,24 @@ use databend_common_ast::ast::ShowDictionariesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DictionaryMeta;
 use itertools::Itertools;
 use log::debug;
 
+use crate::BindContext;
+use crate::Binder;
+use crate::SelectBuilder;
 use crate::plans::CreateDictionaryPlan;
 use crate::plans::DropDictionaryPlan;
 use crate::plans::Plan;
 use crate::plans::RenameDictionaryPlan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDictionaryPlan;
-use crate::BindContext;
-use crate::Binder;
-use crate::SelectBuilder;
 
 pub const DICT_OPT_KEY_SQL_HOST: &str = "host";
 pub const DICT_OPT_KEY_SQL_PORT: &str = "port";

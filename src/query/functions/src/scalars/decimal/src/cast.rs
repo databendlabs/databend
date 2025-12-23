@@ -19,17 +19,6 @@ use std::ops::Mul;
 use std::sync::Arc;
 
 use databend_common_base::base::OrderedFloat;
-use databend_common_expression::serialize::read_decimal_with_size;
-use databend_common_expression::types::compute_view::Compute;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::*;
-use databend_common_expression::vectorize_1_arg;
-use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_decimal_type;
-use databend_common_expression::with_integer_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
@@ -44,6 +33,17 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::types::compute_view::Compute;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::*;
+use databend_common_expression::vectorize_1_arg;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_decimal_type;
+use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
 use crate::cast_from_jsonb::variant_to_decimal;
@@ -506,11 +506,7 @@ where
         DataType::Boolean => {
             let input = input.try_downcast().unwrap();
             vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
-                if a {
-                    T::e(size.scale())
-                } else {
-                    T::zero()
-                }
+                if a { T::e(size.scale()) } else { T::zero() }
             })(input, ctx)
         }
 

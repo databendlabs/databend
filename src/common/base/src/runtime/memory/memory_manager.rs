@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::atomic::AtomicU8;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::OnceLock;
 use std::sync::PoisonError;
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::runtime::memory::mem_stat::ParentMemStat;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
+use crate::runtime::memory::mem_stat::ParentMemStat;
 
 pub static GLOBAL_QUERIES_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
 
@@ -360,11 +360,11 @@ impl QueriesMemoryManager {
                     return Ok(());
                 }
 
-                if let Some(waiting_resource) = state.resources.get(waiting_id) {
-                    if waiting_resource.state.load(Ordering::Acquire) != RUNNING {
-                        // kill by other while in wait
-                        return Ok(());
-                    }
+                if let Some(waiting_resource) = state.resources.get(waiting_id)
+                    && waiting_resource.state.load(Ordering::Acquire) != RUNNING
+                {
+                    // kill by other while in wait
+                    return Ok(());
                 }
 
                 if terminate_state.load(Ordering::Acquire) != KILLED {
@@ -415,22 +415,22 @@ impl QueriesMemoryManager {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::AtomicU8;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::sync::Barrier;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicU8;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
-    use crate::runtime::memory::memory_manager::Group;
-    use crate::runtime::memory::memory_manager::QueriesMemoryManager;
-    use crate::runtime::memory::memory_manager::KILLING;
-    use crate::runtime::memory::memory_manager::RUNNING;
     use crate::runtime::MemStat;
     use crate::runtime::OutOfLimit;
     use crate::runtime::ParentMemStat;
     use crate::runtime::Thread;
+    use crate::runtime::memory::memory_manager::Group;
+    use crate::runtime::memory::memory_manager::KILLING;
+    use crate::runtime::memory::memory_manager::QueriesMemoryManager;
+    use crate::runtime::memory::memory_manager::RUNNING;
 
     fn mock_exceeded_memory(mem_stat: &MemStat, set_water_height: bool) {
         mem_stat.set_limit(257 * 1024 * 1024, set_water_height);

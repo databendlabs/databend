@@ -27,12 +27,12 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
-use super::core::algorithm::SortAlgorithm;
+use super::SortBound;
+use super::SortBoundNext;
 use super::core::Merger;
 use super::core::Rows;
 use super::core::SortedStream;
-use super::SortBound;
-use super::SortBoundNext;
+use super::core::algorithm::SortAlgorithm;
 
 type Stream<A> = BoundedInputStream<<A as SortAlgorithm>::Rows>;
 
@@ -293,8 +293,8 @@ impl<R: Rows> BoundedInputStream<R> {
 mod tests {
     use std::sync::Arc;
 
-    use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
     use databend_common_pipeline::core::port::connect;
 
     use super::*;

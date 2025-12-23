@@ -15,21 +15,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::MetricValue;
-use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
-use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::StringType;
+use databend_common_expression::utils::FromData;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;

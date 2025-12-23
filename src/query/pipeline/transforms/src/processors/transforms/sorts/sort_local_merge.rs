@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::intrinsics::unlikely;
+use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use bytesize::ByteSize;
 use databend_common_exception::Result;
@@ -29,10 +29,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
-use super::core::algorithm::SortAlgorithm;
-use super::core::RowConverter;
-use super::core::Rows;
-use super::create_memory_merger;
 use super::Base;
 use super::MemoryMerger;
 use super::MergeSort;
@@ -41,8 +37,12 @@ use super::RowsStat;
 use super::SortSpill;
 use super::SortSpillParams;
 use super::TransformSortMergeLimit;
-use crate::traits::DataBlockSpill;
+use super::core::RowConverter;
+use super::core::Rows;
+use super::core::algorithm::SortAlgorithm;
+use super::create_memory_merger;
 use crate::MemorySettings;
+use crate::traits::DataBlockSpill;
 
 #[derive(Debug)]
 enum State {

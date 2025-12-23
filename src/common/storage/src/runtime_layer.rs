@@ -17,8 +17,11 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use opendal::raw::oio;
+use opendal::Buffer;
+use opendal::Metadata;
+use opendal::Result;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -36,9 +39,7 @@ use opendal::raw::RpPresign;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
-use opendal::Buffer;
-use opendal::Metadata;
-use opendal::Result;
+use opendal::raw::oio;
 
 /// # TODO
 ///
@@ -183,13 +184,23 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
 pub struct RuntimeIO<R: 'static> {
     inner: Option<R>,
     runtime: Arc<Runtime>,
+    spawn_task_name: String,
 }
 
 impl<R> RuntimeIO<R> {
     fn new(inner: R, runtime: Arc<Runtime>) -> Self {
+        // pre-assemble spawn task name, to avoid calling format! in heavy read loop
+        let query_id = ThreadTracker::query_id();
+        let spawn_task_name = if let Some(id) = query_id {
+            format!("Running query {} IO task", id)
+        } else {
+            String::from("Running IO task")
+        };
+
         Self {
             inner: Some(inner),
             runtime,
+            spawn_task_name,
         }
     }
 }
@@ -200,10 +211,14 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .spawn(async move {
-                let res = r.read().await;
-                (r, res)
-            })
+            .try_spawn(
+                async move {
+                    let res = r.read().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -217,10 +232,14 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .spawn(async move {
-                let res = r.write(bs).await;
-                (r, res)
-            })
+            .try_spawn(
+                async move {
+                    let res = r.write(bs).await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -232,10 +251,14 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .spawn(async move {
-                let res = r.close().await;
-                (r, res)
-            })
+            .try_spawn(
+                async move {
+                    let res = r.close().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -247,10 +270,14 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .spawn(async move {
-                let res = r.abort().await;
-                (r, res)
-            })
+            .try_spawn(
+                async move {
+                    let res = r.abort().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -264,10 +291,14 @@ impl<R: oio::List> oio::List for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .spawn(async move {
-                let res = r.next().await;
-                (r, res)
-            })
+            .try_spawn(
+                async move {
+                    let res = r.next().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -276,22 +307,18 @@ impl<R: oio::List> oio::List for RuntimeIO<R> {
 }
 
 impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
-    fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
-        self.inner.as_mut().unwrap().delete(path, args)
+    async fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
+        self.inner.as_mut().unwrap().delete(path, args).await
     }
 
-    async fn flush(&mut self) -> Result<usize> {
+    async fn close(&mut self) -> Result<()> {
         let mut r = self.inner.take().expect("deleter must be valid");
         let runtime = self.runtime.clone();
 
-        let (r, res) = runtime
-            .spawn(async move {
-                let res = r.flush().await;
-                (r, res)
-            })
+        let _ = runtime
+            .spawn(async move { r.close().await })
             .await
-            .expect("join must success");
-        self.inner = Some(r);
-        res
+            .expect("join must success")?;
+        Ok(())
     }
 }

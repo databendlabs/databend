@@ -16,17 +16,17 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::RelationalProperty;
-use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
+use crate::plans::walk_expr;
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>

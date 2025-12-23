@@ -19,10 +19,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::*;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -31,7 +27,18 @@ use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
 
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
+use super::StateAddr;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
@@ -43,13 +50,6 @@ use super::assert_binary_arguments;
 use super::assert_params;
 use super::batch_merge3;
 use super::batch_serialize3;
-use super::AggrState;
-use super::AggrStateLoc;
-use super::AggregateFunction;
-use super::AggregateFunctionDescription;
-use super::AggregateFunctionRef;
-use super::AggregateFunctionSortDesc;
-use super::StateAddr;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;
 
@@ -326,7 +326,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<ArgMinMaxState<A, V, C>>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

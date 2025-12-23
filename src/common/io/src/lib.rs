@@ -19,7 +19,6 @@
 #![feature(can_vector)]
 #![feature(read_buf)]
 #![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
 #![feature(cursor_split)]
 #![feature(buf_read_has_data_left)]
 
@@ -47,13 +46,22 @@ mod stat_buffer;
 pub mod interval;
 pub mod wkb;
 
+pub use bitmap::HYBRID_HEADER_LEN;
+pub use bitmap::HYBRID_KIND_LARGE;
+pub use bitmap::HYBRID_KIND_SMALL;
+pub use bitmap::HYBRID_MAGIC;
+pub use bitmap::HYBRID_VERSION;
+pub use bitmap::HybridBitmap;
+pub use bitmap::LARGE_THRESHOLD;
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
-pub use bitmap::HybridBitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
+pub use geometry::Axis;
+pub use geometry::Extremum;
+pub use geometry::GeometryDataType;
 pub use geometry::ewkb_to_geo;
 pub use geometry::geo_to_ewkb;
 pub use geometry::geo_to_ewkt;
@@ -65,7 +73,4 @@ pub use geometry::geometry_from_ewkt;
 pub use geometry::geometry_type_name;
 pub use geometry::parse_bytes_to_ewkb;
 pub use geometry::read_srid;
-pub use geometry::Axis;
-pub use geometry::Extremum;
-pub use geometry::GeometryDataType;
 pub use interval::Interval;

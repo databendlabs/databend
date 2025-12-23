@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::Scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::converts::meta::LegacyColumn;
 use databend_common_expression::converts::meta::LegacyScalar;
-use databend_common_expression::Column;
-use databend_common_expression::Scalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
-use crate::rand_block_for_all_types;
 use crate::DataTypeFilter;
+use crate::rand_block_for_all_types;
 
 #[test]
 pub fn test_legacy_converts() -> databend_common_exception::Result<()> {

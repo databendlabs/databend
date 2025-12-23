@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use codeq::Decode;
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::protobuf::WatchResponse;
 use display_more::DisplaySliceExt;
 use log::warn;
 use tokio::sync::mpsc;
 
+use crate::PermitEntry;
+use crate::PermitKey;
 #[cfg(doc)]
 use crate::acquirer::Acquirer;
 use crate::errors::AcquirerClosed;
@@ -26,8 +28,6 @@ use crate::errors::ConnectionClosed;
 use crate::errors::ProcessorError;
 use crate::queue::PermitEvent;
 use crate::queue::SemaphoreQueue;
-use crate::PermitEntry;
-use crate::PermitKey;
 
 /// Process the watch response from the meta-service and emit [`PermitEvent`].
 pub(crate) struct Processor {

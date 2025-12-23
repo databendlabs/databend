@@ -21,9 +21,9 @@ use databend_common_meta_types::snapshot_db::DB;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
+use crate::sm_v003::WriterV003;
 use crate::sm_v003::receiver_v003::ReceiverV003;
 use crate::sm_v003::snapshot_loader::SnapshotLoader;
-use crate::sm_v003::WriterV003;
 use crate::snapshot_config::SnapshotConfig;
 
 #[derive(Debug)]

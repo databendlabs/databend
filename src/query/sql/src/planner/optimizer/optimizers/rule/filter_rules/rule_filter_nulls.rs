@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -29,7 +30,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::ScalarExpr;
 
 const NULL_THRESHOLD_RATIO: f64 = 0.2;
 

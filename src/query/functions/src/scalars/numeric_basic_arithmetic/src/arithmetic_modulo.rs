@@ -14,19 +14,19 @@
 
 use std::ops::Rem;
 
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::ReturnType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Value;
+use databend_common_expression::types::ReturnType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::number::*;
 use num_traits::AsPrimitive;
+use strength_reduce::StrengthReducedU8;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
-use strength_reduce::StrengthReducedU8;
 
-pub fn vectorize_modulo<L, R, M, O>(
-) -> impl Fn(Value<NumberType<L>>, Value<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>> + Copy
+pub fn vectorize_modulo<L, R, M, O>()
+-> impl Fn(Value<NumberType<L>>, Value<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>> + Copy
 where
     L: Number + AsPrimitive<M>,
     R: Number + AsPrimitive<M> + AsPrimitive<f64>,

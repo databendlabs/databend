@@ -34,5 +34,5 @@ pub trait Stoppable {
     ///
     /// Calling `stop()` twice should get an error.
     async fn stop(&mut self, mut force: Option<broadcast::Receiver<()>>)
-        -> Result<(), Self::Error>;
+    -> Result<(), Self::Error>;
 }

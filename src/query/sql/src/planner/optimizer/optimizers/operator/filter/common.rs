@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 
+use crate::ScalarExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
-use crate::ScalarExpr;
 
 pub fn check_uint_range(max: u64, value: &Scalar) -> (bool, u64) {
     let value = match *value {

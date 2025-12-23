@@ -16,10 +16,10 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Expr;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use regex::Regex;
 

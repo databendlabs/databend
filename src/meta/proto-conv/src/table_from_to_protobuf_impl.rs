@@ -31,11 +31,11 @@ use databend_common_meta_app_types::non_empty::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::TableCopiedFileInfo {
     type PB = pb::TableCopiedFileInfo;

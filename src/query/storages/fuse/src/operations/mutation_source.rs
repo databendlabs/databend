@@ -36,15 +36,15 @@ use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::FuseLazyPartInfo;
+use crate::FuseTable;
+use crate::SegmentLocation;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
-use crate::FuseLazyPartInfo;
-use crate::FuseTable;
-use crate::SegmentLocation;
+use crate::pruning::create_segment_location_vector;
 
 impl FuseTable {
     #[async_backtrace::framed]

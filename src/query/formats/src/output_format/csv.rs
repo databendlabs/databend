@@ -18,10 +18,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 
-use crate::field_encoder::write_csv_string;
-use crate::field_encoder::FieldEncoderCSV;
-use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
+use crate::field_encoder::FieldEncoderCSV;
+use crate::field_encoder::write_csv_string;
+use crate::output_format::OutputFormat;
 
 pub type CSVOutputFormat = CSVOutputFormatBase<false, false>;
 pub type CSVWithNamesOutputFormat = CSVOutputFormatBase<true, false>;

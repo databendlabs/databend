@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;

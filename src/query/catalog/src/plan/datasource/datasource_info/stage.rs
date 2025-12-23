@@ -23,11 +23,13 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storage::init_stage_operator;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+use crate::plan::FullParquetMeta;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct StageTableInfo {
     // common
     pub stage_root: String,
@@ -47,7 +49,20 @@ pub struct StageTableInfo {
     pub is_select: bool,
     pub copy_into_table_options: CopyIntoTableOptions,
     pub is_variant: bool,
+
+    // temp work round, when enable_schema_evolution, set it before read partition,
+    // then the StageTableInfo will be dropped, so no need to free it
+    #[serde(skip)]
+    pub parquet_metas: Option<Vec<Arc<FullParquetMeta>>>,
 }
+
+impl PartialEq for StageTableInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.stage_root == other.stage_root && self.stage_info == other.stage_info
+    }
+}
+
+impl Eq for StageTableInfo {}
 
 impl StageTableInfo {
     pub fn schema(&self) -> Arc<TableSchema> {

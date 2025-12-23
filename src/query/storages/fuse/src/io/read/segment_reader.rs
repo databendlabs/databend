@@ -19,14 +19,14 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_table_meta::meta::column_oriented_segment::deserialize_column_oriented_segment;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::column_oriented_segment::deserialize_column_oriented_segment;
 use opendal::Operator;
 
 use super::meta::bytes_reader;

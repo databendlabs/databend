@@ -20,6 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use super::ScalarExpr;
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::binder::MutationType;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
@@ -30,8 +32,6 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Debug, Default)]
 pub struct MutationSource {

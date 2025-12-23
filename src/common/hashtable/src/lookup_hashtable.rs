@@ -19,8 +19,8 @@ use std::mem::MaybeUninit;
 
 use databend_common_base::mem_allocator::DefaultAllocator;
 
-use crate::table0::Entry;
 use crate::HashtableLike;
+use crate::table0::Entry;
 
 pub struct LookupHashtable<
     K: Sized,
@@ -138,9 +138,11 @@ macro_rules! lookup_impl {
                 &mut self,
                 key: &$ty,
             ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
-                match self.insert_and_entry(key) {
-                    Ok(e) => Ok(&mut e.val),
-                    Err(e) => Err(e.val.assume_init_mut()),
+                unsafe {
+                    match self.insert_and_entry(key) {
+                        Ok(e) => Ok(&mut e.val),
+                        Err(e) => Err(e.val.assume_init_mut()),
+                    }
                 }
             }
 
@@ -165,7 +167,7 @@ macro_rules! lookup_impl {
                 key: &$ty,
                 _hash: u64,
             ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-                self.insert_and_entry(key)
+                unsafe { self.insert_and_entry(key) }
             }
 
             fn iter(&self) -> Self::Iterator<'_> {

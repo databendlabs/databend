@@ -19,9 +19,6 @@ use std::ops::Range;
 
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
@@ -29,6 +26,9 @@ use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -79,11 +79,7 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
     }
 
     fn index_column(len: &usize, index: usize) -> Option<()> {
-        if index < *len {
-            Some(())
-        } else {
-            None
-        }
+        if index < *len { Some(()) } else { None }
     }
 
     unsafe fn index_column_unchecked(_: &usize, _: usize) {}

@@ -21,23 +21,23 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::select::SelectList;
-use crate::binder::ColumnBindingBuilder;
-use crate::format_scalar;
-use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
-use crate::plans::BoundColumnRef;
-use crate::plans::FunctionCall;
-use crate::plans::ProjectSet;
-use crate::plans::ScalarItem;
-use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::Binder;
 use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::binder::ColumnBindingBuilder;
+use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::select::SelectList;
+use crate::format_scalar;
+use crate::optimizer::ir::SExpr;
+use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
+use crate::plans::ProjectSet;
+use crate::plans::ScalarItem;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct SetReturningInfo {
@@ -66,7 +66,7 @@ impl<'a> SetReturningAnalyzer<'a> {
         }
     }
 
-    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter {
+    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter<'_> {
         AggregateRewriter::new(self.bind_context, self.metadata.clone())
     }
 }

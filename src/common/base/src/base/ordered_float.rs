@@ -45,7 +45,6 @@ use std::error::Error;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use micromarshal::Unmarshal;
-use num_traits::float::FloatCore;
 use num_traits::AsPrimitive;
 use num_traits::Bounded;
 use num_traits::Float;
@@ -58,6 +57,7 @@ use num_traits::Pow;
 use num_traits::Signed;
 use num_traits::ToPrimitive;
 use num_traits::Zero;
+use num_traits::float::FloatCore;
 
 // masks for the parts of the IEEE 754 float
 const SIGN_MASK: u64 = 0x8000000000000000u64;
@@ -1113,6 +1113,7 @@ impl<T: FloatCore + Num> Num for OrderedFloat<T> {
 /// // This will panic:
 /// let c = a + b;
 /// ```
+#[allow(clippy::derive_ord_xor_partial_ord)]
 #[derive(PartialOrd, PartialEq, Default, Clone, Copy)]
 #[repr(transparent)]
 pub struct NotNan<T>(T);
@@ -1157,7 +1158,7 @@ impl<T> NotNan<T> {
     )]
     #[inline]
     pub const unsafe fn unchecked_new(val: T) -> Self {
-        Self::new_unchecked(val)
+        unsafe { Self::new_unchecked(val) }
     }
 }
 
@@ -1845,7 +1846,7 @@ impl<T: FloatCore> NumCast for NotNan<T> {
 }
 
 macro_rules! impl_float_const_method {
-    ($wrapper:expr, $method:ident) => {
+    ($wrapper:expr_2021, $method:ident) => {
         #[allow(non_snake_case)]
         #[allow(clippy::redundant_closure_call)]
         fn $method() -> Self {
@@ -1855,7 +1856,7 @@ macro_rules! impl_float_const_method {
 }
 
 macro_rules! impl_float_const {
-    ($type:ident, $wrapper:expr) => {
+    ($type:ident, $wrapper:expr_2021) => {
         impl<T: FloatConst> FloatConst for $type<T> {
             impl_float_const_method!($wrapper, E);
             impl_float_const_method!($wrapper, FRAC_1_PI);
@@ -1888,25 +1889,25 @@ mod impl_serde {
     use num_traits::float::FloatCore;
     use serde::de::IntoDeserializer;
 
-    use self::serde::de::Error;
-    use self::serde::de::Unexpected;
     use self::serde::Deserialize;
     use self::serde::Deserializer;
     use self::serde::Serialize;
     use self::serde::Serializer;
+    use self::serde::de::Error;
+    use self::serde::de::Unexpected;
     use super::NotNan;
     use super::OrderedFloat;
 
     #[cfg(test)]
     extern crate serde_test;
     #[cfg(test)]
-    use self::serde_test::assert_de_tokens_error;
-    #[cfg(test)]
-    use self::serde_test::assert_tokens;
-    #[cfg(test)]
     use self::serde_test::Configure;
     #[cfg(test)]
     use self::serde_test::Token;
+    #[cfg(test)]
+    use self::serde_test::assert_de_tokens_error;
+    #[cfg(test)]
+    use self::serde_test::assert_tokens;
 
     impl<T: FloatCore + Serialize> Serialize for OrderedFloat<T> {
         #[inline]
@@ -2099,12 +2100,12 @@ mod impl_borsh {
 }
 
 mod impl_rand {
-    use rand::distributions::uniform::*;
+    use rand::Rng;
     use rand::distributions::Distribution;
     use rand::distributions::Open01;
     use rand::distributions::OpenClosed01;
     use rand::distributions::Standard;
-    use rand::Rng;
+    use rand::distributions::uniform::*;
     use serde::Deserialize;
     use serde::Serialize;
 

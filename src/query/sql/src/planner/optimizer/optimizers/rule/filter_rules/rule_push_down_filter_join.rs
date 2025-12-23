@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::MetadataRef;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -23,15 +24,15 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
+use crate::optimizer::optimizers::rule::Rule;
+use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::optimizers::rule::can_filter_null;
 use crate::optimizer::optimizers::rule::constant::false_constant;
 use crate::optimizer::optimizers::rule::constant::is_falsy;
 use crate::optimizer::optimizers::rule::convert_mark_to_semi_join;
 use crate::optimizer::optimizers::rule::outer_join_to_inner_join;
 use crate::optimizer::optimizers::rule::rewrite_predicates;
-use crate::optimizer::optimizers::rule::Rule;
-use crate::optimizer::optimizers::rule::RuleID;
-use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -42,7 +43,6 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
     id: RuleID,
@@ -110,7 +110,7 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
+fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
     // Extract or predicates from Filter to push down them to join.
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`

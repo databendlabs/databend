@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_users::UserApiProvider;
-use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Status;
+use tonic::metadata::MetadataMap;
 
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;

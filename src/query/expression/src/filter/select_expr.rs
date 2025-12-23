@@ -17,17 +17,17 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use crate::expr::*;
-use crate::filter::select_expr_permutation::FilterPermutation;
-use crate::filter::SelectOp;
-use crate::generate_like_pattern;
-use crate::type_check::convert_escape_pattern;
-use crate::types::DataType;
 use crate::Expr;
 use crate::Function;
 use crate::FunctionID;
 use crate::LikePattern;
 use crate::Scalar;
+use crate::expr::*;
+use crate::filter::SelectOp;
+use crate::filter::select_expr_permutation::FilterPermutation;
+use crate::generate_like_pattern;
+use crate::type_check::convert_escape_pattern;
+use crate::types::DataType;
 
 /// The `SelectExpr` is used to represent the predicates expression.
 #[derive(Clone, Debug)]
@@ -176,31 +176,31 @@ impl SelectExprBuilder {
                                 _ => None,
                             });
                             let can_reorder = Self::can_reorder(column);
-                            if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
-                                && let Scalar::String(like_str) = scalar
-                            {
-                                let pattern = option_escape
-                                    .and_then(|escape| {
-                                        escape
-                                            .chars()
-                                            .next()
-                                            .map(|escape| convert_escape_pattern(like_str, escape))
-                                    })
-                                    .unwrap_or(like_str.to_string())
-                                    .into();
-                                let like_pattern: LikePattern<'static> =
-                                    generate_like_pattern(Cow::Owned(pattern), 0);
+                            let is_string = matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String));
 
-                                SelectExprBuildResult::new(SelectExpr::Like((
-                                    column.clone(),
-                                    Arc::new(like_pattern),
-                                    not,
-                                )))
-                                .can_reorder(can_reorder)
-                            } else {
-                                SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
-                                    .can_push_down_not(false)
+                            match (scalar, is_string) {
+                                (Scalar::String(like_str), true) => {
+                                    let pattern = option_escape
+                                        .and_then(|escape| {
+                                            escape.chars().next().map(|escape| {
+                                                convert_escape_pattern(like_str, escape)
+                                            })
+                                        })
+                                        .unwrap_or(like_str.to_string())
+                                        .into();
+                                    let like_pattern: LikePattern<'static> =
+                                        generate_like_pattern(Cow::Owned(pattern), 0);
+
+                                    SelectExprBuildResult::new(SelectExpr::Like((
+                                        column.clone(),
+                                        Arc::new(like_pattern),
+                                        not,
+                                    )))
                                     .can_reorder(can_reorder)
+                                }
+                                _ => SelectExprBuildResult::new(SelectExpr::Others(expr.clone()))
+                                    .can_push_down_not(false)
+                                    .can_reorder(can_reorder),
                             }
                         }
                         "is_true" => self.build_select_expr(&args[0], not),

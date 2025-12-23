@@ -14,6 +14,7 @@
 
 pub mod arithmetics_type;
 pub mod arrow;
+pub mod bitmap;
 pub mod block_debug;
 pub mod block_thresholds;
 mod column_from;
@@ -31,18 +32,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 pub use self::column_from::*;
-use crate::types::decimal::DecimalScalar;
-use crate::types::i256;
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::types::Decimal;
-use crate::types::DecimalDataKind;
-use crate::types::DecimalDataType;
-use crate::types::DecimalSize;
-use crate::types::NumberDataType;
-use crate::types::NumberScalar;
-use crate::types::F32;
-use crate::types::F64;
 use crate::BlockEntry;
 use crate::Column;
 use crate::DataBlock;
@@ -52,6 +41,18 @@ use crate::FunctionRegistry;
 use crate::RawExpr;
 use crate::Scalar;
 use crate::Value;
+use crate::types::AnyType;
+use crate::types::DataType;
+use crate::types::Decimal;
+use crate::types::DecimalDataKind;
+use crate::types::DecimalDataType;
+use crate::types::DecimalSize;
+use crate::types::F32;
+use crate::types::F64;
+use crate::types::NumberDataType;
+use crate::types::NumberScalar;
+use crate::types::decimal::DecimalScalar;
+use crate::types::i256;
 
 /// A convenient shortcut to evaluate a scalar function.
 pub fn eval_function(
@@ -209,7 +210,14 @@ pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Opti
             }
         }
         BlockEntry::Column(Column::Nullable(c)) => match bitmap {
-            None => Some(c.validity().clone()),
+            None => {
+                let validity = c.validity();
+                if validity.null_count() == 0 {
+                    None
+                } else {
+                    Some(validity.clone())
+                }
+            }
             Some(v) => Some(&c.validity & (&v)),
         },
         _ => bitmap,

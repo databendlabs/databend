@@ -21,11 +21,11 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
 use databend_common_sql::binder::MutationStrategy;
@@ -41,14 +41,14 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 
-use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
-use crate::physical_plans::create_push_down_filters;
+use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::create_push_down_filters;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -119,7 +119,11 @@ impl Interpreter for MutationInterpreter {
         // Execute hook.
         self.execute_hook(&mutation, &mut build_res).await;
 
-        build_res.main_pipeline.add_lock_guard(mutation.lock_guard);
+        let lock_guard = mutation
+            .lock_guard
+            .as_ref()
+            .and_then(|holder| holder.try_take());
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         Ok(build_res)
     }

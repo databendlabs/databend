@@ -27,13 +27,13 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
@@ -103,7 +103,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
         let probe_state = &*state.probe_state;
         for (bucket, (count, sel)) in buckets.iter_mut().zip(&probe_state.partition_entries) {
             if *count > 0 {
-                bucket.copy_rows(&sel[..*count], &state.addresses);
+                bucket.copy_rows(&sel[..*count as usize], &state.addresses);
             }
         }
     }
@@ -152,7 +152,7 @@ pub fn scatter_partitioned_payload(
                 .zip(&state.probe_state.partition_entries)
             {
                 if *count > 0 {
-                    bucket.copy_rows(&sel[..*count], &state.addresses);
+                    bucket.copy_rows(&sel[..*count as usize], &state.addresses);
                 }
             }
         }

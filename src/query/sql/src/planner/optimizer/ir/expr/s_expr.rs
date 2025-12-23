@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::OnceLock;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::VectorIndexInfo;
@@ -23,17 +23,17 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use crate::optimizer::ir::property::RelExpr;
-use crate::optimizer::ir::property::RelationalProperty;
+use crate::IndexType;
 use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::VisitAction;
+use crate::optimizer::ir::property::RelExpr;
+use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Educe)]
@@ -48,19 +48,19 @@ pub struct SExpr {
     pub plan: Arc<RelOperator>,
     pub children: Vec<Arc<SExpr>>,
 
-    pub(crate) original_group: Option<IndexType>,
+    original_group: Option<IndexType>,
 
     /// A cache of relational property of current `SExpr`, will
     /// be lazily computed as soon as `RelExpr::derive_relational_prop`
     /// is invoked on current `SExpr`.
     ///
-    /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
+    /// Since `SExpr` is `Send + Sync`, we use `OnceLock` to protect
     /// the cache.
     #[educe(Hash(ignore), PartialEq(ignore))]
-    pub(crate) rel_prop: Arc<Mutex<Option<Arc<RelationalProperty>>>>,
+    rel_prop: Arc<OnceLock<Arc<RelationalProperty>>>,
 
     #[educe(Hash(ignore), PartialEq(ignore))]
-    pub(crate) stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
+    pub(crate) stat_info: Arc<OnceLock<Arc<StatInfo>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -70,25 +70,29 @@ pub struct SExpr {
 impl SExpr {
     pub fn create(
         plan: impl Into<Arc<RelOperator>>,
-        children: impl Into<Vec<Arc<SExpr>>>,
+        children: Vec<Arc<SExpr>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
-        let plan = plan.into();
-        let children = children.into();
         SExpr {
-            plan,
+            plan: plan.into(),
             children,
             original_group,
-            rel_prop: Arc::new(Mutex::new(rel_prop)),
-            stat_info: Arc::new(Mutex::new(stat_info)),
+            rel_prop: Arc::new(match rel_prop {
+                Some(rel_prop) => OnceLock::from(rel_prop),
+                None => OnceLock::new(),
+            }),
+            stat_info: Arc::new(match stat_info {
+                Some(stat_info) => OnceLock::from(stat_info),
+                None => OnceLock::new(),
+            }),
             applied_rules: AppliedRules::default(),
         }
     }
 
     pub fn create_unary(plan: impl Into<Arc<RelOperator>>, child: impl Into<Arc<SExpr>>) -> Self {
-        Self::create(plan.into(), [child.into()], None, None, None)
+        Self::create(plan.into(), vec![child.into()], None, None, None)
     }
 
     pub fn create_binary(
@@ -98,7 +102,7 @@ impl SExpr {
     ) -> Self {
         Self::create(
             plan,
-            [left_child.into(), right_child.into()],
+            vec![left_child.into(), right_child.into()],
             None,
             None,
             None,
@@ -106,15 +110,15 @@ impl SExpr {
     }
 
     pub fn create_leaf(plan: impl Into<Arc<RelOperator>>) -> Self {
-        Self::create(plan, [], None, None, None)
+        Self::create(plan, vec![], None, None, None)
     }
 
     pub fn build_unary(self, plan: impl Into<Arc<RelOperator>>) -> Self {
-        Self::create(plan, [self.into()], None, None, None)
+        Self::create(plan, vec![self.into()], None, None, None)
     }
 
     pub fn ref_build_unary(self: &Arc<SExpr>, plan: impl Into<Arc<RelOperator>>) -> Self {
-        Self::create(plan, [self.clone()], None, None, None)
+        Self::create(plan, vec![self.clone()], None, None, None)
     }
 
     pub fn plan(&self) -> &RelOperator {
@@ -147,9 +151,19 @@ impl SExpr {
         &self.children[0]
     }
 
+    pub fn left_child_arc(&self) -> Arc<SExpr> {
+        assert_eq!(self.children.len(), 2);
+        self.children[0].clone()
+    }
+
     pub fn right_child(&self) -> &SExpr {
         debug_assert_eq!(self.children.len(), 2);
         &self.children[1]
+    }
+
+    pub fn right_child_arc(&self) -> Arc<SExpr> {
+        assert_eq!(self.children.len(), 2);
+        self.children[1].clone()
     }
 
     pub fn build_side_child(&self) -> &SExpr {
@@ -177,10 +191,41 @@ impl SExpr {
         Self {
             plan: self.plan.clone(),
             original_group: None,
-            rel_prop: Arc::new(Mutex::new(None)),
-            stat_info: Arc::new(Mutex::new(None)),
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
             applied_rules: self.applied_rules.clone(),
             children: children.into_iter().collect(),
+        }
+    }
+
+    pub fn replace_left_child(&self, left: impl Into<Arc<SExpr>>) -> Self {
+        assert_eq!(self.children.len(), 2);
+        Self {
+            plan: self.plan.clone(),
+            original_group: None,
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
+            applied_rules: self.applied_rules.clone(),
+            children: vec![left.into(), self.children[1].clone()],
+        }
+    }
+
+    pub fn replace_right_child(&self, right: impl Into<Arc<SExpr>>) -> Self {
+        assert_eq!(self.children.len(), 2);
+        Self {
+            plan: self.plan.clone(),
+            original_group: None,
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
+            applied_rules: self.applied_rules.clone(),
+            children: vec![self.children[0].clone(), right.into()],
+        }
+    }
+
+    pub fn replace_side_child(&self, side: Side, child: impl Into<Arc<SExpr>>) -> SExpr {
+        match side {
+            Side::Left => self.replace_left_child(child),
+            Side::Right => self.replace_right_child(child),
         }
     }
 
@@ -188,8 +233,8 @@ impl SExpr {
         Self {
             plan: plan.into(),
             original_group: None,
-            rel_prop: Arc::new(Mutex::new(None)),
-            stat_info: Arc::new(Mutex::new(None)),
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
             applied_rules: self.applied_rules.clone(),
             children: self.children.clone(),
         }
@@ -328,14 +373,12 @@ impl SExpr {
     }
 
     pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
-        if let Some(rel_prop) = self.rel_prop.lock().unwrap().as_ref() {
-            return Ok(rel_prop.clone());
-        }
-        let rel_prop = self
-            .plan
-            .derive_relational_prop(&RelExpr::SExpr { expr: self })?;
-        *self.rel_prop.lock().unwrap() = Some(rel_prop.clone());
-        Ok(rel_prop)
+        let rel_prop = self.rel_prop.get_or_try_init(|| {
+            self.plan
+                .derive_relational_prop(&RelExpr::SExpr { expr: self })
+        })?;
+
+        Ok(rel_prop.clone())
     }
 
     pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
@@ -369,5 +412,27 @@ impl SExpr {
         let mut visitor = DataDistributionVisitor { result: None };
         let _ = self.accept(&mut visitor);
         Ok(visitor.result)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
+}
+
+impl Side {
+    pub fn opposite(self) -> Self {
+        match self {
+            Side::Left => Side::Right,
+            Side::Right => Side::Left,
+        }
+    }
+
+    pub fn child(self, s_expr: &SExpr) -> Arc<SExpr> {
+        match self {
+            Side::Left => s_expr.left_child_arc(),
+            Side::Right => s_expr.right_child_arc(),
+        }
     }
 }

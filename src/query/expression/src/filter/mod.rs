@@ -23,9 +23,9 @@ mod selector;
 mod volnitsky;
 
 pub use filter_executor::FilterExecutor;
+pub use like::LikePattern;
 pub use like::generate_like_pattern;
 pub use like::is_like_pattern_escape;
-pub use like::LikePattern;
 pub use select_expr::SelectExpr;
 pub use select_expr::SelectExprBuilder;
 pub use select_op::SelectOp;

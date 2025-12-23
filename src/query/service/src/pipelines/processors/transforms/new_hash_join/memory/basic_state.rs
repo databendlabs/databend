@@ -16,14 +16,14 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
+use databend_common_expression::types::DataType;
 
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 
 pub struct BasicHashJoinState {
     pub mutex: Mutex<()>,

@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::SExpr;
+use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
-use crate::ScalarExpr;
 
 // The DeduplicateJoinConditionOptimizer uses the Union-Find algorithm to remove duplicate join conditions.
 // For example: SELECT * FROM t1, t2, t3 WHERE t1.id = t2.id AND t2.id = t3.id AND t3.id = t1.id
@@ -106,18 +106,18 @@ impl DeduplicateJoinConditionOptimizer {
     #[recursive::recursive]
     pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
-            // Only optimize inner joins
-            RelOperator::Join(join) if matches!(join.join_type, JoinType::Inner) => {
-                self.optimize_inner_join(s_expr, join)
+            // Only optimize filtering joins that don't preserve nulls
+            RelOperator::Join(join) if join.join_type.is_filtering_join() => {
+                self.optimize_filtering_join(s_expr, join)
             }
             // Recursively process other nodes
             _ => self.deduplicate_children(s_expr),
         }
     }
 
-    /// Optimize inner join by removing redundant conditions
-    fn optimize_inner_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
-        debug_assert!(matches!(join.join_type, JoinType::Inner));
+    /// Optimize filtering joins (inner/semi/anti) by removing redundant equi-conditions
+    fn optimize_filtering_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
+        debug_assert!(join.join_type.is_filtering_join());
 
         // Recursively optimize left and right subtrees
         let left = self.deduplicate(s_expr.child(0)?)?;
@@ -125,6 +125,15 @@ impl DeduplicateJoinConditionOptimizer {
 
         let mut join = join.clone();
         let mut non_redundant_conditions = Vec::new();
+        // Anti / Semi joins should not contribute new equivalence to ancestor nodes.
+        let snapshot = if matches!(
+            join.join_type,
+            JoinType::LeftAnti | JoinType::RightAnti | JoinType::LeftSemi | JoinType::RightSemi
+        ) {
+            Some(self.snapshot())
+        } else {
+            None
+        };
 
         // Check each equi-join condition
         for condition in &join.equi_conditions {
@@ -147,6 +156,11 @@ impl DeduplicateJoinConditionOptimizer {
         // Update join conditions if any were removed
         if non_redundant_conditions.len() < join.equi_conditions.len() {
             join.equi_conditions = non_redundant_conditions;
+        }
+
+        // Restore union-find state for anti joins to avoid leaking equivalence upward.
+        if let Some(snapshot) = snapshot {
+            self.restore(snapshot);
         }
 
         // Create new expression
@@ -233,6 +247,28 @@ impl DeduplicateJoinConditionOptimizer {
     fn union(&mut self, idx1: usize, idx2: usize) {
         self.column_group.insert(idx2, idx1);
     }
+
+    /// Snapshot the current union-find state so we can rollback after
+    /// optimizing an anti join.
+    fn snapshot(&self) -> UfSnapshot {
+        UfSnapshot {
+            expr_to_index: self.expr_to_index.clone(),
+            column_group: self.column_group.clone(),
+            next_index: self.next_index,
+        }
+    }
+
+    fn restore(&mut self, snapshot: UfSnapshot) {
+        self.expr_to_index = snapshot.expr_to_index;
+        self.column_group = snapshot.column_group;
+        self.next_index = snapshot.next_index;
+    }
+}
+
+struct UfSnapshot {
+    expr_to_index: HashMap<ScalarExpr, usize>,
+    column_group: HashMap<usize, usize>,
+    next_index: usize,
 }
 
 #[async_trait::async_trait]

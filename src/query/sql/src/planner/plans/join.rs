@@ -21,10 +21,12 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::F64;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
@@ -33,14 +35,13 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -125,6 +126,20 @@ impl JoinType {
             JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
         )
     }
+
+    /// Joins that behave like filters (no null preserving side) so
+    /// equi-join conditions can be deduplicated safely.
+    pub fn is_filtering_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Inner
+                | JoinType::InnerAny
+                | JoinType::LeftSemi
+                | JoinType::RightSemi
+                | JoinType::LeftAnti
+                | JoinType::RightAnti
+        )
+    }
 }
 
 impl Display for JoinType {
@@ -203,6 +218,15 @@ pub struct JoinEquiCondition {
     pub right: ScalarExpr,
     // Used for "is (not) distinct from" and mark join
     pub is_null_equal: bool,
+}
+
+impl Side {
+    pub fn join_condition(self, cond: &JoinEquiCondition) -> &ScalarExpr {
+        match self {
+            Side::Left => &cond.left,
+            Side::Right => &cond.right,
+        }
+    }
 }
 
 impl JoinEquiCondition {

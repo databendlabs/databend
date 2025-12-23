@@ -16,12 +16,12 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
-use crate::types::binary::BinaryColumnIter;
 use crate::Column;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
 use crate::ProjectedBlock;
+use crate::types::binary::BinaryColumnIter;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}

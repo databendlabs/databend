@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -26,15 +25,16 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
-use databend_common_expression::SortColumnDescription;
 use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
+use databend_common_sql::IndexType;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
@@ -45,13 +45,13 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::pipelines::PipelineBuilder;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -59,7 +59,6 @@ pub struct AggregatePartial {
     pub input: PhysicalPlan,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-    pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
     // Order by keys if keys are subset of group by key, then we can use rank to filter data in previous
@@ -163,7 +162,6 @@ impl IPhysicalPlan for AggregatePartial {
             meta: self.meta.clone(),
             group_by: self.group_by.clone(),
             agg_funcs: self.agg_funcs.clone(),
-            enable_experimental_aggregate_hashtable: self.enable_experimental_aggregate_hashtable,
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
@@ -178,17 +176,12 @@ impl IPhysicalPlan for AggregatePartial {
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
 
-        let enable_experimental_aggregate_hashtable = builder
-            .settings
-            .get_enable_experimental_aggregate_hashtable()?;
-
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
 
         let params = PipelineBuilder::build_aggregator_params(
             self.input.output_schema()?,
             &self.group_by,
             &self.agg_funcs,
-            enable_experimental_aggregate_hashtable,
             builder.is_exchange_parent(),
             max_spill_io_requests as usize,
             enable_experiment_aggregate,

@@ -18,8 +18,8 @@ use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use parking_lot::RwLock;
 
-use crate::caches::CacheValue;
 use crate::Unit;
+use crate::caches::CacheValue;
 
 pub struct InMemoryLruCache<V: Into<CacheValue<V>>> {
     unit: Unit,

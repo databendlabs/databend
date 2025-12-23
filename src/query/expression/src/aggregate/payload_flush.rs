@@ -19,14 +19,13 @@ use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
-use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::decimal::Decimal;
-use crate::types::decimal::DecimalType;
-use crate::types::i256;
-use crate::types::nullable::NullableColumn;
-use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
+use crate::BATCH_SIZE;
+use crate::BlockEntry;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
+use crate::Scalar;
+use crate::StateAddr;
 use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -38,14 +37,15 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ReturnType;
 use crate::types::TimestampType;
+use crate::types::binary::BinaryColumn;
+use crate::types::binary::BinaryColumnBuilder;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalType;
+use crate::types::i256;
+use crate::types::nullable::NullableColumn;
+use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::with_number_mapped_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::DataBlock;
-use crate::Scalar;
-use crate::StateAddr;
-use crate::BATCH_SIZE;
 
 pub struct PayloadFlushState {
     pub probe_state: Box<ProbeState>,
@@ -293,12 +293,7 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-
+                let scalar = state.addresses[idx].read_bytes(col_offset);
                 binary_builder.put_slice(scalar);
                 binary_builder.commit_row();
             }
@@ -316,12 +311,7 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-
+                let scalar = state.addresses[idx].read_bytes(col_offset);
                 binary_builder.put_and_commit(std::str::from_utf8(scalar).unwrap());
             }
         }

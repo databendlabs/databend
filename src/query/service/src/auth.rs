@@ -158,7 +158,9 @@ impl AuthMgr {
                 {
                     Ok(mut user_info) => {
                         if user_info.auth_info != AuthInfo::JWT {
-                            return Err(ErrorCode::AuthenticateFailure("Authentication failed: user exists but is not configured for JWT authentication"));
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "Authentication failed: user exists but is not configured for JWT authentication",
+                            ));
                         }
                         if let Some(ensure_user) = jwt.custom.ensure_user {
                             let current_roles = user_info.grants.roles();
@@ -229,7 +231,7 @@ impl AuthMgr {
                                 return Err(ErrorCode::AuthenticateFailure(format!(
                                     "Authentication failed: {}",
                                     e.message()
-                                )))
+                                )));
                             }
                         }
                         let ensure_user = jwt
@@ -310,16 +312,22 @@ impl AuthMgr {
                         hash_method: t,
                         ..
                     } => match p {
-                        None => Err(ErrorCode::AuthenticateFailure("Authentication failed: password is required but was not provided")),
+                        None => Err(ErrorCode::AuthenticateFailure(
+                            "Authentication failed: password is required but was not provided",
+                        )),
                         Some(p) => {
                             if *h == t.hash(p) {
                                 Ok(())
                             } else {
-                                Err(ErrorCode::AuthenticateFailure("Authentication failed: incorrect password"))
+                                Err(ErrorCode::AuthenticateFailure(
+                                    "Authentication failed: incorrect password",
+                                ))
                             }
                         }
                     },
-                    _ => Err(ErrorCode::AuthenticateFailure("Authentication failed: user exists but is not configured for password authentication")),
+                    _ => Err(ErrorCode::AuthenticateFailure(
+                        "Authentication failed: user exists but is not configured for password authentication",
+                    )),
                 };
                 UserApiProvider::instance()
                     .update_user_login_result(tenant, identity, authed.is_ok(), &user)

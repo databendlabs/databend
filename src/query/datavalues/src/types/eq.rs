@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
+use super::DataType;
+use super::DataTypeImpl;
 use super::type_array::ArrayType;
 use super::type_nullable::NullableType;
 use super::type_struct::StructType;
-use super::DataType;
-use super::DataTypeImpl;
 
 impl Eq for DataTypeImpl {}
 

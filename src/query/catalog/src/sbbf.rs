@@ -73,12 +73,12 @@
 //! [sbbf-paper]: https://arxiv.org/pdf/2101.01719
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
-use core::simd::cmp::SimdPartialEq;
 use core::simd::Simd;
+use core::simd::cmp::SimdPartialEq;
 use std::mem::size_of;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;

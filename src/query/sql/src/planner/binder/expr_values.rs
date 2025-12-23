@@ -18,26 +18,26 @@ use databend_common_ast::ast::Expr as AExpr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt8Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::UInt8Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_users::Object;
 
-use crate::binder::wrap_cast;
-use crate::evaluator::BlockOperator;
-use crate::plans::walk_expr_mut;
-use crate::plans::ConstantExpr;
-use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::binder::wrap_cast;
+use crate::evaluator::BlockOperator;
+use crate::plans::ConstantExpr;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 pub(crate) struct ExprValuesRewriter {
     ctx: Arc<dyn TableContext>,

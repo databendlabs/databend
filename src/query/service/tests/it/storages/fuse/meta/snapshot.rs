@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::testing::StatisticsV0;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV1;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 fn default_snapshot() -> TableSnapshot {

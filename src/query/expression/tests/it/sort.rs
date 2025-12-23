@@ -15,16 +15,16 @@
 use std::vec;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::number::*;
 
-use crate::rand_block_for_all_types;
 use crate::DataTypeFilter;
+use crate::rand_block_for_all_types;
 
 #[test]
 fn test_block_sort() -> Result<()> {
@@ -198,8 +198,8 @@ fn sort_concat() {
     // Sort(Sort A || Sort B)  =   Sort (A || B)
     use databend_common_expression::DataBlock;
     use itertools::Itertools;
-    use rand::seq::SliceRandom;
     use rand::Rng;
+    use rand::seq::SliceRandom;
 
     let mut rng = rand::thread_rng();
     let num_blocks = 100;

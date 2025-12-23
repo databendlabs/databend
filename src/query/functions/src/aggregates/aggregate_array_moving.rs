@@ -20,26 +20,21 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::*;
-use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::assert_unary_arguments;
-use super::assert_variadic_params;
-use super::batch_merge1;
-use super::batch_serialize1;
-use super::extract_number_param;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -50,6 +45,11 @@ use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::extract_number_param;
 
 trait SumState: StateSerde + Send + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
@@ -90,47 +90,56 @@ where
     TSum: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
     fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
-        let column = &entry.to_column();
-        let buffer = match column {
-            Column::Null { .. } => {
-                self.values.push(T::default());
-                return Ok(());
+        let val = match entry.data_type() {
+            DataType::Null => None,
+            DataType::Nullable(_) => {
+                let view = entry
+                    .clone()
+                    .downcast::<NullableType<NumberType<T>>>()
+                    .unwrap();
+                view.index(row).unwrap()
             }
-            Column::Nullable(box nullable_column) => {
-                NumberType::<T>::try_downcast_column(&nullable_column.column).unwrap()
+            _ => {
+                let view = entry.clone().downcast::<NumberType<T>>().unwrap();
+                Some(view.index(row).unwrap())
             }
-            _ => NumberType::<T>::try_downcast_column(column).unwrap(),
         };
-        self.values.push(buffer[row]);
+        self.values.push(val.unwrap_or_default());
         Ok(())
     }
 
     fn accumulate(&mut self, entry: &BlockEntry, validity: Option<&Bitmap>) -> Result<()> {
-        let column = match entry.data_type() {
-            DataType::Null => {
+        if entry.data_type().is_null() {
+            for _ in 0..entry.len() {
+                self.values.push(T::default());
+            }
+            return Ok(());
+        }
+
+        let (not_null, nulls) = entry.clone().split_nullable();
+        match nulls.and_bitmap(validity) {
+            ColumnView::Const(false, _) => {
                 for _ in 0..entry.len() {
                     self.values.push(T::default());
                 }
                 return Ok(());
             }
-            _ => entry
-                .clone()
-                .remove_nullable()
-                .downcast::<NumberType<T>>()
-                .unwrap(),
-        };
-        if let Some(validity) = validity {
-            column.iter().zip(validity.iter()).for_each(|(v, b)| {
-                if b {
+            ColumnView::Const(true, _) => {
+                let view = not_null.downcast::<NumberType<T>>().unwrap();
+                view.iter().for_each(|v| {
                     self.values.push(v);
-                } else {
-                    self.values.push(T::default());
+                });
+            }
+            ColumnView::Column(validity) => {
+                let view = not_null.downcast::<NumberType<T>>().unwrap();
+                for (v, b) in view.iter().zip(validity) {
+                    if b {
+                        self.values.push(v);
+                    } else {
+                        self.values.push(T::default());
+                    }
                 }
-            });
-        } else {
-            column.iter().for_each(|v| {
-                self.values.push(v);
-            });
+            }
         }
         Ok(())
     }
@@ -140,17 +149,29 @@ where
         loc: &[AggrStateLoc],
         entry: &BlockEntry,
     ) -> Result<()> {
-        let buffer = match entry.to_column() {
-            Column::Null { len } => Buffer::from(vec![T::default(); len]),
-            Column::Nullable(box nullable_column) => {
-                NumberType::<T>::try_downcast_column(&nullable_column.column).unwrap()
+        match entry.data_type() {
+            DataType::Null => {
+                for place in places {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(T::default());
+                }
             }
-            column => NumberType::<T>::try_downcast_column(&column).unwrap(),
-        };
-        buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.values.push(*c);
-        });
+            DataType::Nullable(_) => {
+                let view = entry.downcast::<NullableType<NumberType<T>>>().unwrap();
+                view.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(c.unwrap_or_default());
+                });
+            }
+            _ => {
+                let view = entry.downcast::<NumberType<T>>().unwrap();
+                view.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(c);
+                });
+            }
+        }
+
         Ok(())
     }
 
@@ -297,48 +318,53 @@ where T: Decimal
         + std::ops::SubAssign
 {
     fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
-        let column = &entry.to_column();
-        let buffer = match column {
-            Column::Null { .. } => {
+        match entry.data_type() {
+            DataType::Null => {
                 self.values.push(T::default());
-                return Ok(());
             }
-            Column::Nullable(box nullable_column) => {
-                T::try_downcast_column(&nullable_column.column).unwrap().0
+            DataType::Nullable(_) => {
+                let view = entry.downcast::<NullableType<DecimalType<T>>>().unwrap();
+                self.values
+                    .push(view.index(row).unwrap().unwrap_or_default());
             }
-            _ => T::try_downcast_column(column).unwrap().0,
-        };
-        self.values.push(buffer[row]);
+            _ => {
+                let view = entry.downcast::<DecimalType<T>>().unwrap();
+                self.values.push(view.index(row).unwrap());
+            }
+        }
         Ok(())
     }
 
     fn accumulate(&mut self, entry: &BlockEntry, validity: Option<&Bitmap>) -> Result<()> {
-        let column = &entry.to_column();
-        let buffer = match column {
-            Column::Null { len } => {
-                for _ in 0..*len {
+        if entry.data_type().is_null() {
+            for _ in 0..entry.len() {
+                self.values.push(T::default());
+            }
+            return Ok(());
+        }
+
+        let (not_null, nulls) = entry.clone().split_nullable();
+        match nulls.and_bitmap(validity) {
+            ColumnView::Const(false, _) => {
+                for _ in 0..entry.len() {
                     self.values.push(T::default());
                 }
                 return Ok(());
             }
-            Column::Nullable(box nullable_column) => {
-                T::try_downcast_column(&nullable_column.column).unwrap().0
+            ColumnView::Const(true, _) => {
+                let view = not_null.downcast::<DecimalType<T>>().unwrap();
+                view.iter().for_each(|v| {
+                    self.values.push(v);
+                });
             }
-            _ => T::try_downcast_column(column).unwrap().0,
-        };
-        match validity {
-            Some(validity) => {
-                for (i, v) in validity.iter().enumerate() {
-                    if v {
-                        self.values.push(buffer[i]);
+            ColumnView::Column(validity) => {
+                let view = not_null.downcast::<DecimalType<T>>().unwrap();
+                for (v, b) in view.iter().zip(validity) {
+                    if b {
+                        self.values.push(v);
                     } else {
                         self.values.push(T::default());
                     }
-                }
-            }
-            None => {
-                for v in buffer.iter() {
-                    self.values.push(*v);
                 }
             }
         }
@@ -350,17 +376,28 @@ where T: Decimal
         loc: &[AggrStateLoc],
         entry: &BlockEntry,
     ) -> Result<()> {
-        let buffer = match entry.to_column() {
-            Column::Null { len } => Buffer::from(vec![T::default(); len]),
-            Column::Nullable(box nullable_column) => {
-                T::try_downcast_column(&nullable_column.column).unwrap().0
+        match entry.data_type() {
+            DataType::Null => {
+                for place in places {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(T::default());
+                }
             }
-            column => T::try_downcast_column(&column).unwrap().0,
-        };
-        buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.values.push(*c);
-        });
+            DataType::Nullable(_) => {
+                let view = entry.downcast::<NullableType<DecimalType<T>>>().unwrap();
+                view.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(c.unwrap_or_default());
+                });
+            }
+            _ => {
+                let view = entry.downcast::<DecimalType<T>>().unwrap();
+                view.iter().zip(places.iter()).for_each(|(c, place)| {
+                    let state = AggrState::new(*place, loc).get::<Self>();
+                    state.values.push(c);
+                });
+            }
+        }
         Ok(())
     }
 
@@ -595,7 +632,7 @@ where State: SumState
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
@@ -786,7 +823,7 @@ where State: SumState
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

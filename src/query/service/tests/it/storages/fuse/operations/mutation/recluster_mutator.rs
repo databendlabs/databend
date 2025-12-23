@@ -21,13 +21,15 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -35,8 +37,6 @@ use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
-use databend_common_storages_fuse::FuseBlockPartInfo;
-use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
@@ -46,12 +46,12 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 use uuid::Uuid;
 
-use crate::storages::fuse::operations::mutation::verify_compact_tasks;
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
+use crate::storages::fuse::operations::mutation::verify_compact_tasks;
 use crate::storages::fuse::utils::new_empty_snapshot;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -217,14 +217,14 @@ async fn test_safety_for_recluster() -> Result<()> {
             number_of_segments, number_of_blocks,
         );
 
-        let unclustered: bool = rand.gen();
+        let unclustered: bool = rand.r#gen();
         let mut unclustered_segment_indices = HashSet::new();
         if unclustered {
             unclustered_segment_indices = block_number_of_segments
                 .iter()
                 .rev()
                 .enumerate()
-                .filter(|(_, &num)| num % 4 == 0)
+                .filter(|(_, num)| *num % 4 == 0)
                 .map(|(index, _)| index)
                 .collect();
         }

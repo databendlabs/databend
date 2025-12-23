@@ -16,10 +16,10 @@ use databend_common_ast::ast::CreateConnectionStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_exception::Result;
 
+use crate::Binder;
 use crate::binder::parse_storage_params_from_uri;
 use crate::plans::CreateConnectionPlan;
 use crate::plans::Plan;
-use crate::Binder;
 
 impl Binder {
     #[async_backtrace::framed]

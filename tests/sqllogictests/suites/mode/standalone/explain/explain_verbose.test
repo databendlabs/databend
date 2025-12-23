@@ -18,17 +18,17 @@ explain(verbose, logical) select * from t where a = 1
 ----
 EvalScalar
 ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
-├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+├── output columns: [t.a (#0), t.b (#1)]
 ├── outer columns: []
-├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+├── used columns: [t.a (#0), t.b (#1)]
 ├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
 └── Filter
     ├── filters: [eq(t.a (#0), 1)]
-    ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    ├── output columns: [t.a (#0), t.b (#1)]
     ├── outer columns: []
-    ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    ├── used columns: [t.a (#0), t.b (#1)]
     ├── cardinality: 0.000
     ├── precise cardinality: N/A
     ├── statistics
@@ -37,9 +37,9 @@ EvalScalar
         ├── filters: []
         ├── order by: []
         ├── limit: NONE
-        ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+        ├── output columns: [t.a (#0), t.b (#1)]
         ├── outer columns: []
-        ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+        ├── used columns: [t.a (#0), t.b (#1)]
         ├── cardinality: 0.000
         ├── precise cardinality: N/A
         └── statistics
@@ -49,27 +49,27 @@ explain(verbose, logical, optimized) select * from t where a = 1
 ----
 Filter
 ├── filters: [eq(t.a (#0), 1)]
-├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+├── output columns: [t.a (#0), t.b (#1)]
 ├── outer columns: []
-├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+├── used columns: [t.a (#0), t.b (#1)]
 ├── cardinality: 1.041
 ├── precise cardinality: N/A
 ├── statistics
-│   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   └── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   └── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
 └── Scan
     ├── table: testdb.t (#0)
     ├── filters: [eq(t.a (#0), 1)]
     ├── order by: []
     ├── limit: NONE
-    ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    ├── output columns: [t.a (#0), t.b (#1)]
     ├── outer columns: []
-    ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    ├── used columns: [t.a (#0), t.b (#1)]
     ├── cardinality: 1000.000
     ├── precise cardinality: 1000
     └── statistics
-        ├── testdb.t.a (#0): { min: 0, max: 999, ndv: 961, null count: 0 }
-        └── testdb.t.b (#1): { min: 1, max: 1000, ndv: 961, null count: 0 }
+        ├── t.a (#0): { min: 0, max: 999, ndv: 961, null count: 0 }
+        └── t.b (#1): { min: 1, max: 1000, ndv: 961, null count: 0 }
 
 query T
 explain(verbose, logical, optimized) select * from t, t t1, t t2, t t3, t t4
@@ -79,204 +79,204 @@ Join(Cross)
 ├── build keys: []
 ├── probe keys: []
 ├── other filters: []
-├── output columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.a (#6), testdb.t.a (#8), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5), testdb.t.b (#7), testdb.t.b (#9)]
+├── output columns: [t.a (#0), t.a (#2), t.a (#4), t.a (#6), t.a (#8), t.b (#1), t.b (#3), t.b (#5), t.b (#7), t.b (#9)]
 ├── outer columns: []
-├── used columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.a (#6), testdb.t.a (#8), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5), testdb.t.b (#7), testdb.t.b (#9)]
+├── used columns: [t.a (#0), t.a (#2), t.a (#4), t.a (#6), t.a (#8), t.b (#1), t.b (#3), t.b (#5), t.b (#7), t.b (#9)]
 ├── cardinality: 1.220
 ├── precise cardinality: N/A
 ├── statistics
-│   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── testdb.t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── testdb.t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── testdb.t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── testdb.t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── testdb.t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   └── testdb.t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   └── t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
 ├── Join(Cross)
 │   ├── build keys: []
 │   ├── probe keys: []
 │   ├── other filters: []
-│   ├── output columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.a (#6), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5), testdb.t.b (#7)]
+│   ├── output columns: [t.a (#0), t.a (#2), t.a (#4), t.a (#6), t.b (#1), t.b (#3), t.b (#5), t.b (#7)]
 │   ├── outer columns: []
-│   ├── used columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.a (#6), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5), testdb.t.b (#7)]
+│   ├── used columns: [t.a (#0), t.a (#2), t.a (#4), t.a (#6), t.b (#1), t.b (#3), t.b (#5), t.b (#7)]
 │   ├── cardinality: 1.172
 │   ├── precise cardinality: N/A
 │   ├── statistics
-│   │   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   ├── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   └── testdb.t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   ├── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   └── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   ├── Join(Cross)
 │   │   ├── build keys: []
 │   │   ├── probe keys: []
 │   │   ├── other filters: []
-│   │   ├── output columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5)]
+│   │   ├── output columns: [t.a (#0), t.a (#2), t.a (#4), t.b (#1), t.b (#3), t.b (#5)]
 │   │   ├── outer columns: []
-│   │   ├── used columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.a (#4), testdb.t.b (#1), testdb.t.b (#3), testdb.t.b (#5)]
+│   │   ├── used columns: [t.a (#0), t.a (#2), t.a (#4), t.b (#1), t.b (#3), t.b (#5)]
 │   │   ├── cardinality: 1.127
 │   │   ├── precise cardinality: N/A
 │   │   ├── statistics
-│   │   │   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   ├── testdb.t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   ├── testdb.t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   ├── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   │   ├── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   │   └── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   └── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   ├── Join(Cross)
 │   │   │   ├── build keys: []
 │   │   │   ├── probe keys: []
 │   │   │   ├── other filters: []
-│   │   │   ├── output columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.b (#1), testdb.t.b (#3)]
+│   │   │   ├── output columns: [t.a (#0), t.a (#2), t.b (#1), t.b (#3)]
 │   │   │   ├── outer columns: []
-│   │   │   ├── used columns: [testdb.t.a (#0), testdb.t.a (#2), testdb.t.b (#1), testdb.t.b (#3)]
+│   │   │   ├── used columns: [t.a (#0), t.a (#2), t.b (#1), t.b (#3)]
 │   │   │   ├── cardinality: 1.083
 │   │   │   ├── precise cardinality: N/A
 │   │   │   ├── statistics
-│   │   │   │   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   │   ├── testdb.t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   │   ├── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   │   │   └── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   │   └── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   │   ├── Filter
 │   │   │   │   ├── filters: [eq(t.a (#0), 1)]
-│   │   │   │   ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+│   │   │   │   ├── output columns: [t.a (#0), t.b (#1)]
 │   │   │   │   ├── outer columns: []
-│   │   │   │   ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+│   │   │   │   ├── used columns: [t.a (#0), t.b (#1)]
 │   │   │   │   ├── cardinality: 1.041
 │   │   │   │   ├── precise cardinality: N/A
 │   │   │   │   ├── statistics
-│   │   │   │   │   ├── testdb.t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │   │   │   └── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │   │   │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │   │   │   └── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   │   │   └── Scan
 │   │   │   │       ├── table: testdb.t (#0)
 │   │   │   │       ├── filters: [eq(t.a (#0), 1)]
 │   │   │   │       ├── order by: []
 │   │   │   │       ├── limit: NONE
-│   │   │   │       ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+│   │   │   │       ├── output columns: [t.a (#0), t.b (#1)]
 │   │   │   │       ├── outer columns: []
-│   │   │   │       ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+│   │   │   │       ├── used columns: [t.a (#0), t.b (#1)]
 │   │   │   │       ├── cardinality: 1000.000
 │   │   │   │       ├── precise cardinality: 1000
 │   │   │   │       └── statistics
-│   │   │   │           ├── testdb.t.a (#0): { min: 0, max: 999, ndv: 961, null count: 0 }
-│   │   │   │           └── testdb.t.b (#1): { min: 1, max: 1000, ndv: 961, null count: 0 }
+│   │   │   │           ├── t.a (#0): { min: 0, max: 999, ndv: 961, null count: 0 }
+│   │   │   │           └── t.b (#1): { min: 1, max: 1000, ndv: 961, null count: 0 }
 │   │   │   └── Filter
-│   │   │       ├── filters: [eq(t1.a (#2), 1)]
-│   │   │       ├── output columns: [testdb.t.a (#2), testdb.t.b (#3)]
+│   │   │       ├── filters: [eq(t.a (#2), 1)]
+│   │   │       ├── output columns: [t.a (#2), t.b (#3)]
 │   │   │       ├── outer columns: []
-│   │   │       ├── used columns: [testdb.t.a (#2), testdb.t.b (#3)]
+│   │   │       ├── used columns: [t.a (#2), t.b (#3)]
 │   │   │       ├── cardinality: 1.041
 │   │   │       ├── precise cardinality: N/A
 │   │   │       ├── statistics
-│   │   │       │   ├── testdb.t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │   │       │   └── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │   │       │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │   │       │   └── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   │       └── Scan
 │   │   │           ├── table: testdb.t (#1)
 │   │   │           ├── filters: [eq(t.a (#2), 1)]
 │   │   │           ├── order by: []
 │   │   │           ├── limit: NONE
-│   │   │           ├── output columns: [testdb.t.a (#2), testdb.t.b (#3)]
+│   │   │           ├── output columns: [t.a (#2), t.b (#3)]
 │   │   │           ├── outer columns: []
-│   │   │           ├── used columns: [testdb.t.a (#2), testdb.t.b (#3)]
+│   │   │           ├── used columns: [t.a (#2), t.b (#3)]
 │   │   │           ├── cardinality: 1000.000
 │   │   │           ├── precise cardinality: 1000
 │   │   │           └── statistics
-│   │   │               ├── testdb.t.a (#2): { min: 0, max: 999, ndv: 961, null count: 0 }
-│   │   │               └── testdb.t.b (#3): { min: 1, max: 1000, ndv: 961, null count: 0 }
+│   │   │               ├── t.a (#2): { min: 0, max: 999, ndv: 961, null count: 0 }
+│   │   │               └── t.b (#3): { min: 1, max: 1000, ndv: 961, null count: 0 }
 │   │   └── Filter
-│   │       ├── filters: [eq(t2.a (#4), 1)]
-│   │       ├── output columns: [testdb.t.a (#4), testdb.t.b (#5)]
+│   │       ├── filters: [eq(t.a (#4), 1)]
+│   │       ├── output columns: [t.a (#4), t.b (#5)]
 │   │       ├── outer columns: []
-│   │       ├── used columns: [testdb.t.a (#4), testdb.t.b (#5)]
+│   │       ├── used columns: [t.a (#4), t.b (#5)]
 │   │       ├── cardinality: 1.041
 │   │       ├── precise cardinality: N/A
 │   │       ├── statistics
-│   │       │   ├── testdb.t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   │       │   └── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   │       │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
+│   │       │   └── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │       └── Scan
 │   │           ├── table: testdb.t (#2)
 │   │           ├── filters: [eq(t.a (#4), 1)]
 │   │           ├── order by: []
 │   │           ├── limit: NONE
-│   │           ├── output columns: [testdb.t.a (#4), testdb.t.b (#5)]
+│   │           ├── output columns: [t.a (#4), t.b (#5)]
 │   │           ├── outer columns: []
-│   │           ├── used columns: [testdb.t.a (#4), testdb.t.b (#5)]
+│   │           ├── used columns: [t.a (#4), t.b (#5)]
 │   │           ├── cardinality: 1000.000
 │   │           ├── precise cardinality: 1000
 │   │           └── statistics
-│   │               ├── testdb.t.a (#4): { min: 0, max: 999, ndv: 961, null count: 0 }
-│   │               └── testdb.t.b (#5): { min: 1, max: 1000, ndv: 961, null count: 0 }
+│   │               ├── t.a (#4): { min: 0, max: 999, ndv: 961, null count: 0 }
+│   │               └── t.b (#5): { min: 1, max: 1000, ndv: 961, null count: 0 }
 │   └── Filter
-│       ├── filters: [eq(t3.a (#6), 1)]
-│       ├── output columns: [testdb.t.a (#6), testdb.t.b (#7)]
+│       ├── filters: [eq(t.a (#6), 1)]
+│       ├── output columns: [t.a (#6), t.b (#7)]
 │       ├── outer columns: []
-│       ├── used columns: [testdb.t.a (#6), testdb.t.b (#7)]
+│       ├── used columns: [t.a (#6), t.b (#7)]
 │       ├── cardinality: 1.041
 │       ├── precise cardinality: N/A
 │       ├── statistics
-│       │   ├── testdb.t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
-│       │   └── testdb.t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│       │   ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
+│       │   └── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │       └── Scan
 │           ├── table: testdb.t (#3)
 │           ├── filters: [eq(t.a (#6), 1)]
 │           ├── order by: []
 │           ├── limit: NONE
-│           ├── output columns: [testdb.t.a (#6), testdb.t.b (#7)]
+│           ├── output columns: [t.a (#6), t.b (#7)]
 │           ├── outer columns: []
-│           ├── used columns: [testdb.t.a (#6), testdb.t.b (#7)]
+│           ├── used columns: [t.a (#6), t.b (#7)]
 │           ├── cardinality: 1000.000
 │           ├── precise cardinality: 1000
 │           └── statistics
-│               ├── testdb.t.a (#6): { min: 0, max: 999, ndv: 961, null count: 0 }
-│               └── testdb.t.b (#7): { min: 1, max: 1000, ndv: 961, null count: 0 }
+│               ├── t.a (#6): { min: 0, max: 999, ndv: 961, null count: 0 }
+│               └── t.b (#7): { min: 1, max: 1000, ndv: 961, null count: 0 }
 └── Filter
-    ├── filters: [eq(t4.a (#8), 1)]
-    ├── output columns: [testdb.t.a (#8), testdb.t.b (#9)]
+    ├── filters: [eq(t.a (#8), 1)]
+    ├── output columns: [t.a (#8), t.b (#9)]
     ├── outer columns: []
-    ├── used columns: [testdb.t.a (#8), testdb.t.b (#9)]
+    ├── used columns: [t.a (#8), t.b (#9)]
     ├── cardinality: 1.041
     ├── precise cardinality: N/A
     ├── statistics
-    │   ├── testdb.t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
-    │   └── testdb.t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
+    │   └── t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
     └── Scan
         ├── table: testdb.t (#4)
         ├── filters: [eq(t.a (#8), 1)]
         ├── order by: []
         ├── limit: NONE
-        ├── output columns: [testdb.t.a (#8), testdb.t.b (#9)]
+        ├── output columns: [t.a (#8), t.b (#9)]
         ├── outer columns: []
-        ├── used columns: [testdb.t.a (#8), testdb.t.b (#9)]
+        ├── used columns: [t.a (#8), t.b (#9)]
         ├── cardinality: 1000.000
         ├── precise cardinality: 1000
         └── statistics
-            ├── testdb.t.a (#8): { min: 0, max: 999, ndv: 961, null count: 0 }
-            └── testdb.t.b (#9): { min: 1, max: 1000, ndv: 961, null count: 0 }
+            ├── t.a (#8): { min: 0, max: 999, ndv: 961, null count: 0 }
+            └── t.b (#9): { min: 1, max: 1000, ndv: 961, null count: 0 }
 
 query T
 explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where number % 10 = t.b) mark from t;
 ----
 EvalScalar
-├── scalars: [t.a (#0) AS (#0), is_true(6 (#6)) AS (#3)]
-├── output columns: [derived.b (#5), derived.mark (#3), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+├── scalars: [t.a (#0) AS (#0), is_true(marker (#6)) AS (#3)]
+├── output columns: [b (#5), mark (#3), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
 ├── outer columns: []
-├── used columns: [derived.a (#4), derived.b (#5), derived.mark (#3), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+├── used columns: [a (#4), b (#5), mark (#3), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
 ├── cardinality: 0.000
 ├── precise cardinality: N/A
 ├── statistics
 └── Join(RightMark)
     ├── build keys: [b (#5)]
-    ├── probe keys: [b (#1)]
+    ├── probe keys: [t.b (#1)]
     ├── other filters: []
-    ├── output columns: [derived.b (#5), derived.marker (#6), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+    ├── output columns: [b (#5), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
     ├── outer columns: []
-    ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2), testdb.t.a (#0), testdb.t.b (#1)]
+    ├── used columns: [a (#4), b (#5), numbers.number (#2), t.a (#0), t.b (#1)]
     ├── cardinality: 0.000
     ├── precise cardinality: N/A
     ├── statistics
@@ -285,25 +285,25 @@ EvalScalar
     │   ├── filters: []
     │   ├── order by: []
     │   ├── limit: NONE
-    │   ├── output columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    │   ├── output columns: [t.a (#0), t.b (#1)]
     │   ├── outer columns: []
-    │   ├── used columns: [testdb.t.a (#0), testdb.t.b (#1)]
+    │   ├── used columns: [t.a (#0), t.b (#1)]
     │   ├── cardinality: 0.000
     │   ├── precise cardinality: N/A
     │   └── statistics
     └── EvalScalar
-        ├── scalars: [numbers.number (#2) AS (#2), outer.b (#5) AS (#5)]
-        ├── output columns: [derived.b (#5), system.numbers.number (#2)]
+        ├── scalars: [numbers.number (#2) AS (#2), b (#5) AS (#5)]
+        ├── output columns: [b (#5), numbers.number (#2)]
         ├── outer columns: []
-        ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2)]
+        ├── used columns: [a (#4), b (#5), numbers.number (#2)]
         ├── cardinality: 0.000
         ├── precise cardinality: N/A
         ├── statistics
         └── Filter
             ├── filters: [eq(modulo(numbers.number (#2), 10), b (#5))]
-            ├── output columns: [derived.b (#5), system.numbers.number (#2)]
+            ├── output columns: [b (#5), numbers.number (#2)]
             ├── outer columns: []
-            ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2)]
+            ├── used columns: [a (#4), b (#5), numbers.number (#2)]
             ├── cardinality: 0.000
             ├── precise cardinality: N/A
             ├── statistics
@@ -311,18 +311,18 @@ EvalScalar
                 ├── build keys: []
                 ├── probe keys: []
                 ├── other filters: []
-                ├── output columns: [derived.b (#5), system.numbers.number (#2)]
+                ├── output columns: [b (#5), numbers.number (#2)]
                 ├── outer columns: []
-                ├── used columns: [derived.a (#4), derived.b (#5), system.numbers.number (#2)]
+                ├── used columns: [a (#4), b (#5), numbers.number (#2)]
                 ├── cardinality: 0.000
                 ├── precise cardinality: N/A
                 ├── statistics
                 ├── Aggregate(Initial)
                 │   ├── group items: [b (#5) AS (#5)]
                 │   ├── aggregate functions: []
-                │   ├── output columns: [derived.b (#5)]
+                │   ├── output columns: [b (#5)]
                 │   ├── outer columns: []
-                │   ├── used columns: [derived.a (#4), derived.b (#5)]
+                │   ├── used columns: [a (#4), b (#5)]
                 │   ├── cardinality: 1.000
                 │   ├── precise cardinality: N/A
                 │   ├── statistics
@@ -331,9 +331,9 @@ EvalScalar
                 │       ├── filters: []
                 │       ├── order by: []
                 │       ├── limit: NONE
-                │       ├── output columns: [derived.a (#4), derived.b (#5)]
+                │       ├── output columns: [a (#4), b (#5)]
                 │       ├── outer columns: []
-                │       ├── used columns: [derived.a (#4), derived.b (#5)]
+                │       ├── used columns: [a (#4), b (#5)]
                 │       ├── cardinality: 0.000
                 │       ├── precise cardinality: N/A
                 │       └── statistics
@@ -342,9 +342,9 @@ EvalScalar
                     ├── filters: []
                     ├── order by: []
                     ├── limit: NONE
-                    ├── output columns: [system.numbers.number (#2)]
+                    ├── output columns: [numbers.number (#2)]
                     ├── outer columns: []
-                    ├── used columns: [system.numbers.number (#2)]
+                    ├── used columns: [numbers.number (#2)]
                     ├── cardinality: 0.000
                     ├── precise cardinality: N/A
                     └── statistics

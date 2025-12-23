@@ -23,9 +23,9 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
+use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::operations::vacuum_tables_from_info;
-use databend_common_storages_fuse::TableContext;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
@@ -103,9 +103,13 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
                 if let Err(e) =
                     vacuum_tables_from_info(tables_need_purge, ctx.clone(), handler).await
                 {
-                    warn!( "Failed to vacuum tables after transaction commit (best-effort operation): {e}");
+                    warn!(
+                        "Failed to vacuum tables after transaction commit (best-effort operation): {e}"
+                    );
                 } else {
-                    info!( "{num_tables} tables vacuumed after transaction commit in a best-effort manner" );
+                    info!(
+                        "{num_tables} tables vacuumed after transaction commit in a best-effort manner"
+                    );
                 }
             } else {
                 warn!("EE feature is not enabled, vacuum after transaction commit is skipped");

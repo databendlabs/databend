@@ -16,20 +16,20 @@ use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::DummyColumnType;
-use crate::plans::ScalarExpr;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
+use crate::binder::DummyColumnType;
+use crate::plans::ScalarExpr;
 
 pub trait TypeProvider<ColumnID: ColumnIndex> {
     fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;

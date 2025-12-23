@@ -17,13 +17,14 @@ use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::ColumnSet;
 use crate::optimizer::optimizers::operator::filter::check_float_range;
 use crate::optimizer::optimizers::operator::filter::check_int_range;
 use crate::optimizer::optimizers::operator::filter::check_uint_range;
@@ -33,7 +34,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-use crate::ColumnSet;
 
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
@@ -154,11 +154,13 @@ impl<'a> InferFilterOptimizer<'a> {
         }
 
         if self.is_falsy {
-            new_predicates = vec![ConstantExpr {
-                span: None,
-                value: Scalar::Boolean(false),
-            }
-            .into()];
+            new_predicates = vec![
+                ConstantExpr {
+                    span: None,
+                    value: Scalar::Boolean(false),
+                }
+                .into(),
+            ];
         } else {
             // Derive new predicates from remaining predicates.
             new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));

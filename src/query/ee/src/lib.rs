@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(
+    clippy::collapsible_if,
+    clippy::let_and_return,
+    clippy::manual_is_multiple_of
+)]
+
 pub mod attach_table;
 pub mod data_mask;
 pub mod enterprise_services;

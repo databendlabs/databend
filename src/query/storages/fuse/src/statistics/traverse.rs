@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::map::KvPair;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -23,6 +19,10 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::map::KvPair;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 

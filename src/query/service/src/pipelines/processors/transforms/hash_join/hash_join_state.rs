@@ -15,10 +15,10 @@
 use std::cell::SyncUnsafeCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
@@ -26,7 +26,6 @@ use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -36,21 +35,22 @@ use databend_common_expression::FixedKey;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
+use databend_common_expression::types::DataType;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RowPtr;
-use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::RwLock;
 
 use super::merge_into_hash_join_optimization::MergeIntoState;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
-use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::sql::IndexType;
 

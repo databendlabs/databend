@@ -20,10 +20,10 @@ use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
 use arrow_flight::SchemaAsIpc;
+use arrow_ipc::CompressionType;
 use arrow_ipc::writer::DictionaryTracker;
 use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
-use arrow_ipc::CompressionType;
 use arrow_schema::ArrowError;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
@@ -31,12 +31,12 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_io::prelude::BinaryWrite;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -191,12 +191,14 @@ pub fn serialize_block(
     let (_, dict, values) = match data_block.is_empty() {
         true => batches_to_flight_data_with_options(
             &ArrowSchema::empty(),
-            vec![RecordBatch::try_new_with_options(
-                Arc::new(ArrowSchema::empty()),
-                vec![],
-                &RecordBatchOptions::new().with_row_count(Some(0)),
-            )
-            .unwrap()],
+            vec![
+                RecordBatch::try_new_with_options(
+                    Arc::new(ArrowSchema::empty()),
+                    vec![],
+                    &RecordBatchOptions::new().with_row_count(Some(0)),
+                )
+                .unwrap(),
+            ],
             options,
         )?,
         false => {

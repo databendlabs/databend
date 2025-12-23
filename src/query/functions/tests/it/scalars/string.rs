@@ -14,14 +14,14 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::*;
+use databend_common_expression::FromData;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
-use databend_common_expression::FromData;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::number::*;
 use goldenfile::Mint;
 
 use super::run_ast;

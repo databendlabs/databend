@@ -19,9 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseInfo;
 
-use crate::databases::default::DefaultDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::databases::default::DefaultDatabase;
 
 pub struct DatabaseFactory {}
 

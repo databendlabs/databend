@@ -31,13 +31,13 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use databend_common_pipeline_transforms::MemorySettings;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::sessions::QueryContext;
 #[allow(clippy::enum_variant_names)]
 enum HashTable {
@@ -127,7 +127,6 @@ impl TransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
 

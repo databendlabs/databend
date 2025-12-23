@@ -18,9 +18,9 @@ use std::io::IoSlice;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_cache::Cache;
@@ -31,8 +31,8 @@ use log::error;
 use log::info;
 use log::warn;
 use parking_lot::RwLock;
-use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 
 use crate::CacheValue;
 use crate::DiskCacheKey;
@@ -388,7 +388,7 @@ pub mod io_result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
                 Error::MalformedPath(p) => write!(f, "Malformed catch file path: {:?}", p),
-                Error::Io(ref e) => write!(f, "{e}"),
+                Error::Io(e) => write!(f, "{e}"),
                 Error::Misc(msg) => write!(f, "{msg}"),
             }
         }
@@ -397,7 +397,7 @@ pub mod io_result {
     impl StdError for Error {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                Error::Io(ref e) => Some(e),
+                Error::Io(e) => Some(e),
                 _ => None,
             }
         }

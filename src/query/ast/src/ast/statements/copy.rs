@@ -25,19 +25,19 @@ use itertools::Itertools;
 use percent_encoding::percent_decode_str;
 use url::Url;
 
-use crate::ast::quote::QuotedString;
-use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_map;
-use crate::ast::write_comma_separated_string_list;
-use crate::ast::write_comma_separated_string_map;
+use crate::ParseError;
+use crate::Result;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
 use crate::ast::TableRef;
 use crate::ast::With;
-use crate::ParseError;
-use crate::Result;
+use crate::ast::quote::QuotedString;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_string_list;
+use crate::ast::write_comma_separated_string_map;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///

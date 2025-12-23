@@ -24,9 +24,9 @@ use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
-use databend_common_expression::DataField;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -34,11 +34,14 @@ use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UDTF;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::principal::UDTF;
 use databend_common_users::UserApiProvider;
 
+use crate::BindContext;
+use crate::Binder;
+use crate::UdfRewriter;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UDFValidator;
@@ -48,9 +51,6 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::plans::UDFLanguage;
-use crate::BindContext;
-use crate::Binder;
-use crate::UdfRewriter;
 
 impl Binder {
     pub(in crate::planner::binder) async fn bind_udf_definition(

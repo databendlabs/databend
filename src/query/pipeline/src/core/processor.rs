@@ -23,8 +23,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::prelude::*;
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
@@ -92,11 +92,11 @@ pub trait Processor: Send {
 // we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
 // so that later an Arc of it could be moved into the async closure,
 // which async_process returns.
-struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+struct UnsafeSyncCelledProcessor(UnsafeCell<Box<dyn Processor>>);
 unsafe impl Sync for UnsafeSyncCelledProcessor {}
 
 impl Deref for UnsafeSyncCelledProcessor {
-    type Target = UnsafeCell<Box<(dyn Processor)>>;
+    type Target = UnsafeCell<Box<dyn Processor>>;
 
     fn deref(&self) -> &Self::Target {
         &(self.0)
@@ -109,8 +109,8 @@ pub struct ProcessorPtr {
     inner: Arc<UnsafeSyncCelledProcessor>,
 }
 
-impl From<UnsafeCell<Box<(dyn Processor)>>> for UnsafeSyncCelledProcessor {
-    fn from(value: UnsafeCell<Box<(dyn Processor)>>) -> Self {
+impl From<UnsafeCell<Box<dyn Processor>>> for UnsafeSyncCelledProcessor {
+    fn from(value: UnsafeCell<Box<dyn Processor>>) -> Self {
         Self(value)
     }
 }
@@ -130,105 +130,111 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn as_any(&mut self) -> &mut dyn Any {
-        (*self.inner.get()).as_any()
+        unsafe { (*self.inner.get()).as_any() }
     }
 
     /// # Safety
     pub unsafe fn id(&self) -> NodeIndex {
-        *self.id.get()
+        unsafe { *self.id.get() }
     }
 
     /// # Safety
     pub unsafe fn set_id(&self, id: NodeIndex) {
-        *self.id.get() = id;
+        unsafe {
+            *self.id.get() = id;
+        }
     }
 
     /// # Safety
     pub unsafe fn name(&self) -> String {
-        (*self.inner.get()).name()
+        unsafe { (*self.inner.get()).name() }
     }
 
     /// # Safety
     pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
-        (*self.inner.get()).event_with_cause(cause)
+        unsafe { (*self.inner.get()).event_with_cause(cause) }
     }
 
     /// # Safety
     pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
-        (*self.inner.get()).un_reacted(cause, self.id().index())
+        unsafe { (*self.inner.get()).un_reacted(cause, self.id().index()) }
     }
 
     /// # Safety
     pub unsafe fn interrupt(&self) {
-        (*self.inner.get()).interrupt()
+        unsafe { (*self.inner.get()).interrupt() }
     }
 
     /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
-        let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
-            .with_property(|| ("graph-node-id", self.id().index().to_string()));
+        unsafe {
+            let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
+                .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
-        match (*self.inner.get()).process() {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                let _ = span
-                    .with_property(|| ("error", "true"))
-                    .with_properties(|| {
-                        [
-                            ("error.type", err.code().to_string()),
-                            ("error.message", err.display_text()),
-                        ]
-                    });
-                log::info!(error = err.to_string(); "Error in process");
-                Err(err)
+            match (*self.inner.get()).process() {
+                Ok(_) => Ok(()),
+                Err(err) => {
+                    let _ = span
+                        .with_property(|| ("error", "true"))
+                        .with_properties(|| {
+                            [
+                                ("error.type", err.code().to_string()),
+                                ("error.message", err.display_text()),
+                            ]
+                        });
+                    log::info!(error = err.to_string(); "Error in process");
+                    Err(err)
+                }
             }
         }
     }
 
     /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
-        let id = self.id();
-        let mut name = self.name();
-        name.push_str("::async_process");
+        unsafe {
+            let id = self.id();
+            let mut name = self.name();
+            name.push_str("::async_process");
 
-        let task = (*self.inner.get()).async_process();
+            let task = (*self.inner.get()).async_process();
 
-        // The `task` may have reference to the `Processor` that hold in `self.inner`,
-        // so we need to move a clone of `self.inner` into the following async closure to keep the
-        // `Processor` from being dropped before `task` is done.
+            // The `task` may have reference to the `Processor` that hold in `self.inner`,
+            // so we need to move a clone of `self.inner` into the following async closure to keep the
+            // `Processor` from being dropped before `task` is done.
 
-        // e.g.
-        // There may be scenarios where the 'ExecutingGraph' has already been dropped,
-        // but the async task returned by async_process is still running; in this case,
-        // there could be illegal memory access.
+            // e.g.
+            // There may be scenarios where the 'ExecutingGraph' has already been dropped,
+            // but the async task returned by async_process is still running; in this case,
+            // there could be illegal memory access.
 
-        let inner = self.inner.clone();
-        async move {
-            let span = Span::enter_with_local_parent(name)
-                .with_property(|| ("graph-node-id", id.index().to_string()));
+            let inner = self.inner.clone();
+            async move {
+                let span = Span::enter_with_local_parent(name)
+                    .with_property(|| ("graph-node-id", id.index().to_string()));
 
-            match task.await {
-                Ok(_) => {
-                    drop(inner);
-                    Ok(())
-                }
-                Err(err) => {
-                    span.with_property(|| ("error", "true")).add_properties(|| {
-                        [
-                            ("error.type", err.code().to_string()),
-                            ("error.message", err.display_text()),
-                        ]
-                    });
-                    log::info!(error = err.to_string(); "Error in process");
-                    Err(err)
+                match task.await {
+                    Ok(_) => {
+                        drop(inner);
+                        Ok(())
+                    }
+                    Err(err) => {
+                        span.with_property(|| ("error", "true")).add_properties(|| {
+                            [
+                                ("error.type", err.code().to_string()),
+                                ("error.message", err.display_text()),
+                            ]
+                        });
+                        log::info!(error = err.to_string(); "Error in process");
+                        Err(err)
+                    }
                 }
             }
+            .boxed()
         }
-        .boxed()
     }
 
     /// # Safety
     pub unsafe fn details_status(&self) -> Option<String> {
-        (*self.inner.get()).details_status()
+        unsafe { (*self.inner.get()).details_status() }
     }
 }

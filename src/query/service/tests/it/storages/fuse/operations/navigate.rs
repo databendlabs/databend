@@ -12,18 +12,18 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::ops::Sub;
 use std::time::Duration;
 
+use chrono::Utc;
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
@@ -97,10 +97,7 @@ async fn test_fuse_navigate() -> Result<()> {
     // 4. navigate to the first snapshot
     // history is order by timestamp DESC
     let (latest, _ver) = &snapshots[0];
-    let instant = latest
-        .timestamp
-        .unwrap()
-        .sub(chrono::Duration::milliseconds(1));
+    let instant = latest.timestamp.unwrap() - chrono::Duration::milliseconds(1);
 
     let ctx = fixture.new_query_ctx().await?;
     let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
@@ -114,10 +111,7 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 4. navigate beyond the first snapshot
     let (first_insertion, _ver) = &snapshots[1];
-    let instant = first_insertion
-        .timestamp
-        .unwrap()
-        .sub(chrono::Duration::milliseconds(1));
+    let instant = first_insertion.timestamp.unwrap() - chrono::Duration::milliseconds(1);
     // navigate from the instant that is just one ms before the timestamp of the last insertion
     let res = fuse_table
         .navigate_to_time_point(&tbl_ctx, loc.clone(), instant)
@@ -225,7 +219,12 @@ async fn test_navigate_for_purge() -> Result<()> {
     let meta = fuse_table.get_operator().stat(&loc).await?;
     let modified = meta.last_modified();
     assert!(modified.is_some());
-    let time_point = modified.unwrap().sub(chrono::Duration::milliseconds(1));
+    let millis = modified.unwrap().into_inner().as_millisecond();
+    let seconds = millis / 1000;
+    let nanos = ((millis % 1000) * 1_000_000) as u32;
+    let base_time = chrono::DateTime::<Utc>::from_timestamp(seconds as i64, nanos)
+        .expect("valid timestamp from operator metadata");
+    let time_point = base_time - chrono::Duration::milliseconds(1);
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot.
     let (navigate, files) = fuse_table.list_by_time_point(time_point).await?;
     assert_eq!(2, files.len());

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use anyhow::Result;
-use cargo_metadata::semver::Version;
 use cargo_metadata::DepKindInfo;
 use cargo_metadata::DependencyKind;
 use cargo_metadata::Metadata;
@@ -25,6 +24,7 @@ use cargo_metadata::Node;
 use cargo_metadata::NodeDep;
 use cargo_metadata::Package;
 use cargo_metadata::PackageId;
+use cargo_metadata::semver::Version;
 
 fn normalize(license_string: &str) -> String {
     let mut list: Vec<&str> = license_string

@@ -15,10 +15,11 @@
 use std::cmp::Ordering;
 
 use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::ColumnBuilder;
 
 use super::StateSerde;
 
@@ -139,7 +140,7 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
 pub(super) trait ScalarStateFunc<T: AccessType>: StateSerde + Send + 'static {
     fn new() -> Self;
     fn add(&mut self, other: Option<T::ScalarRef<'_>>);
-    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn add_batch(&mut self, column: ColumnView<T>, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 }

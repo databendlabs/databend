@@ -17,10 +17,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::bounded;
-use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_tracing::convert_to_batch;
 use databend_common_tracing::Config;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::LogMessage;
@@ -28,10 +27,11 @@ use databend_common_tracing::RemoteLog;
 use databend_common_tracing::RemoteLogBuffer;
 use databend_common_tracing::RemoteLogElement;
 use databend_common_tracing::RemoteLogGuard;
+use databend_common_tracing::convert_to_batch;
 use log::Level;
 use log::Record;
-use opendal::services;
 use opendal::Operator;
+use opendal::services;
 
 fn setup() -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
     let mut labels = BTreeMap::new();

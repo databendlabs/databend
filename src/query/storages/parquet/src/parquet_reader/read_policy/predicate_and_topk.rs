@@ -22,11 +22,11 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TopKSorter;
+use parquet::arrow::FieldLevels;
+use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
-use parquet::arrow::FieldLevels;
-use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::policy::ReadPolicy;
@@ -38,10 +38,10 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::topk::BuiltTopK;
 use crate::parquet_reader::topk::ParquetTopK;
+use crate::parquet_reader::utils::FieldPaths;
 use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::parquet_reader::utils::FieldPaths;
 use crate::transformer::RecordBatchTransformer;
 
 pub struct PredicateAndTopkPolicyBuilder {

@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID as AstColumnID;
 use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_ast::ast::ColumnRef;
@@ -33,49 +34,49 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Span;
-use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::shrink_scalar;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::types::DataType;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use derive_visitor::Drive;
 use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
-use crate::binder::bind_query::MaxColumnPosition;
-use crate::binder::insert::STAGE_PLACEHOLDER;
-use crate::binder::location::parse_uri_location;
-use crate::binder::Binder;
-use crate::plans::CopyIntoTableMode;
-use crate::plans::CopyIntoTablePlan;
-use crate::plans::Plan;
-use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
+use crate::binder::Binder;
+use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::insert::STAGE_PLACEHOLDER;
+use crate::binder::location::parse_uri_location;
+use crate::plans::CopyIntoTableMode;
+use crate::plans::CopyIntoTablePlan;
+use crate::plans::Plan;
+use crate::plans::ValidationMode;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -157,10 +158,11 @@ impl Binder {
             .await?;
         let dedup_full_path = table
             .get_table_info()
-            .meta
-            .options
-            .get(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH)
-            == Some(&"1".to_string());
+            .get_option(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH, false);
+
+        let enable_schema_evolution = table
+            .get_table_info()
+            .get_option(OPT_KEY_ENABLE_SCHEMA_EVOLUTION, false);
 
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
@@ -217,6 +219,7 @@ impl Binder {
             validation_mode,
             is_transform,
             dedup_full_path,
+            enable_schema_evolution,
             path_prefix: None,
             no_file_to_copy: false,
             from_attachment: false,
@@ -224,13 +227,11 @@ impl Binder {
                 schema: stage_schema,
                 files_info,
                 stage_info,
-                files_to_copy: None,
-                duplicated_files_detected: vec![],
                 is_select: false,
                 default_exprs: default_values,
                 copy_into_table_options: stmt.options.clone(),
-                stage_root: "".to_string(),
                 is_variant: false,
+                ..Default::default()
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -249,7 +250,8 @@ impl Binder {
         bind_ctx: &mut BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+        let use_query = !plan.enable_schema_evolution
+            && matches!(&plan.stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
 
         if use_query {
@@ -316,7 +318,7 @@ impl Binder {
                 FileFormatOptionsReader::from_map(options.clone()),
                 false,
             )?;
-            if let FileFormatParams::Csv(ref mut fmt) = &mut params {
+            if let FileFormatParams::Csv(fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.
                 // In the future, client should use EmptyFieldAs=STRING or FieldDefault to distinguish NULL and empty string.
@@ -444,6 +446,7 @@ impl Binder {
                 copy_into_table_options,
                 stage_root: "".to_string(),
                 is_variant: false,
+                ..Default::default()
             },
             write_mode,
             query: None,
@@ -452,6 +455,7 @@ impl Binder {
             enable_distributed: false,
             is_transform: false,
             files_collected: true,
+            enable_schema_evolution: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -652,7 +656,9 @@ pub async fn resolve_stage_location(
     // my_named_stage/abc/
     let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
     if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments("placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client."));
+        return Err(ErrorCode::BadArguments(
+            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
+        ));
     }
 
     let stage = if names[0] == "~" {

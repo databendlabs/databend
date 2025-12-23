@@ -22,12 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use crate::schema::DataSchema;
-use crate::types::AccessType;
-use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::ValueType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnSet;
@@ -38,6 +32,13 @@ use crate::Scalar;
 use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
+use crate::schema::DataSchema;
+use crate::types::AccessType;
+use crate::types::AnyType;
+use crate::types::ArgType;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::ValueType;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
@@ -70,7 +71,10 @@ impl BlockEntry {
     }
 
     pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
-        debug_assert!(scalar.as_ref().is_value_of_type(&data_type));
+        debug_assert!(
+            scalar.as_ref().is_value_of_type(&data_type),
+            "type not match: {scalar:?}, {data_type:?}"
+        );
         BlockEntry::Const(scalar, data_type, num_rows)
     }
 
@@ -80,18 +84,51 @@ impl BlockEntry {
 
     pub fn remove_nullable(self) -> Self {
         match self {
-            BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
+            BlockEntry::Column(Column::Nullable(col)) => {
+                let (col, _) = col.destructure();
+                col.into()
+            }
             BlockEntry::Column(_) => self,
             BlockEntry::Const(scalar, DataType::Nullable(inner), num_rows) => {
                 if scalar.is_null() {
-                    let mut builder = ColumnBuilder::with_capacity(&inner, 1);
-                    builder.push_default();
-                    BlockEntry::Const(builder.build_scalar(), *inner, num_rows)
+                    BlockEntry::Const(Scalar::default_value(&inner), *inner, num_rows)
                 } else {
                     BlockEntry::Const(scalar, *inner, num_rows)
                 }
             }
             _ => self,
+        }
+    }
+
+    pub fn split_nullable(self) -> (Self, ColumnView<BooleanType>) {
+        let n = self.len();
+        match self {
+            BlockEntry::Column(Column::Nullable(col)) => {
+                let (column, validity) = col.destructure();
+                let validity = if validity.null_count() == 0 {
+                    ColumnView::Const(true, n)
+                } else if validity.true_count() == 0 {
+                    ColumnView::Const(false, n)
+                } else {
+                    ColumnView::Column(validity)
+                };
+                (column.into(), validity)
+            }
+            BlockEntry::Column(_) => (self, ColumnView::Const(true, n)),
+            BlockEntry::Const(scalar, DataType::Nullable(inner), _) => {
+                if scalar.is_null() {
+                    (
+                        BlockEntry::Const(Scalar::default_value(&inner), *inner, n),
+                        ColumnView::Const(false, n),
+                    )
+                } else {
+                    (
+                        BlockEntry::Const(scalar, *inner, n),
+                        ColumnView::Const(true, n),
+                    )
+                }
+            }
+            _ => (self, ColumnView::Const(true, n)),
         }
     }
 
@@ -151,20 +188,22 @@ impl BlockEntry {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
-        match self {
-            BlockEntry::Const(scalar, _, _n) => {
-                #[cfg(debug_assertions)]
-                if index >= *_n {
-                    panic!(
-                        "index out of bounds: the len is {:?} but the index is {}",
-                        _n, index
-                    )
-                }
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef<'_> {
+        unsafe {
+            match self {
+                BlockEntry::Const(scalar, _, _n) => {
+                    #[cfg(debug_assertions)]
+                    if index >= *_n {
+                        panic!(
+                            "index out of bounds: the len is {:?} but the index is {}",
+                            _n, index
+                        )
+                    }
 
-                scalar.as_ref()
+                    scalar.as_ref()
+                }
+                BlockEntry::Column(column) => column.index_unchecked(index),
             }
-            BlockEntry::Column(column) => column.index_unchecked(index),
         }
     }
 
@@ -219,7 +258,7 @@ impl TryFrom<Value<AnyType>> for BlockEntry {
     }
 }
 
-#[derive(Debug, EnumAsInner)]
+#[derive(Debug, EnumAsInner, Clone)]
 pub enum ColumnView<T: AccessType> {
     Const(T::Scalar, usize),
     Column(T::Column),
@@ -233,7 +272,11 @@ impl<T: AccessType> ColumnView<T> {
         }
     }
 
-    pub fn iter(&self) -> ColumnViewIter<T> {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn iter(&self) -> ColumnViewIter<'_, T> {
         match self {
             ColumnView::Const(scalar, num_rows) => {
                 ColumnViewIter::Const(T::to_scalar_ref(scalar), *num_rows)
@@ -259,10 +302,12 @@ impl<T: AccessType> ColumnView<T> {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> {
-        debug_assert!(i < self.len());
-        match self {
-            ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
-            ColumnView::Column(column) => T::index_column_unchecked(column, i),
+        unsafe {
+            debug_assert!(i < self.len());
+            match self {
+                ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
+                ColumnView::Column(column) => T::index_column_unchecked(column, i),
+            }
         }
     }
 }
@@ -409,10 +454,10 @@ impl DataBlock {
                     c.check_valid()?;
                     if c.len() != num_rows {
                         return Err(ErrorCode::Internal(format!(
-                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {num_rows}, datatype: {}",
-                        c.len(),
-                        c.data_type()
-                    )));
+                            "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {num_rows}, datatype: {}",
+                            c.len(),
+                            c.data_type()
+                        )));
                     }
                 }
             }

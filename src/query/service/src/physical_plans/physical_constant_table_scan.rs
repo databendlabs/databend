@@ -22,12 +22,12 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ConstantTableScanFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -101,13 +101,14 @@ impl PhysicalPlanBuilder {
         scan: &databend_common_sql::plans::ConstantTableScan,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        debug_assert!(scan
-            .schema
-            .fields
-            .iter()
-            .map(|field| field.name().parse::<IndexType>().unwrap())
-            .collect::<ColumnSet>()
-            .is_superset(&scan.columns));
+        debug_assert!(
+            scan.schema
+                .fields
+                .iter()
+                .map(|field| field.name().parse::<IndexType>().unwrap())
+                .collect::<ColumnSet>()
+                .is_superset(&scan.columns)
+        );
 
         let used: ColumnSet = required.intersection(&scan.columns).copied().collect();
         if used.len() < scan.columns.len() {

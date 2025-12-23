@@ -23,25 +23,25 @@ use databend_common_http::HttpShutdownHandler;
 use databend_common_meta_types::anyerror::AnyError;
 use http::StatusCode;
 use log::info;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::IntoResponse;
+use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
 use poem::middleware::CatchPanic;
 use poem::middleware::CookieJarManager;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
-use poem::Endpoint;
-use poem::EndpointExt;
-use poem::IntoResponse;
-use poem::Route;
 
 use super::v1::HttpQueryContext;
-use crate::servers::http::middleware::json_response;
+use crate::servers::Server;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
+use crate::servers::http::middleware::json_response;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
-use crate::servers::Server;
 
 #[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
@@ -92,7 +92,7 @@ impl HttpHandler {
 
     #[allow(clippy::let_with_type_underscore)]
     #[async_backtrace::framed]
-    async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
+    async fn build_router(&self, sock: SocketAddr) -> impl Endpoint + use<> {
         let ep_clickhouse = Route::new()
             .nest("/", clickhouse_router())
             .with(HTTPSessionMiddleware::create(

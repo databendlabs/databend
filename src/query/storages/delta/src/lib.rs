@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![feature(impl_trait_in_assoc_type)]
-#![allow(clippy::diverging_sub_expression)]
+#![allow(clippy::collapsible_if, clippy::diverging_sub_expression)]
 
 mod partition;
 mod table;

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -27,9 +27,9 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
+use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::FlightReceiver;
 
 pub struct ExchangeSourceReader {
     finished: AtomicBool,

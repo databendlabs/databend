@@ -23,10 +23,10 @@ use databend_common_column::types::NativeType;
 use ringbuffer::AllocRingBuffer;
 use ringbuffer::RingBuffer;
 
-use super::compress_sample_ratio;
 use super::DoubleCompression;
 use super::DoubleStats;
 use super::DoubleType;
+use super::compress_sample_ratio;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;

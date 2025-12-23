@@ -181,11 +181,12 @@ impl FastValuesDecodeFallback for RawValueSource {
         let res: Result<Vec<Scalar>> = try {
             let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(sql)?;
+            let tokens = tokenize_sql(sql).map_err(ErrorCode::from)?;
             let mut bind_context = self.bind_context.clone();
             let metadata = self.metadata.clone();
 
-            let exprs = parse_values(&tokens, sql_dialect)?
+            let exprs = parse_values(&tokens, sql_dialect)
+                .map_err(ErrorCode::from)?
                 .into_iter()
                 .map(|expr| match expr {
                     Expr::Placeholder { .. } => {
@@ -205,7 +206,7 @@ impl FastValuesDecodeFallback for RawValueSource {
                 )
                 .await?
         };
-        res.map_err(|mut err| {
+        res.map_err(|mut err: ErrorCode| {
             // The input for ValueSource is a sub-section of the original SQL. This causes
             // the error span to have an offset, so we adjust the span accordingly.
             if let Some(span) = err.span() {

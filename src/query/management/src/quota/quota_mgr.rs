@@ -33,8 +33,8 @@ use databend_common_meta_types::With;
 use fastrace::func_name;
 
 use super::quota_api::QuotaApi;
-use crate::serde::check_and_upgrade_to_pb;
 use crate::serde::Quota;
+use crate::serde::check_and_upgrade_to_pb;
 
 pub struct QuotaMgr<const WRITE_PB: bool = false> {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,

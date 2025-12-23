@@ -23,6 +23,19 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_exception::Result;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::date::CoreDate;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::empty_array::CoreEmptyArray;
@@ -37,27 +50,10 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::CoreTimestamp;
 use databend_common_expression::types::zero_size_type::ZeroSizeType;
 use databend_common_expression::types::zero_size_type::ZeroSizeValueType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::AggrStateRegistry;
-use databend_common_expression::AggrStateType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_scalar_state::ScalarStateFunc;
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
-use super::batch_serialize1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -67,6 +63,11 @@ use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
+use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
 
 #[derive(Debug)]
 struct ArrayAggStateAny<T>
@@ -94,13 +95,12 @@ where T: ValueType
         self.values.push(T::to_owned_scalar(other.unwrap()));
     }
 
-    fn add_batch(&mut self, column: &T::Column, _validity: Option<&Bitmap>) -> Result<()> {
-        let column_len = T::column_len(column);
-        if column_len == 0 {
+    fn add_batch(&mut self, column: ColumnView<T>, _validity: Option<&Bitmap>) -> Result<()> {
+        if column.is_empty() {
             return Ok(());
         }
-        let column_iter = T::iter_column(column);
-        for val in column_iter {
+
+        for val in column.iter() {
             self.values.push(T::to_owned_scalar(val));
         }
 
@@ -196,20 +196,23 @@ where T: SimpleType + Debug
         }
     }
 
-    fn add_batch(&mut self, column: &Buffer<T::Scalar>, validity: Option<&Bitmap>) -> Result<()> {
-        let length = column.len();
-        if length == 0 {
+    fn add_batch(
+        &mut self,
+        column: ColumnView<SimpleValueType<T>>,
+        validity: Option<&Bitmap>,
+    ) -> Result<()> {
+        if column.is_empty() {
             return Ok(());
         }
 
         if let Some(validity) = validity {
             for (value, valid) in column.iter().zip(validity) {
                 if valid {
-                    self.values.push(*value);
+                    self.values.push(value);
                 }
             }
         } else {
-            self.values.extend(column.iter().copied());
+            self.values.extend(column.iter());
         }
         Ok(())
     }
@@ -305,8 +308,12 @@ where V: ZeroSizeType
         }
     }
 
-    fn add_batch(&mut self, length: &usize, validity: Option<&Bitmap>) -> Result<()> {
-        if IS_NULL || *length == 0 {
+    fn add_batch(
+        &mut self,
+        column: ColumnView<ZeroSizeValueType<V>>,
+        validity: Option<&Bitmap>,
+    ) -> Result<()> {
+        if IS_NULL || column.is_empty() {
             return Ok(());
         }
 
@@ -317,7 +324,11 @@ where V: ZeroSizeType
                 }
             }
         } else {
-            self.validity.extend_constant(*length, true);
+            let length = match column {
+                ColumnView::Const(_, n) => n,
+                ColumnView::Column(n) => n,
+            };
+            self.validity.extend_constant(length, true);
         }
         Ok(())
     }
@@ -408,14 +419,14 @@ where T: ArgType + Debug + std::marker::Send
         }
     }
 
-    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
-        let length = T::column_len(column);
+    fn add_batch(&mut self, column: ColumnView<T>, validity: Option<&Bitmap>) -> Result<()> {
+        let length = column.len();
         if length == 0 {
             return Ok(());
         }
 
         if let Some(validity) = validity {
-            for (scalar, valid) in T::iter_column(column).zip(validity) {
+            for (scalar, valid) in column.iter().zip(validity) {
                 if valid {
                     let val = T::upcast_scalar(T::to_owned_scalar(scalar));
                     self.builder.put_slice(val.as_bytes().unwrap());
@@ -423,7 +434,7 @@ where T: ArgType + Debug + std::marker::Send
                 }
             }
         } else {
-            for scalar in T::iter_column(column) {
+            for scalar in column.iter() {
                 let val = T::upcast_scalar(T::to_owned_scalar(scalar));
                 self.builder.put_slice(val.as_bytes().unwrap());
                 self.builder.commit_row();
@@ -580,14 +591,17 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<State>();
-        let entry = &columns[0];
-        if entry.data_type().is_nullable() {
-            let nullable_column =
-                NullableType::<T>::try_downcast_column(&entry.to_column()).unwrap();
-            state.add_batch(nullable_column.column(), Some(nullable_column.validity()))
-        } else {
-            let column = T::try_downcast_column(&entry.to_column()).unwrap();
-            state.add_batch(&column, None)
+        match &columns[0] {
+            BlockEntry::Const(Scalar::Null, DataType::Nullable(_), _) => Ok(()),
+            entry @ BlockEntry::Const(_, _, _) => {
+                let column = entry.clone().remove_nullable().downcast().unwrap();
+                state.add_batch(column, None)
+            }
+            BlockEntry::Column(Column::Nullable(box nullable_column)) => {
+                let c = T::try_downcast_column(nullable_column.column()).unwrap();
+                state.add_batch(ColumnView::Column(c), Some(nullable_column.validity()))
+            }
+            entry => state.add_batch(entry.downcast().unwrap(), None),
         }
     }
 
@@ -595,55 +609,46 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(nullable_column.column()).unwrap();
-                let column_iter = T::iter_column(&column);
-                column_iter
-                    .zip(nullable_column.validity().iter().zip(places.iter()))
-                    .for_each(|(v, (valid, place))| {
-                        let state = AggrState::new(*place, loc).get::<State>();
-                        if valid {
-                            state.add(Some(v.clone()))
-                        } else {
-                            state.add(None)
-                        }
-                    });
-            }
-            column => {
-                let column = T::try_downcast_column(column).unwrap();
-                let column_iter = T::iter_column(&column);
-                column_iter.zip(places.iter()).for_each(|(v, place)| {
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            entry
+                .downcast::<NullableType<T>>()
+                .unwrap()
+                .iter()
+                .zip(places.iter())
+                .for_each(|(v, place)| {
                     let state = AggrState::new(*place, loc).get::<State>();
-                    state.add(Some(v.clone()))
+                    state.add(v)
                 });
-            }
+        } else {
+            entry
+                .downcast::<T>()
+                .unwrap()
+                .iter()
+                .zip(places.iter())
+                .for_each(|(v, place)| {
+                    let state = AggrState::new(*place, loc).get::<State>();
+                    state.add(Some(v))
+                });
         }
-
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, block: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
-        match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
-                let valid = nullable_column.validity().get_bit(row);
-                if valid {
-                    let column = T::try_downcast_column(nullable_column.column()).unwrap();
-                    let v = T::index_column(&column, row);
-                    state.add(v);
-                } else {
-                    state.add(None);
-                }
-            }
-            column => {
-                let column = T::try_downcast_column(column).unwrap();
-                let v = T::index_column(&column, row);
-                state.add(v);
-            }
+        let entry = &block[0];
+
+        if entry.data_type().is_nullable() {
+            let view = entry.downcast::<NullableType<T>>().unwrap();
+            let v = view.index(row).unwrap();
+            state.add(v);
+        } else {
+            let view = entry.downcast::<T>().unwrap();
+            let v = view.index(row).unwrap();
+            state.add(Some(v));
         }
 
         Ok(())
@@ -694,7 +699,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

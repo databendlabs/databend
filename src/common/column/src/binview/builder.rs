@@ -20,11 +20,11 @@ use std::sync::Arc;
 
 use super::view::CheckUTF8;
 use crate::binary::BinaryColumn;
-use crate::binview::iterator::BinaryViewBuilderIter;
-use crate::binview::view::validate_utf8_only;
 use crate::binview::BinaryViewColumnGeneric;
 use crate::binview::View;
 use crate::binview::ViewType;
+use crate::binview::iterator::BinaryViewBuilderIter;
+use crate::binview::view::validate_utf8_only;
 use crate::buffer::Buffer;
 use crate::error::Result;
 use crate::types::NativeType;
@@ -133,16 +133,18 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     /// - caller must ensure the view and buffers match.
     #[inline]
     pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
-        let len = v.length;
-        if len <= 12 {
-            self.total_bytes_len += len as usize;
-            self.views.push(v)
-        } else {
-            let data = buffers.get_unchecked(v.buffer_idx as usize);
-            let offset = v.offset as usize;
-            let bytes = data.get_unchecked(offset..offset + len as usize);
-            let t = T::from_bytes_unchecked(bytes);
-            self.push_value(t)
+        unsafe {
+            let len = v.length;
+            if len <= 12 {
+                self.total_bytes_len += len as usize;
+                self.views.push(v)
+            } else {
+                let data = buffers.get_unchecked(v.buffer_idx as usize);
+                let offset = v.offset as usize;
+                let bytes = data.get_unchecked(offset..offset + len as usize);
+                let t = T::from_bytes_unchecked(bytes);
+                self.push_value(t)
+            }
         }
     }
 
@@ -296,40 +298,42 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     /// Assumes that the `i < self.len`.
     #[inline]
     pub unsafe fn value_unchecked(&self, i: usize) -> &T {
-        let v = *self.views.get_unchecked(i);
-        let len = v.length;
+        unsafe {
+            let v = *self.views.get_unchecked(i);
+            let len = v.length;
 
-        // view layout:
-        // for no-inlined layout:
-        // length: 4 bytes
-        // prefix: 4 bytes
-        // buffer_index: 4 bytes
-        // offset: 4 bytes
+            // view layout:
+            // for no-inlined layout:
+            // length: 4 bytes
+            // prefix: 4 bytes
+            // buffer_index: 4 bytes
+            // offset: 4 bytes
 
-        // for inlined layout:
-        // length: 4 bytes
-        // data: 12 bytes
-        let bytes = if len <= 12 {
-            let ptr = self.views.as_ptr() as *const u8;
-            std::slice::from_raw_parts(ptr.add(i * 16 + 4), len as usize)
-        } else {
-            let buffer_idx = v.buffer_idx as usize;
-            let offset = v.offset;
-
-            let data = if buffer_idx == self.completed_buffers.len() {
-                self.in_progress_buffer.as_slice()
+            // for inlined layout:
+            // length: 4 bytes
+            // data: 12 bytes
+            let bytes = if len <= 12 {
+                let ptr = self.views.as_ptr() as *const u8;
+                std::slice::from_raw_parts(ptr.add(i * 16 + 4), len as usize)
             } else {
-                self.completed_buffers.get_unchecked(buffer_idx)
-            };
+                let buffer_idx = v.buffer_idx as usize;
+                let offset = v.offset;
 
-            let offset = offset as usize;
-            data.get_unchecked(offset..offset + len as usize)
-        };
-        T::from_bytes_unchecked(bytes)
+                let data = if buffer_idx == self.completed_buffers.len() {
+                    self.in_progress_buffer.as_slice()
+                } else {
+                    self.completed_buffers.get_unchecked(buffer_idx)
+                };
+
+                let offset = offset as usize;
+                data.get_unchecked(offset..offset + len as usize)
+            };
+            T::from_bytes_unchecked(bytes)
+        }
     }
 
     /// Returns an iterator of `&[u8]` over every element of this array
-    pub fn iter(&self) -> BinaryViewBuilderIter<T> {
+    pub fn iter(&self) -> BinaryViewBuilderIter<'_, T> {
         BinaryViewBuilderIter::new(self)
     }
 

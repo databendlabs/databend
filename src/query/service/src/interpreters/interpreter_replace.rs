@@ -25,6 +25,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_sql::BindContext;
+use databend_common_sql::Metadata;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::ScalarBinder;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -33,10 +37,6 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
-use databend_common_sql::BindContext;
-use databend_common_sql::Metadata;
-use databend_common_sql::NameResolutionContext;
-use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
@@ -45,13 +45,13 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
 
-use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
-use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
@@ -100,9 +100,12 @@ impl Interpreter for ReplaceInterpreter {
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        pipeline
-            .main_pipeline
-            .add_lock_guard(self.plan.lock_guard.clone());
+        let lock_guard = self
+            .plan
+            .lock_guard
+            .as_ref()
+            .and_then(|holder| holder.try_take());
+        pipeline.main_pipeline.add_lock_guard(lock_guard);
 
         // purge
         if let Some((files, stage_info, options)) = purge_info {
@@ -413,7 +416,7 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter
+                    let (physical_plan, _, _) = interpreter
                         .build_physical_plan(table_info, &copy_plan, table_meta_timestamps)
                         .await?;
 

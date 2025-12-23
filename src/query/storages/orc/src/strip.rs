@@ -14,8 +14,8 @@
 
 use std::fmt::Debug;
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::local_block_meta_serde;
 use orc_rust::stripe::Stripe;
 
 use crate::hashable_schema::HashableSchema;

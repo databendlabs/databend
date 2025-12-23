@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
@@ -26,14 +26,14 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_sql::plans::JoinType;
 
-use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceHashJoin;
 use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
-use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
+use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
 use crate::sessions::QueryContext;
 
 pub struct HashJoinFactory {

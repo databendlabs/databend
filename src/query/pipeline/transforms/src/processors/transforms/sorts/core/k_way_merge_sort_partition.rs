@@ -19,12 +19,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 
+use super::Rows;
+use super::SortedStream;
 use super::list_domain::Candidate;
 use super::list_domain::EndDomain;
 use super::list_domain::List;
 use super::list_domain::Partition;
-use super::Rows;
-use super::SortedStream;
 use crate::sorts::SortTaskMeta;
 
 pub struct KWaySortPartitioner<R, S>

@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
 
 use crate::SystemLogElement;
 use crate::SystemLogQueue;

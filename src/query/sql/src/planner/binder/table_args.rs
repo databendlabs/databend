@@ -24,9 +24,9 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::plans::ConstantExpr;
 
 pub fn bind_table_args(
     scalar_binder: &mut ScalarBinder<'_>,

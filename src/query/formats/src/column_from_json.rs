@@ -15,15 +15,15 @@
 use chrono_tz::UTC;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::types::DataType;
 use databend_common_io::GeometryDataType;
 use jiff::tz::TimeZone;
 use serde_json::Value;
 
-use crate::field_decoder::FieldJsonAstDecoder;
 use crate::FileFormatOptionsExt;
+use crate::field_decoder::FieldJsonAstDecoder;
 
 fn default_json_options() -> FileFormatOptionsExt {
     FileFormatOptionsExt {
@@ -48,7 +48,7 @@ pub fn column_from_json_value(data_type: &DataType, json: Value) -> Result<Colum
         other => {
             return Err(ErrorCode::BadArguments(format!(
                 "from_json! expects a json array to describe column values, got {other:?}"
-            )))
+            )));
         }
     };
 
@@ -71,8 +71,8 @@ macro_rules! column_from_json {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::*;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::*;
 
     #[test]
     fn test_from_json_macro_strings() {

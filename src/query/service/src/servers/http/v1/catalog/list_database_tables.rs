@@ -12,40 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::DateTime;
-use chrono::Utc;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_users::Object;
+use poem::IntoResponse;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::interpreters::ShowCreateQuerySettings;
+use crate::interpreters::ShowCreateTableInterpreter;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::catalog::get_database_table::TableDetail;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabaseTablesResponse {
-    pub tables: Vec<TableInfo>,
+    pub tables: Vec<TableDetail>,
     pub warnings: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
-pub struct TableInfo {
-    pub name: String,
-    pub database: String,
-    pub catalog: String,
-    pub engine: String,
-    pub create_time: DateTime<Utc>,
-    pub num_rows: u64,
-    pub data_size: u64,
-    pub data_compressed_size: u64,
-    pub index_size: u64,
 }
 
 #[async_backtrace::framed]
@@ -70,35 +59,59 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         )));
     }
 
-    let warnings = vec![];
-    let tables = db
-        .list_tables()
-        .await?
-        .into_iter()
-        .filter(|tbl| {
-            visibility_checker.check_table_visibility(
-                catalog.name().as_str(),
+    let settings = ShowCreateQuerySettings {
+        sql_dialect: Dialect::PostgreSQL,
+        force_quoted_ident: false,
+        quoted_ident_case_sensitive: true,
+        hide_options_in_show_create_table: false,
+    };
+
+    let mut warnings = vec![];
+    let mut tables = vec![];
+    for tbl in db.list_tables().await? {
+        if !visibility_checker.check_table_visibility(
+            catalog.name().as_str(),
+            db.name(),
+            tbl.name(),
+            db.get_db_info().database_id.db_id,
+            tbl.get_table_info().ident.table_id,
+        ) {
+            continue;
+        }
+        let info = tbl.get_table_info();
+        let create_query = ShowCreateTableInterpreter::show_create_query(
+            catalog.as_ref(),
+            db.name(),
+            tbl.as_ref(),
+            &settings,
+        )
+        .await
+        .unwrap_or_else(|e| {
+            let msg = format!(
+                "Failed to generate CREATE query for table {}.{}.{}: {}",
+                catalog.name(),
                 db.name(),
                 tbl.name(),
-                db.get_db_info().database_id.db_id,
-                tbl.get_table_info().ident.table_id,
-            )
-        })
-        .map(|tbl| {
-            let info = tbl.get_table_info();
-            TableInfo {
-                name: tbl.name().to_string(),
-                database: db.name().to_string(),
-                catalog: catalog.name().clone(),
-                engine: info.meta.engine.clone(),
-                create_time: info.meta.created_on,
-                num_rows: info.meta.statistics.number_of_rows,
-                data_size: info.meta.statistics.data_bytes,
-                data_compressed_size: info.meta.statistics.compressed_data_bytes,
-                index_size: info.meta.statistics.index_data_bytes,
-            }
-        })
-        .collect::<Vec<_>>();
+                e
+            );
+            log::warn!("{}", msg);
+            warnings.push(msg);
+            "".to_owned()
+        });
+
+        tables.push(TableDetail {
+            name: tbl.name().to_string(),
+            database: db.name().to_string(),
+            catalog: catalog.name().clone(),
+            engine: info.meta.engine.clone(),
+            create_time: info.meta.created_on,
+            num_rows: info.meta.statistics.number_of_rows,
+            data_size: info.meta.statistics.data_bytes,
+            data_compressed_size: info.meta.statistics.compressed_data_bytes,
+            index_size: info.meta.statistics.index_data_bytes,
+            create_query,
+        });
+    }
 
     Ok(ListDatabaseTablesResponse { tables, warnings })
 }

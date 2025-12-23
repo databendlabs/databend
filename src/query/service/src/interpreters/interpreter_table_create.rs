@@ -21,8 +21,8 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::is_internal_column;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -40,15 +40,15 @@ use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::ExecutionInfo;
-use databend_common_sql::plans::CreateTablePlan;
+use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::FuseSegmentFormat;
-use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FuseSegmentFormat;
+use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
@@ -65,6 +65,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
+use crate::interpreters::InsertInterpreter;
+use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -78,8 +80,6 @@ use crate::interpreters::common::table_option_validation::is_valid_row_per_block
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
-use crate::interpreters::InsertInterpreter;
-use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
@@ -363,9 +363,9 @@ impl CreateTableInterpreter {
             && (req.table_properties.is_some() || req.table_partition.is_some())
         {
             return Err(ErrorCode::TableOptionInvalid(format!(
-                 "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
-                 catalog.info().catalog_type()
-             )));
+                "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
+                catalog.info().catalog_type()
+            )));
         }
 
         let reply = catalog.create_table(req.clone()).await?;
@@ -409,7 +409,7 @@ impl CreateTableInterpreter {
             if settings.get_copy_dedup_full_path_by_default()? {
                 options.insert(
                     OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH.to_string(),
-                    "1".to_string(),
+                    "true".to_string(),
                 );
             };
 

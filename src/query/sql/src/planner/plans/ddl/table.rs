@@ -18,8 +18,6 @@ use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Identifier;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -27,6 +25,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
@@ -34,7 +34,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::LockGuard;
+use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::plans::Plan;
 
@@ -192,10 +192,13 @@ pub struct VacuumTemporaryFilesPlan {
 
 impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![DataField::new(
-            "Files",
-            DataType::Number(NumberDataType::UInt64),
-        )]))
+        Arc::new(DataSchema::new(vec![
+            DataField::new("spill_files", DataType::Number(NumberDataType::UInt64)),
+            DataField::new(
+                "temp_table_sessions",
+                DataType::Number(NumberDataType::UInt64),
+            ),
+        ]))
     }
 }
 
@@ -403,7 +406,7 @@ pub struct ModifyTableColumnPlan {
     pub database: String,
     pub table: String,
     pub action: ModifyColumnAction,
-    pub lock_guard: Option<Arc<LockGuard>>,
+    pub lock_guard: Option<SharedLockGuard>,
 }
 
 impl ModifyTableColumnPlan {

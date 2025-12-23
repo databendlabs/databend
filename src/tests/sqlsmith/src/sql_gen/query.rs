@@ -14,6 +14,7 @@
 
 use std::mem;
 
+use databend_common_ast::ast::CTE;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
@@ -31,14 +32,13 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::With;
-use databend_common_ast::ast::CTE;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use rand::Rng;
 
 use crate::sql_gen::Column;

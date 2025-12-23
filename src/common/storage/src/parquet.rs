@@ -18,8 +18,8 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::errors::ParquetError;
@@ -213,14 +213,14 @@ pub fn traverse_parquet_schema_tree(
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
     use parquet::arrow::ArrowSchemaConverter;
 
-    use crate::parquet::build_parquet_schema_tree;
     use crate::parquet::ParquetSchemaTreeNode;
+    use crate::parquet::build_parquet_schema_tree;
 
     #[test]
     fn test_build_parquet_schema_tree() {

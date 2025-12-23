@@ -24,8 +24,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
     use crate::schema::MarkedDeletedIndexMeta;
+    use crate::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     /// The meta-service key for storing id of dropped but not vacuumed index

@@ -14,10 +14,10 @@
 
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::Result;
-use databend_common_expression::hash_util::hash_by_method_for_bloom;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::hash_util::hash_by_method_for_bloom;
+use databend_common_expression::types::MutableBitmap;
 
 pub struct ExprBloomFilter<'a> {
     filter: &'a Sbbf,

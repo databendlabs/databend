@@ -23,8 +23,8 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::DescNotificationPlan;
 use databend_common_storages_system::parse_notifications_to_datablock;
 
-use crate::interpreters::common::get_notification_client_config;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::get_notification_client_config;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -30,10 +30,10 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
 use super::split_partitioned_meta_into_datablocks;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 static MAX_PARTITION_COUNT: usize = 128;
@@ -211,7 +211,7 @@ impl TransformPartitionBucketScatter {
         Ok(self.initialized_all_inputs)
     }
 
-    #[allow(unused_assignments)]
+    #[allow(unused)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
         let mut is_empty_block = false;

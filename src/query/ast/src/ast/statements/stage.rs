@@ -20,12 +20,12 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_string_list;
-use crate::ast::write_comma_separated_string_map;
 use crate::ast::CreateOption;
 use crate::ast::FileFormatOptions;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::UriLocation;
+use crate::ast::write_comma_separated_string_list;
+use crate::ast::write_comma_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateStageStmt {

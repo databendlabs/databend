@@ -24,17 +24,17 @@ use std::ptr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use roaring::treemap::Iter;
 use roaring::RoaringTreemap;
+use roaring::treemap::Iter;
 use smallvec::SmallVec;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
-const LARGE_THRESHOLD: usize = 32;
-const HYBRID_MAGIC: [u8; 2] = *b"HB";
-const HYBRID_VERSION: u8 = 1;
-const HYBRID_KIND_SMALL: u8 = 0;
-const HYBRID_KIND_LARGE: u8 = 1;
-const HYBRID_HEADER_LEN: usize = 4;
+pub const LARGE_THRESHOLD: usize = 32;
+pub const HYBRID_MAGIC: [u8; 2] = *b"HB";
+pub const HYBRID_VERSION: u8 = 1;
+pub const HYBRID_KIND_SMALL: u8 = 0;
+pub const HYBRID_KIND_LARGE: u8 = 1;
+pub const HYBRID_HEADER_LEN: usize = 4;
 
 type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 
@@ -43,7 +43,7 @@ type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 /// - Calculations may frequently create new Bitmaps; reusing them as much as possible can effectively improve performance.
 ///  - do not use Box to construct HybridBitmap
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum HybridBitmap {
     Small(SmallBitmap),
     Large(RoaringTreemap),
@@ -185,15 +185,15 @@ impl HybridBitmap {
     }
 
     fn try_demote(&mut self) {
-        if let HybridBitmap::Large(tree) = self {
-            if (tree.len() as usize) <= LARGE_THRESHOLD {
-                let data = mem::take(tree);
-                let mut set = SmallBitmap::with_capacity(data.len() as usize);
-                for value in data.into_iter() {
-                    set.push(value);
-                }
-                *self = HybridBitmap::Small(set);
+        if let HybridBitmap::Large(tree) = self
+            && (tree.len() as usize) <= LARGE_THRESHOLD
+        {
+            let data = mem::take(tree);
+            let mut set = SmallBitmap::with_capacity(data.len() as usize);
+            for value in data.into_iter() {
+                set.push(value);
             }
+            *self = HybridBitmap::Small(set);
         }
     }
 }

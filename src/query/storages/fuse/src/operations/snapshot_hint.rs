@@ -29,9 +29,9 @@ use opendal::Operator;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::io::TableMetaLocationGenerator;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
+use crate::io::TableMetaLocationGenerator;
 
 pub struct SnapshotHintWriter<'a> {
     ctx: &'a dyn TableContext,

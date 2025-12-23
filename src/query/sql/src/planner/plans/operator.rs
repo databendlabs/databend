@@ -22,6 +22,7 @@ use enum_as_inner::EnumAsInner;
 
 use super::MutationSource;
 use super::SubqueryExpr;
+use crate::ScalarExpr;
 use crate::impl_match_rel_op;
 use crate::impl_try_from_rel_operator;
 use crate::match_rel_op;
@@ -30,8 +31,6 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
-use crate::plans::r_cte_scan::RecursiveCteScan;
-use crate::plans::sequence::Sequence;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
@@ -54,7 +53,8 @@ use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
-use crate::ScalarExpr;
+use crate::plans::r_cte_scan::RecursiveCteScan;
+use crate::plans::sequence::Sequence;
 
 pub trait Operator {
     /// Get relational operator kind

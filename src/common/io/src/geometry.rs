@@ -18,9 +18,6 @@ use std::str::FromStr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::Geometry;
-use geozero::geo_types::GeoWriter;
-use geozero::geojson::GeoJson;
-use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
 use geozero::GeozeroGeometry;
@@ -28,6 +25,9 @@ use geozero::ToGeo;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
+use geozero::geo_types::GeoWriter;
+use geozero::geojson::GeoJson;
+use geozero::wkb::Ewkb;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
@@ -165,13 +165,13 @@ pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
     if input.starts_with(['s']) || input.starts_with(['S']) {
         if let Some((srid_input, wkt_input)) = input.split_once(';') {
             let srid_input = srid_input.to_uppercase();
-            if let Some(srid_str) = srid_input.strip_prefix("SRID") {
-                if let Some(srid_str) = srid_str.trim().strip_prefix("=") {
-                    let parsed_srid = srid_str.trim().parse::<i32>()?;
-                    let geo = Geometry::try_from_wkt_str(wkt_input)
-                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-                    return Ok((geo, Some(parsed_srid)));
-                }
+            if let Some(srid_str) = srid_input.strip_prefix("SRID")
+                && let Some(srid_str) = srid_str.trim().strip_prefix("=")
+            {
+                let parsed_srid = srid_str.trim().parse::<i32>()?;
+                let geo = Geometry::try_from_wkt_str(wkt_input)
+                    .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+                return Ok((geo, Some(parsed_srid)));
             }
         }
         Err(ErrorCode::GeometryError("invalid srid"))

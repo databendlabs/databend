@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_comma_separated_idents;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -28,8 +28,8 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 
-use crate::normalize_identifier;
 use crate::NameResolutionContext;
+use crate::normalize_identifier;
 
 #[derive(Clone)]
 pub enum ApproxDistinctColumns {

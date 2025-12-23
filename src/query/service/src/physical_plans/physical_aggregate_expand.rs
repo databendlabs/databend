@@ -15,14 +15,14 @@
 use std::any::Any;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::IndexType;
+use databend_common_sql::plans::GroupingSets;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregateExpandFormatter;
@@ -30,8 +30,8 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
 
 /// Add dummy data before `GROUPING SETS`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

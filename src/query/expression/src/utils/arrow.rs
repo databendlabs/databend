@@ -19,10 +19,10 @@ use std::io::Write;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use arrow_ipc::CompressionType;
 use arrow_ipc::reader::FileReaderBuilder;
 use arrow_ipc::writer::FileWriter;
 use arrow_ipc::writer::IpcWriteOptions;
-use arrow_ipc::CompressionType;
 use arrow_schema::Schema;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;

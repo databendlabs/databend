@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -26,8 +25,13 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::ColumnSet;
+use crate::MetadataRef;
+use crate::ScalarExpr;
+use crate::TypeCheck;
 use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::optimizer::ir::RelExpr;
@@ -36,10 +40,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::ColumnSet;
-use crate::MetadataRef;
-use crate::ScalarExpr;
-use crate::TypeCheck;
 
 pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;

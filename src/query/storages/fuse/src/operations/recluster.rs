@@ -16,8 +16,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::tokio::select;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
@@ -36,14 +36,14 @@ use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 use opendal::Operator;
 
-use crate::operations::acquire_task_permit;
-use crate::operations::mutation::ReclusterMode;
-use crate::operations::ReclusterMutator;
-use crate::pruning::create_segment_location_vector;
-use crate::pruning::PruningContext;
-use crate::pruning::SegmentPruner;
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::operations::ReclusterMutator;
+use crate::operations::acquire_task_permit;
+use crate::operations::mutation::ReclusterMode;
+use crate::pruning::PruningContext;
+use crate::pruning::SegmentPruner;
+use crate::pruning::create_segment_location_vector;
 
 impl FuseTable {
     #[async_backtrace::framed]

@@ -56,8 +56,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { arch: x86_64, runner: X64 }
-          - { arch: aarch64, runner: ARM64 }
+          - { arch: x86_64, runner: X64, opt_level: s }
+          - { arch: aarch64, runner: ARM64, opt_level: 3 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,12 +65,13 @@ jobs:
           ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Build Release
         uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 120
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
           DATABEND_TELEMETRY_SOURCE: "pr-test"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: ${{ matrix.opt_level }}
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu

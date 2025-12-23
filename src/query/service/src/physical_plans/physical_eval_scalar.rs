@@ -27,8 +27,11 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
+use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -40,9 +43,6 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Visitor;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
-use databend_common_sql::TypeCheck;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -384,11 +384,7 @@ impl PhysicalPlanBuilder {
                 }
             }
         }
-        if has_flatten {
-            Some(project_set)
-        } else {
-            None
-        }
+        if has_flatten { Some(project_set) } else { None }
     }
 }
 

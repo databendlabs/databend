@@ -23,8 +23,8 @@ use databend_common_expression::Scalar;
 use databend_common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::sql::planner::plans::JoinType;
 
 impl HashJoinProbeState {
@@ -43,7 +43,7 @@ impl HashJoinProbeState {
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike>(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where

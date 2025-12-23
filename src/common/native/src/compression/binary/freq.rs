@@ -22,11 +22,10 @@ use roaring::RoaringBitmap;
 
 use super::BinaryCompression;
 use super::BinaryStats;
-use crate::compression::integer::Freq;
 use crate::compression::Compression;
+use crate::compression::integer::Freq;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::write::WriteOptions;
 
 impl BinaryCompression for Freq {

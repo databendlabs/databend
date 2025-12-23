@@ -34,7 +34,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,DATABEND_RELEASE_VERSION,DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY,DATABEND_ENTERPRISE_LICENSE_EMBEDDED,DATABEND_TELEMETRY_ENDPOINT,DATABEND_TELEMETRY_API_KEY,DATABEND_TELEMETRY_SOURCE
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,DATABEND_RELEASE_VERSION,DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY,DATABEND_ENTERPRISE_LICENSE_EMBEDDED,DATABEND_TELEMETRY_ENDPOINT,DATABEND_TELEMETRY_API_KEY,DATABEND_TELEMETRY_SOURCE,CARGO_PROFILE_RELEASE_OPT_LEVEL
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')
@@ -77,7 +77,7 @@ runs:
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"
         done
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Release for specific artifacts
@@ -87,7 +87,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 

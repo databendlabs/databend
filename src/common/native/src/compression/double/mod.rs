@@ -24,22 +24,22 @@ use std::collections::HashMap;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
 pub use self::one_value::OneValue;
 use self::patas::Patas;
 pub use self::traits::DoubleType;
+use super::Compression;
 use super::basic::CommonCompression;
 use super::integer::Dict;
 use super::integer::Freq;
 use super::integer::Rle;
 use super::is_valid;
-use super::Compression;
 use crate::error::Error;
 use crate::error::Result;
-use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
+use crate::read::read_basic::read_compress_header;
 use crate::write::WriteOptions;
 
 pub fn compress_double<T: DoubleType>(

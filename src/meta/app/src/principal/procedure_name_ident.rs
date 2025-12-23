@@ -38,10 +38,10 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::procedure_id_ident::ProcedureId;
-    use crate::principal::ProcedureNameIdent;
-    use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
+    use crate::principal::ProcedureNameIdent;
+    use crate::principal::procedure_id_ident::ProcedureId;
+    use crate::tenant_key::resource::TenantResource;
 
     pub struct ProcedureName;
     impl TenantResource for ProcedureName {
