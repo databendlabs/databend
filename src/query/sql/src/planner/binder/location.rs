@@ -44,9 +44,9 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
-use databend_common_storage::Scheme;
 use log::LevelFilter;
 use log::info;
+use opendal::Scheme;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 

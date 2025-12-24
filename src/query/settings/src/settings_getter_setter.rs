@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryFrom;
 use std::str::FromStr;
+use std::time::Duration;
 
 use databend_common_ast::parser::Dialect;
 use databend_common_base::base::BuildInfoRef;
@@ -34,6 +36,19 @@ use crate::settings_default::DefaultSettings;
 pub enum FlightCompression {
     Lz4,
     Zstd,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FlightKeepAliveParams {
+    pub time: Option<Duration>,
+    pub interval: Option<Duration>,
+    pub retries: Option<u32>,
+}
+
+impl FlightKeepAliveParams {
+    pub fn is_disabled(&self) -> bool {
+        self.time.is_none() && self.interval.is_none() && self.retries.is_none()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -282,6 +297,33 @@ impl Settings {
     // Get flight client timeout.
     pub fn get_flight_client_timeout(&self) -> Result<u64> {
         self.try_get_u64("flight_client_timeout")
+    }
+
+    pub fn get_flight_keep_alive_params(&self) -> Result<FlightKeepAliveParams> {
+        fn secs_to_duration(value: u64) -> Option<Duration> {
+            if value == 0 {
+                None
+            } else {
+                Some(Duration::from_secs(value))
+            }
+        }
+
+        let retries_raw = self.try_get_u64("flight_client_keep_alive_retries")?;
+        let retries = if retries_raw == 0 {
+            None
+        } else {
+            Some(u32::try_from(retries_raw).map_err(|_| {
+                ErrorCode::BadArguments(
+                    "flight_client_keep_alive_retries must be less than or equal to u32::MAX",
+                )
+            })?)
+        };
+
+        Ok(FlightKeepAliveParams {
+            time: secs_to_duration(self.try_get_u64("flight_client_keep_alive_time_secs")?),
+            interval: secs_to_duration(self.try_get_u64("flight_client_keep_alive_interval_secs")?),
+            retries,
+        })
     }
 
     // Get storage read buffer size.

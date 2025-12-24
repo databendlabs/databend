@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use parking_lot::Mutex;
 
 pub trait UnlockApi: Sync + Send {
     fn unlock(&self, revision: u64);
@@ -36,5 +37,22 @@ impl Drop for LockGuard {
         drop_guard(move || {
             self.lock_mgr.unlock(self.revision);
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedLockGuard {
+    inner: Arc<Mutex<Option<Arc<LockGuard>>>>,
+}
+
+impl SharedLockGuard {
+    pub fn new(guard: Arc<LockGuard>) -> Self {
+        SharedLockGuard {
+            inner: Arc::new(Mutex::new(Some(guard))),
+        }
+    }
+
+    pub fn try_take(&self) -> Option<Arc<LockGuard>> {
+        self.inner.lock().take()
     }
 }

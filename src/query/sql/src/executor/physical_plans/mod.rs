@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod common;
+pub mod window;
 
 pub use common::*;

@@ -937,7 +937,7 @@ impl MetaNode {
             addr, timeout
         );
 
-        let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None).await;
+        let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None, None).await;
         let chan = match chan_res {
             Ok(c) => c,
             Err(e) => {

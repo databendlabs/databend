@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -53,10 +52,13 @@ impl BuildOptionsTable {
         table_id: u64,
         cargo_features: Option<&str>,
         target_features: &str,
+        build_profile: &str,
+        opt_level: &str,
     ) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("cargo_features", TableDataType::String),
-            TableField::new("target_features", TableDataType::String),
+            TableField::new("category", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("value", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -71,28 +73,42 @@ impl BuildOptionsTable {
             ..Default::default()
         };
 
-        let mut cargo_features = if let Some(features) = cargo_features {
-            features
-                .split_terminator(',')
-                .map(|x| x.trim().to_string())
-                .collect::<Vec<_>>()
+        let cargo_features = cargo_features
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("not available");
+
+        let target_features = target_features.trim();
+        let target_features = if target_features.is_empty() {
+            "not available"
         } else {
-            vec!["not available".to_string()]
+            target_features
         };
 
-        let mut target_features: Vec<String> = target_features
-            .split_terminator(',')
-            .map(|x| x.trim().to_string())
-            .collect();
+        let mut category = Vec::with_capacity(4);
+        let mut name = Vec::with_capacity(4);
+        let mut value = Vec::with_capacity(4);
 
-        let length = max(cargo_features.len(), target_features.len());
+        category.push("cargo".to_string());
+        name.push("features".to_string());
+        value.push(cargo_features.to_string());
 
-        cargo_features.resize(length, "".to_string());
-        target_features.resize(length, "".to_string());
+        category.push("target".to_string());
+        name.push("features".to_string());
+        value.push(target_features.to_string());
+
+        category.push("cargo".to_string());
+        name.push("build_profile".to_string());
+        value.push(build_profile.to_string());
+
+        category.push("cargo".to_string());
+        name.push("opt_level".to_string());
+        value.push(opt_level.to_string());
 
         let data = DataBlock::new_from_columns(vec![
-            StringType::from_data(cargo_features),
-            StringType::from_data(target_features),
+            StringType::from_data(category),
+            StringType::from_data(name),
+            StringType::from_data(value),
         ]);
 
         SyncOneBlockSystemTable::create(BuildOptionsTable { table_info, data })

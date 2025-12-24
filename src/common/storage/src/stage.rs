@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::storage::StorageParams;
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -59,10 +60,7 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta.last_modified().map(|m| {
-                let ns = m.into_inner().as_nanosecond();
-                DateTime::from_timestamp_nanos(ns as i64)
-            }),
+            last_modified: meta.last_modified(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
@@ -89,7 +87,18 @@ impl StageFileInfo {
 
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
-        Ok(init_operator(&stage_info.stage_params.storage)?)
+        // External S3 stages don't load credentials by default; `role_arn` opts into assume-role.
+        let storage = match stage_info.stage_params.storage.clone() {
+            StorageParams::S3(mut cfg) => {
+                if cfg.role_arn.is_empty() {
+                    cfg.disable_credential_loader = true;
+                }
+                StorageParams::S3(cfg)
+            }
+            v => v,
+        };
+
+        Ok(init_operator(&storage)?)
     } else {
         let stage_prefix = stage_info.stage_prefix();
         let param = DataOperator::instance()

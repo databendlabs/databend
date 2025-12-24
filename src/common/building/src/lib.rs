@@ -61,6 +61,8 @@ pub fn add_building_env_vars() {
     set_env_config().expect("Unable to generate build envs");
     add_env_credits_info();
     add_target_features();
+    add_build_profile();
+    add_opt_level();
     add_env_version();
     add_env_license();
     add_license_public_key();
@@ -182,6 +184,38 @@ pub fn add_target_features() {
         },
         None => {
             println!("cargo:warning=CARGO_CFG_TARGET_FEATURE was not set");
+        }
+    };
+}
+
+pub fn add_build_profile() {
+    match env::var_os("PROFILE") {
+        Some(var) => match var.into_string() {
+            Ok(s) => println!("cargo:rustc-env=DATABEND_BUILD_PROFILE={}", s),
+            Err(_) => {
+                println!("cargo:warning=PROFILE was not valid utf-8");
+                println!("cargo:rustc-env=DATABEND_BUILD_PROFILE=unknown");
+            }
+        },
+        None => {
+            println!("cargo:warning=PROFILE was not set");
+            println!("cargo:rustc-env=DATABEND_BUILD_PROFILE=unknown");
+        }
+    };
+}
+
+pub fn add_opt_level() {
+    match env::var_os("OPT_LEVEL") {
+        Some(var) => match var.into_string() {
+            Ok(s) => println!("cargo:rustc-env=DATABEND_OPT_LEVEL={}", s),
+            Err(_) => {
+                println!("cargo:warning=OPT_LEVEL was not valid utf-8");
+                println!("cargo:rustc-env=DATABEND_OPT_LEVEL=unknown");
+            }
+        },
+        None => {
+            println!("cargo:warning=OPT_LEVEL was not set");
+            println!("cargo:rustc-env=DATABEND_OPT_LEVEL=unknown");
         }
     };
 }

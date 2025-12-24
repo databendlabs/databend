@@ -14,6 +14,8 @@
 
 use std::cell::RefCell;
 use std::ops::DerefMut;
+use std::time::Duration;
+use std::time::Instant;
 
 use arrow_ipc::CompressionType;
 use arrow_ipc::MetadataVersion;
@@ -38,6 +40,7 @@ use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
+use log::info;
 use serde::ser::SerializeSeq;
 
 fn data_is_null(column: &Column, row_index: usize) -> bool {
@@ -135,6 +138,7 @@ impl serde::Serialize for BlocksSerializer {
     where S: serde::Serializer {
         let mut serialize_seq = serializer.serialize_seq(Some(self.num_rows()))?;
         if let Some(format) = &self.format {
+            let start = Instant::now();
             let mut buf = RefCell::new(Vec::new());
             let encoder = FieldEncoderValues::create_for_http_handler(
                 format.jiff_timezone.clone(),
@@ -151,6 +155,14 @@ impl serde::Serialize for BlocksSerializer {
                         row_index: i,
                     })?
                 }
+            }
+            let duration = Instant::now().duration_since(start);
+            if duration >= Duration::from_secs(3) {
+                info!(
+                    "serialize {} rows using {} secs",
+                    buf.borrow().len(),
+                    duration.as_secs_f64()
+                );
             }
         }
         serialize_seq.end()

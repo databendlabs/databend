@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+use databend_common_grpc::TcpKeepAliveConfig;
+use databend_common_settings::FlightKeepAliveParams;
 
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::SegmentStatsReader;
-pub use meta_readers::TableSnapshotReader;
-pub use meta_readers::bytes_reader;
-pub use meta_readers::read_thrift_file_metadata;
+pub fn build_keep_alive_config(params: FlightKeepAliveParams) -> Option<TcpKeepAliveConfig> {
+    if params.is_disabled() {
+        None
+    } else {
+        Some(TcpKeepAliveConfig {
+            time: params.time,
+            interval: params.interval,
+            retries: params.retries,
+        })
+    }
+}

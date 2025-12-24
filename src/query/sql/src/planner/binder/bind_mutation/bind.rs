@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -154,6 +155,7 @@ impl Binder {
                 )
                 .await
                 .map_err(|err| target_table_identifier.not_found_suggest_error(err))?
+                .map(SharedLockGuard::new)
         } else {
             None
         };

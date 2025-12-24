@@ -73,12 +73,13 @@ use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
 use databend_common_storages_system::ZeroTable;
+use databend_common_version::DATABEND_BUILD_PROFILE;
 use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
 use databend_common_version::DATABEND_COMMIT_AUTHORS;
 use databend_common_version::DATABEND_CREDITS_LICENSES;
 use databend_common_version::DATABEND_CREDITS_NAMES;
 use databend_common_version::DATABEND_CREDITS_VERSIONS;
-use databend_common_version::VERGEN_CARGO_FEATURES;
+use databend_common_version::DATABEND_OPT_LEVEL;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -88,6 +89,9 @@ use crate::table_functions::TemporaryTablesTable;
 pub struct SystemDatabase {
     db_info: DatabaseInfo,
 }
+
+const DATABEND_QUERY_CARGO_FEATURES: Option<&'static str> =
+    option_env!("DATABEND_QUERY_CARGO_FEATURES");
 
 impl SystemDatabase {
     /// These tables may disabled to the sql users.
@@ -152,8 +156,10 @@ impl SystemDatabase {
                 DatabasesTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 BuildOptionsTable::create(
                     sys_db_meta.next_table_id(),
-                    VERGEN_CARGO_FEATURES,
+                    DATABEND_QUERY_CARGO_FEATURES,
                     DATABEND_CARGO_CFG_TARGET_FEATURE,
+                    DATABEND_BUILD_PROFILE,
+                    DATABEND_OPT_LEVEL,
                 ),
                 QueryCacheTable::create(sys_db_meta.next_table_id()),
                 TableFunctionsTable::create(sys_db_meta.next_table_id()),

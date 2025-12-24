@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+mod frame_bound;
+mod transform_window;
+mod window_function;
 
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::SegmentStatsReader;
-pub use meta_readers::TableSnapshotReader;
-pub use meta_readers::bytes_reader;
-pub use meta_readers::read_thrift_file_metadata;
+pub use frame_bound::FrameBound;
+pub use transform_window::TransformWindow;
+pub use transform_window::WindowSortDesc;
+pub use window_function::WindowFunctionInfo;

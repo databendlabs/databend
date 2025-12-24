@@ -20,6 +20,7 @@ use databend_common_ast::ast::Statement;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::BindContext;
 use crate::binder::Binder;
@@ -61,7 +62,8 @@ impl Binder {
                 &table_name,
                 &LockTableOption::LockWithRetry,
             )
-            .await?;
+            .await?
+            .map(SharedLockGuard::new);
 
         let table = self
             .ctx
