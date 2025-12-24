@@ -88,6 +88,7 @@ impl RuleNormalizeAggregateOptimizer {
                     || function.func_name == "uniq"
                     || function.func_name == "count_distinct")
                     && function.args.len() == 1
+                    && aggregate.grouping_sets.is_none()
                     && function.args.iter().all(|expr| {
                         if let ScalarExpr::BoundColumnRef(r) = expr {
                             aggregate

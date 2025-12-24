@@ -47,4 +47,4 @@ select k, count(distinct k) from (select number % 2 as k from numbers(4)) group 
 ----
 0 1
 1 1
-NULL 0
+NULL 2
