@@ -483,6 +483,7 @@ pub struct StorageS3Config {
     ///
     /// Deprecated: prefer the runtime `allow_credential_chain` policy plus global
     /// `storage.disable_config_load` / `storage.disable_instance_profile`.
+    #[serde(skip)]
     pub disable_credential_loader: bool,
     /// Runtime-only override for whether ambient credential chains are allowed.
     ///
