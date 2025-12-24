@@ -901,10 +901,7 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 async fn new_local_meta() -> MetaStore {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
-    let meta = {
-        let config = meta_config.to_meta_grpc_client_conf(version);
-        let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await.unwrap()
-    };
-    meta
+    let config = meta_config.to_meta_grpc_client_conf(version);
+    let provider = MetaStoreProvider::new(config);
+    provider.create_meta_store().await.unwrap()
 }

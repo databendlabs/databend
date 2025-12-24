@@ -252,9 +252,7 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 
     pub fn build(
         self,
-        block_builder: (
-            impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static
-        ),
+        block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
     ) -> Result<SendableDataBlockStream> {
         stream_source_from_entry_lister_with_chunk_size(
             self.op.clone(),
@@ -271,7 +269,7 @@ fn stream_source_from_entry_lister_with_chunk_size<T>(
     lister_fut: FutureLister<T>,
     limit: Option<usize>,
     chunk_size: usize,
-    block_builder: (impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static),
+    block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
 ) -> Result<SendableDataBlockStream>
 where
     T: Future<Output = opendal::Result<Lister>> + Send + 'static,

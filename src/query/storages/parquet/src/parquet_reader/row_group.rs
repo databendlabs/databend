@@ -322,7 +322,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         self.column_chunks
             .iter()
             .enumerate()
-            .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
+            .filter(|&(idx, chunk)| chunk.is_none() && projection.leaf_included(idx))
             .map(|(idx, _chunk)| {
                 let column = self.metadata.meta().column(idx);
                 let (start, length) = column.byte_range();
