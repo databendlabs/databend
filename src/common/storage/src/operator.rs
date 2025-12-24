@@ -72,8 +72,11 @@ use crate::runtime_layer::RuntimeLayer;
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
-fn set_allow_credential_chain(params: &mut StorageParams, allow: bool) {
+fn set_allow_credential_chain_if_missing(params: &mut StorageParams, allow: bool) {
     if let StorageParams::S3(cfg) = params {
+        if cfg.allow_credential_chain.is_some() {
+            return;
+        }
         cfg.allow_credential_chain = Some(allow);
     }
 }
@@ -602,13 +605,15 @@ impl DataOperator {
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {
         let mut data_params = conf.params.clone();
-        set_allow_credential_chain(&mut data_params, true);
+        // Global data operator must allow ambient credentials unless explicitly disabled.
+        set_allow_credential_chain_if_missing(&mut data_params, true);
         let operator = init_operator(&data_params)?;
         check_operator(&operator, &data_params).await?;
 
         // Init spill operator
         let mut params = spill_params.as_ref().unwrap_or(&conf.params).clone();
-        set_allow_credential_chain(&mut params, true);
+        // Spill operator shares the same default credential policy as the global operator.
+        set_allow_credential_chain_if_missing(&mut params, true);
         // Always use Standard storage class if spill to s3 object storage
         set_s3_storage_class(&mut params, S3StorageClass::Standard);
         let spill_operator = init_operator(&params)?;
