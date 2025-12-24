@@ -661,13 +661,20 @@ pub async fn resolve_stage_location(
         ));
     }
 
-    let stage = if names[0] == "~" {
+    let mut stage = if names[0] == "~" {
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
             .get_stage(&ctx.get_tenant(), names[0])
             .await?
     };
+
+    if stage
+        .stage_name
+        .eq_ignore_ascii_case(&GlobalConfig::instance().log.history.stage_name)
+    {
+        stage.allow_credential_chain = true;
+    }
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
     let path = if path.is_empty() { "/" } else { path };

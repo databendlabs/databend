@@ -365,6 +365,14 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    /// Disable loading credentials from env/shared config/web identity files globally.
+    #[clap(long = "storage-disable-config-load")]
+    pub disable_config_load: bool,
+
+    /// Disable all instance-profile based credential providers globally.
+    #[clap(long = "storage-disable-instance-profile")]
+    pub disable_instance_profile: bool,
+
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
 
@@ -432,6 +440,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            disable_config_load: inner.disable_config_load,
+            disable_instance_profile: inner.disable_instance_profile,
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -542,8 +552,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
-        cfg.s3.disable_config_load = inner.s3_disable_config_load;
-        cfg.s3.disable_ec2_metadata = inner.s3_disable_ec2_metadata;
+        cfg.disable_config_load = inner.disable_config_load;
+        cfg.disable_instance_profile = inner.disable_instance_profile;
 
         cfg
     }
@@ -590,8 +600,8 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
-            s3_disable_config_load: self.s3.disable_config_load,
-            s3_disable_ec2_metadata: self.s3.disable_ec2_metadata,
+            disable_config_load: self.disable_config_load,
+            disable_instance_profile: self.disable_instance_profile,
             params: {
                 match self.typ.as_str() {
                     "azblob" => {
@@ -936,14 +946,6 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-enable-virtual-host-style", value_name = "VALUE")]
     pub enable_virtual_host_style: bool,
 
-    /// Disable loading credentials from env/shared config/web identity.
-    #[clap(long = "storage-s3-disable-config-load")]
-    pub disable_config_load: bool,
-
-    /// Disable EC2 instance metadata credential provider (IMDS).
-    #[clap(long = "storage-s3-disable-ec2-metadata")]
-    pub disable_ec2_metadata: bool,
-
     #[clap(long = "storage-s3-role-arn", value_name = "VALUE", default_value_t)]
     #[serde(rename = "role_arn")]
     pub s3_role_arn: String,
@@ -976,8 +978,6 @@ impl Debug for S3StorageConfig {
             .field("bucket", &self.bucket)
             .field("root", &self.root)
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)
-            .field("disable_config_load", &self.disable_config_load)
-            .field("disable_ec2_metadata", &self.disable_ec2_metadata)
             .field("role_arn", &self.s3_role_arn)
             .field("external_id", &self.s3_external_id)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
@@ -1002,8 +1002,6 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             root: inner.root,
             master_key: inner.master_key,
             enable_virtual_host_style: inner.enable_virtual_host_style,
-            disable_config_load: false,
-            disable_ec2_metadata: false,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
             storage_class: inner.storage_class,

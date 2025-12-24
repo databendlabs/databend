@@ -63,7 +63,7 @@ use opendal_layer_immutable_index::ImmutableIndexLayer;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
-use crate::config::S3CredentialChainConfig;
+use crate::config::CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -421,12 +421,12 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // When it is enabled, only explicit credentials are used and requests can fall back to unsigned.
     if cfg.disable_credential_loader {
         builder = builder.disable_config_load().disable_ec2_metadata();
-    } else if let Some(global) = S3CredentialChainConfig::try_get() {
+    } else if let Some(global) = CredentialChainConfig::try_get() {
         // Apply global limits to the credential chain.
         if global.disable_config_load {
             builder = builder.disable_config_load();
         }
-        if global.disable_ec2_metadata {
+        if global.disable_instance_profile {
             builder = builder.disable_ec2_metadata();
         }
     }
@@ -579,9 +579,9 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<()> {
-        S3CredentialChainConfig::init(S3CredentialChainConfig {
-            disable_config_load: conf.s3_disable_config_load,
-            disable_ec2_metadata: conf.s3_disable_ec2_metadata,
+        CredentialChainConfig::init(CredentialChainConfig {
+            disable_config_load: conf.disable_config_load,
+            disable_instance_profile: conf.disable_instance_profile,
         })?;
         GlobalInstance::set(Self::try_create(conf, spill_params).await?);
 
