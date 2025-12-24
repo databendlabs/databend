@@ -64,6 +64,13 @@ impl TableMetaFunc for ClusteringStatistics {
         snapshot: Arc<TableSnapshot>,
         limit: Option<usize>,
     ) -> Result<DataBlock> {
+        // NOTE (design choice):
+        // Clustering statistics are only meaningful for the current cluster key definition.
+        // Historical cluster information stored in snapshots is intentionally ignored.
+        //
+        // Once the cluster key changes, historical cluster_stats cannot be interpreted
+        // or compared correctly, so snapshots are evaluated against the live table's
+        // cluster key only.
         let Some(cluster_key_id) = tbl.cluster_key_id() else {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table {}",
