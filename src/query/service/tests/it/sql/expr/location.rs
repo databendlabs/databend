@@ -32,6 +32,7 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
@@ -179,9 +180,12 @@ async fn test_parse_uri_location() -> Result<()> {
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
+                    disable_ec2_metadata: false,
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: S3StorageClass::default(),
                 }),
                 "/".to_string(),
             ),
@@ -213,9 +217,12 @@ async fn test_parse_uri_location() -> Result<()> {
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
+                    disable_ec2_metadata: false,
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: S3StorageClass::default(),
                 }),
                 "/".to_string(),
             ),
@@ -247,9 +254,12 @@ async fn test_parse_uri_location() -> Result<()> {
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: true,
+                    disable_ec2_metadata: false,
                     enable_virtual_host_style: false,
                     role_arn: "".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: S3StorageClass::default(),
                 }),
                 "/".to_string(),
             ),
@@ -276,9 +286,12 @@ async fn test_parse_uri_location() -> Result<()> {
                     master_key: "".to_string(),
                     root: "/tmp/".to_string(),
                     disable_credential_loader: false,
+                    disable_ec2_metadata: false,
                     enable_virtual_host_style: false,
                     role_arn: "aws::iam::xxxx".to_string(),
                     external_id: "".to_string(),
+                    network_config: None,
+                    storage_class: S3StorageClass::default(),
                 }),
                 "/".to_string(),
             ),

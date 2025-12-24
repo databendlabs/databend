@@ -484,6 +484,10 @@ pub struct StorageS3Config {
     /// This flag is used internally to control whether databend load
     /// credentials from environment like env, profile and web token.
     pub disable_credential_loader: bool,
+    /// Disable EC2 instance metadata credential provider (IMDS).
+    ///
+    /// This does not disable other credential providers (like env, profile, web identity).
+    pub disable_ec2_metadata: bool,
     /// Enable this flag to send API in virtual host style.
     ///
     /// - Virtual Host Style: `https://bucket.s3.amazonaws.com`
@@ -509,6 +513,7 @@ impl Default for StorageS3Config {
             master_key: "".to_string(),
             root: "".to_string(),
             disable_credential_loader: false,
+            disable_ec2_metadata: false,
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
@@ -527,6 +532,7 @@ impl Debug for StorageS3Config {
             .field("storage_class", &self.storage_class)
             .field("root", &self.root)
             .field("disable_credential_loader", &self.disable_credential_loader)
+            .field("disable_ec2_metadata", &self.disable_ec2_metadata)
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)
             .field("role_arn", &self.role_arn)
             .field("external_id", &self.external_id)

@@ -416,9 +416,14 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // Disable credential loader
+    // Disable credential loader.
     if cfg.disable_credential_loader {
-        builder = builder.disable_config_load().disable_ec2_metadata();
+        builder = builder.disable_config_load();
+    }
+
+    // Disable EC2 instance metadata credential provider (IMDS).
+    if cfg.disable_credential_loader || cfg.disable_ec2_metadata {
+        builder = builder.disable_ec2_metadata();
     }
 
     // If credential loading is disabled and no credentials are provided, use unsigned requests.

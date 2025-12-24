@@ -185,6 +185,11 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         disable_credential_loader = false;
     }
 
+    let disable_ec2_metadata = match &GlobalConfig::instance().storage.params {
+        StorageParams::S3(cfg) => cfg.disable_ec2_metadata,
+        _ => false,
+    };
+
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
         region,
@@ -195,6 +200,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         master_key,
         root,
         disable_credential_loader,
+        disable_ec2_metadata,
         enable_virtual_host_style,
         role_arn,
         external_id,

@@ -947,6 +947,9 @@ pub struct S3StorageConfig {
         help = "S3 storage class for Fuse tables (including external fuse tables). Warning: Some S3-compatible storage (e.g., MinIO) may not support intelligent_tiering."
     )]
     pub storage_class: S3StorageClass,
+
+    #[clap(long = "storage-s3-disable-ec2-metadata")]
+    pub disable_ec2_metadata: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -965,6 +968,7 @@ impl Debug for S3StorageConfig {
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)
             .field("role_arn", &self.s3_role_arn)
             .field("external_id", &self.s3_external_id)
+            .field("disable_ec2_metadata", &self.disable_ec2_metadata)
             .field("access_key_id", &mask_string(&self.access_key_id, 3))
             .field(
                 "secret_access_key",
@@ -990,6 +994,7 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
             storage_class: inner.storage_class,
+            disable_ec2_metadata: inner.disable_ec2_metadata,
         }
     }
 }
@@ -1008,6 +1013,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             master_key: self.master_key,
             root: self.root,
             disable_credential_loader: false,
+            disable_ec2_metadata: self.disable_ec2_metadata,
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
