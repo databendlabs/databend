@@ -205,6 +205,7 @@ impl StorageParams {
                 s1.master_key = s2.master_key;
                 s1.network_config = s2.network_config;
                 s1.disable_credential_loader = s2.disable_credential_loader;
+                s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::S3(s1))
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
