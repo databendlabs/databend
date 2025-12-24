@@ -72,6 +72,12 @@ use crate::runtime_layer::RuntimeLayer;
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
+fn set_allow_credential_chain(params: &mut StorageParams, allow: bool) {
+    if let StorageParams::S3(cfg) = params {
+        cfg.allow_credential_chain = Some(allow);
+    }
+}
+
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     let cache = get_operator_cache();
@@ -417,6 +423,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
+    //
     let allow_credential_chain = cfg.allow_credential_chain.unwrap_or_default();
 
     // Disallowing the credential chain forces unsigned or fully explicit access.
@@ -594,11 +601,14 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(&conf.params)?;
-        check_operator(&operator, &conf.params).await?;
+        let mut data_params = conf.params.clone();
+        set_allow_credential_chain(&mut data_params, true);
+        let operator = init_operator(&data_params)?;
+        check_operator(&operator, &data_params).await?;
 
         // Init spill operator
         let mut params = spill_params.as_ref().unwrap_or(&conf.params).clone();
+        set_allow_credential_chain(&mut params, true);
         // Always use Standard storage class if spill to s3 object storage
         set_s3_storage_class(&mut params, S3StorageClass::Standard);
         let spill_operator = init_operator(&params)?;
@@ -606,7 +616,7 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            params: conf.params.clone(),
+            params: data_params,
             spill_operator,
             spill_params,
         })
