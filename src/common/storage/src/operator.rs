@@ -450,6 +450,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         && cfg.security_token.is_empty()
         && cfg.role_arn.is_empty()
     {
+        // Allow anonymous is actually forcing unsigned requests in OpenDAL.
         builder = builder.allow_anonymous();
     }
 
