@@ -16,7 +16,6 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -53,13 +52,13 @@ use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::HttpClientLayer;
+use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
-use opendal_layer_immutable_index::ImmutableIndexLayer;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
@@ -405,8 +404,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // Don't enable it otherwise we will get Permission in stat unknown files
-        // .allow_anonymous()
+        // It's safe to allow anonymous since opendal will perform the check first.
+        .allow_anonymous()
         // Root.
         .root(&cfg.root);
 
@@ -682,78 +681,5 @@ impl OperatorRegistry for iceberg::io::FileIO {
 
         let pos = file_io.relative_path_pos();
         Ok((file_io.get_operator().clone(), &location[pos..]))
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Scheme {
-    Azblob,
-    Gcs,
-    Hdfs,
-    Ipfs,
-    S3,
-    Oss,
-    Obs,
-    Cos,
-    Http,
-    Fs,
-    Webhdfs,
-    Huggingface,
-    Custom(&'static str),
-}
-
-impl Scheme {
-    /// Convert self into static str.
-    pub fn into_static(self) -> &'static str {
-        self.into()
-    }
-}
-
-impl From<Scheme> for &'static str {
-    fn from(v: Scheme) -> Self {
-        match v {
-            Scheme::Azblob => "azblob",
-            Scheme::Gcs => "gcs",
-            Scheme::Hdfs => "hdfs",
-            Scheme::Ipfs => "ipfs",
-            Scheme::S3 => "s3",
-            Scheme::Oss => "oss",
-            Scheme::Obs => "obs",
-            Scheme::Cos => "cos",
-            Scheme::Http => "http",
-            Scheme::Fs => "fs",
-            Scheme::Webhdfs => "webhdfs",
-            Scheme::Huggingface => "huggingface",
-            Scheme::Custom(s) => s,
-        }
-    }
-}
-
-impl FromStr for Scheme {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "azblob" => Ok(Scheme::Azblob),
-            "gcs" => Ok(Scheme::Gcs),
-            "hdfs" => Ok(Scheme::Hdfs),
-            "ipfs" => Ok(Scheme::Ipfs),
-            "s3" | "s3a" => Ok(Scheme::S3),
-            "oss" => Ok(Scheme::Oss),
-            "obs" => Ok(Scheme::Obs),
-            "cos" => Ok(Scheme::Cos),
-            "http" | "https" => Ok(Scheme::Http),
-            "fs" => Ok(Scheme::Fs),
-            "webhdfs" => Ok(Scheme::Webhdfs),
-            "huggingface" | "hf" => Ok(Scheme::Huggingface),
-            _ => Ok(Scheme::Custom(Box::leak(s.into_boxed_str()))),
-        }
-    }
-}
-
-impl std::fmt::Display for Scheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.into_static())
     }
 }
