@@ -23,7 +23,6 @@ use std::io::Result;
 use anyhow::anyhow;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -44,8 +43,6 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
 use databend_common_storage::Scheme;
-use log::LevelFilter;
-use log::info;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 
@@ -172,15 +169,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    // Allow credential chain only when it is explicitly needed (assume-role) or for history tables.
-    let in_history_table_scope = ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off);
-    let allow_credential_chain = !role_arn.is_empty() || in_history_table_scope;
-    let disable_credential_loader = !allow_credential_chain;
-    if in_history_table_scope {
-        info!("Allow credential chain for history tables");
-    }
-
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
         region,
@@ -190,7 +178,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         security_token,
         master_key,
         root,
-        disable_credential_loader,
+        disable_credential_loader: false,
         enable_virtual_host_style,
         role_arn,
         external_id,

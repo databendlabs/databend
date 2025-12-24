@@ -20,8 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::storage::StorageParams;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_stage_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::Binder;
@@ -90,33 +89,16 @@ impl Binder {
                 )
                 .await?;
 
-                // Validate the input config using the same credential-chain policy as runtime stage access.
-                let validate_storage = match stage_storage.clone() {
-                    StorageParams::S3(mut cfg) => {
-                        let allow_credential_chain = !cfg.role_arn.is_empty();
-                        cfg.disable_credential_loader = !allow_credential_chain;
-                        StorageParams::S3(cfg)
-                    }
-                    v => v,
-                };
+                let stage_info =
+                    StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name);
 
-                // Check the storage params via init operator.
-                let _ = init_operator(&validate_storage).map_err(|err| {
+                init_stage_operator(&stage_info).map_err(|err| {
                     ErrorCode::InvalidConfig(format!(
                         "Input storage config for stage is invalid: {err:?}"
                     ))
                 })?;
 
-                // Persist stage configs without embedding runtime-only credential-chain policy.
-                let stage_storage = match stage_storage {
-                    StorageParams::S3(mut cfg) => {
-                        cfg.disable_credential_loader = false;
-                        StorageParams::S3(cfg)
-                    }
-                    v => v,
-                };
-
-                StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name)
+                stage_info
             }
         };
 

@@ -34,6 +34,7 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
@@ -61,7 +62,9 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use derive_visitor::Drive;
+use log::LevelFilter;
 use log::debug;
+use log::info;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -709,7 +712,13 @@ pub async fn resolve_file_location(
                     "copy from insecure storage is not allowed",
                 ))
             } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, true);
+                let mut stage_info = StageInfo::new_external_stage(storage_params, true);
+                let in_history_table_scope = ThreadTracker::capture_log_settings()
+                    .is_some_and(|settings| settings.level == LevelFilter::Off);
+                if in_history_table_scope {
+                    info!("Allow credential chain for history tables");
+                    stage_info.allow_credential_chain = true;
+                }
                 Ok((stage_info, path))
             }
         }
