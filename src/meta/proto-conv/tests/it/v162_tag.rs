@@ -34,6 +34,7 @@ fn test_decode_v162_tag_meta() -> anyhow::Result<()> {
         comment: "tag describing priority".to_string(),
         created_on: Utc.with_ymd_and_hms(2024, 12, 12, 7, 30, 0).unwrap(),
         updated_on: Some(Utc.with_ymd_and_hms(2024, 12, 31, 3, 5, 6).unwrap()),
+        drop_on: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

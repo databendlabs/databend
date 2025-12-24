@@ -60,6 +60,9 @@ pub struct TagMeta {
     pub comment: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
+    /// When Some, indicates the tag has been dropped (soft delete timestamp).
+    /// This is reserved for future UNDROP/vacuum semantics; currently unused.
+    pub drop_on: Option<DateTime<Utc>>,
 }
 
 /// Request to create a new tag definition.

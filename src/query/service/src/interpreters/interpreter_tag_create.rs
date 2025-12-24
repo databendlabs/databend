@@ -60,6 +60,7 @@ impl Interpreter for CreateTagInterpreter {
             comment,
             created_on: Utc::now(),
             updated_on: None,
+            drop_on: None,
         };
         if matches!(self.plan.create_option, CreateOption::CreateOrReplace) {
             return Err(ErrorCode::InvalidArgument(
