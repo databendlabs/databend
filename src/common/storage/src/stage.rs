@@ -60,10 +60,7 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta.last_modified().map(|m| {
-                let ns = m.into_inner().as_nanosecond();
-                DateTime::from_timestamp_nanos(ns as i64)
-            }),
+            last_modified: meta.last_modified(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
