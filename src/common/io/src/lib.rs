@@ -32,7 +32,7 @@ mod binary_read;
 mod binary_write;
 
 mod bincode_serialization;
-mod bitmap;
+pub mod bitmap;
 mod borsh_serialization;
 pub mod cursor_ext;
 mod decimal;
