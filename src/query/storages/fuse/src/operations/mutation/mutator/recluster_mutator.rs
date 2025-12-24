@@ -243,13 +243,11 @@ impl ReclusterMutator {
                 && Some(level) == max_level
                 && level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS
             {
-                // We intentionally preserve selected_segs_idx so that later logic can keep
-                // track of the segments involved for block reordering decisions.
                 debug!(
-                    "recluster: only two blocks remain at level {}, skipping reclustering to avoid task churn",
+                    "recluster: only two blocks remain at level {}, skipping to avoid task churn",
                     level
                 );
-                break;
+                continue;
             }
 
             let mut total_rows = 0;
