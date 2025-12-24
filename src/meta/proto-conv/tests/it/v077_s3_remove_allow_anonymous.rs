@@ -55,6 +55,7 @@ fn test_v077_s3_remove_allow_anonymous() -> anyhow::Result<()> {
             }),
         },
         is_temporary: false,
+        allow_credential_chain: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,

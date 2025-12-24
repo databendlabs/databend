@@ -485,7 +485,7 @@ pub struct StorageS3Config {
     /// credentials from environment like env, profile and web token.
     ///
     /// Deprecated: prefer the runtime `allow_credential_chain` policy plus global
-    /// `storage.s3.disable_config_load` / `storage.s3.disable_ec2_metadata`.
+    /// `storage.disable_config_load` / `storage.disable_instance_profile`.
     pub disable_credential_loader: bool,
     /// Enable this flag to send API in virtual host style.
     ///
