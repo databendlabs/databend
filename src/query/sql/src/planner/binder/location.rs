@@ -25,7 +25,6 @@ use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
