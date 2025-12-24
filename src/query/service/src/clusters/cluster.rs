@@ -391,7 +391,7 @@ impl ClusterDiscovery {
     }
 
     pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        let nodes = match config.query.cluster_id.is_empty() {
+        let nodes = match config.query.warehouse_id.is_empty() {
             true => {
                 self.warehouse_manager
                     .discover_warehouse_nodes(&config.query.node_id)
@@ -399,7 +399,7 @@ impl ClusterDiscovery {
             }
             false => {
                 self.warehouse_manager
-                    .list_warehouse_nodes(self.cluster_id.clone())
+                    .list_warehouse_nodes(config.query.warehouse_id.clone())
                     .await
             }
         };
