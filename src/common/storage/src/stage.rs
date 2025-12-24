@@ -90,12 +90,12 @@ impl StageFileInfo {
 
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
-        // External S3 stages don't load credentials by default; `role_arn` opts into assume-role.
+        // External S3 stages disallow the ambient credential chain by default.
+        // `role_arn` opts into using the credential chain as the source credential.
         let storage = match stage_info.stage_params.storage.clone() {
             StorageParams::S3(mut cfg) => {
-                if cfg.role_arn.is_empty() {
-                    cfg.disable_credential_loader = true;
-                }
+                let allow_credential_chain = !cfg.role_arn.is_empty();
+                cfg.disable_credential_loader = !allow_credential_chain;
                 StorageParams::S3(cfg)
             }
             v => v,

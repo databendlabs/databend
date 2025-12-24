@@ -90,23 +90,31 @@ impl Binder {
                 )
                 .await?;
 
-                // External S3 stages don't load credentials by default; `role_arn` opts into assume-role.
-                let stage_storage = match stage_storage {
+                // Validate the input config using the same credential-chain policy as runtime stage access.
+                let validate_storage = match stage_storage.clone() {
                     StorageParams::S3(mut cfg) => {
-                        if cfg.role_arn.is_empty() {
-                            cfg.disable_credential_loader = true;
-                        }
+                        let allow_credential_chain = !cfg.role_arn.is_empty();
+                        cfg.disable_credential_loader = !allow_credential_chain;
                         StorageParams::S3(cfg)
                     }
                     v => v,
                 };
 
                 // Check the storage params via init operator.
-                let _ = init_operator(&stage_storage).map_err(|err| {
+                let _ = init_operator(&validate_storage).map_err(|err| {
                     ErrorCode::InvalidConfig(format!(
                         "Input storage config for stage is invalid: {err:?}"
                     ))
                 })?;
+
+                // Persist stage configs without embedding runtime-only credential-chain policy.
+                let stage_storage = match stage_storage {
+                    StorageParams::S3(mut cfg) => {
+                        cfg.disable_credential_loader = false;
+                        StorageParams::S3(cfg)
+                    }
+                    v => v,
+                };
 
                 StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name)
             }

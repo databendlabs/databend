@@ -44,6 +44,31 @@ pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
     pub params: StorageParams,
+    /// Global switches that affect AWS S3 credential chain behavior.
+    ///
+    /// Notes:
+    /// - These are runtime-only controls and are not persisted in meta.
+    /// - They apply to all S3 operators created in this process.
+    pub s3_disable_config_load: bool,
+    pub s3_disable_ec2_metadata: bool,
+}
+
+/// Runtime-only switches for AWS S3 credential chain behavior.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct S3CredentialChainConfig {
+    pub disable_config_load: bool,
+    pub disable_ec2_metadata: bool,
+}
+
+impl S3CredentialChainConfig {
+    pub fn init(cfg: S3CredentialChainConfig) -> databend_common_exception::Result<()> {
+        GlobalInstance::set(cfg);
+        Ok(())
+    }
+
+    pub fn try_get() -> Option<S3CredentialChainConfig> {
+        GlobalInstance::try_get()
+    }
 }
 
 // TODO: This config should be moved out of common-storage crate.

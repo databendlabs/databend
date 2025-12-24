@@ -67,6 +67,7 @@ use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
+use crate::config::S3CredentialChainConfig;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
@@ -416,9 +417,18 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // Disable credential loader
+    // `disable_credential_loader` disables the ambient credential chain entirely.
+    // When it is enabled, only explicit credentials are used and requests can fall back to unsigned.
     if cfg.disable_credential_loader {
         builder = builder.disable_config_load().disable_ec2_metadata();
+    } else if let Some(global) = S3CredentialChainConfig::try_get() {
+        // Apply global limits to the credential chain.
+        if global.disable_config_load {
+            builder = builder.disable_config_load();
+        }
+        if global.disable_ec2_metadata {
+            builder = builder.disable_ec2_metadata();
+        }
     }
 
     // If credential loading is disabled and no credentials are provided, use unsigned requests.
@@ -569,6 +579,10 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<()> {
+        S3CredentialChainConfig::init(S3CredentialChainConfig {
+            disable_config_load: conf.s3_disable_config_load,
+            disable_ec2_metadata: conf.s3_disable_ec2_metadata,
+        })?;
         GlobalInstance::set(Self::try_create(conf, spill_params).await?);
 
         Ok(())
