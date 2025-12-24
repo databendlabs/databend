@@ -29,6 +29,7 @@ message TagMeta {
   string comment = 2;
   string created_on = 3;
   optional string updated_on = 4;
+  optional string drop_on = 5;
 }
 
 // Value stored for tag-to-object binding (indexed by object).

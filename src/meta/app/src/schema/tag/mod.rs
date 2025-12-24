@@ -38,8 +38,6 @@ pub use ref_ident::ObjectTagIdRefIdentRaw;
 pub use ref_ident::TagIdObjectRef;
 pub use ref_ident::TagIdObjectRefIdent;
 pub use ref_ident::TagIdObjectRefIdentRaw;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::data_id::DataId;
 use crate::schema::tag::id_ident::Resource;
@@ -49,17 +47,23 @@ use crate::tenant::Tenant;
 ///
 /// Tags are user-defined labels that can be attached to Databend objects
 /// (databases, tables, stages, connections) for governance and classification.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagMeta {
     /// Optional list of allowed values for this tag. Mirrors the semantics of
-    /// `CREATE TAG ... ALLOWED_VALUES`: declare before other options, accept up
-    /// to 5,000 entries, and use order to resolve propagation conflicts. If
-    /// unset, any string (including empty) is accepted when binding tags.
+    /// `CREATE TAG ... ALLOWED_VALUES`: declare before other options and accept
+    /// up to 5,000 entries. If unset, any string (including empty) is accepted
+    /// when binding tags. Keep a `Vec` here to preserve declaration order so
+    /// future ON_CONFLICT semantics can follow Snowflake's
+    /// ALLOWED_VALUES_SEQUENCE behavior. Duplicates are removed when tags are
+    /// created.
     pub allowed_values: Option<Vec<String>>,
     /// User-provided description of the tag.
     pub comment: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
+    /// When Some, indicates the tag has been dropped (soft delete timestamp).
+    /// This is reserved for future UNDROP/vacuum semantics; currently unused.
+    pub drop_on: Option<DateTime<Utc>>,
 }
 
 /// Request to create a new tag definition.
@@ -70,7 +74,7 @@ pub struct CreateTagReq {
 }
 
 /// Response from creating a tag.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTagReply {
     pub tag_id: u64,
 }
@@ -83,15 +87,16 @@ pub struct GetTagReply {
 }
 
 /// Complete information about a tag, including its name, ID, and metadata.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagInfo {
     pub name: String,
-    pub tag_id: u64,
+    /// Sequence-wrapped tag id, so callers can observe name->id mapping changes.
+    pub tag_id: SeqV<TagId>,
     pub meta: SeqV<TagMeta>,
 }
 
 /// Objects that can be tagged.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TaggableObject {
     Database { db_id: u64 },
     Table { table_id: u64 },
@@ -167,7 +172,7 @@ pub struct UnsetObjectTagsReq {
 /// The `tag_id` is part of the key, so only the value payload and timestamp are stored here.
 ///
 /// [`ObjectToTagIdent`]: crate::schema::ObjectTagIdRefIdent
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectTagIdRefValue {
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
     /// is present, this string must match one of the configured entries,
