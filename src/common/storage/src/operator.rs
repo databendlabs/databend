@@ -63,11 +63,11 @@ use opendal_layer_immutable_index::ImmutableIndexLayer;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
+use crate::config::S3CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
-use crate::config::S3CredentialChainConfig;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
