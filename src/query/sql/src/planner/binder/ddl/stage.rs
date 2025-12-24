@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
@@ -88,6 +89,17 @@ impl Binder {
                     "when CREATE STAGE",
                 )
                 .await?;
+
+                // External S3 stages don't load credentials by default; `role_arn` opts into assume-role.
+                let stage_storage = match stage_storage {
+                    StorageParams::S3(mut cfg) => {
+                        if cfg.role_arn.is_empty() {
+                            cfg.disable_credential_loader = true;
+                        }
+                        StorageParams::S3(cfg)
+                    }
+                    v => v,
+                };
 
                 // Check the storage params via init operator.
                 let _ = init_operator(&stage_storage).map_err(|err| {

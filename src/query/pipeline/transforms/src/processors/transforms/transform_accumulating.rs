@@ -254,10 +254,10 @@ impl<B: BlockMetaInfo, T: BlockMetaAccumulatingTransform<B>> Processor
         if let Some(mut data_block) = self.input_data.take() {
             debug_assert!(data_block.is_empty());
 
-            if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = B::downcast_from(block_meta) {
-                    self.output_data = self.inner.transform(block_meta)?;
-                }
+            if let Some(block_meta) = data_block.take_meta()
+                && let Some(block_meta) = B::downcast_from(block_meta)
+            {
+                self.output_data = self.inner.transform(block_meta)?;
             }
 
             return Ok(());

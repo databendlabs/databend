@@ -19,7 +19,7 @@ CREATE or replace TABLE `empsalary2` ( `depname` VARCHAR null,  `empno` BIGINT n
 statement ok
 INSERT INTO empsalary2 SELECT * FROM empsalary
 
-query TIIR
+query TIII
 SELECT depname, empno, salary, sum(salary + 1) OVER (PARTITION BY depname ORDER BY empno + 1) FROM empsalary ORDER BY depname, empno
 ----
 develop 7 4200 4201
@@ -33,7 +33,7 @@ sales 1 5000 5001
 sales 3 4800 9802
 sales 4 4800 14603
 
-query TIIR
+query ?III
 SELECT enroll_date, empno, salary, sum(salary + 1) OVER (PARTITION BY enroll_date + 1 ORDER BY empno + 1) FROM empsalary ORDER BY enroll_date, empno
 ----
 2006-10-01 1 5000 5001
@@ -47,7 +47,7 @@ SELECT enroll_date, empno, salary, sum(salary + 1) OVER (PARTITION BY enroll_dat
 2008-01-01 7 4200 4201
 2008-01-01 9 4500 8702
 
-query IIIRT
+query IIII?
 SELECT empno, empno % 2, salary, sum(salary + 1) OVER (PARTITION BY empno % 2 ORDER BY enroll_date + 1) as W, enroll_date FROM empsalary order by W, empno
 ----
 1 1 5000 5001 2006-10-01
@@ -188,7 +188,7 @@ SELECT salary, lead(salary + 1, 2, salary + 2) OVER (ORDER BY enroll_date) c FRO
 3500 4501
 
 # first_value
-query TII
+query ?II
 SELECT enroll_date, salary, first_value(salary + 1) OVER (ORDER BY enroll_date) FROM empsalary order by enroll_date, salary
 ----
 2006-10-01 5000 5001
@@ -202,7 +202,7 @@ SELECT enroll_date, salary, first_value(salary + 1) OVER (ORDER BY enroll_date) 
 2008-01-01 4200 5001
 2008-01-01 4500 5001
 
-query TII
+query ?II
 SELECT enroll_date, salary, first_value(salary + 1) OVER (ORDER BY enroll_date) FROM empsalary2 order by enroll_date, salary
 ----
 2006-10-01 5000 5001
@@ -217,7 +217,7 @@ SELECT enroll_date, salary, first_value(salary + 1) OVER (ORDER BY enroll_date) 
 2008-01-01 4500 5001
 
 # last_value
-query TII
+query ?II
 SELECT enroll_date, salary, last_value(salary + 1) OVER (ORDER BY enroll_date) FROM empsalary order by enroll_date, salary
 ----
 2006-10-01 5000 6001
@@ -232,7 +232,7 @@ SELECT enroll_date, salary, last_value(salary + 1) OVER (ORDER BY enroll_date) F
 2008-01-01 4500 4501
 
 # last_value
-query TII
+query ?II
 SELECT enroll_date, salary, last_value(salary + 1) OVER (ORDER BY enroll_date) FROM empsalary2 order by enroll_date, salary
 ----
 2006-10-01 5000 6001
@@ -289,12 +289,12 @@ sales 3 5
 sales 4 NULL
 
 # lag from array
-query T
+query ?
 SELECT lag([456],8,[123]) OVER (PARTITION BY 10)
 ----
 [123]
 
-query T
+query ?
 SELECT lag([456],8,['123']) OVER (PARTITION BY 10)
 ----
 [123]
@@ -314,7 +314,7 @@ create or replace table t4(a int, b int, c int);
 statement ok
 insert into t4 values (1, 1, 1),(2, 2, 1), (3, 4, 1), (5, 6, 1),(3, 2, 1),(4, 6, 1),(7,8,1),(9,10,1),(8,2,1),(3,5,1),(4,5,1),(2,3,1),(4,2,1),(2,6,1);
 
-query TT
+query II
 SELECT a, lag(a, 2) OVER (ORDER BY c) from t4;
 ----
 1 NULL
@@ -335,7 +335,7 @@ SELECT a, lag(a, 2) OVER (ORDER BY c) from t4;
 statement ok
 set max_block_size=1;
 
-query TT
+query II
 SELECT a, lag(a, 2) OVER (ORDER BY c) from t4;
 ----
 1 NULL

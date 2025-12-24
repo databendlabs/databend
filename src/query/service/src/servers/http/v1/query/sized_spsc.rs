@@ -179,7 +179,7 @@ impl PageBuilder {
     fn new(max_rows: usize) -> Self {
         Self {
             blocks: Vec::new(),
-            remain_size: 10 * 1024 * 1024,
+            remain_size: 4 * 1024 * 1024,
             remain_rows: max_rows,
         }
     }

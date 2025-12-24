@@ -140,12 +140,12 @@ SELECT  id,  user_id,  order_id,  lag(order_id, 1) IGNORE NULLS over (    PARTIT
 statement ok
 drop TABLE default.issue2549
 
-query T
+query ?
 SELECT first_value(NULL) IGNORE NULLS OVER (PARTITION BY 'QZHc9f7');
 ----
 NULL
 
-query T
+query ?
 SELECT last_value(NULL) IGNORE NULLS OVER (PARTITION BY 'QZHc9f7');
 ----
 NULL
