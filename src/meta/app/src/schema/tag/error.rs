@@ -14,13 +14,16 @@
 
 use databend_common_exception::ErrorCode;
 
+use crate::schema::tag::TagId;
+use crate::schema::tag::id_ident::Resource as TagIdResource;
+use crate::schema::tag::id_ident::TagIdIdent;
+use crate::tenant::Tenant;
+use crate::tenant_key::errors::UnknownError;
+
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
-    /// Keep a domain error here instead of reusing `UnknownError` so callers can
-    /// map it back to `ErrorCode::UnknownTag` without converting through the
-    /// tenant-key helpers.
-    #[error("TAG with id {tag_id} does not exist.")]
-    NotFound { tag_id: u64 },
+    #[error(transparent)]
+    UnknownTagId(#[from] UnknownError<TagIdResource, TagId>),
 
     #[error(
         "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
@@ -37,13 +40,20 @@ pub enum TagError {
         allowed_values_display: String,
     },
 
-    #[error("Tag metadata was modified concurrently, please retry (e.g., allowed_values changed)")]
-    ConcurrentModification,
+    #[error(
+        "Tag metadata for tag id(s) {tag_ids:?} was modified concurrently, please retry (e.g., allowed_values changed)"
+    )]
+    TagMetaConcurrentModification { tag_ids: Vec<u64> },
 }
 
 impl TagError {
-    pub fn not_found(tag_id: u64) -> Self {
-        Self::NotFound { tag_id }
+    pub fn not_found(tenant: &Tenant, tag_id: u64) -> Self {
+        let ident = TagId::new(tag_id).into_t_ident(tenant);
+        Self::UnknownTagId(ident.unknown_error("tag id not found"))
+    }
+
+    pub fn not_found_ident(tag_ident: TagIdIdent) -> Self {
+        Self::UnknownTagId(tag_ident.unknown_error("tag id not found"))
     }
 
     pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
@@ -77,8 +87,10 @@ impl TagError {
         }
     }
 
-    pub fn concurrent_modification() -> Self {
-        Self::ConcurrentModification
+    pub fn concurrent_modification(tag_ids: impl Into<Vec<u64>>) -> Self {
+        Self::TagMetaConcurrentModification {
+            tag_ids: tag_ids.into(),
+        }
     }
 }
 
@@ -86,10 +98,18 @@ impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
-            TagError::NotFound { .. } => ErrorCode::UnknownTag(s),
+            TagError::UnknownTagId(err) => ErrorCode::from(err),
             TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
             TagError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
-            TagError::ConcurrentModification => ErrorCode::TagConcurrentModification(s),
+            TagError::TagMetaConcurrentModification { .. } => {
+                ErrorCode::TagMetaConcurrentModification(s)
+            }
         }
+    }
+}
+
+impl From<UnknownError<TagIdResource, TagId>> for ErrorCode {
+    fn from(err: UnknownError<TagIdResource, TagId>) -> Self {
+        ErrorCode::UnknownTag(err.to_string())
     }
 }

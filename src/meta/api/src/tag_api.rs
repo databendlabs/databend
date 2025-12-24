@@ -184,9 +184,9 @@ where
         let tags = self
             .list_id_value(&tag_dir)
             .await?
-            .map(|(name_ident, tag_id, meta_seqv)| TagInfo {
+            .map(|(name_ident, tag_id_seqv, meta_seqv)| TagInfo {
                 name: name_ident.tag_name().to_string(),
-                tag_id: *tag_id,
+                tag_id: tag_id_seqv,
                 meta: meta_seqv,
             })
             .collect();
@@ -227,7 +227,7 @@ where
         {
             // Verify tag exists
             let Some(meta_seqv) = meta_opt else {
-                return Ok(Err(TagError::not_found(*tag_id)));
+                return Ok(Err(TagError::not_found(&req.tenant, *tag_id)));
             };
             // Check allowed_values: None means any value is allowed
             if let Some(allowed) = &meta_seqv.data.allowed_values {
@@ -267,7 +267,12 @@ where
             Ok(Ok(()))
         } else {
             // Tag metadata was modified concurrently (e.g., allowed_values changed)
-            Ok(Err(TagError::concurrent_modification()))
+            let tag_ids = req
+                .tags
+                .iter()
+                .map(|(tag_id, _)| *tag_id)
+                .collect::<Vec<_>>();
+            Ok(Err(TagError::concurrent_modification(tag_ids)))
         }
     }
 
@@ -314,15 +319,13 @@ where
             ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
         let stream = self.list_pb(&refs_dir).await?;
-        let entries = stream.try_collect::<Vec<_>>().await?;
-
-        Ok(entries
-            .into_iter()
-            .map(|entry| ObjectTagValue {
+        Ok(stream
+            .map_ok(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
                 tag_value: entry.seqv,
             })
-            .collect())
+            .try_collect::<Vec<_>>()
+            .await?)
     }
 
     /// List all references for a tag by ID.
@@ -340,20 +343,20 @@ where
             TagIdObjectRefIdent::new_generic(tenant, TagIdObjectRef::prefix(tag_id)),
             2,
         );
-        let stream = self.list_pb(&refs_dir).await?;
-        let entries = stream.try_collect::<Vec<_>>().await?;
-
-        let tagged_objects: Vec<TaggableObject> = entries
-            .into_iter()
-            .map(|entry| entry.key.name().object.clone())
-            .collect();
-
-        let value_keys: Vec<ObjectTagIdRefIdent> = tagged_objects
-            .iter()
-            .map(|obj| {
-                ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(obj.clone(), tag_id))
+        let refs = self
+            .list_pb(&refs_dir)
+            .await?
+            .map_ok(|entry| {
+                let object = entry.key.name().object.clone();
+                let value_key = ObjectTagIdRefIdent::new_generic(
+                    tenant,
+                    ObjectTagIdRef::new(object.clone(), tag_id),
+                );
+                (object, value_key)
             })
-            .collect();
+            .try_collect::<Vec<_>>()
+            .await?;
+        let (tagged_objects, value_keys): (Vec<_>, Vec<_>) = refs.into_iter().unzip();
 
         let tag_values = self
             .get_pb_values_vec::<ObjectTagIdRefIdent, _>(value_keys)
