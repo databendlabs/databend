@@ -426,7 +426,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // If allow_credential_chain is not set, default to false.
+    // If allow_credential_chain is not set, default to false for security.
     let allow_credential_chain = cfg.allow_credential_chain.unwrap_or(false);
 
     // Disallowing the credential chain forces unsigned or fully explicit access.
