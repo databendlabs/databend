@@ -17,23 +17,23 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::dma_buffer_to_bytes;
+use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::GlobalUniqName;
-use databend_common_base::base::dma_buffer_to_bytes;
-use databend_common_base::base::dma_read_file_range;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempDir;
+use opendal::services::Fs;
 use opendal::Buffer;
 use opendal::Operator;
-use opendal::services::Fs;
 
-use super::Location;
 use super::async_buffer::SpillTarget;
 use super::serialize::*;
+use super::Location;
 
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]

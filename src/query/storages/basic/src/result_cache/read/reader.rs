@@ -23,8 +23,8 @@ use databend_common_storage::DataOperator;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
-use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_meta_key;
+use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::meta_manager::ResultCacheMetaManager;
 
 pub struct ResultCacheReader {

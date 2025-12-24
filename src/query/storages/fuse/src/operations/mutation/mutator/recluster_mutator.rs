@@ -19,8 +19,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::ReclusterParts;
@@ -28,11 +28,11 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::compare_scalars;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::compare_scalars;
-use databend_common_expression::types::DataType;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -42,26 +42,26 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
+use fastrace::Span;
 use indexmap::IndexSet;
 use log::debug;
 use log::warn;
 use opendal::Operator;
 
-use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
-use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
-use crate::FuseTable;
-use crate::SegmentLocation;
 use crate::io::MetaReaders;
+use crate::operations::common::BlockMetaIndex as BlockIndex;
+use crate::operations::mutation::mutator::block_compact_mutator::CompactLimitState;
+use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;
 use crate::operations::CompactLazyPartInfo;
-use crate::operations::common::BlockMetaIndex as BlockIndex;
-use crate::operations::mutation::SegmentCompactChecker;
-use crate::operations::mutation::mutator::block_compact_mutator::CompactLimitState;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
+use crate::FuseTable;
+use crate::SegmentLocation;
+use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
+use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 pub enum ReclusterMode {
     Recluster,

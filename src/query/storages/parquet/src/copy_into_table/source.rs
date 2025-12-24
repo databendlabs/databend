@@ -31,11 +31,11 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use opendal::Operator;
 
-use crate::ParquetPart;
 use crate::copy_into_table::projection::CopyProjectionEvaluator;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::read_settings::ReadSettings;
+use crate::ParquetPart;
 
 enum State {
     Init,

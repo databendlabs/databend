@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use anyhow::Ok;
 use anyhow::Result;
-use anyhow::anyhow;
 use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
@@ -36,8 +36,8 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
-use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
+use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::sessions::BuildInfoRef;
@@ -45,9 +45,9 @@ use databend_query::sessions::SessionManager;
 use futures::TryStream;
 use futures::TryStreamExt;
 use log::debug;
-use opendal::Operator;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryLayer;
+use opendal::Operator;
 
 /// Load the configuration file of databend query.
 ///
@@ -219,7 +219,7 @@ mod tests {
     use std::path::Path;
 
     use databend_common_base::base::tokio;
-    use databend_common_storage::Scheme;
+    use opendal::Scheme;
 
     use super::*;
 
@@ -237,12 +237,12 @@ mod tests {
     #[tokio::test]
     async fn test_load_epochfs_storage() -> Result<()> {
         let op = load_bendsave_storage("s3://bendsave/tmp?region=us-east-1").await?;
-        assert_eq!(op.info().scheme(), Scheme::S3.to_string());
+        assert_eq!(op.info().scheme(), Scheme::S3);
         assert_eq!(op.info().name(), "bendsave");
         assert_eq!(op.info().root(), "/tmp/");
 
         let op = load_bendsave_storage("fs://opt").await?;
-        assert_eq!(op.info().scheme(), Scheme::Fs.to_string());
+        assert_eq!(op.info().scheme(), Scheme::Fs);
         assert_eq!(op.info().root(), "/opt");
         Ok(())
     }

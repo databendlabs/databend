@@ -38,19 +38,19 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
-use crate::FuseTable;
+use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
-use crate::io::create_inverted_index_builders;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::statistics::ClusterStatsGenerator;
+use crate::FuseTable;
 
 #[allow(clippy::large_enum_variant)]
 enum State {

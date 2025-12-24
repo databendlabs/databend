@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Instant;
 
-use opendal::Buffer;
-use opendal::Metadata;
-use opendal::Result;
+use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -31,7 +29,9 @@ use opendal::raw::RpDelete;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
-use opendal::raw::oio;
+use opendal::Buffer;
+use opendal::Metadata;
+use opendal::Result;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
 #[derive(Debug, Default)]

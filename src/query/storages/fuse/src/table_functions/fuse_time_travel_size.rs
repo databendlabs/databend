@@ -21,27 +21,27 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
 
 use super::parse_opt_opt_args;
-use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
-use crate::FuseTable;
 use crate::io::SnapshotsIO;
+use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::table_functions::string_literal;
+use crate::FuseTable;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 
 pub struct FuseTimeTravelSizeArgs {
     pub database_name: Option<String>,

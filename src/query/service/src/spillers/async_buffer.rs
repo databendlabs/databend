@@ -32,27 +32,27 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_storages_parquet::ReadSettings;
-use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_common_storages_parquet::parquet_reader::row_group::get_ranges;
-use fastrace::Span;
+use databend_common_storages_parquet::parquet_reader::RowGroupCore;
+use databend_common_storages_parquet::ReadSettings;
 use fastrace::future::FutureExt;
+use fastrace::Span;
 use opendal::Metadata;
 use opendal::Operator;
 use opendal::Writer;
-use parquet::arrow::ArrowWriter;
-use parquet::arrow::FieldLevels;
-use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::parquet_to_arrow_schema;
+use parquet::arrow::ArrowWriter;
+use parquet::arrow::FieldLevels;
+use parquet::arrow::ProjectionMask;
 use parquet::basic::Compression;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
@@ -832,9 +832,9 @@ impl Background {
 #[cfg(test)]
 mod tests {
     use std::io::Write;
-    use std::sync::Arc;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
+    use std::sync::Arc;
 
     use databend_common_base::runtime::spawn;
     use opendal::Operator;

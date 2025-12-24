@@ -27,9 +27,9 @@ use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
-use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::ProjectionMask;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::schema::types::SchemaDescPtr;
 

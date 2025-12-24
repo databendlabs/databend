@@ -18,6 +18,9 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -25,13 +28,10 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
+use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
@@ -48,8 +48,8 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 use parquet::format::FileMetaData;
-use sysinfo::System;
 use sysinfo::get_current_pid;
+use sysinfo::System;
 use uuid::Uuid;
 
 // NOTE:

@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -28,7 +29,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::local_block_meta_serde;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
@@ -46,6 +46,7 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -53,24 +54,23 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
-use crate::FuseStorageFormat;
-use crate::io::BloomIndexState;
-use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
+use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
+use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
-use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
-use crate::io::write::virtual_column_builder::VirtualColumnState;
+use crate::io::BloomIndexState;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::column_parquet_metas;
-use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::gen_columns_statistics;
+use crate::statistics::ClusterStatsGenerator;
+use crate::FuseStorageFormat;
 
 pub fn serialize_block(
     write_settings: &WriteSettings,

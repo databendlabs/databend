@@ -25,9 +25,9 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::ColumnData;
 use opendal::Operator;
-use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::arrow_reader::RowSelection;
+use parquet::arrow::ProjectionMask;
 use parquet::column::page::PageIterator;
 use parquet::column::page::PageReader;
 use parquet::errors::ParquetError;
@@ -322,7 +322,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         self.column_chunks
             .iter()
             .enumerate()
-            .filter(|&(idx, chunk)| chunk.is_none() && projection.leaf_included(idx))
+            .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
             .map(|(idx, _chunk)| {
                 let column = self.metadata.meta().column(idx);
                 let (start, length) = column.byte_range();
@@ -497,8 +497,8 @@ mod test {
     use arrow_schema::Schema;
     use bytes::Bytes;
     use databend_common_base::base::tokio;
-    use opendal::Operator;
     use opendal::services::Memory;
+    use opendal::Operator;
     use parquet::arrow::ArrowWriter;
     use parquet::basic::Repetition;
     use parquet::file::metadata::RowGroupMetaData;

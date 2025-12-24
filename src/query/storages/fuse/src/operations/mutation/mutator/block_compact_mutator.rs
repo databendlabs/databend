@@ -27,9 +27,9 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::is_stream_column_id;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::is_stream_column_id;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -38,10 +38,8 @@ use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use opendal::Operator;
 
-use crate::TableContext;
-use crate::io::SegmentsIO;
 use crate::io::read::read_segment_stats;
-use crate::operations::CompactOptions;
+use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
@@ -50,8 +48,10 @@ use crate::operations::mutation::CompactExtraInfo;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
+use crate::TableContext;
 
 #[derive(Clone)]
 pub struct BlockCompactMutator {

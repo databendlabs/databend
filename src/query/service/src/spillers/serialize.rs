@@ -25,18 +25,18 @@ use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::arrow::write_column;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
-use databend_common_expression::arrow::write_column;
-use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::DataType;
 use databend_storages_common_io::BufferReader;
 use opendal::Buffer;
-use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
@@ -199,10 +199,10 @@ fn bare_blocks_to_parquet<W: Write + Send>(
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
-    use databend_common_expression::FromData;
     use databend_common_expression::block_debug::assert_block_value_eq;
     use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::StringType;
+    use databend_common_expression::FromData;
 
     use super::*;
 

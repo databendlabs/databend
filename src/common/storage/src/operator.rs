@@ -16,17 +16,17 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::runtime::metrics::FamilyCounter;
-use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
@@ -44,29 +44,28 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
-use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
-use opendal::Builder;
-use opendal::Operator;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::HttpClientLayer;
+use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
-use opendal_layer_immutable_index::ImmutableIndexLayer;
+use opendal::Builder;
+use opendal::Operator;
 
-use crate::StorageConfig;
-use crate::StorageHttpClient;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
+use crate::StorageConfig;
+use crate::StorageHttpClient;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
@@ -404,8 +403,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // Don't enable it otherwise we will get Permission in stat unknown files
-        // .allow_anonymous()
+        // It's safe to allow anonymous since opendal will perform the check first.
+        .allow_anonymous()
         // Root.
         .root(&cfg.root);
 
@@ -653,78 +652,5 @@ impl OperatorRegistry for iceberg::io::FileIO {
 
         let pos = file_io.relative_path_pos();
         Ok((file_io.get_operator().clone(), &location[pos..]))
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Scheme {
-    Azblob,
-    Gcs,
-    Hdfs,
-    Ipfs,
-    S3,
-    Oss,
-    Obs,
-    Cos,
-    Http,
-    Fs,
-    Webhdfs,
-    Huggingface,
-    Custom(&'static str),
-}
-
-impl Scheme {
-    /// Convert self into static str.
-    pub fn into_static(self) -> &'static str {
-        self.into()
-    }
-}
-
-impl From<Scheme> for &'static str {
-    fn from(v: Scheme) -> Self {
-        match v {
-            Scheme::Azblob => "azblob",
-            Scheme::Gcs => "gcs",
-            Scheme::Hdfs => "hdfs",
-            Scheme::Ipfs => "ipfs",
-            Scheme::S3 => "s3",
-            Scheme::Oss => "oss",
-            Scheme::Obs => "obs",
-            Scheme::Cos => "cos",
-            Scheme::Http => "http",
-            Scheme::Fs => "fs",
-            Scheme::Webhdfs => "webhdfs",
-            Scheme::Huggingface => "huggingface",
-            Scheme::Custom(s) => s,
-        }
-    }
-}
-
-impl FromStr for Scheme {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "azblob" => Ok(Scheme::Azblob),
-            "gcs" => Ok(Scheme::Gcs),
-            "hdfs" => Ok(Scheme::Hdfs),
-            "ipfs" => Ok(Scheme::Ipfs),
-            "s3" | "s3a" => Ok(Scheme::S3),
-            "oss" => Ok(Scheme::Oss),
-            "obs" => Ok(Scheme::Obs),
-            "cos" => Ok(Scheme::Cos),
-            "http" | "https" => Ok(Scheme::Http),
-            "fs" => Ok(Scheme::Fs),
-            "webhdfs" => Ok(Scheme::Webhdfs),
-            "huggingface" | "hf" => Ok(Scheme::Huggingface),
-            _ => Ok(Scheme::Custom(Box::leak(s.into_boxed_str()))),
-        }
-    }
-}
-
-impl std::fmt::Display for Scheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.into_static())
     }
 }

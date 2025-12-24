@@ -20,24 +20,24 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::expr::*;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::expr::*;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_storages_common_stage::project_columnar;
-use opendal::Operator;
 use opendal::services::Memory;
+use opendal::Operator;
 use parquet::file::metadata::ParquetMetaDataReader;
 
-use crate::ParquetSourceType;
 use crate::copy_into_table::CopyProjectionEvaluator;
 use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::ParquetReaderBuilder;
 use crate::schema::arrow_to_table_schema;
+use crate::ParquetSourceType;
 
 pub struct InmMemoryFile {
     file_data: Bytes,

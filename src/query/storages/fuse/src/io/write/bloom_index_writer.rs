@@ -26,19 +26,19 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::NgramArgs;
-use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
-use crate::FuseStorageFormat;
 use crate::io::BlockReader;
+use crate::FuseStorageFormat;
 
 #[derive(Debug)]
 pub struct BloomIndexState {

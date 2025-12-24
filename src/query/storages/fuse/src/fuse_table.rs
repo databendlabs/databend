@@ -34,6 +34,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -41,21 +42,20 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
-use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
-use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
-use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
+use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
+use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
-use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
@@ -66,20 +66,22 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_sql::ApproxDistinctColumns;
-use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_sql::ApproxDistinctColumns;
+use databend_common_sql::BloomIndexColumns;
+use databend_common_storage::init_operator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
-use databend_common_storage::init_operator;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::Files;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -87,10 +89,9 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::decode_column_hll;
-use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -102,7 +103,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use databend_storages_common_table_meta::table::TableCompression;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
@@ -110,6 +110,23 @@ use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 
+use crate::fuse_column::FuseTableColumnStatisticsProvider;
+use crate::fuse_type::FuseTableType;
+use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
+use crate::io::TableMetaLocationGenerator;
+use crate::io::TableSnapshotReader;
+use crate::io::WriteSettings;
+use crate::operations::load_last_snapshot_hint;
+use crate::operations::ChangesDesc;
+use crate::operations::SnapshotHint;
+use crate::statistics::reduce_block_statistics;
+use crate::statistics::Trim;
+use crate::FuseSegmentFormat;
+use crate::FuseStorageFormat;
+use crate::NavigationPoint;
+use crate::Table;
+use crate::TableStatistics;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -120,23 +137,6 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
-use crate::FuseSegmentFormat;
-use crate::FuseStorageFormat;
-use crate::NavigationPoint;
-use crate::Table;
-use crate::TableStatistics;
-use crate::fuse_column::FuseTableColumnStatisticsProvider;
-use crate::fuse_type::FuseTableType;
-use crate::io::MetaReaders;
-use crate::io::SegmentsIO;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::TableSnapshotReader;
-use crate::io::WriteSettings;
-use crate::operations::ChangesDesc;
-use crate::operations::SnapshotHint;
-use crate::operations::load_last_snapshot_hint;
-use crate::statistics::Trim;
-use crate::statistics::reduce_block_statistics;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -680,16 +680,15 @@ impl FuseTable {
 
         info!(
             "extracting snapshot location of table {} with id {:?} from the last snapshot hint file.",
-            table_info.desc, table_info.ident
+            table_info.desc,
+            table_info.ident
         );
 
         let snapshot_hint = Self::refresh_schema_from_hint(operator, storage_prefix)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            snapshot_hint
-                .as_ref()
-                .map(|(hint, _)| &hint.snapshot_full_path),
+            snapshot_hint.as_ref().map(|(hint, _)| &hint.snapshot_full_path),
             table_info.desc,
             table_info.ident
         );
@@ -954,7 +953,11 @@ impl Table for FuseTable {
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
+                if dry_run {
+                    Ok(Some(vec![]))
+                } else {
+                    Ok(None)
+                }
             }
             Err(e) => Err(e),
         }

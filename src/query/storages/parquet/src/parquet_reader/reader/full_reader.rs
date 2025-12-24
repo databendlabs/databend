@@ -19,39 +19,39 @@ use arrow_schema::ArrowError;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use databend_common_storage::OperatorRegistry;
+use futures::future::BoxFuture;
 use futures::StreamExt;
 use futures::TryFutureExt;
-use futures::future::BoxFuture;
 use opendal::Reader;
-use parquet::arrow::ParquetRecordBatchStreamBuilder;
-use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ArrowPredicateFn;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::arrow_reader::RowFilter;
 use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::ParquetRecordBatchStreamBuilder;
+use parquet::arrow::ProjectionMask;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::schema::types::SchemaDescPtr;
 
-use crate::ParquetPruner;
 use crate::meta::check_parquet_schema;
-use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::predicate::ParquetPredicate;
-use crate::parquet_reader::utils::FieldPaths;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::transform_record_batch_by_field_paths;
+use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::DataBlockIterator;
 use crate::transformer::RecordBatchTransformer;
+use crate::ParquetPruner;
 
 /// The reader to read a whole parquet file.
 pub struct ParquetWholeFileReader {

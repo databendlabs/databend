@@ -14,35 +14,35 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
-use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
-use logforth::filter::EnvFilter;
 use logforth::filter::env_filter::EnvFilterBuilder;
+use logforth::filter::EnvFilter;
 use opendal::Operator;
 use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::WithTonicConfig;
 
-use crate::Config;
 use crate::config::LogFormat;
 use crate::config::OTLPProtocol;
 use crate::filter::ThreadTrackerFilter;
+use crate::loggers::new_rolling_file_appender;
 use crate::loggers::IdenticalLayout;
 use crate::loggers::JsonLayout;
 use crate::loggers::TextLayout;
-use crate::loggers::new_rolling_file_appender;
 use crate::predefined_tables::table_to_target;
 use crate::query_log_collector::QueryLogCollector;
 use crate::remote_log::RemoteLog;
 use crate::structlog::StructLogReporter;
+use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
 

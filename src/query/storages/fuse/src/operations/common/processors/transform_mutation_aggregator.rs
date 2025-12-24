@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -31,6 +31,7 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -44,7 +45,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
-use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
 use log::debug;
@@ -52,11 +52,10 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
-use crate::FuseTable;
+use crate::io::read::read_segment_stats;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::read::read_segment_stats;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
@@ -65,10 +64,11 @@ use crate::operations::common::SnapshotChanges;
 use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
-use crate::statistics::VirtualColumnAccumulator;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
+use crate::statistics::VirtualColumnAccumulator;
+use crate::FuseTable;
 
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,

@@ -19,9 +19,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use opendal::Buffer;
-use opendal::Metadata;
-use opendal::Result;
+use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -39,7 +37,9 @@ use opendal::raw::RpPresign;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
-use opendal::raw::oio;
+use opendal::Buffer;
+use opendal::Metadata;
+use opendal::Result;
 
 /// # TODO
 ///
@@ -307,18 +307,26 @@ impl<R: oio::List> oio::List for RuntimeIO<R> {
 }
 
 impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
-    async fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
-        self.inner.as_mut().unwrap().delete(path, args).await
+    fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
+        self.inner.as_mut().unwrap().delete(path, args)
     }
 
-    async fn close(&mut self) -> Result<()> {
+    async fn flush(&mut self) -> Result<usize> {
         let mut r = self.inner.take().expect("deleter must be valid");
         let runtime = self.runtime.clone();
 
-        let _ = runtime
-            .spawn(async move { r.close().await })
+        let (r, res) = runtime
+            .try_spawn(
+                async move {
+                    let res = r.flush().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
-            .expect("join must success")?;
-        Ok(())
+            .expect("join must success");
+        self.inner = Some(r);
+        res
     }
 }

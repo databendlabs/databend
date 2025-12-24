@@ -35,13 +35,13 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use opendal::Operator;
 
-use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::StreamBlockBuilder;
 use crate::io::StreamBlockProperties;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
+use crate::FuseTable;
 
 enum State {
     Consume,

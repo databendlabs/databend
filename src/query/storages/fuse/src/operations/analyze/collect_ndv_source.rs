@@ -43,6 +43,8 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
@@ -50,22 +52,20 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::decode_column_hll;
-use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Operator;
 
-use crate::FuseLazyPartInfo;
-use crate::FuseStorageFormat;
-use crate::FuseTable;
+use crate::io::build_column_hlls;
+use crate::io::read::meta::SegmentStatsReader;
 use crate::io::BlockReader;
 use crate::io::CachedMetaWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::build_column_hlls;
-use crate::io::read::meta::SegmentStatsReader;
 use crate::operations::acquire_task_permit;
 use crate::operations::analyze::AnalyzeNDVMeta;
+use crate::FuseLazyPartInfo;
+use crate::FuseStorageFormat;
+use crate::FuseTable;
 
 struct SegmentWithHLL {
     segment_location: Location,
@@ -296,7 +296,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 return Err(ErrorCode::Internal(format!(
                     "Invalid state reached in sync process: {:?}. This is a bug.",
                     state
-                )));
+                )))
             }
         }
         Ok(())
@@ -416,7 +416,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 return Err(ErrorCode::Internal(format!(
                     "Invalid state reached in async process: {:?}. This is a bug.",
                     state
-                )));
+                )))
             }
         }
         Ok(())

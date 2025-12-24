@@ -25,9 +25,9 @@ use databend_common_metrics::storage::*;
 use futures::future::try_join_all;
 use opendal::Operator;
 
+use crate::merge_io_result::OwnerMemory;
 use crate::MergeIOReadResult;
 use crate::ReadSettings;
-use crate::merge_io_result::OwnerMemory;
 
 pub struct MergeIOReader {}
 

@@ -19,30 +19,30 @@ use std::sync::Arc;
 
 use arrow_schema::Schema;
 use bytes::Bytes;
+use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
-use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
-use databend_common_storages_parquet::ReadSettings;
 use databend_common_storages_parquet::parquet_reader::RowGroupCore;
+use databend_common_storages_parquet::ReadSettings;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use either::Either;
 use opendal::Operator;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::arrow_writer::compute_leaves;
+use parquet::arrow::arrow_writer::get_column_writers;
+use parquet::arrow::arrow_writer::ArrowColumnWriter;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::arrow_writer::ArrowColumnWriter;
-use parquet::arrow::arrow_writer::compute_leaves;
-use parquet::arrow::arrow_writer::get_column_writers;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::metadata::RowGroupMetaDataPtr;
@@ -53,11 +53,11 @@ use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
+use super::async_buffer::BufferWriter;
+use super::async_buffer::SpillTarget;
 use super::Location;
 use super::SpillerInner;
 use super::SpillsBufferPool;
-use super::async_buffer::BufferWriter;
-use super::async_buffer::SpillTarget;
 
 pub struct Properties {
     schema: Arc<Schema>,
@@ -534,13 +534,13 @@ impl<A> SpillerInner<A> {
 #[cfg(test)]
 mod tests {
     use databend_common_exception::Result;
-    use databend_common_expression::Column;
-    use databend_common_expression::FromData;
+    use databend_common_expression::types::array::ArrayColumnBuilder;
+    use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::types::array::ArrayColumnBuilder;
-    use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
 
     use super::*;
 

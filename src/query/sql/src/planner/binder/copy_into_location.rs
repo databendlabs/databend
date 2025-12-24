@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::CopyIntoLocationSource;
 use databend_common_ast::ast::CopyIntoLocationStmt;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
@@ -24,11 +24,11 @@ use databend_common_storage::init_stage_operator;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::ErrorKind;
 
-use crate::BindContext;
-use crate::binder::Binder;
 use crate::binder::copy_into_table::resolve_file_location;
+use crate::binder::Binder;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Plan;
+use crate::BindContext;
 
 impl Binder {
     #[async_backtrace::framed]

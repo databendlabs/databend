@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::let_and_return)]
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,13 +50,13 @@ use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use opendal::EntryMode;
-use opendal::Metadata;
-use opendal::OperatorBuilder;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::OpStat;
 use opendal::raw::RpStat;
+use opendal::EntryMode;
+use opendal::Metadata;
+use opendal::OperatorBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
@@ -227,13 +226,13 @@ mod test_accessor {
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
 
+    use opendal::raw::oio;
+    use opendal::raw::oio::Entry;
     use opendal::raw::MaybeSend;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
-    use opendal::raw::oio;
-    use opendal::raw::oio::Entry;
 
     use super::*;
 
@@ -298,15 +297,17 @@ mod test_accessor {
     }
 
     impl oio::Delete for MockDeleter {
-        async fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.size += 1;
             Ok(())
         }
 
-        async fn close(&mut self) -> opendal::Result<()> {
+        async fn flush(&mut self) -> opendal::Result<usize> {
             self.hit_batch.store(true, Ordering::Release);
+
+            let n = self.size;
             self.size = 0;
-            Ok(())
+            Ok(n)
         }
     }
 
@@ -888,12 +889,10 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
     // db1.t1 should still be accessible
     fixture.execute_command("select * from db1.t1").await?;
     // db2.t1 should not exist
-    assert!(
-        fixture
-            .execute_command("select * from db2.t1")
-            .await
-            .is_err()
-    );
+    assert!(fixture
+        .execute_command("select * from db2.t1")
+        .await
+        .is_err());
     Ok(())
 }
 

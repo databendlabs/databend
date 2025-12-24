@@ -24,8 +24,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableField;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
-use databend_common_native::read::ColumnIter;
 use databend_common_native::read::reader::NativeReader;
+use databend_common_native::read::ColumnIter;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -35,9 +35,9 @@ use opendal::Buffer;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
+use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
-use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
