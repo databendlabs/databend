@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -56,10 +57,15 @@ impl Interpreter for CreateTagInterpreter {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let comment = self.plan.comment.clone().unwrap_or_default();
         let meta = TagMeta {
-            allowed_values: self.plan.allowed_values.clone(),
+            allowed_values: self
+                .plan
+                .allowed_values
+                .as_ref()
+                .map(|vals| normalize_allowed_values(vals)),
             comment,
             created_on: Utc::now(),
             updated_on: None,
+            drop_on: None,
         };
         if matches!(self.plan.create_option, CreateOption::CreateOrReplace) {
             return Err(ErrorCode::InvalidArgument(
@@ -86,4 +92,15 @@ impl Interpreter for CreateTagInterpreter {
             }
         }
     }
+}
+
+fn normalize_allowed_values(values: &[String]) -> Vec<String> {
+    let mut seen = HashSet::with_capacity(values.len());
+    let mut deduped = Vec::with_capacity(values.len());
+    for value in values {
+        if seen.insert(value.as_str()) {
+            deduped.push(value.clone());
+        }
+    }
+    deduped
 }

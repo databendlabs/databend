@@ -20,15 +20,7 @@ pub enum TagError {
     /// map it back to `ErrorCode::UnknownTag` without converting through the
     /// tenant-key helpers.
     #[error("TAG with id {tag_id} does not exist.")]
-    NotFound { tag_id: u64 },
-
-    #[error(
-        "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
-    )]
-    TagHasReferences {
-        tag_name: String,
-        reference_count: usize,
-    },
+    TagIdNotFound { tag_id: u64 },
 
     #[error("Invalid value '{tag_value}' for TAG with id {tag_id}{allowed_values_display}.")]
     NotAllowedValue {
@@ -37,20 +29,15 @@ pub enum TagError {
         allowed_values_display: String,
     },
 
-    #[error("Tag metadata was modified concurrently, please retry (e.g., allowed_values changed)")]
-    ConcurrentModification,
+    #[error(
+        "Tag metadata for tag id(s) {tag_ids:?} was modified concurrently, please retry (e.g., allowed_values changed)"
+    )]
+    TagMetaConcurrentModification { tag_ids: Vec<u64> },
 }
 
 impl TagError {
     pub fn not_found(tag_id: u64) -> Self {
-        Self::NotFound { tag_id }
-    }
-
-    pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
-        Self::TagHasReferences {
-            tag_name: tag_name.into(),
-            reference_count,
-        }
+        Self::TagIdNotFound { tag_id }
     }
 
     pub fn not_allowed_value(
@@ -77,8 +64,10 @@ impl TagError {
         }
     }
 
-    pub fn concurrent_modification() -> Self {
-        Self::ConcurrentModification
+    pub fn concurrent_modification(tag_ids: impl Into<Vec<u64>>) -> Self {
+        Self::TagMetaConcurrentModification {
+            tag_ids: tag_ids.into(),
+        }
     }
 }
 
@@ -86,10 +75,11 @@ impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
-            TagError::NotFound { .. } => ErrorCode::UnknownTag(s),
-            TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
+            TagError::TagIdNotFound { .. } => ErrorCode::UnknownTag(s),
             TagError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
-            TagError::ConcurrentModification => ErrorCode::TagConcurrentModification(s),
+            TagError::TagMetaConcurrentModification { .. } => {
+                ErrorCode::TagMetaConcurrentModification(s)
+            }
         }
     }
 }

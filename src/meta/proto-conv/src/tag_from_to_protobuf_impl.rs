@@ -48,6 +48,10 @@ impl FromToProto for mt::TagMeta {
                 Some(v) => Some(DateTime::<Utc>::from_pb(v)?),
                 None => None,
             },
+            drop_on: match p.drop_on {
+                Some(v) => Some(DateTime::<Utc>::from_pb(v)?),
+                None => None,
+            },
         })
     }
 
@@ -59,6 +63,10 @@ impl FromToProto for mt::TagMeta {
             comment: self.comment.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: match self.updated_on {
+                Some(v) => Some(v.to_pb()?),
+                None => None,
+            },
+            drop_on: match self.drop_on {
                 Some(v) => Some(v.to_pb()?),
                 None => None,
             },

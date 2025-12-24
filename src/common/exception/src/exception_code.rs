@@ -379,12 +379,10 @@ build_exceptions! {
     TagAlreadyExists(2750),
     /// Unknown tag
     UnknownTag(2751),
-    /// Tag has active references
-    TagHasReferences(2752),
     /// Invalid value for tag
-    NotAllowedTagValue(2753),
+    NotAllowedTagValue(2752),
     /// Tag metadata was modified concurrently
-    TagConcurrentModification(2754),
+    TagMetaConcurrentModification(2753),
 }
 
 // Cloud and Integration Errors [1701-1703]
