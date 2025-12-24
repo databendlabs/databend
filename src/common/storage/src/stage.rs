@@ -96,7 +96,7 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             StorageParams::S3(mut cfg) => {
                 let allow_credential_chain =
                     stage_info.allow_credential_chain || !cfg.role_arn.is_empty();
-                cfg.disable_credential_loader = !allow_credential_chain;
+                cfg.allow_credential_chain = Some(allow_credential_chain);
                 StorageParams::S3(cfg)
             }
             v => v,

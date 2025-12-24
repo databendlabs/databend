@@ -205,10 +205,6 @@ impl StorageParams {
                 s1.master_key = s2.master_key;
                 s1.network_config = s2.network_config;
                 s1.disable_credential_loader = s2.disable_credential_loader;
-                // Remove disable_credential_loader is role_arn has been set.
-                if !s1.role_arn.is_empty() {
-                    s1.disable_credential_loader = false;
-                }
                 Ok(Self::S3(s1))
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
@@ -487,6 +483,12 @@ pub struct StorageS3Config {
     /// Deprecated: prefer the runtime `allow_credential_chain` policy plus global
     /// `storage.disable_config_load` / `storage.disable_instance_profile`.
     pub disable_credential_loader: bool,
+    /// Runtime-only override for whether ambient credential chains are allowed.
+    ///
+    /// This value is never serialized/persisted and is only used when building
+    /// operators in the current process.
+    #[serde(skip)]
+    pub allow_credential_chain: Option<bool>,
     /// Enable this flag to send API in virtual host style.
     ///
     /// - Virtual Host Style: `https://bucket.s3.amazonaws.com`
@@ -512,6 +514,7 @@ impl Default for StorageS3Config {
             master_key: "".to_string(),
             root: "".to_string(),
             disable_credential_loader: false,
+            allow_credential_chain: None,
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
@@ -530,6 +533,7 @@ impl Debug for StorageS3Config {
             .field("storage_class", &self.storage_class)
             .field("root", &self.root)
             .field("disable_credential_loader", &self.disable_credential_loader)
+            .field("allow_credential_chain", &self.allow_credential_chain)
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)
             .field("role_arn", &self.role_arn)
             .field("external_id", &self.external_id)

@@ -1023,6 +1023,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             master_key: self.master_key,
             root: self.root,
             disable_credential_loader: false,
+            allow_credential_chain: None,
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,

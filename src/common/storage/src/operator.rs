@@ -417,9 +417,12 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // `disable_credential_loader` disables the ambient credential chain entirely.
-    // When it is enabled, only explicit credentials are used and requests can fall back to unsigned.
-    if cfg.disable_credential_loader {
+    let allow_credential_chain = cfg
+        .allow_credential_chain
+        .unwrap_or(!cfg.disable_credential_loader);
+
+    // Disallowing the credential chain forces unsigned or fully explicit access.
+    if !allow_credential_chain {
         builder = builder.disable_config_load().disable_ec2_metadata();
     } else if let Some(global) = CredentialChainConfig::try_get() {
         // Apply global limits to the credential chain.
@@ -433,7 +436,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
 
     // If credential loading is disabled and no credentials are provided, use unsigned requests.
     // This allows accessing public buckets reliably in environments where signing could be rejected.
-    if cfg.disable_credential_loader
+    if !allow_credential_chain
         && cfg.access_key_id.is_empty()
         && cfg.secret_access_key.is_empty()
         && cfg.security_token.is_empty()

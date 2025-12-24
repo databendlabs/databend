@@ -179,6 +179,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         master_key,
         root,
         disable_credential_loader: false,
+        allow_credential_chain: None,
         enable_virtual_host_style,
         role_arn,
         external_id,
