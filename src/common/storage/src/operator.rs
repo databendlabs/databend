@@ -596,7 +596,7 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {
-        let mut data_params = conf.params.clone();
+        let data_params = conf.params.clone();
         let operator = init_operator(&data_params)?;
         check_operator(&operator, &data_params).await?;
 
