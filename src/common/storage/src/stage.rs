@@ -24,18 +24,18 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserIdentity;
-use futures::stream;
 use databend_common_meta_app::storage::StorageParams;
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::Operator;
 use regex::Regex;
 
-use crate::init_operator;
 use crate::DataOperator;
+use crate::init_operator;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {

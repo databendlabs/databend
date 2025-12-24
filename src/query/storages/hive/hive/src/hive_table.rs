@@ -49,8 +49,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
-use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
+use databend_common_storage::init_operator;
 use databend_common_storages_parquet::ParquetPruner;
 use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSourceType;
@@ -66,10 +66,10 @@ use opendal::Operator;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_table_options::HiveTableOptions;
-use crate::hive_table_source::HiveTableSource;
-use crate::utils::HiveFetchPartitionScalars;
 use crate::HivePartInfo;
 use crate::HivePartitionFiller;
+use crate::hive_table_source::HiveTableSource;
+use crate::utils::HiveFetchPartitionScalars;
 
 pub const HIVE_TABLE_ENGINE: &str = "hive";
 pub const HIVE_DEFAULT_PARTITION: &str = "__HIVE_DEFAULT_PARTITION__";
@@ -245,8 +245,7 @@ impl HiveTable {
         if partition_num < 100000 {
             trace!(
                 "get {} partitions from hive metastore:{:?}",
-                partition_num,
-                partition_names
+                partition_num, partition_names
             );
         } else {
             trace!("get {} partitions from hive metastore", partition_num);

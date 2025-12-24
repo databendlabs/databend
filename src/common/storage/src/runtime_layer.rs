@@ -19,7 +19,9 @@ use std::sync::Arc;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use opendal::raw::oio;
+use opendal::Buffer;
+use opendal::Metadata;
+use opendal::Result;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -37,9 +39,7 @@ use opendal::raw::RpPresign;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
-use opendal::Buffer;
-use opendal::Metadata;
-use opendal::Result;
+use opendal::raw::oio;
 
 /// # TODO
 ///

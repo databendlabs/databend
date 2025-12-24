@@ -25,10 +25,6 @@ use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -36,6 +32,10 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -45,14 +45,14 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::StreamSource;
 use databend_common_storage::DataOperator;
+use futures::StreamExt;
 use futures::stream;
 use futures::stream::Chunks;
 use futures::stream::Take;
-use futures::StreamExt;
-use opendal::operator_futures::FutureLister;
 use opendal::Lister;
 use opendal::Metadata;
 use opendal::Operator;
+use opendal::operator_futures::FutureLister;
 
 use crate::table::SystemTablePart;
 
@@ -252,10 +252,9 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 
     pub fn build(
         self,
-        block_builder: (impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock>
-             + Sync
-             + Send
-             + 'static),
+        block_builder: (
+            impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static
+        ),
     ) -> Result<SendableDataBlockStream> {
         stream_source_from_entry_lister_with_chunk_size(
             self.op.clone(),

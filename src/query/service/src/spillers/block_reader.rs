@@ -22,8 +22,8 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::traits::Location;
 use opendal::Operator;
 
-use super::serialize::deserialize_block;
 use super::Layout;
+use super::serialize::deserialize_block;
 
 pub struct BlocksReader<'a> {
     read_bytes: u64,

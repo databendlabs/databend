@@ -70,9 +70,6 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
@@ -82,6 +79,9 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -95,8 +95,6 @@ use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
-use databend_storages_common_table_meta::table::is_reserved_opt_key;
-use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -105,22 +103,28 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
 
-use crate::binder::get_storage_params_from_options;
-use crate::binder::parse_storage_params_from_uri;
-use crate::binder::scalar::ScalarBinder;
+use crate::BindContext;
+use crate::DefaultExprBinder;
+use crate::Planner;
+use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ConstraintExprBinder;
 use crate::binder::Visibility;
+use crate::binder::get_storage_params_from_options;
+use crate::binder::parse_storage_params_from_uri;
+use crate::binder::scalar::ScalarBinder;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
+use crate::planner::semantic::IdentifierNormalizer;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
-use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
@@ -162,10 +166,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
-use crate::BindContext;
-use crate::DefaultExprBinder;
-use crate::Planner;
-use crate::SelectBuilder;
 
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
@@ -604,7 +604,7 @@ impl Binder {
                     Some(self.ctx.as_ref()),
                     "when create TABLE with external location",
                 )
-                    .await?;
+                .await?;
 
                 // create a temporary op to check if params is correct
                 let op = init_operator(&sp)?;
@@ -738,12 +738,15 @@ impl Binder {
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
-                        (AnalyzeCreateTableResult {
-                            schema: Arc::new(table_schema),
-                            field_comments: vec![],
-                            table_indexes: None,
-                            table_constraints: None,
-                        }, as_query_plan)
+                        (
+                            AnalyzeCreateTableResult {
+                                schema: Arc::new(table_schema),
+                                field_comments: vec![],
+                                table_indexes: None,
+                                table_constraints: None,
+                            },
+                            as_query_plan,
+                        )
                     }
                     Engine::Delta => {
                         let sp =
@@ -755,12 +758,15 @@ impl Binder {
                         // we do this in case we change this idea.
                         storage_params = Some(sp);
                         engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (AnalyzeCreateTableResult {
-                            schema: Arc::new(table_schema),
-                            field_comments: vec![],
-                            table_indexes: None,
-                            table_constraints: None,
-                        }, as_query_plan)
+                        (
+                            AnalyzeCreateTableResult {
+                                schema: Arc::new(table_schema),
+                                field_comments: vec![],
+                                table_indexes: None,
+                                table_constraints: None,
+                            },
+                            as_query_plan,
+                        )
                     }
                     _ => Err(ErrorCode::BadArguments(
                         "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
@@ -1174,7 +1180,9 @@ impl Binder {
                                     "Invalid number of arguments for attaching policy '{}' to '{}': \
                                      expected at least 2 arguments (masked column + condition columns), \
                                      got {} argument(s)",
-                                    name, table, columns.len()
+                                    name,
+                                    table,
+                                    columns.len()
                                 )));
                             }
 
@@ -1345,7 +1353,9 @@ impl Binder {
                     .get_settings()
                     .get_enable_experimental_row_access_policy()?
                 {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
                 let columns = columns
                     .iter()
@@ -1369,7 +1379,9 @@ impl Binder {
                     .get_settings()
                     .get_enable_experimental_row_access_policy()?
                 {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
                 let policy = self.normalize_identifier(policy).name;
                 Ok(Plan::DropTableRowAccessPolicy(Box::new(
@@ -1388,7 +1400,9 @@ impl Binder {
                     .get_settings()
                     .get_enable_experimental_row_access_policy()?
                 {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
                 Ok(Plan::DropAllTableRowAccessPolicies(Box::new(
                     DropAllTableRowAccessPoliciesPlan {

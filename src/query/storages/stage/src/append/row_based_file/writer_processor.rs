@@ -32,9 +32,9 @@ use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 
 use super::buffers::FileOutputBuffers;
+use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
 use crate::append::path::unload_path;
-use crate::append::UnloadOutput;
 
 pub struct RowBasedFileWriter {
     input: Arc<InputPort>,

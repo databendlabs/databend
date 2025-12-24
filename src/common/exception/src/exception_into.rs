@@ -19,12 +19,12 @@ use std::fmt::Formatter;
 
 use geozero::error::GeozeroError;
 
-use crate::exception_backtrace::capture;
-use crate::span::Span;
 use crate::ErrorCode;
 use crate::ErrorFrame;
 use crate::ParseError;
 use crate::StackTrace;
+use crate::exception_backtrace::capture;
+use crate::span::Span;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {

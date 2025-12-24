@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_app::storage::StorageParams;
-use opendal::raw::normalize_root;
 use opendal::Scheme;
+use opendal::raw::normalize_root;
 
 #[derive(Debug)]
 pub struct ExternalStorageConnection {
