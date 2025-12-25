@@ -70,6 +70,7 @@ pub struct RuntimeFilterDesc {
     pub id: usize,
     pub build_key: Expr,
     pub probe_targets: Vec<(Expr<String>, usize)>,
+    pub build_key_ndv: u64,
     pub build_table_rows: Option<u64>,
     pub enable_bloom_runtime_filter: bool,
     pub enable_inlist_runtime_filter: bool,
@@ -98,6 +99,7 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
                 .iter()
                 .map(|(probe_key, scan_id)| (probe_key.as_expr(&BUILTIN_FUNCTIONS), *scan_id))
                 .collect(),
+            build_key_ndv: runtime_filter.build_key_ndv,
             build_table_rows: runtime_filter.build_table_rows,
             enable_bloom_runtime_filter: runtime_filter.enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: runtime_filter.enable_inlist_runtime_filter,

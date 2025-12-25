@@ -103,7 +103,7 @@ CommitSink
             ├── probe keys: [t1.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── estimated rows: 2.00
+            ├── estimated rows: 1.50
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── scan id: 1
@@ -135,7 +135,7 @@ query T
 explain analyze partial update t1 set a = a + 1 where a in (select a from t2) and b > 2;
 ----
 HashJoin: LEFT SEMI
-├── estimated rows: 2.00
+├── estimated rows: 1.50
 ├── output rows: 2
 ├── TableScan
 │   ├── table: default.default.t2
