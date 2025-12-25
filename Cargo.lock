@@ -11688,7 +11688,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 [[package]]
 name = "ownedbytes"
 version = "0.9.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -15455,7 +15455,7 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 [[package]]
 name = "tantivy"
 version = "0.26.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "aho-corasick",
  "arc-swap",
@@ -15507,7 +15507,7 @@ dependencies = [
 [[package]]
 name = "tantivy-bitpacker"
 version = "0.9.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "bitpacking 0.9.2",
 ]
@@ -15515,7 +15515,7 @@ dependencies = [
 [[package]]
 name = "tantivy-columnar"
 version = "0.6.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "downcast-rs",
  "fastdivide",
@@ -15530,7 +15530,7 @@ dependencies = [
 [[package]]
 name = "tantivy-common"
 version = "0.10.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -15553,7 +15553,7 @@ dependencies = [
 [[package]]
 name = "tantivy-jieba"
 version = "0.17.0"
-source = "git+https://github.com/b41sh/tantivy-jieba?rev=0d18ff7872af581fb799c07f32cbad84ac5993f7#0d18ff7872af581fb799c07f32cbad84ac5993f7"
+source = "git+https://github.com/datafuse-extras/tantivy-jieba?rev=18a0ae9#18a0ae9a444502b042fb01244afc5044df39287a"
 dependencies = [
  "jieba-rs",
  "lazy_static",
@@ -15563,7 +15563,7 @@ dependencies = [
 [[package]]
 name = "tantivy-query-grammar"
 version = "0.25.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "fnv",
  "nom 7.1.3",
@@ -15575,7 +15575,7 @@ dependencies = [
 [[package]]
 name = "tantivy-sstable"
 version = "0.6.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "futures-util",
  "itertools 0.14.0",
@@ -15588,7 +15588,7 @@ dependencies = [
 [[package]]
 name = "tantivy-stacker"
 version = "0.6.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "murmurhash32",
  "tantivy-common",
@@ -15597,7 +15597,7 @@ dependencies = [
 [[package]]
 name = "tantivy-tokenizer-api"
 version = "0.6.0"
-source = "git+https://github.com/b41sh/tantivy?rev=7cec26400695dc9d8299751c3b36e8b9eee6abbc#7cec26400695dc9d8299751c3b36e8b9eee6abbc"
+source = "git+https://github.com/datafuse-extras/tantivy?rev=26446bc#26446bc055b33565eefc2d59dce2cf5743261a8b"
 dependencies = [
  "serde",
 ]
