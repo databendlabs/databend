@@ -19,3 +19,4 @@ pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentStatsReader;
 pub use meta_readers::TableSnapshotReader;
 pub use meta_readers::bytes_reader;
+pub use meta_readers::read_thrift_file_metadata;

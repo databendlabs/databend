@@ -14,7 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::intrinsics::unlikely;
+use std::hint::unlikely;
 use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;

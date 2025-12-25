@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Display;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
@@ -28,8 +27,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -46,6 +43,11 @@ use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
 
+use super::LagLeadDefault;
+use super::LagLeadFunctionDesc;
+use super::NthValueFunctionDesc;
+use super::NtileFunctionDesc;
+use super::WindowFunction;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
@@ -238,83 +240,6 @@ impl IPhysicalPlan for Window {
         }
         Ok(())
     }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum WindowFunction {
-    Aggregate(AggregateFunctionDesc),
-    RowNumber,
-    Rank,
-    DenseRank,
-    PercentRank,
-    LagLead(LagLeadFunctionDesc),
-    NthValue(NthValueFunctionDesc),
-    Ntile(NtileFunctionDesc),
-    CumeDist,
-}
-
-impl WindowFunction {
-    fn data_type(&self) -> Result<DataType> {
-        let return_type = match self {
-            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
-            WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
-                DataType::Number(NumberDataType::UInt64)
-            }
-            WindowFunction::PercentRank | WindowFunction::CumeDist => {
-                DataType::Number(NumberDataType::Float64)
-            }
-            WindowFunction::LagLead(f) => f.return_type.clone(),
-            WindowFunction::NthValue(f) => f.return_type.clone(),
-            WindowFunction::Ntile(f) => f.return_type.clone(),
-        };
-        Ok(return_type)
-    }
-}
-
-impl Display for WindowFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            WindowFunction::Aggregate(agg) => write!(f, "{}", agg.sig.name),
-            WindowFunction::RowNumber => write!(f, "row_number"),
-            WindowFunction::Rank => write!(f, "rank"),
-            WindowFunction::DenseRank => write!(f, "dense_rank"),
-            WindowFunction::PercentRank => write!(f, "percent_rank"),
-            WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
-            WindowFunction::LagLead(_) => write!(f, "lead"),
-            WindowFunction::NthValue(_) => write!(f, "nth_value"),
-            WindowFunction::Ntile(_) => write!(f, "ntile"),
-            WindowFunction::CumeDist => write!(f, "cume_dist"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum LagLeadDefault {
-    Null,
-    Index(IndexType),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct LagLeadFunctionDesc {
-    pub is_lag: bool,
-    pub offset: u64,
-    pub arg: usize,
-    pub return_type: DataType,
-    pub default: LagLeadDefault,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct NthValueFunctionDesc {
-    pub n: Option<u64>,
-    pub arg: usize,
-    pub return_type: DataType,
-    pub ignore_null: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct NtileFunctionDesc {
-    pub n: u64,
-    pub return_type: DataType,
 }
 
 impl PhysicalPlanBuilder {

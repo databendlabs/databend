@@ -11,80 +11,8 @@ members = [
     "src/bendpy",
     "src/bendsave",
     "src/binaries",
-    "src/common/auth",
-    "src/common/base",
-    "src/common/building",
-    "src/common/cache",
-    "src/common/cloud_control",
-    "src/common/column",
-    "src/common/compress",
-    "src/common/exception",
-    "src/common/frozen_api",
-    "src/common/grpc",
-    "src/common/hashtable",
-    "src/common/http",
-    "src/common/io",
-    "src/common/license",
-    "src/common/metrics",
-    "src/common/native",
-    "src/common/storage",
-    "src/common/telemetry",
-    "src/common/timezone",
-    "src/common/tracing",
-    "src/common/vector",
-    "src/common/version",
     "src/meta/*",
-    "src/query/ast",
-    "src/query/catalog",
     "src/query/codegen",
-    "src/query/config",
-    "src/query/datavalues",
-    "src/query/ee_features/attach_table",
-    "src/query/ee_features/data_mask",
-    "src/query/ee_features/resources_management",
-    "src/query/ee_features/storage_encryption",
-    "src/query/ee_features/stream_handler",
-    "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/virtual_column",
-    "src/query/ee",
-    "src/query/expression",
-    "src/query/formats",
-    "src/query/functions",
-    "src/query/functions",
-    "src/query/functions/src/scalars/arithmetic",
-    "src/query/functions/src/scalars/geographic",
-    "src/query/functions/src/scalars/integer_arithmetic",
-    "src/query/functions/src/scalars/mathematics",
-    "src/query/functions/src/scalars/numeric_basic_arithmetic",
-    "src/query/functions/src/scalars/timestamp",
-    "src/query/management",
-    "src/query/pipeline",
-    "src/query/pipeline/transforms",
-    "src/query/script",
-    "src/query/service",
-    "src/query/settings",
-    "src/query/sql",
-    "src/query/storages/basic",
-    "src/query/storages/common/blocks",
-    "src/query/storages/common/cache",
-    "src/query/storages/common/index",
-    "src/query/storages/common/io",
-    "src/query/storages/common/pruner",
-    "src/query/storages/common/session",
-    "src/query/storages/common/stage",
-    "src/query/storages/common/table_meta",
-    "src/query/storages/delta",
-    "src/query/storages/factory",
-    "src/query/storages/fuse",
-    "src/query/storages/hive/hive",
-    "src/query/storages/iceberg",
-    "src/query/storages/information_schema",
-    "src/query/storages/orc",
-    "src/query/storages/parquet",
-    "src/query/storages/stage",
-    "src/query/storages/stream",
-    "src/query/storages/system",
-    "src/query/users",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
 ]
@@ -312,13 +240,13 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 lru = "0.12"
 
 ## in branch dev
-iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c", features = [
+iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
+iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -367,9 +295,9 @@ num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
-object_store_opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
+object_store_opendal = { version = "0.54.1" }
 once_cell = "1.15.0"
-opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef", features = [
+opendal = { version = "0.54.1", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -387,8 +315,6 @@ opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef", feat
     "services-webhdfs",
     "services-huggingface",
 ] }
-opendal-layer-immutable-index = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
-opendal-layer-observe-metrics-common = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
@@ -589,9 +515,6 @@ codegen-units = 1       ## better performance see below comment
 ## Test SQL:
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
 ## select max(number) from numbers_mt(10000000000); ~ 3x performance
-
-[profile.release.target.'cfg(target_arch = "aarch64")']
-opt-level = 3
 
 [profile.ci]
 inherits = "release"

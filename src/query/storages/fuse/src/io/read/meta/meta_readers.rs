@@ -45,7 +45,7 @@ use opendal::Operator;
 use parquet::format::FileMetaData;
 use parquet::thrift::TSerializable;
 
-use self::thrift_file_meta_read::read_thrift_file_metadata;
+pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;

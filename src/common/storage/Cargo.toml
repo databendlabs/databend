@@ -34,8 +34,6 @@ iceberg = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 opendal = { workspace = true }
-opendal-layer-immutable-index = { workspace = true }
-opendal-layer-observe-metrics-common = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
 regex = { workspace = true }

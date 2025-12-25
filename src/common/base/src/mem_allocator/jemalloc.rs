@@ -249,7 +249,7 @@ pub mod not_linux {
 
         #[inline(always)]
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            StdAllocator.deallocate(ptr, layout)
+            unsafe { StdAllocator.deallocate(ptr, layout) }
         }
 
         unsafe fn grow(
@@ -258,7 +258,7 @@ pub mod not_linux {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            StdAllocator.grow(ptr, old_layout, new_layout)
+            unsafe { StdAllocator.grow(ptr, old_layout, new_layout) }
         }
 
         unsafe fn grow_zeroed(
@@ -267,7 +267,7 @@ pub mod not_linux {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            StdAllocator.grow_zeroed(ptr, old_layout, new_layout)
+            unsafe { StdAllocator.grow_zeroed(ptr, old_layout, new_layout) }
         }
 
         unsafe fn shrink(
@@ -276,7 +276,7 @@ pub mod not_linux {
             old_layout: Layout,
             new_layout: Layout,
         ) -> Result<NonNull<[u8]>, AllocError> {
-            StdAllocator.shrink(ptr, old_layout, new_layout)
+            unsafe { StdAllocator.shrink(ptr, old_layout, new_layout) }
         }
     }
 }

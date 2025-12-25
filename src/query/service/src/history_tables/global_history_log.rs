@@ -509,12 +509,20 @@ pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
     let op = match params {
         None => DataOperator::instance().operator(),
         Some(p) => {
-            let new_p = p.clone();
-            let new_p = new_p.map_root(|root| {
+            let mut new_p = p.clone();
+            new_p = new_p.map_root(|root| {
                 // replace `log_history` with empty string
                 let new_root = root.replace("log_history/", "");
                 normalize_root(new_root.as_str())
             });
+            // Special handling for history tables.
+            // Since history tables storage params are fully generated from config,
+            // we can safely allow credential chain.
+            if let StorageParams::S3(cfg) = &mut new_p {
+                if cfg.allow_credential_chain.is_none() {
+                    cfg.allow_credential_chain = Some(true);
+                }
+            }
             init_operator(&new_p)?
         }
     };

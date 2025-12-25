@@ -143,7 +143,6 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
-paste = { workspace = true }
 petgraph = { workspace = true }
 pin-project-lite = { workspace = true }
 poem = { workspace = true }
