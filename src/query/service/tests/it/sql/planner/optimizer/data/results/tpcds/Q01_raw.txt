@@ -34,12 +34,12 @@ Limit
             │                                           ├── probe keys: []
             │                                           ├── other filters: []
             │                                           ├── Scan
-            │                                           │   ├── table: default.store_returns (#4)
+            │                                           │   ├── table: default.date_dim (#5)
             │                                           │   ├── filters: []
             │                                           │   ├── order by: []
             │                                           │   └── limit: NONE
             │                                           └── Scan
-            │                                               ├── table: default.date_dim (#5)
+            │                                               ├── table: default.store_returns (#4)
             │                                               ├── filters: []
             │                                               ├── order by: []
             │                                               └── limit: NONE
@@ -47,41 +47,41 @@ Limit
                 ├── build keys: []
                 ├── probe keys: []
                 ├── other filters: []
-                ├── Join(Cross)
-                │   ├── build keys: []
-                │   ├── probe keys: []
-                │   ├── other filters: []
-                │   ├── EvalScalar
-                │   │   ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), Sum(sr_return_amt) (#48) AS (#48)]
-                │   │   └── Aggregate(Initial)
-                │   │       ├── group items: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7)]
-                │   │       ├── aggregate functions: [sum(store_returns.sr_return_amt (#11)) AS (#48)]
-                │   │       └── EvalScalar
-                │   │           ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), store_returns.sr_return_amt (#11) AS (#11)]
-                │   │           └── Filter
-                │   │               ├── filters: [eq(store_returns.sr_returned_date_sk (#0), date_dim.d_date_sk (#20)), eq(date_dim.d_year (#26), 2001)]
-                │   │               └── Join(Cross)
-                │   │                   ├── build keys: []
-                │   │                   ├── probe keys: []
-                │   │                   ├── other filters: []
-                │   │                   ├── Scan
-                │   │                   │   ├── table: default.store_returns (#0)
-                │   │                   │   ├── filters: []
-                │   │                   │   ├── order by: []
-                │   │                   │   └── limit: NONE
-                │   │                   └── Scan
-                │   │                       ├── table: default.date_dim (#1)
-                │   │                       ├── filters: []
-                │   │                       ├── order by: []
-                │   │                       └── limit: NONE
-                │   └── Scan
-                │       ├── table: default.store (#2)
-                │       ├── filters: []
-                │       ├── order by: []
-                │       └── limit: NONE
-                └── Scan
-                    ├── table: default.customer (#3)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+                ├── Scan
+                │   ├── table: default.customer (#3)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Join(Cross)
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── other filters: []
+                    ├── Scan
+                    │   ├── table: default.store (#2)
+                    │   ├── filters: []
+                    │   ├── order by: []
+                    │   └── limit: NONE
+                    └── EvalScalar
+                        ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), Sum(sr_return_amt) (#48) AS (#48)]
+                        └── Aggregate(Initial)
+                            ├── group items: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7)]
+                            ├── aggregate functions: [sum(store_returns.sr_return_amt (#11)) AS (#48)]
+                            └── EvalScalar
+                                ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), store_returns.sr_return_amt (#11) AS (#11)]
+                                └── Filter
+                                    ├── filters: [eq(store_returns.sr_returned_date_sk (#0), date_dim.d_date_sk (#20)), eq(date_dim.d_year (#26), 2001)]
+                                    └── Join(Cross)
+                                        ├── build keys: []
+                                        ├── probe keys: []
+                                        ├── other filters: []
+                                        ├── Scan
+                                        │   ├── table: default.date_dim (#1)
+                                        │   ├── filters: []
+                                        │   ├── order by: []
+                                        │   └── limit: NONE
+                                        └── Scan
+                                            ├── table: default.store_returns (#0)
+                                            ├── filters: []
+                                            ├── order by: []
+                                            └── limit: NONE
 

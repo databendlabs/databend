@@ -30,7 +30,7 @@ use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
-use crate::optimizer::ir::NewStatistic;
+use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -323,10 +323,10 @@ impl Join {
         let mut join_card_updated = false;
         let mut left_column_index = 0;
         let mut right_column_index = 0;
-        for condition in self.equi_conditions.iter() {
+        for condition in &self.equi_conditions {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
-            if join_card == 0 as f64 {
+            if join_card == 0.0 {
                 break;
             }
             // Currently don't consider the case such as: `t1.a + t1.b = t2.a`
@@ -334,143 +334,114 @@ impl Join {
             {
                 continue;
             }
-            let left_col_stat = left_statistics
+            let Some(left_col_stat) = left_statistics
                 .column_stats
-                .get(left_condition.used_columns().iter().next().unwrap());
-            let right_col_stat = right_statistics
+                .get(left_condition.used_columns().iter().next().unwrap())
+            else {
+                continue;
+            };
+            let Some(right_col_stat) = right_statistics
                 .column_stats
-                .get(right_condition.used_columns().iter().next().unwrap());
-            match (left_col_stat, right_col_stat) {
-                (Some(left_col_stat), Some(right_col_stat)) => {
-                    if !left_col_stat.min.type_comparable(&right_col_stat.min) {
-                        continue;
-                    }
-                    let left_interval =
-                        UniformSampleSet::new(left_col_stat.min.clone(), left_col_stat.max.clone());
-                    let right_interval = UniformSampleSet::new(
-                        right_col_stat.min.clone(),
-                        right_col_stat.max.clone(),
-                    );
-                    if !left_interval.has_intersection(&right_interval)? {
-                        join_card = 0.0;
-                        continue;
-                    }
+                .get(right_condition.used_columns().iter().next().unwrap())
+            else {
+                continue;
+            };
 
-                    // Update column min and max value
-                    let mut new_ndv = None;
-                    let (new_min, new_max) = left_interval.intersection(&right_interval)?;
+            if !left_col_stat.min.type_comparable(&right_col_stat.min) {
+                continue;
+            }
+            let left_interval =
+                UniformSampleSet::new(left_col_stat.min.clone(), left_col_stat.max.clone());
+            let right_interval =
+                UniformSampleSet::new(right_col_stat.min.clone(), right_col_stat.max.clone());
+            if !left_interval.has_intersection(&right_interval)? {
+                join_card = 0.0;
+                continue;
+            }
 
-                    if let Datum::Bytes(_) | Datum::Bool(_) = left_col_stat.min {
-                        let card = evaluate_by_ndv(
-                            left_col_stat,
-                            right_col_stat,
-                            *left_cardinality,
-                            *right_cardinality,
-                            &mut new_ndv,
-                        );
-                        let (left_index, right_index) = update_statistic(
-                            left_statistics,
-                            right_statistics,
-                            left_condition,
-                            right_condition,
-                            NewStatistic {
-                                min: new_min,
-                                max: new_max,
-                                ndv: new_ndv,
-                            },
-                        );
-                        if card < join_card {
-                            join_card = card;
-                            join_card_updated = true;
-                            left_column_index = left_index;
-                            right_column_index = right_index;
-                        }
-                        continue;
-                    }
-                    let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
-                        (Some(left_hist), Some(right_hist)) => {
-                            // Evaluate join cardinality by histogram.
-                            evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
-                        }
-                        _ => evaluate_by_ndv(
-                            left_col_stat,
-                            right_col_stat,
-                            *left_cardinality,
-                            *right_cardinality,
-                            &mut new_ndv,
-                        ),
-                    };
-                    let (left_index, right_index) = update_statistic(
-                        left_statistics,
-                        right_statistics,
-                        left_condition,
-                        right_condition,
-                        NewStatistic {
-                            min: new_min,
-                            max: new_max,
-                            ndv: new_ndv,
-                        },
-                    );
-                    if card < join_card {
-                        join_card = card;
-                        join_card_updated = true;
-                        left_column_index = left_index;
-                        right_column_index = right_index;
-                    }
+            // Update column min and max value
+            let mut new_ndv = None;
+            let (new_min, new_max) = left_interval.intersection(&right_interval)?;
+            let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
+                (Some(left_hist), Some(right_hist))
+                    if matches!(
+                        left_col_stat.min,
+                        Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
+                    ) =>
+                {
+                    // Evaluate join cardinality by histogram.
+                    evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
                 }
-                _ => continue,
+                _ => evaluate_by_ndv(
+                    left_col_stat,
+                    right_col_stat,
+                    *left_cardinality,
+                    *right_cardinality,
+                    &mut new_ndv,
+                ),
+            };
+
+            let (left_index, right_index) = update_statistic(
+                left_statistics,
+                right_statistics,
+                left_condition,
+                right_condition,
+                NewStatistic {
+                    min: new_min,
+                    max: new_max,
+                    ndv: new_ndv,
+                },
+            );
+            if card < join_card {
+                join_card = card;
+                join_card_updated = true;
+                left_column_index = left_index;
+                right_column_index = right_index;
             }
         }
-        if join_card_updated {
-            for (idx, left) in left_statistics.column_stats.iter_mut() {
-                if *idx == left_column_index {
-                    if left.histogram.is_some() {
-                        // Todo: find a better way to update accuracy histogram
-                        left.histogram = if left.ndv as u64 <= 2 {
-                            None
-                        } else {
-                            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
-                            {
-                                left.min = Datum::Float(F64::from(left.min.to_double()?));
-                                left.max = Datum::Float(F64::from(left.max.to_double()?));
-                            }
-                            Some(HistogramBuilder::from_ndv(
-                                left.ndv as u64,
-                                max(join_card as u64, left.ndv as u64),
-                                Some((left.min.clone(), left.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        };
-                    }
-                    continue;
-                }
+        if !join_card_updated {
+            return Ok(join_card);
+        }
+
+        for (idx, left) in left_statistics.column_stats.iter_mut() {
+            if *idx != left_column_index || left.histogram.is_none() || left.ndv.value() as u64 <= 2
+            {
                 // Other columns' histograms are inaccurate, so make them None
                 left.histogram = None;
+                continue;
             }
-            for (idx, right) in right_statistics.column_stats.iter_mut() {
-                if *idx == right_column_index {
-                    if right.histogram.is_some() {
-                        // Todo: find a better way to update accuracy histogram
-                        right.histogram = if right.ndv as u64 <= 2 {
-                            None
-                        } else {
-                            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
-                            {
-                                right.min = Datum::Float(F64::from(right.min.to_double()?));
-                                right.max = Datum::Float(F64::from(right.max.to_double()?));
-                            }
-                            Some(HistogramBuilder::from_ndv(
-                                right.ndv as u64,
-                                max(join_card as u64, right.ndv as u64),
-                                Some((right.min.clone(), right.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        };
-                    }
-                    continue;
-                }
+            // Todo: find a better way to update accuracy histogram
+            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
+                left.min = Datum::Float(F64::from(left.min.to_double()?));
+                left.max = Datum::Float(F64::from(left.max.to_double()?));
+            }
+            left.histogram = Some(HistogramBuilder::from_ndv(
+                left.ndv.value() as u64,
+                max(join_card as u64, left.ndv.value() as u64),
+                Some((left.min.clone(), left.max.clone())),
+                DEFAULT_HISTOGRAM_BUCKETS,
+            )?);
+        }
+
+        for (idx, right) in right_statistics.column_stats.iter_mut() {
+            if *idx != right_column_index
+                || right.histogram.is_none()
+                || right.ndv.value() as u64 <= 2
+            {
                 right.histogram = None;
+                continue;
             }
+            // Todo: find a better way to update accuracy histogram
+            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
+                right.min = Datum::Float(F64::from(right.min.to_double()?));
+                right.max = Datum::Float(F64::from(right.max.to_double()?));
+            }
+            right.histogram = Some(HistogramBuilder::from_ndv(
+                right.ndv.value() as u64,
+                max(join_card as u64, right.ndv.value() as u64),
+                Some((right.min.clone(), right.max.clone())),
+                DEFAULT_HISTOGRAM_BUCKETS,
+            )?);
         }
         Ok(join_card)
     }
@@ -526,10 +497,15 @@ impl Join {
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
         } else {
-            let mut column_stats = HashMap::new();
-            column_stats.extend(left_statistics.column_stats);
-            column_stats.extend(right_statistics.column_stats);
-            column_stats
+            left_statistics
+                .column_stats
+                .into_iter()
+                .chain(right_statistics.column_stats)
+                .map(|(col, mut stat)| {
+                    stat.ndv = stat.ndv.reduce(cardinality);
+                    (col, stat)
+                })
+                .collect()
         };
         Ok(Arc::new(StatInfo {
             cardinality,
@@ -987,10 +963,21 @@ fn evaluate_by_ndv(
     right_cardinality: f64,
     new_ndv: &mut Option<f64>,
 ) -> f64 {
-    // Update column ndv
-    *new_ndv = Some(left_stat.ndv.min(right_stat.ndv));
-
-    let max_ndv = f64::max(left_stat.ndv, right_stat.ndv);
+    let max_ndv = match (left_stat.ndv, right_stat.ndv) {
+        (Ndv::Stat(a), Ndv::Stat(b)) => {
+            *new_ndv = Some(f64::min(a, b));
+            f64::max(a, b)
+        }
+        (Ndv::Stat(stat), Ndv::Max(max)) | (Ndv::Max(max), Ndv::Stat(stat)) => {
+            *new_ndv = Some(f64::min(stat, max));
+            stat
+        }
+        (Ndv::Max(0.0), Ndv::Max(0.0)) => {
+            *new_ndv = Some(0.0);
+            0.0
+        }
+        _ => left_cardinality * right_cardinality,
+    };
     if max_ndv == 0.0 {
         0.0
     } else {
@@ -1009,6 +996,7 @@ fn update_statistic(
     let right_index = *right_condition.used_columns().iter().next().unwrap();
     let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
     let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
+
     if let Some(new_min) = new_stat.min {
         left_col_stat.min = new_min.clone();
         right_col_stat.min = new_min;
@@ -1018,8 +1006,15 @@ fn update_statistic(
         right_col_stat.max = new_max;
     }
     if let Some(new_ndv) = new_stat.ndv {
-        left_col_stat.ndv = new_ndv;
-        right_col_stat.ndv = new_ndv;
+        left_col_stat.ndv = Ndv::Stat(new_ndv);
+        right_col_stat.ndv = Ndv::Stat(new_ndv);
     }
     (left_index, right_index)
+}
+
+#[derive(Debug, Clone)]
+struct NewStatistic {
+    min: Option<Datum>,
+    max: Option<Datum>,
+    ndv: Option<f64>,
 }

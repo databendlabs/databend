@@ -23,6 +23,7 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -149,65 +150,81 @@ impl Aggregate {
     }
 
     pub fn derive_agg_stats(&self, stat_info: Arc<StatInfo>) -> Result<Arc<StatInfo>> {
-        let (cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics.clone());
-        let cardinality = if self.group_items.is_empty() {
-            // Scalar aggregation
-            1.0
-        } else if self
+        let column_stats = &stat_info.statistics.column_stats;
+        if self.group_items.is_empty() {
+            return Ok(Arc::new(StatInfo {
+                cardinality: 1.0,
+                statistics: Statistics {
+                    precise_cardinality: Some(1),
+                    column_stats: column_stats.clone(),
+                },
+            }));
+        }
+
+        if self.group_items.iter().any(|item| {
+            column_stats
+                .get(&item.index)
+                .map(|stat| {
+                    if let Ndv::Max(ndv) = stat.ndv {
+                        ndv >= stat_info.cardinality
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(true)
+        }) {
+            return Ok(Arc::new(StatInfo {
+                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
+                statistics: Statistics {
+                    precise_cardinality: None,
+                    column_stats: column_stats.clone(),
+                },
+            }));
+        }
+
+        let groups_ndv = self
             .group_items
             .iter()
-            .any(|item| !statistics.column_stats.contains_key(&item.index))
-        {
-            (cardinality * DEFAULT_AGGREGATE_RATIO).max(1_f64)
-        } else {
-            // A upper bound
-            let mut res = self
-                .group_items
-                .first()
-                .map(|item| {
-                    let item_stat = statistics.column_stats.get(&item.index).unwrap();
-                    item_stat.ndv
-                })
-                .unwrap_or(1.0);
+            .map(|group| column_stats[&group.index].ndv.value())
+            .collect::<Vec<_>>();
 
-            for (idx, item) in self.group_items.iter().skip(1).enumerate() {
-                let item_stat = statistics.column_stats.get(&item.index).unwrap();
-                let ndv = item_stat.ndv * AGGREGATE_COLUMN_CORRELATION_COEFFICIENT.powi(idx as i32);
-                res *= ndv.max(1_f64);
+        let cardinality = groups_ndv
+            .into_iter()
+            .enumerate()
+            .fold(1.0, |acc, (i, ndv)| {
+                let x = if i > 1 {
+                    ndv * AGGREGATE_COLUMN_CORRELATION_COEFFICIENT.powi((i - 1) as i32)
+                } else {
+                    ndv
+                };
+                acc * x.max(1.0)
+            })
+            .min(stat_info.cardinality);
+
+        let mut column_stats = stat_info.statistics.column_stats.clone();
+        for item in self.group_items.iter() {
+            let item_stat = column_stats.get_mut(&item.index).unwrap();
+            if self.group_items.len() == 1 {
+                item_stat.ndv = item_stat.ndv.reduce(cardinality);
             }
 
-            for item in self.group_items.iter() {
-                let item_stat = statistics.column_stats.get_mut(&item.index).unwrap();
-                if let Some(histogram) = &mut item_stat.histogram {
-                    let mut num_values = 0.0;
-                    let mut num_distinct = 0.0;
-                    for bucket in histogram.buckets.iter() {
-                        num_distinct += bucket.num_distinct();
-                        num_values += bucket.num_values();
-                    }
-                    // When there is a high probability that eager aggregation
-                    // is better, we will update the histogram.
-                    if num_values / num_distinct >= 10.0 {
-                        for bucket in histogram.buckets.iter_mut() {
-                            bucket.aggregate_values();
-                        }
-                    }
+            let Some(histogram) = &mut item_stat.histogram else {
+                continue;
+            };
+            // When there is a high probability that eager aggregation
+            // is better, we will update the histogram.
+            if histogram.num_values() >= histogram.num_distinct_values() * 10.0 {
+                for bucket in histogram.buckets.iter_mut() {
+                    bucket.aggregate_values();
                 }
             }
-            // To avoid res is very large
-            f64::min(res, cardinality)
-        };
+        }
 
-        let precise_cardinality = if self.group_items.is_empty() {
-            Some(1)
-        } else {
-            None
-        };
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality,
-                column_stats: statistics.column_stats,
+                precise_cardinality: None,
+                column_stats,
             },
         }))
     }

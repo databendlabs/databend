@@ -44,6 +44,6 @@ pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
 pub use stats::HistogramBuilder;
 pub use stats::MAX_SELECTIVITY;
-pub use stats::NewStatistic;
+pub use stats::Ndv;
 pub use stats::SelectivityEstimator;
 pub use stats::UniformSampleSet;
