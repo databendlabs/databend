@@ -16,15 +16,11 @@ use databend_common_exception::ErrorCode;
 
 use crate::schema::tag::TagId;
 use crate::schema::tag::id_ident::Resource as TagIdResource;
-use crate::schema::tag::id_ident::TagIdIdent;
 use crate::tenant::Tenant;
 use crate::tenant_key::errors::UnknownError;
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
-    #[error(transparent)]
-    UnknownTagId(#[from] UnknownError<TagIdResource, TagId>),
-
     #[error(
         "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
     )]
@@ -32,6 +28,12 @@ pub enum TagError {
         tag_name: String,
         reference_count: usize,
     },
+}
+
+#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
+pub enum TagMetaError {
+    #[error(transparent)]
+    UnknownTagId(#[from] UnknownError<TagIdResource, TagId>),
 
     #[error("Invalid value '{tag_value}' for TAG with id {tag_id}{allowed_values_display}.")]
     NotAllowedValue {
@@ -47,20 +49,18 @@ pub enum TagError {
 }
 
 impl TagError {
-    pub fn not_found(tenant: &Tenant, tag_id: u64) -> Self {
-        let ident = TagId::new(tag_id).into_t_ident(tenant);
-        Self::UnknownTagId(ident.unknown_error("tag id not found"))
-    }
-
-    pub fn not_found_ident(tag_ident: TagIdIdent) -> Self {
-        Self::UnknownTagId(tag_ident.unknown_error("tag id not found"))
-    }
-
     pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
         Self::TagHasReferences {
             tag_name: tag_name.into(),
             reference_count,
         }
+    }
+}
+
+impl TagMetaError {
+    pub fn not_found(tenant: &Tenant, tag_id: u64) -> Self {
+        let ident = TagId::new(tag_id).into_t_ident(tenant);
+        Self::UnknownTagId(ident.unknown_error("tag id not found"))
     }
 
     pub fn not_allowed_value(
@@ -98,10 +98,18 @@ impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
-            TagError::UnknownTagId(err) => ErrorCode::from(err),
             TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
-            TagError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
-            TagError::TagMetaConcurrentModification { .. } => {
+        }
+    }
+}
+
+impl From<TagMetaError> for ErrorCode {
+    fn from(err: TagMetaError) -> Self {
+        let s = err.to_string();
+        match err {
+            TagMetaError::UnknownTagId(err) => ErrorCode::from(err),
+            TagMetaError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
+            TagMetaError::TagMetaConcurrentModification { .. } => {
                 ErrorCode::TagMetaConcurrentModification(s)
             }
         }

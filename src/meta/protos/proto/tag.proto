@@ -23,8 +23,21 @@ message TagMeta {
   // Ordered list of string values that may be set on this tag.
   // Matches CREATE TAG ... ALLOWED_VALUES semantics: must be declared before
   // other parameters, accepts up to 5,000 entries, and when omitted any string
-  // (including empty) is accepted. Propagating tags use the order to resolve
-  // conflicts, mirroring Snowflake behavior.
+  // (including empty) is accepted. Propagating tags rely on this order to
+  // resolve conflicts when ON_CONFLICT = ALLOWED_VALUES_SEQUENCE (e.g. `CREATE
+  // TAG my_tag ALLOWED_VALUES 'blue', 'red' PROPAGATE = ON_DEPENDENCY
+  // ON_CONFLICT = ALLOWED_VALUES_SEQUENCE` always picks `'blue'`). A conflict
+  // arises when the same downstream object inherits different values:
+  //
+  //   Tag definition: my_tag ALLOWED_VALUES 'blue', 'red'
+  //   Object A --(my_tag='blue')--> \
+  //                                   -> Object C (final = 'blue')
+  //   Object B --(my_tag='red')-->  /
+  //
+  // We keep a repeated field instead of a map to avoid undefined iteration
+  // order or manually maintained indices. With maps, gaps like `{blue:1, red:3}`
+  // (after deletes/edits) would desync the conflict priority from the declared
+  // order, so we store the sequence directly.
   repeated string allowed_values = 1;
   string comment = 2;
   string created_on = 3;

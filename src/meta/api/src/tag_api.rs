@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateTagReply;
@@ -32,6 +34,7 @@ use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagReferenceInfo;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UnsetObjectTagsReq;
+use databend_common_meta_app::schema::tag::error::TagMetaError;
 use databend_common_meta_app::schema::tag::id_ident::Resource as TagIdResource;
 use databend_common_meta_app::schema::tag::id_ident::TagId;
 use databend_common_meta_app::schema::tag::id_to_name_ident::TagIdToNameIdent;
@@ -201,7 +204,7 @@ where
     async fn set_object_tags(
         &self,
         req: SetObjectTagsReq,
-    ) -> Result<Result<(), TagError>, MetaError> {
+    ) -> Result<Result<(), TagMetaError>, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if req.tags.is_empty() {
@@ -227,12 +230,16 @@ where
         {
             // Verify tag exists
             let Some(meta_seqv) = meta_opt else {
-                return Ok(Err(TagError::not_found(&req.tenant, *tag_id)));
+                return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
             };
             // Check allowed_values: None means any value is allowed
             if let Some(allowed) = &meta_seqv.data.allowed_values {
-                if !allowed.contains(tag_value) {
-                    return Ok(Err(TagError::not_allowed_value(
+                // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
+                // for O(1) membership checks when validating bindings.
+                let allowed_lookup: HashSet<&str> =
+                    allowed.iter().map(|value| value.as_str()).collect();
+                if !allowed_lookup.contains(tag_value.as_str()) {
+                    return Ok(Err(TagMetaError::not_allowed_value(
                         *tag_id,
                         tag_value.clone(),
                         Some(allowed.clone()),
@@ -272,7 +279,7 @@ where
                 .iter()
                 .map(|(tag_id, _)| *tag_id)
                 .collect::<Vec<_>>();
-            Ok(Err(TagError::concurrent_modification(tag_ids)))
+            Ok(Err(TagMetaError::concurrent_modification(tag_ids)))
         }
     }
 
