@@ -225,41 +225,44 @@ impl AggregatePayloadWriters {
     }
 }
 
+pub trait PartitionStream: Send {
+    fn finish(&mut self) -> Vec<(usize, DataBlock)>;
+    fn partition(&mut self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)>;
+}
+
+pub struct LocalPartitionStream {
+    partition_stream: BlockPartitionStream,
+}
+
+impl LocalPartitionStream {
+    pub fn new(max_rows: usize, max_bytes: usize, partition_count: usize) -> Self {
+        let partition_stream = BlockPartitionStream::create(max_rows, max_bytes, partition_count);
+        Self { partition_stream }
+    }
+}
+
+impl PartitionStream for LocalPartitionStream {
+    fn finish(&mut self) -> Vec<(usize, DataBlock)> {
+        let ids = self.partition_stream.partition_ids();
+        let mut pending_blocks = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(block) = self.partition_stream.finalize_partition(id) {
+                pending_blocks.push((id, block));
+            }
+        }
+        pending_blocks
+    }
+
+    fn partition(&mut self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
+        let indices = vec![partition_id as u64; block.num_rows()];
+        self.partition_stream.partition(indices, block, true)
+    }
+}
+
 struct SharedPartitionStreamInner {
     partition_stream: BlockPartitionStream,
     worker_count: usize,
     finish_count: usize,
-}
-
-impl SharedPartitionStreamInner {
-    pub fn finish(&mut self) -> Vec<(usize, DataBlock)> {
-        self.finish_count += 1;
-
-        if self.finish_count == self.worker_count {
-            self.finish_count = 0;
-
-            let ids = self.partition_stream.partition_ids();
-
-            let mut pending_blocks = Vec::with_capacity(ids.len());
-
-            for id in ids {
-                if let Some(block) = self.partition_stream.finalize_partition(id) {
-                    pending_blocks.push((id, block));
-                }
-            }
-            return pending_blocks;
-        }
-        vec![]
-    }
-
-    pub fn partition(&mut self, partition_id: u64, block: DataBlock) -> Vec<(usize, DataBlock)> {
-        let indices = vec![partition_id; block.num_rows()];
-        self.partition_stream.partition(indices, block, true)
-    }
-
-    pub fn update_worker_count(&mut self, worker_count: usize) {
-        self.worker_count = worker_count;
-    }
 }
 
 #[derive(Clone)]
@@ -284,35 +287,62 @@ impl SharedPartitionStream {
         }
     }
 
-    pub fn finish(&self) -> Vec<(usize, DataBlock)> {
+    pub fn do_finish(&self) -> Vec<(usize, DataBlock)> {
         let mut inner = self.inner.lock();
-        inner.finish()
+        inner.finish_count += 1;
+
+        if inner.finish_count == inner.worker_count {
+            inner.finish_count = 0;
+
+            let ids = inner.partition_stream.partition_ids();
+
+            let mut pending_blocks = Vec::with_capacity(ids.len());
+
+            for id in ids {
+                if let Some(block) = inner.partition_stream.finalize_partition(id) {
+                    pending_blocks.push((id, block));
+                }
+            }
+            return pending_blocks;
+        }
+        vec![]
     }
 
-    pub fn partition(&self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
+    pub fn do_partition(&self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
         let mut inner = self.inner.lock();
-        inner.partition(partition_id as u64, block)
+        let indices = vec![partition_id as u64; block.num_rows()];
+        inner.partition_stream.partition(indices, block, true)
     }
 
     pub fn update_worker_count(&self, worker_count: usize) {
         let mut inner = self.inner.lock();
-        inner.update_worker_count(worker_count);
+        inner.worker_count = worker_count;
     }
 }
 
-pub struct NewAggregateSpiller {
+impl PartitionStream for SharedPartitionStream {
+    fn finish(&mut self) -> Vec<(usize, DataBlock)> {
+        self.do_finish()
+    }
+
+    fn partition(&mut self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
+        self.do_partition(partition_id, block)
+    }
+}
+
+pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
     partition_count: usize,
-    partition_stream: SharedPartitionStream,
+    partition_stream: P,
     payload_writers: AggregatePayloadWriters,
 }
 
-impl NewAggregateSpiller {
+impl<P: PartitionStream> NewAggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         partition_count: usize,
-        partition_stream: SharedPartitionStream,
+        partition_stream: P,
         is_local: bool,
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
@@ -351,50 +381,11 @@ impl NewAggregateSpiller {
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        let NewSpilledPayload {
-            bucket,
-            location,
-            row_group,
-        } = payload;
-
-        let data_operator = DataOperator::instance();
-        let target = SpillTarget::from_storage_params(data_operator.spill_params());
-        let operator = data_operator.spill_operator();
-        let buffer_pool = SpillsBufferPool::instance();
-
-        let mut reader = buffer_pool.reader(
-            operator.clone(),
-            location.clone(),
-            vec![row_group.clone()],
-            target,
-        )?;
-
-        let instant = Instant::now();
-        let data_block = reader.read(self.read_setting)?;
-        let elapsed = instant.elapsed();
-
-        let read_size = reader.read_bytes();
-
-        info!(
-            "Read aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, elapsed: {:?})",
-            bucket,
-            location,
-            read_size,
-            row_group.num_rows(),
-            elapsed
-        );
-
-        if let Some(block) = data_block {
-            Ok(AggregateMeta::Serialized(SerializedPayload {
-                bucket,
-                data_block: block,
-                max_partition_count: self.partition_count,
-            }))
-        } else {
-            Err(ErrorCode::Internal("read empty block from final aggregate"))
-        }
+        restore_payload(self.read_setting, payload, self.partition_count)
     }
+}
 
+impl NewAggregateSpiller<SharedPartitionStream> {
     pub fn update_activate_worker(&self, activate_worker: usize) {
         self.partition_stream.update_worker_count(activate_worker);
     }
@@ -407,6 +398,71 @@ impl NewAggregateSpiller {
             .partition_stream
             .partition_ids()
             .is_empty()
+    }
+}
+
+pub struct NewAggregateSpillReader {
+    read_setting: ReadSettings,
+}
+
+impl NewAggregateSpillReader {
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        let table_ctx: Arc<dyn TableContext> = ctx;
+        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
+        Ok(Self { read_setting })
+    }
+
+    pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
+        restore_payload(self.read_setting, payload, 0)
+    }
+}
+
+fn restore_payload(
+    read_setting: ReadSettings,
+    payload: NewSpilledPayload,
+    max_partition_count: usize,
+) -> Result<AggregateMeta> {
+    let NewSpilledPayload {
+        bucket,
+        location,
+        row_group,
+    } = payload;
+
+    let data_operator = DataOperator::instance();
+    let target = SpillTarget::from_storage_params(data_operator.spill_params());
+    let operator = data_operator.spill_operator();
+    let buffer_pool = SpillsBufferPool::instance();
+
+    let mut reader = buffer_pool.reader(
+        operator.clone(),
+        location.clone(),
+        vec![row_group.clone()],
+        target,
+    )?;
+
+    let instant = Instant::now();
+    let data_block = reader.read(read_setting)?;
+    let elapsed = instant.elapsed();
+
+    let read_size = reader.read_bytes();
+
+    info!(
+        "Read aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, elapsed: {:?})",
+        bucket,
+        location,
+        read_size,
+        row_group.num_rows(),
+        elapsed
+    );
+
+    if let Some(block) = data_block {
+        Ok(AggregateMeta::Serialized(SerializedPayload {
+            bucket,
+            data_block: block,
+            max_partition_count,
+        }))
+    } else {
+        Err(ErrorCode::Internal("read empty block from final aggregate"))
     }
 }
 
@@ -435,6 +491,7 @@ mod tests {
     use databend_common_expression::types::Int32Type;
 
     use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
+    use crate::pipelines::processors::transforms::aggregator::new_aggregate::LocalPartitionStream;
     use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
     use crate::test_kits::TestFixture;
 
@@ -445,6 +502,35 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
+        let mut spiller =
+            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream, true)?;
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
+
+        spiller.spill(0, block.clone())?;
+        spiller.spill(2, block)?;
+
+        let payloads = spiller.spill_finish()?;
+
+        assert_eq!(payloads.len(), 2);
+
+        let spilled_files = ctx.get_spilled_files();
+        assert_eq!(spilled_files.len(), 2);
+
+        let buckets: HashSet<_> = payloads.iter().map(|p| p.bucket).collect();
+        assert!(buckets.contains(&0));
+        assert!(buckets.contains(&2));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_aggregate_payload_writers_local_stream() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let partition_count = 4;
+        let partition_stream = LocalPartitionStream::new(1024, 1024 * 1024, partition_count);
         let mut spiller =
             NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream, true)?;
 
