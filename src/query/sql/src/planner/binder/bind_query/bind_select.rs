@@ -730,7 +730,7 @@ impl SelectRewriter {
                         }
                         source_query.push_str(&table.name);
                         if let Some(ref_name) = ref_name {
-                            source_query.push('@');
+                            source_query.push('/');
                             source_query.push_str(&ref_name.name);
                         }
 
