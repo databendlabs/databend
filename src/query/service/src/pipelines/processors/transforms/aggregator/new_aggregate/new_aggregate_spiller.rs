@@ -333,7 +333,6 @@ impl PartitionStream for SharedPartitionStream {
 pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
-    partition_count: usize,
     partition_stream: P,
     payload_writers: AggregatePayloadWriters,
 }
@@ -356,7 +355,6 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         Ok(Self {
             memory_settings,
             read_setting,
-            partition_count,
             partition_stream,
             payload_writers,
         })
