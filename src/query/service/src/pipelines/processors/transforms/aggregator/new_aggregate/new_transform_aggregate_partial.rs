@@ -135,7 +135,7 @@ impl Spiller {
         &mut self,
         mut partition: PartitionedPayload,
         is_row_shuffle: bool,
-        dispatch_method: &Vec<u64>,
+        dispatch_method: &[u64],
     ) -> Result<()> {
         match self {
             Spiller::Standalone(spiller) => Self::spill_partition(spiller, partition.payloads),
@@ -472,30 +472,28 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
 
                 if self.is_row_shuffle {
                     blocks.extend(payloads.into_iter().map(DataBlock::empty_with_meta))
+                } else if self.dispatch_method.len() == 1 {
+                    blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                        payloads
+                            .into_iter()
+                            .map(DataBlock::empty_with_meta)
+                            .collect(),
+                    )))
                 } else {
-                    if self.dispatch_method.len() == 1 {
-                        blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                            payloads
-                                .into_iter()
-                                .map(DataBlock::empty_with_meta)
-                                .collect(),
-                        )))
-                    } else {
-                        let mut chunks = Vec::with_capacity(self.dispatch_method.len());
-                        for bucket_num in self.dispatch_method.iter() {
-                            let chunk: Vec<AggregateMeta> = payloads
-                                .drain(0..*bucket_num as usize)
-                                .map(|payload| {
-                                    AggregateMeta::downcast_from(payload)
-                                        .expect("AggregateMeta is expected")
-                                })
-                                .collect();
-                            chunks.push(AggregateMeta::create_partitioned(None, chunk));
-                        }
-                        blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                            chunks.into_iter().map(DataBlock::empty_with_meta).collect(),
-                        )))
+                    let mut chunks = Vec::with_capacity(self.dispatch_method.len());
+                    for bucket_num in self.dispatch_method.iter() {
+                        let chunk: Vec<AggregateMeta> = payloads
+                            .drain(0..*bucket_num as usize)
+                            .map(|payload| {
+                                AggregateMeta::downcast_from(payload)
+                                    .expect("AggregateMeta is expected")
+                            })
+                            .collect();
+                        chunks.push(AggregateMeta::create_partitioned(None, chunk));
                     }
+                    blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                        chunks.into_iter().map(DataBlock::empty_with_meta).collect(),
+                    )))
                 }
                 blocks
             }
