@@ -40,11 +40,14 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::CreateTagInterpreter;
 use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::SetObjectTagsInterpreter;
 use crate::interpreters::SetRoleInterpreter;
+use crate::interpreters::UnsetObjectTagsInterpreter;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::access_log::AccessLogger;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
@@ -587,6 +590,14 @@ impl InterpreterFactory {
                 *plan.clone(),
             )?)),
             Plan::DropTag(plan) => Ok(Arc::new(DropTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::SetObjectTags(plan) => Ok(Arc::new(SetObjectTagsInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::UnsetObjectTags(plan) => Ok(Arc::new(UnsetObjectTagsInterpreter::try_create(
                 ctx.clone(),
                 *plan.clone(),
             )?)),

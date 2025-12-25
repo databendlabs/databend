@@ -32,3 +32,58 @@ pub struct DropTagPlan {
     pub if_exists: bool,
     pub name: String,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TagSetPlanItem {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DatabaseTagSetTarget {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableTagSetTarget {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StageTagSetTarget {
+    pub if_exists: bool,
+    pub stage_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectionTagSetTarget {
+    pub if_exists: bool,
+    pub connection_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TagSetObject {
+    Database(DatabaseTagSetTarget),
+    Table(TableTagSetTarget),
+    Stage(StageTagSetTarget),
+    Connection(ConnectionTagSetTarget),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetObjectTagsPlan {
+    pub tenant: Tenant,
+    pub object: TagSetObject,
+    pub tags: Vec<TagSetPlanItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnsetObjectTagsPlan {
+    pub tenant: Tenant,
+    pub object: TagSetObject,
+    pub tags: Vec<String>,
+}

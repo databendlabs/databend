@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::AlterObjectTagAction;
+use databend_common_ast::ast::AlterObjectTagStmt;
+use databend_common_ast::ast::AlterObjectTagTarget;
 use databend_common_ast::ast::CreateTagStmt;
 use databend_common_ast::ast::DropTagStmt;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTagsStmt;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TagSetItem;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -24,10 +30,18 @@ use crate::SelectBuilder;
 use crate::binder::BindContext;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::ConnectionTagSetTarget;
 use crate::plans::CreateTagPlan;
+use crate::plans::DatabaseTagSetTarget;
 use crate::plans::DropTagPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::SetObjectTagsPlan;
+use crate::plans::StageTagSetTarget;
+use crate::plans::TableTagSetTarget;
+use crate::plans::TagSetObject;
+use crate::plans::TagSetPlanItem;
+use crate::plans::UnsetObjectTagsPlan;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -102,6 +116,114 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowTags)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_alter_object_tag(
+        &self,
+        stmt: &AlterObjectTagStmt,
+    ) -> Result<Plan> {
+        match &stmt.action {
+            AlterObjectTagAction::Set { tags } => {
+                let normalized_tags = self.normalize_tag_set_items(tags)?;
+                let object = self.build_tag_set_object(&stmt.object)?;
+                Ok(Plan::SetObjectTags(Box::new(SetObjectTagsPlan {
+                    tenant: self.ctx.get_tenant(),
+                    object,
+                    tags: normalized_tags,
+                })))
+            }
+            AlterObjectTagAction::Unset { tags } => {
+                let normalized_tags = self.normalize_tag_unset_items(tags);
+                let object = self.build_tag_set_object(&stmt.object)?;
+                Ok(Plan::UnsetObjectTags(Box::new(UnsetObjectTagsPlan {
+                    tenant: self.ctx.get_tenant(),
+                    object,
+                    tags: normalized_tags,
+                })))
+            }
+        }
+    }
+
+    pub(in crate::planner::binder) fn normalize_tag_set_items(
+        &self,
+        tags: &[TagSetItem],
+    ) -> Result<Vec<TagSetPlanItem>> {
+        let mut normalized = Vec::with_capacity(tags.len());
+        for tag in tags {
+            normalized.push(TagSetPlanItem {
+                name: normalize_identifier(&tag.tag_name, &self.name_resolution_ctx).name,
+                value: tag.tag_value.clone(),
+            });
+        }
+        Ok(normalized)
+    }
+
+    pub(in crate::planner::binder) fn normalize_tag_unset_items(
+        &self,
+        tags: &[Identifier],
+    ) -> Vec<String> {
+        tags.iter()
+            .map(|tag| normalize_identifier(tag, &self.name_resolution_ctx).name)
+            .collect()
+    }
+
+    fn build_tag_set_object(&self, target: &AlterObjectTagTarget) -> Result<TagSetObject> {
+        match target {
+            AlterObjectTagTarget::Database {
+                if_exists,
+                catalog,
+                database,
+            } => {
+                let catalog = catalog
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+                    .unwrap_or_else(|| self.ctx.get_current_catalog());
+                let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+                Ok(TagSetObject::Database(DatabaseTagSetTarget {
+                    if_exists: *if_exists,
+                    catalog,
+                    database,
+                }))
+            }
+            AlterObjectTagTarget::Table { if_exists, table } => {
+                if let TableReference::Table {
+                    catalog,
+                    database,
+                    table,
+                    ..
+                } = table
+                {
+                    let (catalog, database, table) =
+                        self.normalize_object_identifier_triple(catalog, database, table);
+                    Ok(TagSetObject::Table(TableTagSetTarget {
+                        if_exists: *if_exists,
+                        catalog,
+                        database,
+                        table,
+                    }))
+                } else {
+                    Err(ErrorCode::Internal(
+                        "only base tables are supported when altering tags",
+                    ))
+                }
+            }
+            AlterObjectTagTarget::Stage {
+                if_exists,
+                stage_name,
+            } => Ok(TagSetObject::Stage(StageTagSetTarget {
+                if_exists: *if_exists,
+                stage_name: stage_name.clone(),
+            })),
+            AlterObjectTagTarget::Connection {
+                if_exists,
+                connection_name,
+            } => Ok(TagSetObject::Connection(ConnectionTagSetTarget {
+                if_exists: *if_exists,
+                connection_name: normalize_identifier(connection_name, &self.name_resolution_ctx)
+                    .name,
+            })),
+        }
     }
 
     fn literal_to_tag_value(&self, literal: &Literal) -> Result<String> {
