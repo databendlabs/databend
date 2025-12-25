@@ -483,7 +483,7 @@ pub fn deserialize_bitmap(buf: &[u8]) -> Result<HybridBitmap> {
         return result;
     }
 
-    RoaringTreemap::deserialize_from(buf)
+    RoaringTreemap::deserialize_unchecked_from(buf)
         .map(HybridBitmap::from)
         .map_err(|e| {
             let len = buf.len();
@@ -502,10 +502,27 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
         && buf[..2] == HYBRID_MAGIC
         && buf[2] == HYBRID_VERSION
     {
-        return Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64);
+        Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64)
+    } else {
+        Ok(deserialize_bitmap(buf)?.len())
     }
+}
 
-    Ok(deserialize_bitmap(buf)?.len())
+pub fn intersection_with_serialized(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+    if let HybridBitmap::Large(lhs) = lhs
+        && buf.len() > 3
+        && buf[3] == HYBRID_KIND_LARGE
+        && buf[..2] == HYBRID_MAGIC
+        && buf[2] == HYBRID_VERSION
+    {
+        Ok(reader::intersection_with_serialized(
+            lhs,
+            &buf[HYBRID_HEADER_LEN..],
+        )?)
+    } else {
+        *lhs &= deserialize_bitmap(buf)?;
+        Ok(())
+    }
 }
 
 fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
@@ -529,7 +546,7 @@ fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
     match kind {
         HYBRID_KIND_SMALL => Some(decode_small_bitmap(payload)),
         HYBRID_KIND_LARGE => Some(
-            RoaringTreemap::deserialize_from(payload)
+            RoaringTreemap::deserialize_unchecked_from(payload)
                 .map(HybridBitmap::from)
                 .map_err(|e| {
                     let len = payload.len();

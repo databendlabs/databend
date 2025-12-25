@@ -20,6 +20,7 @@ use std::io::Seek;
 
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use roaring::RoaringTreemap;
 
 // Sizes of header structures
 const DESCRIPTION_BYTES: usize = 4;
@@ -159,6 +160,10 @@ impl BitmapReader<'_> {
             cardinality,
         })
     }
+
+    pub fn bitmap_buf(&self) -> &[u8] {
+        &self.buf[4..]
+    }
 }
 
 pub struct Description {
@@ -185,6 +190,41 @@ pub fn bitmap_len(buf: &[u8]) -> io::Result<usize> {
     Ok(sum)
 }
 
+pub fn intersection_with_serialized(tree: &mut RoaringTreemap, buf: &[u8]) -> io::Result<()> {
+    use std::cmp::Ordering::*;
+    let rhs = TreemapReader::new(buf)?;
+    let mut bitmaps = Vec::new();
+    let mut lhs_iter = tree.bitmaps();
+    let mut rhs_iter = rhs.iter();
+
+    let mut lhs_curr = lhs_iter.next();
+    let mut rhs_curr = rhs_iter.next().transpose()?;
+
+    while let (Some((lhs_prefix, lhs_bitmap)), Some(rhs_bitmap)) = (lhs_curr, rhs_curr.as_ref()) {
+        match lhs_prefix.cmp(&rhs_bitmap.prefix()) {
+            Less => {
+                lhs_curr = lhs_iter.next();
+            }
+            Greater => {
+                rhs_curr = rhs_iter.next().transpose()?;
+            }
+            Equal => {
+                let intersection = lhs_bitmap
+                    .intersection_with_serialized_unchecked(Cursor::new(rhs_bitmap.bitmap_buf()))?;
+                if !intersection.is_empty() {
+                    bitmaps.push((lhs_prefix, intersection));
+                }
+                lhs_curr = lhs_iter.next();
+                rhs_curr = rhs_iter.next().transpose()?;
+            }
+        }
+    }
+
+    *tree = RoaringTreemap::from_bitmaps(bitmaps);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -195,30 +235,56 @@ mod tests {
 
     use super::*;
 
+    fn create_bitmap(seed: u64) -> RoaringTreemap {
+        let mut rng = SmallRng::seed_from_u64(seed);
+
+        let mut bitmap = RoaringTreemap::new();
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v);
+        }
+
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v & u32::MAX as u64);
+        }
+
+        for _ in 0..50 {
+            let v = rng.r#gen::<u64>();
+            bitmap.insert(v & u16::MAX as u64);
+        }
+
+        bitmap
+    }
+
     #[test]
-    fn test_base() -> io::Result<()> {
-        let mut rng = SmallRng::seed_from_u64(123);
+    fn test_len() -> io::Result<()> {
+        let bitmap = create_bitmap(123);
+        let mut buf = Vec::new();
+        bitmap.serialize_into(&mut buf)?;
+        assert_eq!(bitmap_len(&buf)?, 150);
 
-        let mut map = RoaringTreemap::new();
-        for _ in 0..50 {
-            let v = rng.r#gen::<u64>();
-            map.insert(v);
-        }
+        Ok(())
+    }
 
-        for _ in 0..50 {
-            let v = rng.r#gen::<u64>();
-            map.insert(v & u32::MAX as u64);
-        }
+    #[test]
+    fn test_intersection() -> io::Result<()> {
+        let v1 = create_bitmap(123);
+        let v2 = create_bitmap(456);
+        let v3 = create_bitmap(789);
 
-        for _ in 0..50 {
-            let v = rng.r#gen::<u64>();
-            map.insert(v & u16::MAX as u64);
-        }
+        let v12 = &v1 | &v2;
+        let v23 = &v2 | &v3;
+
+        assert_eq!(&v12 & &v23, v2);
 
         let mut buf = Vec::new();
-        map.serialize_into(&mut buf)?;
+        v23.serialize_into(&mut buf)?;
 
-        assert_eq!(bitmap_len(&buf)?, 150);
+        let mut v = v12;
+        intersection_with_serialized(&mut v, &buf)?;
+
+        assert_eq!(v, v2);
 
         Ok(())
     }
