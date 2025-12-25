@@ -63,6 +63,11 @@ use crate::operations::mutation::mutator::block_compact_mutator::CompactLimitSta
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
 
+/// Maximum recluster depth allowed when only two blocks remain.
+/// For two-block layouts, repeated reclustering beyond this level
+/// rarely improves data locality and may cause task churn.
+const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
+
 pub enum ReclusterMode {
     Recluster,
     Compact,
@@ -224,9 +229,24 @@ impl ReclusterMutator {
 
         let mut tasks = Vec::new();
         let mut selected_blocks_idx = IndexSet::new();
+        let max_level = blocks_map.keys().last().copied();
         // Process blocks for reclustering based on their level
         for (level, indices) in blocks_map.into_iter() {
-            if level == -1 || indices.len() < 2 {
+            let block_count = indices.len();
+            if level == -1 || block_count < 2 {
+                continue;
+            }
+
+            // For two-block scenarios at the deepest level, limit reclustering depth
+            // to avoid generating repeated tasks with little benefit.
+            if block_count == 2
+                && Some(level) == max_level
+                && level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS
+            {
+                debug!(
+                    "recluster: only two blocks remain at level {}, skipping to avoid task churn",
+                    level
+                );
                 continue;
             }
 
