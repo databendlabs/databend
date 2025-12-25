@@ -90,13 +90,6 @@ impl HashTableConfig {
         node_nums: usize,
         active_threads: usize,
     ) -> Self {
-        let mut config = HashTableConfig::default();
-        config.partial_agg = true;
-        config.initial_radix_bits = radix_bits;
-        config.max_radix_bits = radix_bits;
-        config.current_max_radix_bits = Arc::new(AtomicU64::new(radix_bits));
-        config.repartition_radix_bits_incr = 0;
-
         let capacity = if node_nums != 1 {
             131072 * (2 << node_nums)
         } else {
@@ -106,9 +99,16 @@ impl HashTableConfig {
             let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
             (cache_per_active_thread / size_per_entry).next_power_of_two()
         };
-        config.max_partial_capacity = capacity;
 
-        config
+        HashTableConfig {
+            current_max_radix_bits: Arc::new(AtomicU64::new(radix_bits)),
+            initial_radix_bits: radix_bits,
+            max_radix_bits: radix_bits,
+            repartition_radix_bits_incr: 0,
+            partial_agg: true,
+            max_partial_capacity: capacity,
+            ..Default::default()
+        }
     }
 
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
