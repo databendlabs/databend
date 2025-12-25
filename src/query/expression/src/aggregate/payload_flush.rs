@@ -312,7 +312,7 @@ impl Payload {
         unsafe {
             for idx in 0..len {
                 let scalar = state.addresses[idx].read_bytes(col_offset);
-                binary_builder.put_and_commit(std::str::from_utf8_unchecked(scalar).unwrap());
+                binary_builder.put_and_commit(std::str::from_utf8_unchecked(scalar));
             }
         }
         binary_builder.build()
