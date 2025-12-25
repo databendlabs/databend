@@ -99,7 +99,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
-            quote_char: b'\'',
+            quote_char: b'"',
         }
     }
 
@@ -124,7 +124,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
-            quote_char: b'\'',
+            quote_char: b'"',
         }
     }
 
@@ -362,7 +362,7 @@ impl FieldEncoderValues {
 
         match self.common_settings().geometry_format {
             GeometryDataType::GEOJSON => {
-                out_buf.extend_from_slice(s.as_bytes());
+                out_buf.extend_from_slice(&s);
             }
             _ => {
                 self.write_string_inner(&s, out_buf, in_nested);
@@ -392,7 +392,7 @@ impl FieldEncoderValues {
 
         match self.common_settings().geometry_format {
             GeometryDataType::GEOJSON => {
-                out_buf.extend_from_slice(s.as_bytes());
+                out_buf.extend_from_slice(&s);
             }
             _ => {
                 self.write_string_inner(&s, out_buf, in_nested);
