@@ -62,6 +62,7 @@ use opendal::services;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
+use crate::config::CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -415,19 +416,31 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // Disable credential loader
-    if cfg.disable_credential_loader {
+    // If allow_credential_chain is not set, default to false for security.
+    let allow_credential_chain = cfg.allow_credential_chain.unwrap_or(false);
+
+    // Disallowing the credential chain forces unsigned or fully explicit access.
+    if !allow_credential_chain {
         builder = builder.disable_config_load().disable_ec2_metadata();
+    } else if let Some(global) = CredentialChainConfig::try_get() {
+        // Apply global limits to the credential chain.
+        if global.disable_config_load {
+            builder = builder.disable_config_load();
+        }
+        if global.disable_instance_profile {
+            builder = builder.disable_ec2_metadata();
+        }
     }
 
     // If credential loading is disabled and no credentials are provided, use unsigned requests.
     // This allows accessing public buckets reliably in environments where signing could be rejected.
-    if cfg.disable_credential_loader
+    if !allow_credential_chain
         && cfg.access_key_id.is_empty()
         && cfg.secret_access_key.is_empty()
         && cfg.security_token.is_empty()
         && cfg.role_arn.is_empty()
     {
+        // Allow anonymous is actually forcing unsigned requests in OpenDAL.
         builder = builder.allow_anonymous();
     }
 
@@ -568,6 +581,10 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<()> {
+        CredentialChainConfig::init(CredentialChainConfig {
+            disable_config_load: conf.disable_config_load,
+            disable_instance_profile: conf.disable_instance_profile,
+        })?;
         GlobalInstance::set(Self::try_create(conf, spill_params).await?);
 
         Ok(())
@@ -578,8 +595,9 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(&conf.params)?;
-        check_operator(&operator, &conf.params).await?;
+        let data_params = conf.params.clone();
+        let operator = init_operator(&data_params)?;
+        check_operator(&operator, &data_params).await?;
 
         // Init spill operator
         let mut params = spill_params.as_ref().unwrap_or(&conf.params).clone();
@@ -590,7 +608,7 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            params: conf.params.clone(),
+            params: data_params,
             spill_operator,
             spill_params,
         })

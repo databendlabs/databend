@@ -44,6 +44,31 @@ pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
     pub params: StorageParams,
+    /// Global switches that affect the ambient credential chain behavior.
+    ///
+    /// Notes:
+    /// - These are runtime-only controls and are not persisted in meta.
+    /// - They apply to all storage operators created in this process.
+    pub disable_config_load: bool,
+    pub disable_instance_profile: bool,
+}
+
+/// Runtime-only switches for ambient credential chain behavior.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CredentialChainConfig {
+    pub disable_config_load: bool,
+    pub disable_instance_profile: bool,
+}
+
+impl CredentialChainConfig {
+    pub fn init(cfg: CredentialChainConfig) -> databend_common_exception::Result<()> {
+        GlobalInstance::set(cfg);
+        Ok(())
+    }
+
+    pub fn try_get() -> Option<CredentialChainConfig> {
+        GlobalInstance::try_get()
+    }
 }
 
 // TODO: This config should be moved out of common-storage crate.
