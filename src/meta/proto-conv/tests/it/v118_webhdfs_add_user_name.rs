@@ -57,6 +57,7 @@ fn test_v118_webhdfs_add_user_name() -> anyhow::Result<()> {
             }),
         },
         is_temporary: false,
+        allow_credential_chain: false,
         file_format_params: mt::principal::FileFormatParams::Json(
             mt::principal::JsonFileFormatParams {
                 compression: mt::principal::StageFileCompression::Bz2,

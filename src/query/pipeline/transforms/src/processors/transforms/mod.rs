@@ -30,6 +30,7 @@ mod transform_dummy;
 mod transform_hook;
 mod transform_pipeline_helper;
 mod transform_retry_async;
+pub mod window;
 
 pub use transform::*;
 pub use transform_accumulating::*;
