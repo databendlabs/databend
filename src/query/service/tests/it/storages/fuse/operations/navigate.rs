@@ -221,7 +221,7 @@ async fn test_navigate_for_purge() -> Result<()> {
     let meta = fuse_table.get_operator().stat(&loc).await?;
     let modified = meta.last_modified();
     assert!(modified.is_some());
-    let millis = modified.unwrap().into_inner().as_millisecond();
+    let millis = modified.unwrap().timestamp_millis();
     let seconds = millis / 1000;
     let nanos = ((millis % 1000) * 1_000_000) as u32;
     let base_time = chrono::DateTime::<Utc>::from_timestamp(seconds as i64, nanos)

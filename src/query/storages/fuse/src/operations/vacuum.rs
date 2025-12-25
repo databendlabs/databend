@@ -41,6 +41,7 @@ use log::info;
 use log::warn;
 use opendal::Entry;
 use opendal::Operator;
+use opendal::Scheme;
 
 use crate::FuseTable;
 use crate::io::SnapshotLiteExtended;
@@ -178,9 +179,6 @@ async fn is_gc_candidate_segment_block(
         })?
     };
 
-    let last_modified =
-        DateTime::from_timestamp_nanos(last_modified.into_inner().as_nanosecond() as i64);
-
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
@@ -246,7 +244,9 @@ impl FuseTable {
         let dal = self.get_operator_ref();
 
         match dal.info().scheme() {
-            "fs" => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
+            Scheme::Fs => {
+                fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await
+            }
             _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
         }
     }

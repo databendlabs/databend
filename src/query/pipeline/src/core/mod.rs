@@ -31,6 +31,7 @@ pub use finished_chain::always_callback;
 pub use finished_chain::basic_callback;
 pub use input_error::InputError;
 pub use lock_guard::LockGuard;
+pub use lock_guard::SharedLockGuard;
 pub use lock_guard::UnlockApi;
 pub use pipe::Pipe;
 pub use pipe::PipeItem;

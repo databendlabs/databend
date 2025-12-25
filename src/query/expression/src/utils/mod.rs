@@ -14,6 +14,7 @@
 
 pub mod arithmetics_type;
 pub mod arrow;
+pub mod bitmap;
 pub mod block_debug;
 pub mod block_thresholds;
 mod column_from;

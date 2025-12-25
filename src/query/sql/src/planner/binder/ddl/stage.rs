@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_storage::init_operator;
+use databend_common_storage::init_stage_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::Binder;
@@ -89,14 +89,16 @@ impl Binder {
                 )
                 .await?;
 
-                // Check the storage params via init operator.
-                let _ = init_operator(&stage_storage).map_err(|err| {
+                let stage_info =
+                    StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name);
+
+                init_stage_operator(&stage_info).map_err(|err| {
                     ErrorCode::InvalidConfig(format!(
                         "Input storage config for stage is invalid: {err:?}"
                     ))
                 })?;
 
-                StageInfo::new_external_stage(stage_storage, true).with_stage_name(stage_name)
+                stage_info
             }
         };
 

@@ -14,6 +14,7 @@
 
 mod flight_client;
 mod flight_service;
+pub(crate) mod keep_alive;
 mod request_builder;
 pub mod v1;
 

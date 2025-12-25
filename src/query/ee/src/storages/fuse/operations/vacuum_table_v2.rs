@@ -537,15 +537,12 @@ async fn select_gc_root(
     let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
 
     let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
-        Ok(v) => v
-            .last_modified()
-            .ok_or_else(|| {
-                ErrorCode::StorageOther(format!(
-                    "Failed to get `last_modified` metadata of the gc root object '{}'",
-                    gc_root_path
-                ))
-            })
-            .map(|v| DateTime::from_timestamp_nanos(v.into_inner().as_nanosecond() as i64))?,
+        Ok(v) => v.last_modified().ok_or_else(|| {
+            ErrorCode::StorageOther(format!(
+                "Failed to get `last_modified` metadata of the gc root object '{}'",
+                gc_root_path
+            ))
+        })?,
         Err(e) => {
             return if e.kind() == ErrorKind::NotFound {
                 // Concurrent vacuum, ignore it
@@ -577,13 +574,8 @@ async fn select_gc_root(
                                 gc_root_path
                             ))
                         })?,
-                        Some(v) => v
+                        Some(v) => v,
                     };
-
-                    let last_modified = DateTime::from_timestamp_nanos(
-                        last_modified.into_inner().as_nanosecond() as i64,
-                    );
-
                     if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                         gc_candidates.push(path.to_owned());
                     }
@@ -663,15 +655,12 @@ async fn update_gc_root_times(
     gc_root_timestamp: &mut Option<DateTime<Utc>>,
 ) -> Result<()> {
     let meta = fuse_table.get_operator_ref().stat(gc_root_location).await?;
-    let meta_ts = meta
-        .last_modified()
-        .ok_or_else(|| {
-            ErrorCode::StorageOther(format!(
-                "Failed to get `last_modified` metadata of snapshot '{}'",
-                gc_root_location
-            ))
-        })
-        .map(|v| DateTime::from_timestamp_nanos(v.into_inner().as_nanosecond() as i64))?;
+    let meta_ts = meta.last_modified().ok_or_else(|| {
+        ErrorCode::StorageOther(format!(
+            "Failed to get `last_modified` metadata of snapshot '{}'",
+            gc_root_location
+        ))
+    })?;
     *gc_root_meta_ts = Some(gc_root_meta_ts.map_or(meta_ts, |cur| cur.min(meta_ts)));
 
     let gc_root_ts = gc_root_snapshot_ts.unwrap();

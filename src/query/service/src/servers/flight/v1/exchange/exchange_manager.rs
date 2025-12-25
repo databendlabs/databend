@@ -39,6 +39,7 @@ use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::basic_callback;
+use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
@@ -67,6 +68,7 @@ use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::keep_alive::build_keep_alive_config;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::actions::init_query_fragments;
@@ -184,6 +186,11 @@ impl DataExchangeManager {
 
         let config = GlobalConfig::instance();
         let with_cur_rt = env.create_rpc_clint_with_current_rt;
+        let settings = match ctx {
+            Some(ref ctx) => ctx.get_settings(),
+            None => env.settings.clone(),
+        };
+        let keep_alive = settings.get_flight_keep_alive_params()?;
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -203,8 +210,10 @@ impl DataExchangeManager {
                     let query_id = env.query_id.clone();
                     let address = source.flight_address.clone();
 
+                    let keep_alive_params = keep_alive;
                     flight_exchanges.push(async move {
-                        let mut flight_client = Self::create_client(&address, with_cur_rt).await?;
+                        let mut flight_client =
+                            Self::create_client(&address, with_cur_rt, keep_alive_params).await?;
 
                         Ok::<QueryExchange, ErrorCode>(match edge {
                             Edge::Fragment(channel) => QueryExchange::Fragment {
@@ -326,9 +335,14 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn create_client(address: &str, use_current_rt: bool) -> Result<FlightClient> {
+    pub async fn create_client(
+        address: &str,
+        use_current_rt: bool,
+        keep_alive: FlightKeepAliveParams,
+    ) -> Result<FlightClient> {
         let config = GlobalConfig::instance();
         let address = address.to_string();
+        let keep_alive_config = build_keep_alive_config(keep_alive);
         let task = async move {
             match config.tls_query_cli_enabled() {
                 true => Ok(FlightClient::new(FlightServiceClient::new(
@@ -336,11 +350,18 @@ impl DataExchangeManager {
                         address.to_owned(),
                         None,
                         Some(config.query.to_rpc_client_tls_config()),
+                        keep_alive_config,
                     )
                     .await?,
                 ))),
                 false => Ok(FlightClient::new(FlightServiceClient::new(
-                    ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
+                    ConnectionFactory::create_rpc_channel(
+                        address.to_owned(),
+                        None,
+                        None,
+                        keep_alive_config,
+                    )
+                    .await?,
                 ))),
             }
         };
@@ -474,6 +495,7 @@ impl DataExchangeManager {
             timeout: settings.get_flight_client_timeout()?,
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
+            keep_alive: settings.get_flight_keep_alive_params()?,
         };
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();

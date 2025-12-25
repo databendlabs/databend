@@ -69,6 +69,7 @@ goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
+roaring = { workspace = true }
 
 [[bench]]
 name = "bench"

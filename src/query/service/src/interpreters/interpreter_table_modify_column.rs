@@ -754,9 +754,12 @@ impl Interpreter for ModifyTableColumnInterpreter {
             }
         };
 
-        build_res
-            .main_pipeline
-            .add_lock_guard(self.plan.lock_guard.clone());
+        let lock_guard = self
+            .plan
+            .lock_guard
+            .as_ref()
+            .and_then(|holder| holder.try_take());
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 }
