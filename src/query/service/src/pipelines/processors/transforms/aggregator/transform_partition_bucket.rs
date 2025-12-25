@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -30,9 +30,9 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 
 use super::AggregatePayload;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 static MAX_PARTITION_COUNT: usize = 128;

@@ -25,6 +25,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
+use databend_common_sql::ScalarExpr;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
@@ -33,9 +36,6 @@ use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
 use databend_common_sql::plans::ScalarItem;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
-use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
 
 use super::AggregateExpand;
@@ -50,10 +50,10 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
-use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {

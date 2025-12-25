@@ -26,8 +26,8 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 
 pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,

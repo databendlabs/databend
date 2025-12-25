@@ -25,11 +25,11 @@ use databend_common_pipeline::core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
-use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewTransformFinalAggregate;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
+use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::sessions::QueryContext;
 
 fn build_partition_bucket_experimental(

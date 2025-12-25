@@ -24,8 +24,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_transforms::traits::Location;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use log::debug;
@@ -462,13 +462,13 @@ mod tests {
 
     use databend_common_base::base::tokio;
     use databend_common_exception::Result;
-    use databend_common_expression::types::Int32Type;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
 
+    use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
     use crate::pipelines::processors::transforms::aggregator::new_aggregate::LocalPartitionStream;
     use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
-    use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
