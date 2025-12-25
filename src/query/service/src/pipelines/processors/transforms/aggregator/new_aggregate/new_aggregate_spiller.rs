@@ -381,7 +381,7 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload, self.partition_count)
+        restore_payload(self.read_setting, payload)
     }
 }
 
@@ -413,14 +413,13 @@ impl NewAggregateSpillReader {
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload, 0)
+        restore_payload(self.read_setting, payload)
     }
 }
 
 fn restore_payload(
     read_setting: ReadSettings,
     payload: NewSpilledPayload,
-    max_partition_count: usize,
 ) -> Result<AggregateMeta> {
     let NewSpilledPayload {
         bucket,
@@ -459,7 +458,8 @@ fn restore_payload(
         Ok(AggregateMeta::Serialized(SerializedPayload {
             bucket,
             data_block: block,
-            max_partition_count,
+            // New aggregator no longer uses this field; keep 0 for deprecated compatibility.
+            max_partition_count: 0,
         }))
     } else {
         Err(ErrorCode::Internal("read empty block from final aggregate"))
