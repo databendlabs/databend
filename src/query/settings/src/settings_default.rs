@@ -1494,7 +1494,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
                 ("enable_experiment_aggregate", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable experiment aggregate, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
