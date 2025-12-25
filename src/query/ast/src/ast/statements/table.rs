@@ -507,7 +507,6 @@ impl Display for AlterTableAction {
                 write_comma_separated_string_map(f, set_options)?;
                 write!(f, ")")?;
             }
-
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
             }

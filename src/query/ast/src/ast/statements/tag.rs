@@ -21,8 +21,11 @@ use derive_visitor::DriveMut;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::TableReference;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTagStmt {
@@ -58,6 +61,23 @@ impl Display for CreateTagStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct TagSetItem {
+    pub tag_name: Identifier,
+    pub tag_value: String,
+}
+
+impl Display for TagSetItem {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{} = {}",
+            self.tag_name,
+            QuotedString(&self.tag_value, '\'')
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropTagStmt {
     pub if_exists: bool,
     pub name: Identifier,
@@ -88,6 +108,116 @@ impl Display for ShowTagsStmt {
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct AlterObjectTagStmt {
+    pub object: AlterObjectTagTarget,
+    pub action: AlterObjectTagAction,
+}
+
+impl Display for AlterObjectTagStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ALTER {}", self.object)?;
+        write!(f, " {}", self.action)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum AlterObjectTagTarget {
+    Database {
+        if_exists: bool,
+        catalog: Option<Identifier>,
+        database: Identifier,
+    },
+    Table {
+        if_exists: bool,
+        table: TableReference,
+    },
+    Stage {
+        if_exists: bool,
+        stage_name: String,
+    },
+    Connection {
+        if_exists: bool,
+        connection_name: Identifier,
+    },
+}
+
+impl Display for AlterObjectTagTarget {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AlterObjectTagTarget::Database {
+                if_exists,
+                catalog,
+                database,
+            } => {
+                write!(f, "DATABASE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_dot_separated_list(f, catalog.iter().chain(Some(database)))?;
+            }
+            AlterObjectTagTarget::Table { if_exists, table } => {
+                write!(f, "TABLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{table}")?;
+            }
+            AlterObjectTagTarget::Stage {
+                if_exists,
+                stage_name,
+            } => {
+                write!(f, "STAGE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{stage_name}")?;
+            }
+            AlterObjectTagTarget::Connection {
+                if_exists,
+                connection_name,
+            } => {
+                write!(f, "CONNECTION ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{connection_name}")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum AlterObjectTagAction {
+    Set { tags: Vec<TagSetItem> },
+    Unset { tags: Vec<Identifier> },
+}
+
+impl Display for AlterObjectTagAction {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AlterObjectTagAction::Set { tags } => {
+                write!(f, "SET TAG ")?;
+                if tags.len() == 1 {
+                    write!(f, "{}", &tags[0])?;
+                } else {
+                    write_comma_separated_list(f, tags)?;
+                }
+            }
+            AlterObjectTagAction::Unset { tags } => {
+                write!(f, "UNSET TAG ")?;
+                if tags.len() == 1 {
+                    write!(f, "{}", &tags[0])?;
+                } else {
+                    write_comma_separated_list(f, tags)?;
+                }
+            }
         }
         Ok(())
     }

@@ -2074,6 +2074,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
     );
 
+    let alter_object_tag_action = alter_object_tags_action(
+        |tags| AlterObjectTagAction::Set { tags },
+        |tags| AlterObjectTagAction::Unset { tags },
+    );
+
+    let alter_object_tags = map(
+        rule! {
+            #alter_object_tag_target ~ #alter_object_tag_action
+        },
+        |(object, action)| Statement::AlterObjectTag(AlterObjectTagStmt { object, action }),
+    );
+
     let call = map(
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
@@ -2924,6 +2936,7 @@ AS
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
@@ -4318,6 +4331,107 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     .parse(i)
 }
 
+fn tag_set_item(i: Input) -> IResult<TagSetItem> {
+    map(
+        rule! {
+            #ident ~ ^"=" ~ ^#literal_string
+        },
+        |(tag_name, _, tag_value)| TagSetItem {
+            tag_name,
+            tag_value,
+        },
+    )
+    .parse(i)
+}
+
+fn tag_set_items(i: Input) -> IResult<Vec<TagSetItem>> {
+    map(
+        rule! { #tag_set_item ~ ("," ~ #tag_set_item)* },
+        |(first, rest)| {
+            let mut tags = vec![first];
+            for (_, item) in rest {
+                tags.push(item);
+            }
+            tags
+        },
+    )
+    .parse(i)
+}
+
+fn tag_unset_items(i: Input) -> IResult<Vec<Identifier>> {
+    map(rule! { #comma_separated_list1(ident) }, |tags| tags).parse(i)
+}
+
+fn alter_object_tags_action<'a, T, SetAction, UnsetAction>(
+    set_action: SetAction,
+    unset_action: UnsetAction,
+) -> impl FnMut(Input<'a>) -> IResult<'a, T>
+where
+    SetAction: Fn(Vec<TagSetItem>) -> T,
+    UnsetAction: Fn(Vec<Identifier>) -> T,
+{
+    move |i| {
+        alt((
+            map(
+                rule! {
+                    SET ~ TAG ~ #tag_set_items
+                },
+                |(_, _, tags)| set_action(tags),
+            ),
+            map(
+                rule! {
+                    UNSET ~ TAG ~ #tag_unset_items
+                },
+                |(_, _, tags)| unset_action(tags),
+            ),
+        ))
+        .parse(i)
+    }
+}
+
+fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
+    alt((
+        map(
+            rule! {
+                DATABASE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2
+            },
+            |(_, opt_if_exists, (catalog, database))| AlterObjectTagTarget::Database {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+            },
+        ),
+        map(
+            rule! {
+                TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only
+            },
+            |(_, opt_if_exists, table_reference)| AlterObjectTagTarget::Table {
+                if_exists: opt_if_exists.is_some(),
+                table: table_reference,
+            },
+        ),
+        map(
+            rule! {
+                STAGE ~ ( IF ~ ^EXISTS )? ~ #stage_name
+            },
+            |(_, opt_if_exists, stage_name)| AlterObjectTagTarget::Stage {
+                if_exists: opt_if_exists.is_some(),
+                stage_name: stage_name.to_string(),
+            },
+        ),
+        map(
+            rule! {
+                CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+            },
+            |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
+                if_exists: opt_if_exists.is_some(),
+                connection_name,
+            },
+        ),
+    ))
+    .parse(i)
+}
+
 pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     let rename_database = map(
         rule! {
@@ -4646,29 +4760,34 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    rule!(
+    // The action list is split to avoid the trait bound limit in `alt(...)`.
+    let alter_table_action_primary = rule!(
         #alter_table_cluster_key
-        | #drop_table_cluster_key
-        | #drop_constraint
-        | #rename_table
-        | #swap_with
-        | #rename_column
-        | #modify_table_comment
-        | #add_column
-        | #drop_column
-        | #modify_column
-        | #recluster_table
-        | #revert_table
-        | #set_table_options
-        | #unset_table_options
-        | #refresh_cache
-        | #modify_table_connection
-        | #drop_all_row_access_polices
-        | #drop_row_access_policy
-        | #add_row_access_policy
-        | #add_constraint
-    )
-    .parse(i)
+            | #drop_table_cluster_key
+            | #drop_constraint
+            | #rename_table
+            | #swap_with
+            | #rename_column
+            | #modify_table_comment
+            | #add_column
+            | #drop_column
+            | #modify_column
+            | #recluster_table
+            | #revert_table
+            | #set_table_options
+    );
+
+    let alter_table_action_secondary = rule!(
+        #unset_table_options
+            | #refresh_cache
+            | #modify_table_connection
+            | #drop_all_row_access_polices
+            | #drop_row_access_policy
+            | #add_row_access_policy
+            | #add_constraint
+    );
+
+    alt((alter_table_action_primary, alter_table_action_secondary)).parse(i)
 }
 
 pub fn match_clause(i: Input) -> IResult<MergeOption> {

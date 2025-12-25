@@ -152,6 +152,7 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::SetObjectTagsPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
@@ -172,6 +173,7 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetObjectTagsPlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UnsetWorkloadGroupQuotasPlan;
@@ -374,6 +376,8 @@ pub enum Plan {
     // Tags
     CreateTag(Box<CreateTagPlan>),
     DropTag(Box<DropTagPlan>),
+    SetObjectTags(Box<SetObjectTagsPlan>),
+    UnsetObjectTags(Box<UnsetObjectTagsPlan>),
 
     // Stages
     CreateStage(Box<CreateStagePlan>),

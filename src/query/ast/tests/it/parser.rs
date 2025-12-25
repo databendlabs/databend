@@ -16,6 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::AlterObjectTagAction;
+use databend_common_ast::ast::AlterObjectTagStmt;
+use databend_common_ast::ast::AlterObjectTagTarget;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -1170,6 +1175,172 @@ fn test_statement_error() {
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.1).unwrap();
+    }
+}
+
+#[test]
+fn test_alter_object_set_tag() {
+    let cases: Vec<(&str, Box<dyn Fn(&AlterObjectTagStmt)>)> = vec![
+        (
+            "ALTER DATABASE mydb SET TAG env = 'prod'",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                match &stmt.object {
+                    AlterObjectTagTarget::Database {
+                        catalog,
+                        database,
+                        if_exists,
+                    } => {
+                        assert!(!if_exists);
+                        assert!(catalog.is_none());
+                        assert_eq!(database.name, "mydb");
+                    }
+                    _ => panic!("expected DATABASE target"),
+                }
+                match &stmt.action {
+                    AlterObjectTagAction::Set { tags } => {
+                        assert_eq!(tags.len(), 1);
+                        assert_eq!(tags[0].tag_name.name, "env");
+                        assert_eq!(tags[0].tag_value, "prod");
+                    }
+                    _ => panic!("expected SET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER TABLE default.t SET TAG env = 'dev', owner = 'alice'",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                match &stmt.object {
+                    AlterObjectTagTarget::Table { if_exists, table } => {
+                        assert!(!if_exists);
+                        if let TableReference::Table {
+                            database,
+                            table: tbl,
+                            ..
+                        } = table
+                        {
+                            assert_eq!(database.as_ref().unwrap().name, "default");
+                            assert_eq!(tbl.name, "t");
+                        } else {
+                            panic!("expected simple table reference");
+                        }
+                    }
+                    _ => panic!("expected TABLE target"),
+                }
+                match &stmt.action {
+                    AlterObjectTagAction::Set { tags } => {
+                        assert_eq!(tags.len(), 2);
+                        assert_eq!(tags[0].tag_name.name, "env");
+                        assert_eq!(tags[1].tag_name.name, "owner");
+                        assert_eq!(tags[1].tag_value, "alice");
+                    }
+                    _ => panic!("expected SET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER STAGE IF EXISTS mystage SET TAG label = 'foo'",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                match &stmt.object {
+                    AlterObjectTagTarget::Stage {
+                        if_exists,
+                        stage_name,
+                    } => {
+                        assert!(*if_exists);
+                        assert_eq!(stage_name, "mystage");
+                    }
+                    _ => panic!("expected STAGE target"),
+                }
+                match &stmt.action {
+                    AlterObjectTagAction::Set { tags } => {
+                        assert_eq!(tags.len(), 1);
+                        assert_eq!(tags[0].tag_name.name, "label");
+                    }
+                    _ => panic!("expected SET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER CONNECTION conn SET TAG scope = 'tenant'",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                match &stmt.object {
+                    AlterObjectTagTarget::Connection {
+                        if_exists,
+                        connection_name,
+                    } => {
+                        assert!(!if_exists);
+                        assert_eq!(connection_name.name, "conn");
+                    }
+                    _ => panic!("expected CONNECTION target"),
+                }
+                assert!(matches!(stmt.action, AlterObjectTagAction::Set { .. }));
+            }),
+        ),
+        (
+            "ALTER DATABASE mydb UNSET TAG env, owner",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                assert!(matches!(stmt.object, AlterObjectTagTarget::Database { .. }));
+                match &stmt.action {
+                    AlterObjectTagAction::Unset { tags } => {
+                        assert_eq!(tags.len(), 2);
+                        assert_eq!(tags[0].name, "env");
+                        assert_eq!(tags[1].name, "owner");
+                    }
+                    _ => panic!("expected UNSET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER TABLE t UNSET TAG label",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                assert!(matches!(stmt.object, AlterObjectTagTarget::Table { .. }));
+                match &stmt.action {
+                    AlterObjectTagAction::Unset { tags } => {
+                        assert_eq!(tags.len(), 1);
+                        assert_eq!(tags[0].name, "label");
+                    }
+                    _ => panic!("expected UNSET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER STAGE mystage UNSET TAG label, owner",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                assert!(matches!(stmt.object, AlterObjectTagTarget::Stage { .. }));
+                match &stmt.action {
+                    AlterObjectTagAction::Unset { tags } => {
+                        assert_eq!(tags.len(), 2);
+                        assert_eq!(tags[0].name, "label");
+                    }
+                    _ => panic!("expected UNSET TAG"),
+                }
+            }),
+        ),
+        (
+            "ALTER CONNECTION conn UNSET TAG scope",
+            Box::new(|stmt: &AlterObjectTagStmt| {
+                assert!(matches!(
+                    stmt.object,
+                    AlterObjectTagTarget::Connection { .. }
+                ));
+                match &stmt.action {
+                    AlterObjectTagAction::Unset { tags } => {
+                        assert_eq!(tags.len(), 1);
+                        assert_eq!(tags[0].name, "scope");
+                    }
+                    _ => panic!("expected UNSET TAG"),
+                }
+            }),
+        ),
+    ];
+
+    for (sql, check) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        if let Statement::AlterObjectTag(alter) = stmt {
+            check(&alter);
+        } else {
+            panic!("expected ALTER ... TAG statement");
+        }
     }
 }
 
