@@ -1767,7 +1767,7 @@ async fn test_max_size_per_page() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
     assert!(reply.error.is_none(), "{:?}", reply.error);
-    let target = (10_usize * 1024 * 1024) as f64;
+    let target = (4_usize * 1024 * 1024) as f64;
     assert!(
         (0.9..1.1).contains(&(body.len() as f64 / target)),
         "body len {} rows {}",
@@ -1786,7 +1786,7 @@ async fn test_max_size_per_page_total_rows() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
     assert!(reply.error().is_none(), "{:?}", reply.error());
-    assert_eq!(reply.resps.len(), 3);
+    assert_eq!(reply.resps.len(), 6);
     assert_eq!(reply.data().len(), 20000, "{:?}", reply.error());
     Ok(())
 }
