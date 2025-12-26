@@ -62,8 +62,8 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use derive_visitor::Drive;
-use log::debug;
 use log::LevelFilter;
+use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
