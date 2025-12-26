@@ -536,7 +536,9 @@ impl FuseTable {
         }
 
         if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize));
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
         }
 
         if let Some(duration) = self.try_get_table_option_retention_period()? {
@@ -544,7 +546,9 @@ impl FuseTable {
         }
 
         if let Some(num_snapshots) = self.try_get_setting_num_snapshots_to_keep(ctx)? {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize));
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
         }
 
         let duration = self.get_data_retention_period_from_settings(ctx)?;
@@ -566,10 +570,7 @@ impl FuseTable {
         Ok(None)
     }
 
-    fn try_get_setting_num_snapshots_to_keep(
-        &self,
-        ctx: &dyn TableContext,
-    ) -> Result<Option<u64>> {
+    fn try_get_setting_num_snapshots_to_keep(&self, ctx: &dyn TableContext) -> Result<Option<u64>> {
         let settings_value = ctx
             .get_settings()
             .get_data_retention_num_snapshots_to_keep()?;
@@ -594,7 +595,7 @@ impl FuseTable {
 
     fn get_data_retention_period_from_settings(&self, ctx: &dyn TableContext) -> Result<Duration> {
         Ok(Duration::days(
-            ctx.get_settings().get_data_retention_time_in_days()? as i64
+            ctx.get_settings().get_data_retention_time_in_days()? as i64,
         ))
     }
 
