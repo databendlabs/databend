@@ -47,14 +47,13 @@ impl KeyBuilder {
     }
 
     pub fn push_u64(mut self, n: u64) -> Self {
-        use std::io::Write;
-        
         if !self.buf.is_empty() {
             // `/`
             self.buf.push(0x2f);
         }
         
         // Write directly to buffer instead of allocating a string
+        use std::io::Write;
         write!(self.buf, "{}", n).unwrap();
         self
     }
