@@ -41,11 +41,6 @@ pub enum TagMetaError {
         tag_value: String,
         allowed_values_display: String,
     },
-
-    #[error(
-        "Tag metadata for tag id(s) {tag_ids:?} was modified concurrently, please retry (e.g., allowed_values changed)"
-    )]
-    TagMetaConcurrentModification { tag_ids: Vec<u64> },
 }
 
 impl TagError {
@@ -86,12 +81,6 @@ impl TagMetaError {
             allowed_values_display,
         }
     }
-
-    pub fn concurrent_modification(tag_ids: impl Into<Vec<u64>>) -> Self {
-        Self::TagMetaConcurrentModification {
-            tag_ids: tag_ids.into(),
-        }
-    }
 }
 
 impl From<TagError> for ErrorCode {
@@ -109,9 +98,6 @@ impl From<TagMetaError> for ErrorCode {
         match err {
             TagMetaError::UnknownTagId(err) => ErrorCode::from(err),
             TagMetaError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
-            TagMetaError::TagMetaConcurrentModification { .. } => {
-                ErrorCode::TagMetaConcurrentModification(s)
-            }
         }
     }
 }

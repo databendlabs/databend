@@ -199,12 +199,19 @@ where
 
     /// Attach multiple tags to an object in a single transaction.
     /// Validates tag existence and allowed_values constraints.
+    ///
+    /// The txn uses optimistic locking:
+    /// - We must re-fetch `TagMeta` and verify values on every retry so each attempt uses the
+    ///   latest `allowed_values`.
+    /// - The generated conditions include `tag_meta.seq`, ensuring no concurrent update sneaks in
+    ///   between validation and commit. If any `TagMeta` changes, the txn fails and the loop
+    ///   re-executes the entire validation/write process.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn set_object_tags(
         &self,
         req: SetObjectTagsReq,
-    ) -> Result<Result<(), TagMetaError>, MetaError> {
+    ) -> Result<Result<(), TagMetaError>, MetaTxnError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         if req.tags.is_empty() {
@@ -218,68 +225,74 @@ where
             .map(|(tag_id, _)| TagId::new(*tag_id).into_t_ident(&req.tenant))
             .collect();
 
-        let tag_metas = self
-            .get_pb_values_vec::<TagIdIdent, _>(tag_meta_keys.clone())
-            .await?;
+        let mut trials = txn_backoff(None, func_name!());
 
-        let mut txn_conditions = Vec::with_capacity(req.tags.len());
-        let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
+        loop {
+            trials.next().unwrap()?.await;
 
-        for (((tag_id, tag_value), meta_opt), tag_meta_key) in
-            req.tags.iter().zip(tag_metas).zip(tag_meta_keys)
-        {
-            // Verify tag exists
-            let Some(meta_seqv) = meta_opt else {
-                return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
-            };
-            // Check allowed_values: None means any value is allowed
-            if let Some(allowed) = &meta_seqv.data.allowed_values {
-                // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
-                // for O(1) membership checks when validating bindings.
-                let allowed_lookup: HashSet<&str> =
-                    allowed.iter().map(|value| value.as_str()).collect();
-                if !allowed_lookup.contains(tag_value.as_str()) {
-                    return Ok(Err(TagMetaError::not_allowed_value(
-                        *tag_id,
-                        tag_value.clone(),
-                        Some(allowed.clone()),
-                    )));
-                }
-            }
-            // Add condition to ensure tag meta hasn't been modified
-            // object set value must be occurs in allowed_values if it's not none.
-            txn_conditions.push(txn_cond_eq_seq(&tag_meta_key, meta_seqv.seq));
+            // Each retry must refetch tag meta because the txn conditions compare the latest seq.
+            // If another session updated tag meta (e.g. allowed_values), our previous snapshot is stale.
+            let tag_metas = self
+                .get_pb_values_vec::<TagIdIdent, _>(tag_meta_keys.clone())
+                .await?;
 
-            let obj_ref_key = ObjectTagIdRefIdent::new_generic(
-                req.tenant.clone(),
-                ObjectTagIdRef::new(req.taggable_object.clone(), *tag_id),
-            );
-            let tag_ref_key = TagIdObjectRefIdent::new_generic(
-                req.tenant.clone(),
-                TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
-            );
+            let mut txn_conditions = Vec::with_capacity(req.tags.len());
+            let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
 
-            txn_ops.push(txn_op_put_pb(
-                &obj_ref_key,
-                &ObjectTagIdRefValue {
-                    tag_allowed_value: tag_value.clone(),
-                },
-                None,
-            )?);
-            txn_ops.push(txn_op_put_pb(&tag_ref_key, &EmptyProto {}, None)?);
-        }
-
-        let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;
-        if succ {
-            Ok(Ok(()))
-        } else {
-            // Tag metadata was modified concurrently (e.g., allowed_values changed)
-            let tag_ids = req
+            for (((tag_id, tag_value), meta_opt), tag_meta_key) in req
                 .tags
                 .iter()
-                .map(|(tag_id, _)| *tag_id)
-                .collect::<Vec<_>>();
-            Ok(Err(TagMetaError::concurrent_modification(tag_ids)))
+                .zip(tag_metas.into_iter())
+                .zip(tag_meta_keys.iter())
+            {
+                // Verify tag exists
+                let Some(meta_seqv) = meta_opt else {
+                    return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
+                };
+                // Check allowed_values: None means any value is allowed
+                if let Some(allowed) = &meta_seqv.data.allowed_values {
+                    // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
+                    // for O(1) membership checks when validating bindings.
+                    let allowed_lookup: HashSet<&str> =
+                        allowed.iter().map(|value| value.as_str()).collect();
+                    if !allowed_lookup.contains(tag_value.as_str()) {
+                        return Ok(Err(TagMetaError::not_allowed_value(
+                            *tag_id,
+                            tag_value.clone(),
+                            Some(allowed.clone()),
+                        )));
+                    }
+                }
+                // Add condition to ensure tag meta hasn't been modified
+                // object set value must be occurs in allowed_values if it's not none.
+                txn_conditions.push(txn_cond_eq_seq(tag_meta_key, meta_seqv.seq));
+
+                let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+                    req.tenant.clone(),
+                    ObjectTagIdRef::new(req.taggable_object.clone(), *tag_id),
+                );
+                let tag_ref_key = TagIdObjectRefIdent::new_generic(
+                    req.tenant.clone(),
+                    TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
+                );
+
+                txn_ops.push(txn_op_put_pb(
+                    &obj_ref_key,
+                    &ObjectTagIdRefValue {
+                        tag_allowed_value: tag_value.clone(),
+                    },
+                    None,
+                )?);
+                txn_ops.push(txn_op_put_pb(&tag_ref_key, &EmptyProto {}, None)?);
+            }
+
+            let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;
+            if succ {
+                return Ok(Ok(()));
+            } else {
+                // Transaction failed because tag meta was modified concurrently; re-loop to read latest seq.
+                debug!(req :? =(&req), tag_ids :? = Vec::from_iter(req.tags.iter().map(|(tag_id, _)| *tag_id)); "set_object_tags retry due to concurrent tag meta modification");
+            }
         }
     }
 
