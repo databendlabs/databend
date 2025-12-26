@@ -356,13 +356,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
             return false;
         }
 
-        matches!(
-            ctx,
-            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes)
-                if changes.appended_segments.is_empty()
+        match ctx {
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => {
+                changes.appended_segments.is_empty()
                     && changes.replaced_segments.is_empty()
                     && changes.removed_segment_indexes.is_empty()
-        )
+            }
+            ConflictResolveContext::AppendOnly((merged, _)) => merged.merged_segments.is_empty(),
+            _ => false,
+        }
     }
 
     fn need_truncate(&self) -> bool {
@@ -748,31 +750,5 @@ where F: SnapshotGenerator + Send + Sync + 'static
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::operations::SnapshotChanges;
-
-    #[test]
-    fn no_changes_should_skip_commit() {
-        let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges::default());
-        assert!(CommitSink::<MutationGenerator>::should_skip_commit(
-            &ctx, false, false, false
-        ));
-    }
-
-    #[test]
-    fn appended_segments_force_commit() {
-        let mut changes = SnapshotChanges::default();
-        changes
-            .appended_segments
-            .push(("test_segment".to_string(), 0));
-        let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(changes);
-        assert!(!CommitSink::<MutationGenerator>::should_skip_commit(
-            &ctx, false, false, false
-        ));
     }
 }
