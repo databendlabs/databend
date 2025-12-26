@@ -119,7 +119,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 16c64g
+      - 16c
       - aws
     needs: create_release
     strategy:
@@ -162,7 +162,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 16c64g
+      - 16c
       - aws
     needs: create_release
     strategy:

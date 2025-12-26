@@ -200,6 +200,38 @@ function install_protobuf {
 	protoc --version
 }
 
+function ensure_clang_toolchain {
+	PACKAGE_MANAGER=$1
+
+	case "$PACKAGE_MANAGER" in
+	brew)
+		BREW_LLVM_PATHS=(
+			/opt/homebrew/opt/llvm/bin/clang
+			/usr/local/opt/llvm/bin/clang
+		)
+		for brew_clang in "${BREW_LLVM_PATHS[@]}"; do
+			if [[ -x "$brew_clang" ]]; then
+				echo "==> Homebrew llvm already installed (${brew_clang})"
+				return
+			fi
+		done
+		echo "==> Homebrew llvm clang not found, installing with brew"
+		;;
+	*)
+		if command -v clang >/dev/null 2>&1; then
+			clang_version=$(clang --version | head -n 1)
+			echo "==> clang is already installed (${clang_version})"
+			return
+		fi
+
+		echo "==> clang not found, installing with ${PACKAGE_MANAGER}"
+		;;
+	esac
+
+	install_pkg clang "$PACKAGE_MANAGER"
+	install_pkg llvm "$PACKAGE_MANAGER"
+}
+
 function install_jdk {
 	PACKAGE_MANAGER=$1
 
@@ -838,8 +870,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_lapack "$PACKAGE_MANAGER"
 
 	install_pkg cmake "$PACKAGE_MANAGER"
-	install_pkg clang "$PACKAGE_MANAGER"
-	install_pkg llvm "$PACKAGE_MANAGER"
+	ensure_clang_toolchain "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	install_sqlite3 "$PACKAGE_MANAGER"
 	install_libtiff "$PACKAGE_MANAGER"
@@ -883,8 +914,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
-	install_pkg clang "$PACKAGE_MANAGER"
-	install_pkg llvm "$PACKAGE_MANAGER"
+	ensure_clang_toolchain "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
 fi

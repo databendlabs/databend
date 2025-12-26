@@ -75,7 +75,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 16c64g
+      - 16c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -102,14 +102,13 @@ jobs:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
 
-  # FIXME: temporarily disable unit test
   # test_unit:
   #   needs: info
   #   runs-on:
   #     - self-hosted
   #     - "${{ inputs.runner_arch }}"
   #     - Linux
-  #     - 16c64g
+  #     - 16c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
   #     - uses: actions/checkout@v4
