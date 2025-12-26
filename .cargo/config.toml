@@ -8,4 +8,4 @@ JEMALLOC_SYS_WITH_MALLOC_CONF = "percpu_arena:percpu,oversize_threshold:0,backgr
 
 [target.'cfg(target_os = "linux")']
 linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+rustflags = ["-C", "link-arg=-fuse-ld=mold", "-C", "link-arg=-flto=thin"]
