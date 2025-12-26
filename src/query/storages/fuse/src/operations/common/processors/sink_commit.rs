@@ -122,6 +122,10 @@ pub struct CommitSink<F: SnapshotGenerator> {
     deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
+    // Tracks whether the ongoing mutation produced no physical changes.
+    // We still need to read the previous snapshot before deciding to skip the commit,
+    // because new tables must record their first snapshot even for empty writes.
+    pending_noop_commit: bool,
 }
 
 #[derive(Debug)]
@@ -184,6 +188,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             deduplicated_label,
             table_meta_timestamps,
             vacuum_handler,
+            pending_noop_commit: false,
         })))
     }
 
@@ -313,22 +318,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
-        let skip_commit = Self::should_skip_commit(
+        // Decide whether this mutation ended up as a no-op. We postpone the actual
+        // "skip commit" decision until `State::FillDefault`, after we know whether
+        // the table already has a snapshot.
+        self.pending_noop_commit = Self::should_skip_commit(
             &conflict_resolve_context,
             has_new_segments,
             has_virtual_schema,
             has_hll,
+            self.allow_append_only_skip(),
         );
 
         self.snapshot_gen
             .set_conflict_resolve_context(conflict_resolve_context);
-
-        if skip_commit {
-            self.ctx
-                .set_status_info("No table changes detected, skip commit");
-            self.state = State::Finish;
-            return Ok(Event::Finished);
-        }
 
         self.state = State::FillDefault;
 
@@ -351,6 +353,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         has_new_segments: bool,
         has_virtual_schema: bool,
         has_new_hll: bool,
+        allow_append_only_skip: bool,
     ) -> bool {
         if has_new_segments || has_virtual_schema || has_new_hll {
             return false;
@@ -362,7 +365,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     && changes.replaced_segments.is_empty()
                     && changes.removed_segment_indexes.is_empty()
             }
-            ConflictResolveContext::AppendOnly((merged, _)) => merged.merged_segments.is_empty(),
+            ConflictResolveContext::AppendOnly((merged, _)) => {
+                allow_append_only_skip && merged.merged_segments.is_empty()
+            }
             _ => false,
         }
     }
@@ -379,6 +384,17 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .as_any()
             .downcast_ref::<AppendGenerator>()
             .is_some()
+    }
+
+    /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if
+    /// nothing was written. Overwrite/CTAS flows (`CREATE OR REPLACE TABLE t AS SELECT ...`
+    /// or `INSERT OVERWRITE ...`) still need a snapshot even when the query returns zero rows,
+    /// so we disable skipping when `AppendGenerator` is in overwrite mode.
+    fn allow_append_only_skip(&self) -> bool {
+        self.snapshot_gen
+            .as_any()
+            .downcast_ref::<AppendGenerator>()
+            .is_some_and(|g| !g.is_overwrite())
     }
 
     async fn clean_history(&self, purge_mode: &PurgeMode) -> Result<()> {
@@ -544,6 +560,24 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let mut table_info = fuse_table.table_info.clone();
+
+                let require_initial_snapshot = self.table.is_temp();
+                // Only skip when both conditions hold:
+                // 1) the mutation touched nothing (`pending_noop_commit` is true).
+                // 2) the table already has a snapshot, or it's safe to skip the initial snapshot.
+                //    CTAS-created temporary tables must still commit even when the SELECT returns zero rows,
+                //    because `system.temporary_tables` currently depends on the committed table meta to show
+                //    correct statistics.
+                let skip_commit =
+                    self.pending_noop_commit && (previous.is_some() || !require_initial_snapshot);
+                // Reset the flag so subsequent mutations (or retries) re-evaluate their own no-op status.
+                self.pending_noop_commit = false;
+                if skip_commit {
+                    self.ctx
+                        .set_status_info("No table changes detected, skip commit");
+                    self.state = State::Finish;
+                    return Ok(());
+                }
 
                 // merge virtual schema
                 let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
