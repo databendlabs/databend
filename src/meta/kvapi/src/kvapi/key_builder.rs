@@ -14,6 +14,8 @@
 
 //! A helper for building a string key from a structured key
 
+use std::io::Write;
+
 use crate::kvapi::helper::escape;
 use crate::kvapi::helper::escape_specified;
 
@@ -53,7 +55,6 @@ impl KeyBuilder {
         }
         
         // Write directly to buffer instead of allocating a string
-        use std::io::Write;
         write!(self.buf, "{}", n).unwrap();
         self
     }
