@@ -500,6 +500,47 @@ query IT
 select * from t2 where query('body:test');
 ----
 
+
+statement ok
+CREATE TABLE t3 (id int, body variant, INVERTED INDEX idx (body))
+
+statement ok
+INSERT INTO t3 VALUES
+(1, '{"videoInfo":{"extraData":[{ "name": "codecA", "type": "mp4" },{ "name": "codecB", "type": "jpg" }]}}'),
+(2, '{"videoInfo":{"extraData":[{ "name": "codecA", "type": "jpg" },{ "name": "codecA", "type": "mp4" }]}}'),
+(3, '{"videoInfo":{"extraData":[{ "name": "codecA", "type": "jpg" },{ "name": "codecB", "type": "mp4" }]}}'),
+(4, '{"videoInfo":{"extraData":[{ "name": "codecA", "attributes": { "type": "jpg" }}, { "name": "codecB", "attributes": { "type": "mp4" }}]}}'),
+(5, '{"videoInfo":{"extraData":[{ "name": "codecA", "attributes": { "type": "mp4" }}, { "name": "codecB", "attributes": { "type": "jpg" }}]}}'),
+(6, '{"videoInfo":{"extraData":[{ "name": "codec foo", "type": "jpg" }, { "name": "codec bar", "type": "mp4" }]}}'),
+(7, '{"videoInfo":{"extraData":[{ "name": "codec foo", "type": "mp4" }]}}');
+
+query IT
+select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.type:jpg');
+----
+2 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecA","type":"mp4"}]}}
+3 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecB","type":"mp4"}]}}
+
+query IT
+select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.type:mp4');
+----
+1 {"videoInfo":{"extraData":[{"name":"codecA","type":"mp4"},{"name":"codecB","type":"jpg"}]}}
+2 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecA","type":"mp4"}]}}
+
+query IT
+select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.attributes.type:jpg');
+----
+4 {"videoInfo":{"extraData":[{"attributes":{"type":"jpg"},"name":"codecA"},{"attributes":{"type":"mp4"},"name":"codecB"}]}}
+
+query IT
+select * from t3 where query('body.videoInfo.extraData.name:"codec foo" AND body.videoInfo.extraData.type:mp4');
+----
+7 {"videoInfo":{"extraData":[{"name":"codec foo","type":"mp4"}]}}
+
+query IT
+select * from t3 where query('body.videoInfo.extraData.name:codecB AND body.videoInfo.extraData.type:jpg');
+----
+1 {"videoInfo":{"extraData":[{"name":"codecA","type":"mp4"},{"name":"codecB","type":"jpg"}]}}
+
 statement ok
 CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'native' row_per_page = 2;
 
@@ -527,4 +568,5 @@ use default
 
 statement ok
 drop database test_inverted_index
+
 

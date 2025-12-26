@@ -115,12 +115,12 @@ EvalScalar
         ├── probe keys: []
         ├── other filters: []
         ├── Scan
-        │   ├── table: default.t1 (#0)
+        │   ├── table: default.t2 (#1)
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
-            ├── table: default.t2 (#1)
+            ├── table: default.t1 (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -134,18 +134,18 @@ EvalScalar
     ├── build keys: [t2.a (#2), t2.b (#3)]
     ├── probe keys: [t1.a (#0), t1.b (#1)]
     ├── other filters: []
-    ├── Filter
-    │   ├── filters: [gt(t1.a (#0), 2)]
-    │   └── Scan
-    │       ├── table: default.t1 (#0)
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Scan
-        ├── table: default.t2 (#1)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+    ├── Scan
+    │   ├── table: default.t2 (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(t1.a (#0), 2)]
+        └── Scan
+            ├── table: default.t1 (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 query T
 explain syntax select 1, 'ab', [1,2,3], (1, 'a')

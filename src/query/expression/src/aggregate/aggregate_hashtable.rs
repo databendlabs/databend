@@ -46,6 +46,7 @@ pub struct AggregateHashTable {
 
     current_radix_bits: u64,
     hash_index: HashIndex,
+    hash_index_resize_count: usize,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -80,6 +81,7 @@ impl AggregateHashTable {
             ),
             hash_index: HashIndex::with_capacity(capacity),
             config,
+            hash_index_resize_count: 0,
         }
     }
 
@@ -113,6 +115,7 @@ impl AggregateHashTable {
                 capacity_mask: capacity - 1,
             },
             config,
+            hash_index_resize_count: 0,
         }
     }
 
@@ -398,10 +401,12 @@ impl AggregateHashTable {
             if self.hash_index.capacity == self.config.max_partial_capacity {
                 return;
             }
+            self.hash_index_resize_count += 1;
             self.hash_index = HashIndex::with_capacity(new_capacity);
             return;
         }
 
+        self.hash_index_resize_count += 1;
         let mut hash_index = HashIndex::with_capacity(new_capacity);
 
         // iterate over payloads and copy to new entries
@@ -453,5 +458,9 @@ impl AggregateHashTable {
                 .map(|arena| arena.allocated_bytes())
                 .sum::<usize>()
             + self.hash_index.allocated_bytes()
+    }
+
+    pub fn hash_index_resize_count(&self) -> usize {
+        self.hash_index_resize_count
     }
 }

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
@@ -95,6 +96,14 @@ impl InvertedIndexPruner {
                     need_position = true;
                 }
             });
+            for field_id in &field_ids {
+                let field = inverted_index_info.index_schema.field(*field_id as usize);
+                let data_type = field.data_type().remove_nullable();
+                if data_type == DataType::Variant {
+                    need_position = true;
+                    break;
+                }
+            }
 
             // whether need to generate score internl column
             let has_score = inverted_index_info.has_score;
