@@ -192,6 +192,9 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
+                        // Special handling for history tables.
+                        // Since history tables storage params are fully generated from config,
+                        // we can safely allow credential chain.
                         let sp = allow_system_history_credential_chain(&table_info, sp);
                         let operator = init_operator(&sp)?;
 
@@ -1387,4 +1390,3 @@ fn allow_system_history_credential_chain(
     }
     sp
 }
-
