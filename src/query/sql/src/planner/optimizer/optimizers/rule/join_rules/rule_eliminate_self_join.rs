@@ -17,10 +17,14 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -31,6 +35,7 @@ use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::Scan;
 
 #[derive(Clone, Debug)]
@@ -54,10 +59,20 @@ struct GroupKeyItemSignature {
     column_name: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct AggFuncSignature {
+    func_name: String,
+    distinct: bool,
+    params: Vec<Scalar>,
+    args: Vec<GroupKeyItemSignature>,
+}
+
 #[derive(Clone, Debug)]
 struct Candidate {
     table_id: u64,
     group_key: Vec<GroupKeyItemSignature>,
+    group_key_indexes: HashMap<GroupKeyItemSignature, IndexType>,
+    agg_func_indexes: Vec<(AggFuncSignature, IndexType)>,
     strict: bool,
     path: Vec<usize>,
 }
@@ -175,6 +190,7 @@ impl RuleEliminateSelfJoin {
         }
 
         let mut remove_paths: HashSet<Vec<usize>> = HashSet::new();
+        let mut removed_to_keep_column_mapping: HashMap<IndexType, IndexType> = HashMap::new();
         for (_key, group_candidates) in groups.iter() {
             let has_strict = group_candidates.iter().any(|c| c.strict);
             let has_loose = group_candidates.iter().any(|c| !c.strict);
@@ -182,11 +198,19 @@ impl RuleEliminateSelfJoin {
                 continue;
             }
 
+            let Some(keep) = group_candidates.iter().find(|c| c.strict) else {
+                continue;
+            };
+
             // If there is at least one strict candidate, loose candidates are redundant:
             // both sides are INNER JOIN on unique group keys (Aggregate), so the join acts
             // as a filter, and the strict side already filters stronger than the loose side.
             for c in group_candidates.iter().filter(|c| !c.strict) {
+                let Some(mapping) = Self::build_removed_to_keep_index_mapping(c, keep) else {
+                    continue;
+                };
                 remove_paths.insert(c.path.clone());
+                removed_to_keep_column_mapping.extend(mapping);
             }
         }
 
@@ -195,9 +219,37 @@ impl RuleEliminateSelfJoin {
         }
 
         let mut path = Vec::new();
-        let rewritten = self
+        let mut rewritten = self
             .remove_paths_from_inner_join_tree(original, &mut path, &remove_paths)?
             .unwrap_or_else(|| original.clone());
+
+        if !removed_to_keep_column_mapping.is_empty() {
+            let output_columns = rewritten.derive_relational_prop()?.output_columns.clone();
+            let mut items = Vec::new();
+            for (old, new) in removed_to_keep_column_mapping.iter() {
+                if old == new {
+                    continue;
+                }
+                if output_columns.contains(old) {
+                    continue;
+                }
+                if !output_columns.contains(new) {
+                    continue;
+                }
+                let scalar = Self::make_bound_column_ref(&metadata, *new);
+                items.push(ScalarItem {
+                    scalar,
+                    index: *old,
+                });
+            }
+
+            if !items.is_empty() {
+                rewritten = SExpr::create_unary(
+                    Arc::new(RelOperator::EvalScalar(crate::plans::EvalScalar { items })),
+                    Arc::new(rewritten),
+                );
+            }
+        }
 
         Ok(rewritten)
     }
@@ -233,7 +285,10 @@ impl RuleEliminateSelfJoin {
             return None;
         }
 
+        let group_key_indexes = Self::group_key_indexes(&final_agg.group_items, metadata)?;
         let group_key = Self::group_key_signature(&final_agg.group_items, metadata)?;
+
+        let agg_func_indexes = Self::agg_func_indexes(&final_agg.aggregate_functions, metadata)?;
 
         let scan = match node.child(0).ok()?.child(0).ok()?.child(0).ok()?.plan() {
             RelOperator::Scan(scan) => scan,
@@ -245,8 +300,27 @@ impl RuleEliminateSelfJoin {
         Some(Candidate {
             table_id,
             group_key,
+            group_key_indexes,
+            agg_func_indexes,
             strict,
             path: path.to_vec(),
+        })
+    }
+
+    fn group_key_item_signature(
+        item: &crate::plans::ScalarItem,
+        metadata: &Metadata,
+    ) -> Option<GroupKeyItemSignature> {
+        let ScalarExpr::BoundColumnRef(col) = &item.scalar else {
+            return None;
+        };
+        let ColumnEntry::BaseTableColumn(base_col) = metadata.column(col.column.index) else {
+            return None;
+        };
+        Some(GroupKeyItemSignature {
+            column_id: base_col.column_id,
+            column_position: base_col.column_position,
+            column_name: base_col.column_name.clone(),
         })
     }
 
@@ -256,27 +330,110 @@ impl RuleEliminateSelfJoin {
     ) -> Option<Vec<GroupKeyItemSignature>> {
         let mut sig = Vec::with_capacity(group_items.len());
         for item in group_items.iter() {
-            let used = item.scalar.used_columns();
-            if used.len() != 1 {
-                return None;
-            }
-            let col_idx = *used.iter().next()?;
-            let ColumnEntry::BaseTableColumn(base_col) = metadata.column(col_idx) else {
+            sig.push(Self::group_key_item_signature(item, metadata)?);
+        }
+        Some(sig)
+    }
+
+    fn group_key_indexes(
+        group_items: &[crate::plans::ScalarItem],
+        metadata: &Metadata,
+    ) -> Option<HashMap<GroupKeyItemSignature, IndexType>> {
+        let mut sig = HashMap::with_capacity(group_items.len());
+        for item in group_items.iter() {
+            sig.insert(Self::group_key_item_signature(item, metadata)?, item.index);
+        }
+        Some(sig)
+    }
+
+    fn agg_func_signature(item: &ScalarItem, metadata: &Metadata) -> Option<AggFuncSignature> {
+        let ScalarExpr::AggregateFunction(agg) = &item.scalar else {
+            return None;
+        };
+
+        let mut args = Vec::with_capacity(agg.args.len());
+        for arg in agg.args.iter() {
+            let ScalarExpr::BoundColumnRef(col) = arg else {
                 return None;
             };
-
-            sig.push(GroupKeyItemSignature {
+            let ColumnEntry::BaseTableColumn(base_col) = metadata.column(col.column.index) else {
+                return None;
+            };
+            args.push(GroupKeyItemSignature {
                 column_id: base_col.column_id,
                 column_position: base_col.column_position,
                 column_name: base_col.column_name.clone(),
             });
         }
-        Some(sig)
+
+        Some(AggFuncSignature {
+            func_name: agg.func_name.clone(),
+            distinct: agg.distinct,
+            params: agg.params.clone(),
+            args,
+        })
+    }
+
+    fn agg_func_indexes(
+        agg_items: &[ScalarItem],
+        metadata: &Metadata,
+    ) -> Option<Vec<(AggFuncSignature, IndexType)>> {
+        let mut result = Vec::with_capacity(agg_items.len());
+        for item in agg_items.iter() {
+            result.push((Self::agg_func_signature(item, metadata)?, item.index));
+        }
+        Some(result)
     }
 
     fn table_id_from_scan(&self, scan: &Scan, metadata: &Metadata) -> Option<u64> {
         let table_entry = metadata.table(scan.table_index);
         Some(table_entry.table().get_table_info().ident.table_id)
+    }
+
+    fn build_removed_to_keep_index_mapping(
+        remove: &Candidate,
+        keep: &Candidate,
+    ) -> Option<HashMap<IndexType, IndexType>> {
+        let mut mapping = HashMap::new();
+
+        for (sig, old_index) in remove.group_key_indexes.iter() {
+            let new_index = *keep.group_key_indexes.get(sig)?;
+            mapping.insert(*old_index, new_index);
+        }
+
+        let mut keep_agg_by_sig: HashMap<&AggFuncSignature, Vec<IndexType>> = HashMap::new();
+        for (sig, idx) in keep.agg_func_indexes.iter() {
+            keep_agg_by_sig.entry(sig).or_default().push(*idx);
+        }
+        let mut keep_agg_pos: HashMap<&AggFuncSignature, usize> = HashMap::new();
+
+        for (sig, old_index) in remove.agg_func_indexes.iter() {
+            let list = keep_agg_by_sig.get(sig)?;
+            let pos = keep_agg_pos.entry(sig).or_insert(0);
+            if *pos >= list.len() {
+                return None;
+            }
+            mapping.insert(*old_index, list[*pos]);
+            *pos += 1;
+        }
+
+        Some(mapping)
+    }
+
+    fn make_bound_column_ref(metadata: &Metadata, index: IndexType) -> ScalarExpr {
+        let entry = metadata.column(index);
+        let binding = ColumnBindingBuilder::new(
+            entry.name(),
+            index,
+            Box::new(entry.data_type()),
+            Visibility::Visible,
+        )
+        .build();
+        crate::plans::BoundColumnRef {
+            span: None,
+            column: binding,
+        }
+        .into()
     }
 
     fn remove_paths_from_inner_join_tree(

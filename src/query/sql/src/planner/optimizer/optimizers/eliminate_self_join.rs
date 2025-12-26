@@ -32,29 +32,25 @@ impl EliminateSelfJoinOptimizer {
     }
 
     fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
-        println!(
-            "before eager aggregation: {}",
-            s_expr.pretty_format(&self.opt_ctx.get_metadata().read())?
-        );
+        // `EagerAggregation` is used here as a speculative pre-rewrite to expose patterns that
+        // `EliminateSelfJoin` can match. If no self-join is actually eliminated, we intentionally
+        // return the original input plan to avoid keeping the eager-aggregation rewrite as a
+        // standalone optimization.
         static RULES_EAGER_AGGREGATION: &[RuleID] = &[RuleID::EagerAggregation];
         let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES_EAGER_AGGREGATION);
-        let s_expr = optimizer.optimize_sync(s_expr)?;
+        let s_expr_after_eager_aggregation = optimizer.optimize_sync(s_expr)?;
 
-        println!(
-            "after eager aggregation: {}",
-            s_expr.pretty_format(&self.opt_ctx.get_metadata().read())?
-        );
         static RULES_ELIMINATE_SELF_JOIN: &[RuleID] = &[RuleID::EliminateSelfJoin];
         let optimizer =
             RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES_ELIMINATE_SELF_JOIN);
-        let s_expr = optimizer.optimize_sync(&s_expr)?;
+        let s_expr_after_eliminate_self_join =
+            optimizer.optimize_sync(&s_expr_after_eager_aggregation)?;
 
-        println!(
-            "after eliminate self join: {}",
-            s_expr.pretty_format(&self.opt_ctx.get_metadata().read())?
-        );
+        if s_expr_after_eager_aggregation.eq(&s_expr_after_eliminate_self_join) {
+            return Ok(s_expr.clone());
+        }
 
-        Ok(s_expr)
+        Ok(s_expr_after_eliminate_self_join)
     }
 }
 
