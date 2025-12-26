@@ -255,7 +255,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             format!("unexpected `{span_text}`")
         };
         if let Some(suggestion) = has_suggestion {
-            msg += &format!(". {}", suggestion);
+            write!(msg, ". {}", suggestion).unwrap();
             labels = vec![(inner.span, msg)];
 
             // Return early to skip context labels when we have intelligent suggestions
@@ -270,15 +270,15 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
                     write!(msg, ", or {} more ...", more).unwrap();
                     break;
                 } else if i == 0 {
-                    msg += ", expecting ";
+                    msg.push_str(", expecting ");
                 } else if iter.peek().is_none() && i == 1 {
-                    msg += " or ";
+                    msg.push_str(" or ");
                 } else if iter.peek().is_none() {
-                    msg += ", or ";
+                    msg.push_str(", or ");
                 } else {
-                    msg += ", ";
+                    msg.push_str(", ");
                 }
-                msg += error;
+                msg.push_str(error);
             }
 
             labels = vec![(inner.span, msg)];

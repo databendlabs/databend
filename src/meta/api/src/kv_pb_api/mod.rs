@@ -212,14 +212,15 @@ pub trait KVPbApi: KVApi {
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
         let it = keys.into_iter();
-        let key_chunks = it
+        let key_chunks: Vec<Vec<K>> = it
             .chunks(Self::CHUNK_SIZE)
             .into_iter()
             .map(|x| x.collect::<Vec<_>>())
             .collect::<Vec<_>>();
+        let total_keys: usize = key_chunks.iter().map(|c| c.len()).sum();
 
         async move {
-            let mut res = vec![];
+            let mut res = Vec::with_capacity(total_keys);
             for chunk in key_chunks {
                 let strm = self.get_pb_values(chunk).await?;
 
@@ -278,14 +279,15 @@ pub trait KVPbApi: KVApi {
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
         let it = keys.into_iter();
-        let key_chunks = it
+        let key_chunks: Vec<Vec<K>> = it
             .chunks(Self::CHUNK_SIZE)
             .into_iter()
             .map(|x| x.collect::<Vec<_>>())
             .collect::<Vec<_>>();
+        let total_keys: usize = key_chunks.iter().map(|c| c.len()).sum();
 
         async move {
-            let mut res = vec![];
+            let mut res = Vec::with_capacity(total_keys);
             for chunk in key_chunks {
                 let strm = self.get_pb_stream(chunk).await?;
 
