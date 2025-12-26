@@ -329,12 +329,7 @@ impl FieldEncoderValues {
         self.write_string_inner(bitmap_result, out_buf, in_nested);
     }
 
-    fn write_variant(
-        &self,
-        column: &BinaryColumn,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-    ) {
+    fn write_variant(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = RawJsonb::new(v).to_string();
         out_buf.extend_from_slice(s.as_bytes());
