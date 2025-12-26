@@ -123,12 +123,7 @@ impl Client for ScriptClient {
     type Set = QueryResult;
 
     async fn query(&self, query: &str) -> databend_common_exception::Result<Self::Set> {
-        let ctx = self
-            .ctx
-            .get_current_session()
-            .create_query_context(&databend_common_version::BUILD_INFO)
-            .await?;
-
+        let ctx = QueryContext::create_from(&self.ctx);
         let mut planner = Planner::new(ctx.clone());
         // In script ignore query level settings.
         let extras = planner.parse_sql(query)?;
