@@ -102,23 +102,23 @@ jobs:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
 
-  # test_unit:
-  #   needs: info
-  #   runs-on:
-  #     - self-hosted
-  #     - "${{ inputs.runner_arch }}"
-  #     - Linux
-  #     - 16c
-  #     - "${{ inputs.runner_provider }}"
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         # fetch all tags, metasrv and metaclient need tag as its version.
-  #         fetch-depth: 0
-  #     - uses: ./.github/actions/test_unit
-  #       timeout-minutes: 60
-  #       with:
-  #         target: ${{ needs.info.outputs.target }}
+  test_unit:
+    needs: info
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 16c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/test_unit
+        timeout-minutes: 60
+        with:
+          target: ${{ needs.info.outputs.target }}
 
   test_metactl:
     needs: [info, build, check]
