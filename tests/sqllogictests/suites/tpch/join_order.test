@@ -32,7 +32,7 @@ statement ok
 analyze table supplier
 
 # Q1
-query I
+query T
 explain join select
     l_returnflag,
     l_linestatus,
@@ -58,7 +58,7 @@ order by
 Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
 
 # Q2
-query I
+query T
 explain join select
     s_acctbal,
     s_name,
@@ -138,7 +138,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.partsupp (#5) (read rows: 800000)
 
 # Q3
-query I
+query T
 explain join select
     l_orderkey,
     sum(l_extendedprice * (1 - l_discount)) as revenue,
@@ -174,7 +174,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
 
 # Q4
-query I
+query T
 explain join select
     o_orderpriority,
     count(*) as order_count
@@ -204,7 +204,7 @@ HashJoin: RIGHT SEMI
     └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
 
 # Q5
-query I
+query T
 explain join select
     n_name,
     ceil(sum(l_extendedprice * (1 - l_discount)) / 10) as revenue
@@ -253,7 +253,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
 
 # Q6
-query I
+query T
 explain join select
    truncate(sum(l_extendedprice * l_discount),3) as revenue
 from
@@ -267,7 +267,7 @@ where
 Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
 
 # Q7
-query I
+query T
 explain join select
     supp_nation,
     cust_nation,
@@ -331,7 +331,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
 
 # Q8
-query I
+query T
 explain join select
     o_year,
     truncate(sum(case
@@ -401,7 +401,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
 
 # Q9
-query I
+query T
 explain join select
     nation,
     o_year,
@@ -458,7 +458,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.partsupp (#3) (read rows: 800000)
 
 # Q10
-query I
+query T
 explain join select
     c_custkey,
     c_name,
@@ -506,7 +506,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
 
 # Q11
-query I
+query T
 explain join select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value
@@ -558,7 +558,7 @@ HashJoin: INNER
             └── Scan: default.tpch_test.partsupp (#0) (read rows: 800000)
 
 # Q12
-query I
+query T
 explain join select
     l_shipmode,
     sum(case
@@ -595,7 +595,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.orders (#0) (read rows: 1500000)
 
 # Q13
-query I
+query T
 explain join select
     c_count,
     count(*) as custdist
@@ -627,7 +627,7 @@ HashJoin: RIGHT OUTER
     └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
 
 # Q14
-query I
+query T
 explain join select
             TRUNCATE(100.00 * sum(case
                              when p_type like 'PROMO%'
@@ -736,7 +736,7 @@ HashJoin: INNER
 
 
 # Q16
-query I
+query T
 explain join select
     p_brand,
     p_type,
@@ -780,7 +780,7 @@ HashJoin: RIGHT MARK
             └── Scan: default.tpch_test.partsupp (#0) (read rows: 800000)
 
 #Q17
-query I
+query T
 explain join select
         truncate(sum(l_extendedprice) / 7.0,8) as avg_yearly
 from
@@ -810,7 +810,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
 
 #Q18
-query I
+query T
 explain join select
     c_name,
     c_custkey,
@@ -846,20 +846,16 @@ order by
 ----
 HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
-│       └── Probe
-│           └── HashJoin: INNER
-│               ├── Build
-│               │   └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
-│               └── Probe
-│                   └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
+│   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
 └── Probe
-    └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
+        └── Probe
+            └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
 
 # Q19
-query I
+query T
 explain join select
     truncate(sum(l_extendedprice* (1 - l_discount)),3) as revenue
 from
@@ -937,7 +933,7 @@ HashJoin: INNER
     └── Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
 
 # Q20
-query I
+query T
 explain join select
     s_name,
     s_address
@@ -995,7 +991,7 @@ HashJoin: RIGHT SEMI
             └── Scan: default.tpch_test.lineitem (#4) (read rows: 6001215)
 
 # Q21
-query I
+query T
 explain join select
     s_name,
     truncate(count(*),4) as numwait
@@ -1059,7 +1055,7 @@ HashJoin: RIGHT ANTI
     └── Scan: default.tpch_test.lineitem (#5) (read rows: 6001215)
 
 # Q22
-query I
+query T
 explain join select
     cntrycode,
     count(*) as numcust,
