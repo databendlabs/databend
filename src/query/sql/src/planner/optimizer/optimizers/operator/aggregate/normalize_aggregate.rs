@@ -98,6 +98,12 @@ impl RuleNormalizeAggregateOptimizer {
                         } else {
                             false
                         }
+                    })
+                    && function.args.iter().all(|expr| {
+                        !expr
+                            .data_type()
+                            .map(|t| t.is_nullable_or_null())
+                            .unwrap_or(true)
                     });
 
                 if distinct_eliminated {
@@ -189,6 +195,7 @@ impl RuleNormalizeAggregateOptimizer {
             || aggregate.grouping_sets.is_some()
             || aggregate.aggregate_functions.len() != 1
             || s_expr.arity() != 1
+            || !aggregate.group_items.is_empty()
         {
             return Ok(None);
         }
@@ -204,17 +211,12 @@ impl RuleNormalizeAggregateOptimizer {
             return Ok(None);
         }
 
-        let args_in_group = function.args.iter().all(|expr| {
-            if let ScalarExpr::BoundColumnRef(r) = expr {
-                aggregate
-                    .group_items
-                    .iter()
-                    .any(|item| item.index == r.column.index)
-            } else {
-                false
-            }
-        });
-        if args_in_group {
+        // Skip rewrite when any argument is nullable or Null, to preserve NULL-skipping semantics.
+        if function.args.iter().any(|expr| {
+            expr.data_type()
+                .map(|t| t.is_nullable_or_null())
+                .unwrap_or(true)
+        }) {
             return Ok(None);
         }
 
