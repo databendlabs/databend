@@ -62,6 +62,7 @@ use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
+use crate::operations::ConflictResolveContext;
 use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
@@ -287,21 +288,48 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.new_segment_locs = meta.new_segment_locs;
+        let CommitMeta {
+            conflict_resolve_context,
+            new_segment_locs,
+            table_id: _,
+            virtual_schema,
+            hll,
+        } = meta;
 
-        self.new_virtual_schema = meta.virtual_schema;
+        let has_new_segments = !new_segment_locs.is_empty();
+        let has_virtual_schema = virtual_schema.is_some();
+        let has_hll = !hll.is_empty();
 
-        if !meta.hll.is_empty() {
+        self.new_segment_locs = new_segment_locs;
+
+        self.new_virtual_schema = virtual_schema;
+
+        if has_hll {
             let binding = self.ctx.get_mutation_status();
             let status = binding.read();
             self.insert_rows = status.insert_rows + status.update_rows;
-            self.insert_hll = meta.hll;
+            self.insert_hll = hll;
         }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
+        let skip_commit = Self::should_skip_commit(
+            &conflict_resolve_context,
+            has_new_segments,
+            has_virtual_schema,
+            has_hll,
+        );
+
         self.snapshot_gen
-            .set_conflict_resolve_context(meta.conflict_resolve_context);
+            .set_conflict_resolve_context(conflict_resolve_context);
+
+        if skip_commit {
+            self.ctx
+                .set_status_info("No table changes detected, skip commit");
+            self.state = State::Finish;
+            return Ok(Event::Finished);
+        }
+
         self.state = State::FillDefault;
 
         Ok(Event::Async)
@@ -316,6 +344,25 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .as_any()
             .downcast_ref::<TruncateGenerator>()
             .is_some_and(|g| matches!(g.mode(), TruncateMode::DropAll))
+    }
+
+    fn should_skip_commit(
+        ctx: &ConflictResolveContext,
+        has_new_segments: bool,
+        has_virtual_schema: bool,
+        has_new_hll: bool,
+    ) -> bool {
+        if has_new_segments || has_virtual_schema || has_new_hll {
+            return false;
+        }
+
+        matches!(
+            ctx,
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes)
+                if changes.appended_segments.is_empty()
+                    && changes.replaced_segments.is_empty()
+                    && changes.removed_segment_indexes.is_empty()
+        )
     }
 
     fn need_truncate(&self) -> bool {
@@ -701,5 +748,31 @@ where F: SnapshotGenerator + Send + Sync + 'static
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::operations::SnapshotChanges;
+
+    #[test]
+    fn no_changes_should_skip_commit() {
+        let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges::default());
+        assert!(CommitSink::<MutationGenerator>::should_skip_commit(
+            &ctx, false, false, false
+        ));
+    }
+
+    #[test]
+    fn appended_segments_force_commit() {
+        let mut changes = SnapshotChanges::default();
+        changes
+            .appended_segments
+            .push(("test_segment".to_string(), 0));
+        let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(changes);
+        assert!(!CommitSink::<MutationGenerator>::should_skip_commit(
+            &ctx, false, false, false
+        ));
     }
 }
