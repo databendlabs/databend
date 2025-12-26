@@ -192,6 +192,10 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
+                        // Special handling for history tables.
+                        // Since history tables storage params are fully generated from config,
+                        // we can safely allow credential chain.
+                        let sp = allow_system_history_credential_chain(&table_info, sp);
                         let operator = init_operator(&sp)?;
 
                         let table_meta_options = &table_info.meta.options;
@@ -1372,4 +1376,23 @@ fn apply_storage_class(
 pub enum RetentionPolicy {
     ByTimePeriod(TimeDelta),
     ByNumOfSnapshotsToKeep(usize),
+}
+
+fn allow_system_history_credential_chain(
+    table_info: &TableInfo,
+    storage_params: StorageParams,
+) -> StorageParams {
+    let mut sp = storage_params;
+    let Ok(db_name) = table_info.database_name() else {
+        return sp;
+    };
+    if !db_name.eq_ignore_ascii_case("system_history") {
+        return sp;
+    }
+    if let StorageParams::S3(cfg) = &mut sp {
+        if cfg.allow_credential_chain.is_none() {
+            cfg.allow_credential_chain = Some(true);
+        }
+    }
+    sp
 }
