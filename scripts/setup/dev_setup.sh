@@ -203,13 +203,31 @@ function install_protobuf {
 function ensure_clang_toolchain {
 	PACKAGE_MANAGER=$1
 
-	if command -v clang >/dev/null 2>&1; then
-		clang_version=$(clang --version | head -n 1)
-		echo "==> clang is already installed (${clang_version})"
-		return
-	fi
+	case "$PACKAGE_MANAGER" in
+	brew)
+		BREW_LLVM_PATHS=(
+			/opt/homebrew/opt/llvm/bin/clang
+			/usr/local/opt/llvm/bin/clang
+		)
+		for brew_clang in "${BREW_LLVM_PATHS[@]}"; do
+			if [[ -x "$brew_clang" ]]; then
+				echo "==> Homebrew llvm already installed (${brew_clang})"
+				return
+			fi
+		done
+		echo "==> Homebrew llvm clang not found, installing with brew"
+		;;
+	*)
+		if command -v clang >/dev/null 2>&1; then
+			clang_version=$(clang --version | head -n 1)
+			echo "==> clang is already installed (${clang_version})"
+			return
+		fi
 
-	echo "==> clang not found, installing with ${PACKAGE_MANAGER}"
+		echo "==> clang not found, installing with ${PACKAGE_MANAGER}"
+		;;
+	esac
+
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 }
