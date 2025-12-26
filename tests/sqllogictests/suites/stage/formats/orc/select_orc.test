@@ -42,10 +42,10 @@ NULL
 query
 select * from @data/orc/nested_map.orc  (file_format=>'orc')
 ----
-{'zero':0,'one':1}
+{"zero":0,"one":1}
 NULL
-{'two':2,'tree':3}
-{'one':1,'two':2,'nill':NULL}
+{"two":2,"tree":3}
+{"one":1,"two":2,"nill":NULL}
 
 query
 select * from @data/orc/nested_struct.orc  (file_format=>'orc')
