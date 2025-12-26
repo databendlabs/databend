@@ -75,6 +75,7 @@ unicase = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 
 [lints]

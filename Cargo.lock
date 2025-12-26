@@ -4494,6 +4494,7 @@ dependencies = [
  "enum-as-inner",
  "fastrace",
  "globiter",
+ "goldenfile",
  "indexmap 2.9.0",
  "itertools 0.13.0",
  "jsonb",

@@ -35,7 +35,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 
 pub struct RuleEliminateFilter {
-    id: RuleID,
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
 }
@@ -43,7 +42,6 @@ pub struct RuleEliminateFilter {
 impl RuleEliminateFilter {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
-            id: RuleID::EliminateFilter,
             // Filter
             //  \
             //   *
@@ -58,7 +56,7 @@ impl RuleEliminateFilter {
 
 impl Rule for RuleEliminateFilter {
     fn id(&self) -> RuleID {
-        self.id
+        RuleID::EliminateFilter
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
@@ -79,14 +77,11 @@ impl Rule for RuleEliminateFilter {
                 .clone();
 
             let metadata = self.metadata.read();
-            let mut fields = Vec::with_capacity(output_columns.len());
+            let fields = output_columns
+                .iter()
+                .map(|col| DataField::new(&col.to_string(), metadata.column(*col).data_type()))
+                .collect();
 
-            for col in output_columns.iter() {
-                fields.push(DataField::new(
-                    &col.to_string(),
-                    metadata.column(*col).data_type(),
-                ));
-            }
             let empty_scan =
                 ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
             let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
@@ -138,13 +133,13 @@ impl Rule for RuleEliminateFilter {
             .collect::<Vec<ScalarExpr>>();
 
         if predicates.is_empty() {
-            state.add_result(s_expr.child(0)?.clone());
+            state.add_result(s_expr.unary_child().clone());
         } else if origin_predicates.len() != predicates.len() {
-            let filter = Filter { predicates };
-            state.add_result(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
+            state.add_result(
+                s_expr
+                    .unary_child_arc()
+                    .ref_build_unary(Filter { predicates }),
+            );
         }
         Ok(())
     }

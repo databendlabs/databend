@@ -88,7 +88,6 @@ use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SecureFilter;
-use crate::plans::Statistics;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -442,7 +441,6 @@ impl Binder {
             Scan {
                 table_index,
                 columns: columns.into_iter().map(|col| col.index()).collect(),
-                statistics: Arc::new(Statistics::default()),
                 change_type,
                 sample: sample.clone(),
                 scan_id,
