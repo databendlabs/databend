@@ -59,6 +59,7 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    removed_mark_indexes: ColumnSet,
     /// Table column indexes that are lazy materialized.
     table_lazy_columns: HashMap<IndexType, ColumnSet>,
     table_source: HashMap<IndexType, DataSourcePlan>,
@@ -132,6 +133,14 @@ impl Metadata {
 
     pub fn columns(&self) -> &[ColumnEntry] {
         self.columns.as_slice()
+    }
+
+    pub fn add_removed_mark_index(&mut self, index: IndexType) {
+        self.removed_mark_indexes.insert(index);
+    }
+
+    pub fn is_removed_mark_index(&self, index: IndexType) -> bool {
+        self.removed_mark_indexes.contains(&index)
     }
 
     pub fn add_retained_column(&mut self, index: IndexType) {
