@@ -57,6 +57,10 @@ impl AppendGenerator {
         }
     }
 
+    pub fn is_overwrite(&self) -> bool {
+        self.overwrite
+    }
+
     fn check_fill_default(&self, summary: &Statistics) -> Result<bool> {
         let mut fill_default_values = false;
         // check if need to fill default value in statistics
