@@ -4936,6 +4936,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-management",
+ "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-metrics",
  "databend-common-pipeline",

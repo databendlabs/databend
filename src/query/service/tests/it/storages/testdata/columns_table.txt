@@ -11,6 +11,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'active_result_scan'              | 'system'             | 'query_cache'             | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'actual_row_count'                | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'after'                           | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'allowed_values'                  | 'system'             | 'tags'                    | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'arguments'                       | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'arguments'                       | 'system'             | 'user_functions'          | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'attempt_number'                  | 'system'             | 'task_history'            | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
@@ -67,6 +68,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'comment'                         | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'task_history'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'comment'                         | 'system'             | 'tasks'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'comment'                         | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -97,6 +99,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_on'                      | 'system'             | 'streams'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables'                  | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tables_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                      | 'system'             | 'tags'                    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'tasks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'temporary_tables'        | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
@@ -291,6 +294,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                            | 'system'             | 'table_functions'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'name'                            | 'system'             | 'tags'                    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'temporary_tables'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
