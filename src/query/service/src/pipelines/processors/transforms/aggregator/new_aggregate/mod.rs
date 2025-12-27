@@ -20,7 +20,10 @@ mod new_transform_final_aggregate;
 mod transform_partition_bucket_scatter;
 
 pub use datablock_splitter::split_partitioned_meta_into_datablocks;
+pub use new_aggregate_spiller::LocalPartitionStream;
+pub use new_aggregate_spiller::NewAggregateSpillReader;
 pub use new_aggregate_spiller::NewAggregateSpiller;
+pub use new_aggregate_spiller::PartitionStream;
 pub use new_aggregate_spiller::SharedPartitionStream;
 pub use new_final_aggregate_state::FinalAggregateSharedState;
 pub use new_transform_aggregate_partial::NewTransformPartialAggregate;
