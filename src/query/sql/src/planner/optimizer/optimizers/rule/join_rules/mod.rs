@@ -15,6 +15,7 @@
 mod push_down_filter_join;
 mod rule_commute_join;
 mod rule_commute_join_base_table;
+mod rule_eliminate_self_join;
 mod rule_left_exchange_join;
 mod rule_semi_to_inner_join;
 mod util;
@@ -22,6 +23,7 @@ mod util;
 pub use push_down_filter_join::*;
 pub use rule_commute_join::RuleCommuteJoin;
 pub use rule_commute_join_base_table::RuleCommuteJoinBaseTable;
+pub use rule_eliminate_self_join::RuleEliminateSelfJoin;
 pub use rule_left_exchange_join::RuleLeftExchangeJoin;
 pub use rule_semi_to_inner_join::RuleSemiToInnerJoin;
 pub use util::get_join_predicates;

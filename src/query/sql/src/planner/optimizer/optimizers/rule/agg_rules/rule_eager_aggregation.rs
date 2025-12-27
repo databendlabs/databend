@@ -337,6 +337,12 @@ impl Rule for RuleEagerAggregation {
         if extra_eval_scalar_expr.is_some() {
             for eval_item in &extra_eval_scalar.items {
                 let eval_used_columns = eval_item.scalar.used_columns();
+                if eval_used_columns
+                    .iter()
+                    .any(|column| self.metadata.read().is_removed_mark_index(*column))
+                {
+                    continue;
+                }
                 let mut resolved_by_one_child = false;
                 join_columns.for_each_mut(|side, columns_set| {
                     if eval_used_columns.is_subset(columns_set) {

@@ -15,6 +15,7 @@
 mod cascades;
 pub mod cte_filter_pushdown;
 pub mod distributed;
+mod eliminate_self_join;
 mod hyper_dp;
 pub mod operator;
 pub mod recursive;
@@ -22,5 +23,6 @@ pub mod rule;
 
 pub use cascades::CascadesOptimizer;
 pub use cte_filter_pushdown::CTEFilterPushdownOptimizer;
+pub use eliminate_self_join::EliminateSelfJoinOptimizer;
 pub use hyper_dp::DPhpyOptimizer;
 pub use operator::CleanupUnusedCTEOptimizer;
