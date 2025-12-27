@@ -60,6 +60,7 @@ impl OutputFormat for ParquetOutputFormat {
             &mut buf,
             TableCompression::Zstd,
             true,
+            false,
             None,
         )?;
         Ok(buf)

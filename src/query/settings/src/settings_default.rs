@@ -977,6 +977,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_parquet_int32_delta_encoding", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables automatic INT32 DELTA_BINARY_PACKED encoding when heuristics match.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("external_server_connect_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
                     desc: "Connection timeout to external server",

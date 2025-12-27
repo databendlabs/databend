@@ -128,7 +128,7 @@ pub async fn do_refresh_virtual_column(
     let segment_reader =
         MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
 
-    let write_settings = fuse_table.get_write_settings();
+    let write_settings = fuse_table.get_write_settings_with_ctx(&ctx)?;
     let storage_format = write_settings.storage_format;
 
     let operator = fuse_table.get_operator_ref();

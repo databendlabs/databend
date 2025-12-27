@@ -514,6 +514,7 @@ impl VirtualColumnBuilder {
             &mut data,
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
+            write_settings.enable_parquet_int32_delta_encoding,
             None,
             Some(&columns_statistics),
         )?;
