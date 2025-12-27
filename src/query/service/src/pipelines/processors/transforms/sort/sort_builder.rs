@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::InputPort;
@@ -453,11 +453,11 @@ struct ContextChannel {
 }
 
 impl BroadcastChannel for ContextChannel {
-    fn sender(&self) -> async_channel::Sender<BlockMetaInfoPtr> {
+    fn sender(&self) -> async_channel::Sender<DataBlock> {
         self.ctx.broadcast_source_sender(self.id)
     }
 
-    fn receiver(&self) -> async_channel::Receiver<BlockMetaInfoPtr> {
+    fn receiver(&self) -> async_channel::Receiver<DataBlock> {
         self.ctx.broadcast_sink_receiver(self.id)
     }
 }
