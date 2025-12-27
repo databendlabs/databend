@@ -1,0 +1,32 @@
+[package]
+name = "databend-common-parquet-reader-experimental"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[features]
+
+[dependencies]
+databend-common-column = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+
+bytes = { workspace = true }
+lz4_flex = { workspace = true }
+parquet = { workspace = true, features = ["experimental"] }
+parquet-format-safe = { workspace = true }
+parquet2 = { workspace = true }
+streaming-decompression = { workspace = true }
+zstd = { workspace = true }
+
+[dev-dependencies]
+# used to test async readers
+
+[package.metadata.cargo-machete]
+ignored = ["match-template"]
+
+[lints]
+workspace = true
