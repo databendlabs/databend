@@ -65,7 +65,6 @@ pub struct EvalScalar {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for EvalScalar {
     fn as_any(&self) -> &dyn Any {
         self

@@ -45,7 +45,6 @@ pub struct AggregateExpand {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for AggregateExpand {
     fn as_any(&self) -> &dyn Any {
         self

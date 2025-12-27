@@ -46,7 +46,6 @@ pub struct AsyncFunction {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for AsyncFunction {
     fn as_any(&self) -> &dyn Any {
         self

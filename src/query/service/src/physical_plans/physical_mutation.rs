@@ -108,7 +108,6 @@ pub struct Mutation {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Mutation {
     fn as_any(&self) -> &dyn Any {
         self

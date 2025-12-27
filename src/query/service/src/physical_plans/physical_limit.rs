@@ -38,7 +38,7 @@ use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {
-    meta: PhysicalPlanMeta,
+    pub(crate) meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub limit: Option<usize>,
     pub offset: usize,
@@ -47,7 +47,6 @@ pub struct Limit {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Limit {
     fn as_any(&self) -> &dyn Any {
         self

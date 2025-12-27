@@ -59,7 +59,6 @@ pub struct Duplicate {
     pub n: usize,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Duplicate {
     fn as_any(&self) -> &dyn Any {
         self
@@ -108,7 +107,6 @@ pub struct Shuffle {
     pub strategy: ShuffleStrategy,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Shuffle {
     fn as_any(&self) -> &dyn Any {
         self
@@ -191,7 +189,6 @@ pub struct ChunkFilter {
     pub predicates: Vec<Option<RemoteExpr>>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkFilter {
     fn as_any(&self) -> &dyn Any {
         self
@@ -256,7 +253,6 @@ pub struct ChunkEvalScalar {
     pub eval_scalars: Vec<Option<MultiInsertEvalScalar>>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkEvalScalar {
     fn as_any(&self) -> &dyn Any {
         self
@@ -328,7 +324,6 @@ pub struct ChunkCastSchema {
     pub cast_schemas: Vec<Option<CastSchema>>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkCastSchema {
     fn as_any(&self) -> &dyn Any {
         self
@@ -401,7 +396,6 @@ pub struct ChunkFillAndReorder {
     pub fill_and_reorders: Vec<Option<FillAndReorder>>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkFillAndReorder {
     fn as_any(&self) -> &dyn Any {
         self
@@ -478,7 +472,6 @@ pub struct ChunkAppendData {
     pub target_tables: Vec<SerializableTable>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkAppendData {
     fn as_any(&self) -> &dyn Any {
         self
@@ -637,7 +630,6 @@ pub struct ChunkMerge {
     pub group_ids: Vec<u64>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkMerge {
     fn as_any(&self) -> &dyn Any {
         self
@@ -709,7 +701,6 @@ pub struct ChunkCommitInsert {
     pub targets: Vec<SerializableTable>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ChunkCommitInsert {
     fn as_any(&self) -> &dyn Any {
         self

@@ -57,7 +57,6 @@ pub struct ReplaceDeduplicate {
     pub delete_when: Option<(RemoteExpr, String)>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ReplaceDeduplicate {
     fn as_any(&self) -> &dyn Any {
         self

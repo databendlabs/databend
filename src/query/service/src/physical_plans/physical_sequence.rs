@@ -39,7 +39,6 @@ pub struct Sequence {
     pub meta: PhysicalPlanMeta,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Sequence {
     fn as_any(&self) -> &dyn Any {
         self

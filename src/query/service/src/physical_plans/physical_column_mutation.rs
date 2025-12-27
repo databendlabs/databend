@@ -52,7 +52,6 @@ pub struct ColumnMutation {
     pub udf_col_num: usize,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ColumnMutation {
     fn as_any(&self) -> &dyn Any {
         self

@@ -41,7 +41,6 @@ pub struct Exchange {
     pub allow_adjust_parallelism: bool,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Exchange {
     fn as_any(&self) -> &dyn Any {
         self

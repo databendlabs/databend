@@ -45,7 +45,6 @@ pub struct CopyIntoLocation {
     pub info: CopyIntoLocationInfo,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for CopyIntoLocation {
     fn as_any(&self) -> &dyn Any {
         self

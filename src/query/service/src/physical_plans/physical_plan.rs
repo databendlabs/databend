@@ -16,8 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -33,6 +31,8 @@ use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::de::Error as DeError;
+use serde_json::Value as JsonValue;
 
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::MutationSource;
@@ -70,8 +70,23 @@ pub trait DeriveHandle: Send + Sync + 'static {
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>>;
 }
 
-#[typetag::serde]
-pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
+pub(crate) trait PhysicalPlanSerdeSerialization {
+    fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_>;
+}
+
+pub(crate) trait PhysicalPlanSerdeDeserialization {
+    fn from_physical_plan_deserialize(v: PhysicalPlanDeserialize) -> Self;
+}
+
+pub(crate) trait IPhysicalPlan:
+    PhysicalPlanSerdeSerialization
+    + PhysicalPlanSerdeSerialization
+    + DynClone
+    + Debug
+    + Send
+    + Sync
+    + 'static
+{
     fn as_any(&self) -> &dyn Any;
 
     fn get_meta(&self) -> &PhysicalPlanMeta;
@@ -269,6 +284,145 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
     }
 }
 
+macro_rules! define_physical_plan_serde {
+    ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
+        #[derive(Clone, Debug, serde::Deserialize)]
+        /// owned enum for deserialization; serialization uses PhysicalPlanSerdeRef to avoid cloning
+        pub(crate) enum PhysicalPlanDeserialize {
+            $( $(#[$meta])? $variant($path), )+
+        }
+
+        #[derive(Debug, serde::Serialize)]
+        pub(crate) enum PhysicalPlanSerdeSerialize<'a> {
+            $( $(#[$meta])? $variant(&'a $path), )+
+        }
+
+        $( $(#[$meta])? impl From<$path> for PhysicalPlanDeserialize {
+            fn from(v: $path) -> Self {
+                PhysicalPlanDeserialize::$variant(v)
+            }
+        })+
+
+        $( $(#[$meta])? impl<'a> From<&'a $path> for PhysicalPlanSerdeSerialize<'a> {
+            fn from(v: &'a $path) -> Self {
+                PhysicalPlanSerdeSerialize::$variant(v)
+            }
+        })+
+
+        $( $(#[$meta])? impl PhysicalPlanSerdeSerialization for $path {
+            fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_> {
+                PhysicalPlanSerdeSerialize::from(self)
+            }
+        })+
+    };
+}
+
+include!(concat!(env!("OUT_DIR"), "/physical_plan_impls.rs"));
+
+include!(concat!(env!("OUT_DIR"), "/physical_plan_dispatch.rs"));
+
+impl PhysicalPlanSerdeSerialization for PhysicalPlanDeserialize {
+    fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_> {
+        dispatch_plan_ref!(self, v => PhysicalPlanSerdeSerialize::from(v))
+    }
+}
+
+impl PhysicalPlanSerdeDeserialization for PhysicalPlan {
+    fn from_physical_plan_deserialize(v: PhysicalPlanDeserialize) -> Self {
+        PhysicalPlan { inner: Box::new(v) }
+    }
+}
+
+impl IPhysicalPlan for PhysicalPlanDeserialize {
+    fn as_any(&self) -> &dyn Any {
+        dispatch_plan_ref!(self, v => v.as_any())
+    }
+
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        dispatch_plan_ref!(self, v => v.get_meta())
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        dispatch_plan_mut!(self, v => v.get_meta_mut())
+    }
+
+    fn get_id(&self) -> u32 {
+        dispatch_plan_ref!(self, v => v.get_id())
+    }
+
+    fn get_name(&self) -> String {
+        dispatch_plan_ref!(self, v => v.get_name())
+    }
+
+    fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        dispatch_plan_mut!(self, v => v.adjust_plan_id(next_id))
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        dispatch_plan_ref!(self, v => v.output_schema())
+    }
+
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
+        dispatch_plan_ref!(self, v => v.children())
+    }
+
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
+        dispatch_plan_mut!(self, v => v.children_mut())
+    }
+
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        dispatch_plan_ref!(self, v => v.formatter())
+    }
+
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        dispatch_plan_ref!(self, v => v.try_find_single_data_source())
+    }
+
+    fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        dispatch_plan_ref!(self, v => v.try_find_mutation_source())
+    }
+
+    fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        dispatch_plan_ref!(self, v => v.get_all_data_source(sources))
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        dispatch_plan_mut!(self, v => v.set_pruning_stats(stats))
+    }
+
+    fn is_distributed_plan(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.is_distributed_plan())
+    }
+
+    fn is_warehouse_distributed_plan(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.is_warehouse_distributed_plan())
+    }
+
+    fn display_in_profile(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.display_in_profile())
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        dispatch_plan_ref!(self, v => v.get_desc())
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        dispatch_plan_ref!(self, v => v.get_labels())
+    }
+
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        dispatch_plan_ref!(self, v => v.derive(children))
+    }
+
+    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        dispatch_plan_ref!(self, v => v.build_pipeline(builder))
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        dispatch_plan_ref!(self, v => v.build_pipeline2(builder))
+    }
+}
+
 pub struct PhysicalPlan {
     inner: Box<dyn IPhysicalPlan + 'static>,
 }
@@ -291,41 +445,122 @@ impl Debug for PhysicalPlan {
     }
 }
 
-impl Deref for PhysicalPlan {
-    type Target = dyn IPhysicalPlan;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner.deref()
-    }
-}
-
-impl DerefMut for PhysicalPlan {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.deref_mut()
-    }
-}
-
 impl serde::Serialize for PhysicalPlan {
     #[recursive::recursive]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        self.inner.serialize(serializer)
+        self.inner
+            .to_physical_plan_serde_serialize()
+            .serialize(serializer)
     }
 }
 
 impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     #[recursive::recursive]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        Ok(PhysicalPlan {
-            inner: Box::<dyn IPhysicalPlan + 'static>::deserialize(deserializer)?,
-        })
+        // Deserialize to JSON first to avoid backtracking failures in streaming deserializers.
+        let value = JsonValue::deserialize(deserializer)?;
+        let inner: PhysicalPlanDeserialize =
+            serde_json::from_value(value).map_err(DeError::custom)?;
+
+        Ok(PhysicalPlan::from_physical_plan_deserialize(inner))
     }
 }
 
 impl PhysicalPlan {
-    pub fn new<T: IPhysicalPlan + 'static>(inner: T) -> PhysicalPlan {
+    #[allow(private_bounds)]
+    pub fn new<T>(inner: T) -> PhysicalPlan
+    where PhysicalPlanDeserialize: From<T> {
         PhysicalPlan {
-            inner: Box::new(inner),
+            inner: Box::<PhysicalPlanDeserialize>::new(inner.into()),
         }
+    }
+
+    pub fn as_any(&self) -> &dyn Any {
+        self.inner.as_any()
+    }
+
+    pub fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
+    pub fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        self.inner.get_meta_mut()
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.inner.get_id()
+    }
+
+    pub fn get_name(&self) -> String {
+        self.inner.get_name()
+    }
+
+    pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        self.inner.adjust_plan_id(next_id)
+    }
+
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.inner.output_schema()
+    }
+
+    pub fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
+        self.inner.children()
+    }
+
+    pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
+        self.inner.children_mut()
+    }
+
+    pub fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        self.inner.formatter()
+    }
+
+    pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.inner.try_find_single_data_source()
+    }
+
+    pub fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        self.inner.try_find_mutation_source()
+    }
+
+    pub fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        self.inner.get_all_data_source(sources)
+    }
+
+    pub fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        self.inner.set_pruning_stats(stats)
+    }
+
+    pub fn is_distributed_plan(&self) -> bool {
+        self.inner.is_distributed_plan()
+    }
+
+    pub fn is_warehouse_distributed_plan(&self) -> bool {
+        self.inner.is_warehouse_distributed_plan()
+    }
+
+    pub fn display_in_profile(&self) -> bool {
+        self.inner.display_in_profile()
+    }
+
+    pub fn get_desc(&self) -> Result<String> {
+        self.inner.get_desc()
+    }
+
+    pub fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        self.inner.get_labels()
+    }
+
+    pub fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        self.inner.derive(children)
+    }
+
+    pub fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.inner.build_pipeline(builder)
+    }
+
+    pub fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.inner.build_pipeline2(builder)
     }
 
     #[recursive::recursive]
@@ -363,5 +598,111 @@ impl PhysicalPlan {
         };
 
         self.formatter()?.format(&mut context)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::any::Any;
+    use std::backtrace::Backtrace;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use serde::ser::SerializeStruct;
+    use serde_json::{self};
+
+    use super::*;
+
+    static STACK_DEPTH: AtomicUsize = AtomicUsize::new(0);
+    static STACK_DELTA: AtomicUsize = AtomicUsize::new(0);
+    static BASELINE_DEPTH: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(Clone, Debug, serde::Deserialize)]
+    pub(crate) struct StackDepthPlan {
+        meta: PhysicalPlanMeta,
+    }
+
+    impl StackDepthPlan {
+        fn new(name: impl Into<String>) -> Self {
+            StackDepthPlan {
+                meta: PhysicalPlanMeta::new(name),
+            }
+        }
+    }
+
+    impl serde::Serialize for StackDepthPlan {
+        fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+        where S: serde::Serializer {
+            let depth = current_stack_depth();
+            STACK_DEPTH.store(depth, Ordering::Relaxed);
+            let baseline = BASELINE_DEPTH.load(Ordering::Relaxed);
+            STACK_DELTA.store(depth.saturating_sub(baseline), Ordering::Relaxed);
+
+            // Serialize in the same shape as a normal plan node.
+            let mut state = serializer.serialize_struct("StackDepthPlan", 1)?;
+            state.serialize_field("meta", &self.meta)?;
+            state.end()
+        }
+    }
+
+    impl IPhysicalPlan for StackDepthPlan {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn get_meta(&self) -> &PhysicalPlanMeta {
+            &self.meta
+        }
+
+        fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+            &mut self.meta
+        }
+
+        fn derive(&self, _children: Vec<PhysicalPlan>) -> PhysicalPlan {
+            PhysicalPlan::new(self.clone())
+        }
+
+        fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+            let _ = builder;
+            Ok(())
+        }
+    }
+
+    // Used to compare the serialization stack depth of different versions
+    #[test]
+    fn typetag_serialize_stack_depth_is_measured() {
+        STACK_DEPTH.store(0, Ordering::Relaxed);
+        STACK_DELTA.store(0, Ordering::Relaxed);
+        let baseline = current_stack_depth();
+        BASELINE_DEPTH.store(baseline, Ordering::Relaxed);
+
+        let plan = PhysicalPlan::new(StackDepthPlan::new("stack_depth_plan"));
+        serde_json::to_vec(&plan).expect("serialize typetag plan");
+
+        let depth = STACK_DEPTH.load(Ordering::Relaxed);
+        let delta = STACK_DELTA.load(Ordering::Relaxed);
+
+        assert!(depth > 0, "backtrace depth was not captured");
+        assert!(
+            delta > 0,
+            "delta between typetag serialize and baseline should be > 0"
+        );
+        eprintln!(
+            "typetag serialize stack depth: {}, delta from baseline: {}",
+            depth, delta
+        );
+    }
+
+    fn current_stack_depth() -> usize {
+        Backtrace::force_capture()
+            .to_string()
+            .lines()
+            .filter(|line| {
+                line.trim_start()
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+            })
+            .count()
     }
 }

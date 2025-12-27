@@ -59,7 +59,6 @@ pub struct CompactSource {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for CompactSource {
     fn as_any(&self) -> &dyn Any {
         self

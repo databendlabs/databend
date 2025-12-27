@@ -51,7 +51,6 @@ pub struct CopyIntoTable {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for CopyIntoTable {
     fn as_any(&self) -> &dyn Any {
         self

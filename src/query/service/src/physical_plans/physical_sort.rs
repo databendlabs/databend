@@ -99,7 +99,6 @@ impl Display for SortStep {
     }
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Sort {
     fn as_any(&self) -> &dyn Any {
         self

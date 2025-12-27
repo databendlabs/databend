@@ -55,7 +55,6 @@ pub struct AddStreamColumn {
     pub stream_columns: Vec<StreamColumn>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for AddStreamColumn {
     fn as_any(&self) -> &dyn Any {
         self

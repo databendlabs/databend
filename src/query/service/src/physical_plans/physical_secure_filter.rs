@@ -48,7 +48,6 @@ pub struct SecureFilter {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for SecureFilter {
     fn as_any(&self) -> &dyn Any {
         self

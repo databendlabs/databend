@@ -54,7 +54,6 @@ pub struct RowFetch {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for RowFetch {
     fn as_any(&self) -> &dyn Any {
         self

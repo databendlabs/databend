@@ -41,7 +41,6 @@ pub struct ExpressionScan {
     pub output_schema: DataSchemaRef,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ExpressionScan {
     fn as_any(&self) -> &dyn Any {
         self

@@ -35,7 +35,6 @@ pub struct RecursiveCteScan {
     pub stat: PlanStatsInfo,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for RecursiveCteScan {
     fn as_any(&self) -> &dyn Any {
         self

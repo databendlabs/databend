@@ -41,7 +41,6 @@ pub struct CacheScan {
     pub output_schema: DataSchemaRef,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for CacheScan {
     fn as_any(&self) -> &dyn Any {
         self

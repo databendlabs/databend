@@ -73,7 +73,6 @@ pub struct Window {
     pub limit: Option<usize>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Window {
     fn as_any(&self) -> &dyn Any {
         self

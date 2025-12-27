@@ -37,7 +37,6 @@ pub struct ExchangeSource {
     pub query_id: String,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ExchangeSource {
     fn as_any(&self) -> &dyn Any {
         self

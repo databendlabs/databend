@@ -54,7 +54,6 @@ pub struct WindowPartition {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for WindowPartition {
     fn as_any(&self) -> &dyn Any {
         self

@@ -142,7 +142,6 @@ pub struct HashJoin {
     pub broadcast_id: Option<u32>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for HashJoin {
     fn as_any(&self) -> &dyn Any {
         self
