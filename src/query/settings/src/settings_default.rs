@@ -425,7 +425,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("force_eager_aggregate", DefaultSettingValue { 
+                ("force_eager_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Force apply rule eager aggregate.",
                     mode: SettingMode::Both,
@@ -1494,7 +1494,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
                 ("enable_experiment_aggregate", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable experiment aggregate, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1506,6 +1506,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("force_aggregate_shuffle_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

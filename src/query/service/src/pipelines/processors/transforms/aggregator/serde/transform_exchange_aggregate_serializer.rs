@@ -167,6 +167,46 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     let c = serialize_block(block_number, c, &self.options)?;
                     serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
+                Some(AggregateMeta::Partitioned { data, .. }) => {
+                    if index == self.local_pos {
+                        let blocks = data
+                            .into_iter()
+                            .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
+                            .collect::<Vec<_>>();
+
+                        serialized_blocks.push(FlightSerialized::DataBlock(
+                            block.add_meta(Some(ExchangeShuffleMeta::create(blocks)))?,
+                        ));
+                        continue;
+                    }
+
+                    let mut buckets = Vec::with_capacity(data.len());
+                    let mut payload_row_counts = Vec::with_capacity(data.len());
+                    let mut payload_blocks = Vec::with_capacity(data.len());
+
+                    for meta in data {
+                        let AggregateMeta::AggregatePayload(payload) = meta else {
+                            unreachable!("Partitioned meta only contains AggregatePayload");
+                        };
+
+                        let block = payload.payload.aggregate_flush_all()?;
+                        buckets.push(payload.bucket);
+                        payload_row_counts.push(block.num_rows());
+                        payload_blocks.push(block);
+                    }
+
+                    if payload_blocks.is_empty() {
+                        continue;
+                    }
+
+                    let mut merged_block = DataBlock::concat(&payload_blocks)?;
+                    merged_block = merged_block.add_meta(Some(
+                        AggregateSerdeMeta::create_partitioned_payload(buckets, payload_row_counts),
+                    ))?;
+
+                    let serialized = serialize_block(-1, merged_block, &self.options)?;
+                    serialized_blocks.push(FlightSerialized::DataBlock(serialized));
+                }
 
                 _ => unreachable!(),
             };
