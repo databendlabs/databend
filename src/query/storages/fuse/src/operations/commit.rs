@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use chrono::Utc;
@@ -275,6 +274,7 @@ impl FuseTable {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
                 base_snapshot_location: self.snapshot_loc(),
+                lvt_check: None,
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
@@ -328,10 +328,9 @@ impl FuseTable {
         base_segments: &[Location],
         base_summary: Statistics,
         table_meta_timestamps: TableMetaTimestamps,
-        max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
-        let mut backoff = set_backoff(None, None, max_retry_elapsed);
+        let mut backoff = set_backoff(None, None, None);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;

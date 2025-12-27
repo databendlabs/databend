@@ -419,6 +419,8 @@ pub enum TokenKind {
     BOOLEAN,
     #[token("BOTH", ignore(ascii_case))]
     BOTH,
+    #[token("BRANCH", ignore(ascii_case))]
+    BRANCH,
     #[token("BY", ignore(ascii_case))]
     BY,
     #[token("BROTLI", ignore(ascii_case))]
@@ -1224,6 +1226,8 @@ pub enum TokenKind {
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TAG", ignore(ascii_case))]
+    TAG,
     #[token("TARGET_LAG", ignore(ascii_case))]
     TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]

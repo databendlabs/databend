@@ -87,6 +87,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            lvt_check: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;
 

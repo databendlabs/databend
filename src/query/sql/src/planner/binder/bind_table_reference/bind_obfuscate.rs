@@ -102,7 +102,7 @@ impl Binder {
         table: &Identifier,
         seed: u64,
     ) -> Result<(SExpr, BindContext)> {
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None, &None);
 
         let catalog_name = table_identifier.catalog_name();
         let database_name = table_identifier.database_name();
@@ -114,6 +114,7 @@ impl Binder {
                 &catalog_name,
                 &database_name,
                 &table_name,
+                None,
                 None,
                 None,
             )?
@@ -189,6 +190,7 @@ fn build_subquery(
         catalog: None,
         database: Some(database.clone()),
         table: table_name.clone(),
+        ref_name: None,
         alias: None,
         temporal: None,
         with_options: None,

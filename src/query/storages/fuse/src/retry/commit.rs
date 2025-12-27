@@ -330,6 +330,7 @@ async fn try_rebuild_req(
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: latest_table.snapshot_loc(),
+            lvt_check: None,
         };
         *update_table_meta_req = req;
     }

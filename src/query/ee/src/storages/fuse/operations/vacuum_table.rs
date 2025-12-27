@@ -17,21 +17,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::DateTime;
+use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::RetentionPolicy;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::SnapshotLiteExtended;
-use databend_common_storages_fuse::io::SnapshotsIO;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-
-use crate::storages::fuse::get_snapshot_referenced_segments;
 
 const DRY_RUN_LIMIT: usize = 1000;
 
@@ -68,72 +62,24 @@ pub async fn get_snapshot_referenced_files(
     fuse_table: &FuseTable,
     ctx: &Arc<dyn TableContext>,
 ) -> Result<Option<SnapshotReferencedFiles>> {
-    // 1. Read the root snapshot.
-    let root_snapshot_location_op = fuse_table.snapshot_loc();
-    if root_snapshot_location_op.is_none() {
-        return Ok(None);
-    }
-
-    let root_snapshot_location = root_snapshot_location_op.unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let ver = TableMetaLocationGenerator::snapshot_version(root_snapshot_location.as_str());
-    let params = LoadParams {
-        location: root_snapshot_location.clone(),
-        len_hint: None,
-        ver,
-        put_cache: true,
-    };
-    let root_snapshot = match reader.read(&params).await {
-        Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-            // concurrent gc: someone else has already collected this snapshot, ignore it
-            // warn!(
-            //    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-            //    root_snapshot_location, self.table_info.desc, self.table_info.ident,
-            //);
-            return Ok(None);
-        }
-        Err(e) => return Err(e),
-        Ok(v) => v,
-    };
-
-    let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
-        format_version: ver,
-        snapshot_id: root_snapshot.snapshot_id,
-        timestamp: root_snapshot.timestamp,
-        segments: HashSet::from_iter(root_snapshot.segments.clone()),
-        table_statistics_location: root_snapshot.table_statistics_location(),
-    });
-    drop(root_snapshot);
-
-    // 2. Find all segments referenced by the current snapshots
-    let snapshots_io = SnapshotsIO::create(ctx.clone(), fuse_table.get_operator());
-    let segments_opt = get_snapshot_referenced_segments(
-        &snapshots_io,
-        root_snapshot_location,
-        root_snapshot_lite,
-        |status| {
+    // 1. Find all segments referenced by the current snapshots (including branches and tags)
+    let segments_opt = fuse_table
+        .get_snapshot_referenced_segments(ctx.clone(), |status| {
             ctx.set_status_info(&status);
-        },
-    )
-    .await?;
-
-    let segments_vec = match segments_opt {
-        Some(segments) => segments,
-        None => {
-            return Ok(None);
-        }
-    };
-
-    let locations_referenced = fuse_table
-        .get_block_locations(ctx.clone(), &segments_vec, false, false)
+        })
         .await?;
 
-    let mut segments = HashSet::with_capacity(segments_vec.len());
-    segments_vec.into_iter().for_each(|(location, _)| {
-        segments.insert(location);
-    });
+    let Some(segments) = segments_opt else {
+        return Ok(None);
+    };
+
+    let segment_refs: Vec<&_> = segments.iter().collect();
+    let locations_referenced = fuse_table
+        .get_block_locations(ctx.clone(), &segment_refs, false, false)
+        .await?;
+
     Ok(Some(SnapshotReferencedFiles {
-        segments,
+        segments: segments.into_iter().map(|(location, _)| location).collect(),
         blocks: locations_referenced.block_location,
         blocks_index: locations_referenced.bloom_location,
         segments_stats: locations_referenced.hll_location,
@@ -164,9 +110,8 @@ pub async fn do_gc_orphan_files(
     start: Instant,
 ) -> Result<()> {
     // 1. Get all the files referenced by the current snapshot
-    let referenced_files = match get_snapshot_referenced_files(fuse_table, ctx).await? {
-        Some(referenced_files) => referenced_files,
-        None => return Ok(()),
+    let Some(referenced_files) = get_snapshot_referenced_files(fuse_table, ctx).await? else {
+        return Ok(());
     };
     let status = format!(
         "gc orphan: read referenced files:{},{},{},{}, cost:{:?}",
@@ -317,9 +262,8 @@ pub async fn do_dry_run_orphan_files(
     dry_run_limit: usize,
 ) -> Result<()> {
     // 1. Get all the files referenced by the current snapshot
-    let referenced_files = match get_snapshot_referenced_files(fuse_table, ctx).await? {
-        Some(referenced_files) => referenced_files,
-        None => return Ok(()),
+    let Some(referenced_files) = get_snapshot_referenced_files(fuse_table, ctx).await? else {
+        return Ok(());
     };
     let status = format!(
         "dry_run orphan: read referenced files:{},{},{},{}, cost:{:?}",
@@ -420,31 +364,36 @@ pub async fn do_vacuum(
     let dry_run_limit = if dry_run { Some(DRY_RUN_LIMIT) } else { None };
     // Let the table navigate to the point according to the table's retention policy.
     let navigation_point = None;
-    let keep_last_snapshot = true;
     let purge_files_opt = fuse_table
-        .purge(
-            ctx.clone(),
-            navigation_point,
-            dry_run_limit,
-            keep_last_snapshot,
-            dry_run,
-        )
+        .purge(ctx.clone(), navigation_point, dry_run_limit, dry_run)
         .await?;
     let status = format!("do_vacuum: purged table, cost:{:?}", start.elapsed());
     ctx.set_status_info(&status);
-    let retention_policy = fuse_table.get_data_retention_policy(ctx.as_ref())?;
 
-    let retention_period = match retention_policy {
-        RetentionPolicy::ByTimePeriod(retention_period) => retention_period,
-        RetentionPolicy::ByNumOfSnapshotsToKeep(_) => {
-            // Technically, we should derive a reasonable retention period from the ByNumOfSnapshotsToKeep policy,
-            // but it's not worth the effort since VACUUM2 will replace legacy purge and vacuum soon.
-            // Use the table retention period for now.
-            fuse_table.get_data_retention_period(ctx.as_ref())?
-        }
+    let catalog = ctx.get_default_catalog()?;
+    let table_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(
+            ctx.get_tenant(),
+            fuse_table.get_table_info().ident.table_id,
+        ))
+        .await?;
+    let table = fuse_table.refresh(ctx.as_ref()).await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    // Technically, we should derive a reasonable retention period from the ByNumOfSnapshotsToKeep policy,
+    // but it's not worth the effort since VACUUM2 will replace legacy purge and vacuum soon.
+    // Use the table retention period for now.
+    let retention_period = if fuse_table.is_transient() {
+        // For transient table, keep no history data
+        TimeDelta::zero()
+    } else {
+        fuse_table.get_data_retention_period(ctx.as_ref())?
     };
-
-    let retention_time = chrono::Utc::now() - retention_period;
+    let candidate_time = Utc::now() - retention_period;
+    let retention_time = if let Some(lvt) = table_lvt {
+        std::cmp::min(lvt.time, candidate_time)
+    } else {
+        candidate_time
+    };
     if let Some(mut purge_files) = purge_files_opt {
         let dry_run_limit = dry_run_limit.unwrap();
         if purge_files.len() < dry_run_limit {

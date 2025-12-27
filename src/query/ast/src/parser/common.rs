@@ -288,6 +288,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             catalog,
             database,
             table,
+            ref_name: None,
             alias: None,
             temporal: None,
             with_options: None,
@@ -311,6 +312,7 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
                     catalog,
                     database,
                     table,
+                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -379,6 +381,49 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
         |res| match res {
             (ident1, None) => (None, ident1),
             (ident0, Some((_, ident1))) => (Some(ident0), ident1),
+        },
+    )
+    .parse(i)
+}
+
+pub type DotSeparatedIdentifiersWithRef = (
+    Option<Identifier>,
+    Option<Identifier>,
+    Identifier,
+    Option<Identifier>,
+);
+
+/// Parse one to three idents separated by dots, with optional "/ref" at the end.
+///
+/// Compatible with `dot_separated_idents_1_to_3`.
+///
+/// Examples:
+/// - `table`
+/// - `db.table`
+/// - `catalog.db.table`
+/// - `table/branch`
+/// - `db.table/branch`
+/// - `catalog.db.table/tag_v1`
+///
+/// Returns (catalog, database, table, ref_name)
+pub fn dot_separated_idents_with_ref(i: Input) -> IResult<DotSeparatedIdentifiersWithRef> {
+    map(
+        rule! {
+            // 1~3 dot-separated identifiers
+            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )? ~ ( "/" ~ #ident )?
+        },
+        |res| match res {
+            (ident2, None, opt_ref) => (None, None, ident2, opt_ref.map(|(_, r)| r)),
+
+            // db.table / db.table@ref
+            (ident1, Some((_, ident2, None)), opt_ref) => {
+                (None, Some(ident1), ident2, opt_ref.map(|(_, r)| r))
+            }
+
+            // catalog.db.table / catalog.db.table@ref
+            (ident0, Some((_, ident1, Some((_, ident2)))), opt_ref) => {
+                (Some(ident0), Some(ident1), ident2, opt_ref.map(|(_, r)| r))
+            }
         },
     )
     .parse(i)

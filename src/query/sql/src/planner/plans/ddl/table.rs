@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Identifier;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -29,6 +30,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -586,4 +588,28 @@ pub struct DropAllTableRowAccessPoliciesPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct CreateTableRefPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+
+    pub ref_type: SnapshotRefType,
+    pub ref_name: String,
+    pub navigation: Option<NavigationPoint>,
+    pub retain: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableRefPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+
+    pub ref_type: SnapshotRefType,
+    pub ref_name: String,
 }

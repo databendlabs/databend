@@ -622,6 +622,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
+    async fn get_table_lvt(
+        &self,
+        _name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>> {
+        unimplemented!()
+    }
+
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()>;
 
     fn transform_udtf_as_table_function(

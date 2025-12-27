@@ -333,6 +333,20 @@ build_exceptions! {
     UnsupportedEngineParams(2703),
 }
 
+// Table reference Errors [2745-2749]
+build_exceptions! {
+    /// Unknown reference
+    UnknownReference(2745),
+    /// Reference already exists
+    ReferenceAlreadyExists(2746),
+    /// Illegal reference
+    IllegalReference(2747),
+    /// Mismatched reference type
+    MismatchedReferenceType(2748),
+    /// Reference expired
+    ReferenceExpired(2749),
+}
+
 // License Errors [1401-1404]
 build_exceptions! {
     /// License key parse error
@@ -497,7 +511,7 @@ build_exceptions! {
     IllegalUser(2218),
 }
 
-// Database and Catalog Management Errors [2301-2317, 2321-2323]
+// Database and Catalog Management Errors [2301-2317, 2321-2326]
 build_exceptions! {
     /// Database already exists
     DatabaseAlreadyExists(2301),

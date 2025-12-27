@@ -173,6 +173,7 @@ fn new_table_meta() -> mt::TableMeta {
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
+        refs: btreemap! {},
     }
 }
 

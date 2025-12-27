@@ -39,6 +39,8 @@ pub enum Feature {
     StorageEncryption,
     #[serde(alias = "stream", alias = "STREAM")]
     Stream,
+    #[serde(alias = "table_ref", alias = "TABLE_REF")]
+    TableRef,
     #[serde(alias = "attach_table", alias = "ATTACH_TABLE")]
     AttacheTable,
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
@@ -80,6 +82,7 @@ impl fmt::Display for Feature {
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
+            Feature::TableRef => write!(f, "table_ref"),
             Feature::AttacheTable => write!(f, "attach_table"),
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
@@ -118,6 +121,7 @@ impl Feature {
             | (Feature::Vacuum, Feature::Vacuum)
             | (Feature::LicenseInfo, Feature::LicenseInfo)
             | (Feature::Stream, Feature::Stream)
+            | (Feature::TableRef, Feature::TableRef)
             | (Feature::DataMask, Feature::DataMask)
             | (Feature::RowAccessPolicy, Feature::RowAccessPolicy)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
@@ -227,6 +231,10 @@ mod tests {
             serde_json::from_str::<Feature>("\"Stream\"").unwrap()
         );
         assert_eq!(
+            Feature::TableRef,
+            serde_json::from_str::<Feature>("\"TableRef\"").unwrap()
+        );
+        assert_eq!(
             Feature::AttacheTable,
             serde_json::from_str::<Feature>("\"ATTACH_TABLE\"").unwrap()
         );
@@ -287,6 +295,7 @@ mod tests {
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
                 Feature::Stream,
+                Feature::TableRef,
                 Feature::AttacheTable,
                 Feature::AmendTable,
                 Feature::HilbertClustering,
@@ -298,7 +307,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }

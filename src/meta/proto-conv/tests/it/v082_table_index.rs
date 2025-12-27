@@ -104,6 +104,7 @@ fn test_decode_v82_table_meta() -> anyhow::Result<()> {
         }},
         row_access_policy_columns_ids: None,
         constraints: btreemap! {},
+        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v82.as_slice(), 82, want())?;

@@ -39,14 +39,14 @@ use crate::storages::fuse::utils::new_empty_snapshot;
 /// so the delete operation cannot be applied
 #[test]
 fn test_unresolvable_delete_conflict() {
-    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
         ("3".to_string(), 1),
     ];
 
-    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -81,7 +81,7 @@ fn test_unresolvable_delete_conflict() {
 ///
 /// the delete operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 8 in the latest snapshot
 fn test_resolvable_delete_conflict() {
-    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -107,7 +107,7 @@ fn test_resolvable_delete_conflict() {
         additional_stats_meta: None,
     };
 
-    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),
@@ -226,7 +226,7 @@ fn test_resolvable_delete_conflict() {
 ///
 /// the replace operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 6,5 in the latest snapshot
 fn test_resolvable_replace_conflict() {
-    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -252,7 +252,7 @@ fn test_resolvable_replace_conflict() {
         additional_stats_meta: None,
     };
 
-    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),

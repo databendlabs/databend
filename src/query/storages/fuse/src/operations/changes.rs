@@ -81,7 +81,7 @@ impl FuseTable {
             Some(_) => {
                 if let Some(snapshot_loc) = &location {
                     let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator())
+                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true)
                             .await?;
                     let Some(prev_table_seq) = snapshot.prev_table_seq else {
                         return Err(ErrorCode::IllegalStream(
@@ -362,7 +362,7 @@ impl FuseTable {
 
         let latest_segments = if let Some(snapshot) = latest {
             let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator(), true).await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -568,7 +568,8 @@ impl FuseTable {
         &self,
         base_location: &String,
     ) -> Result<Arc<TableSnapshot>> {
-        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator()).await {
+        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator(), true).await
+        {
             Ok((base_snapshot, _)) => Ok(base_snapshot),
             Err(_) => Err(ErrorCode::IllegalStream(format!(
                 "Failed to read the offset snapshot: {:?}, maybe purged",

@@ -58,6 +58,7 @@ impl Dataframe {
         let table = TableReference::Table {
             database: db.map(|db| Identifier::from_name(None, db)),
             table: Identifier::from_name(None, table_name),
+            ref_name: None,
             span: None,
             catalog: None,
             alias: None,
@@ -84,13 +85,14 @@ impl Dataframe {
         let (s_expr, bind_context) = if db == Some("system") && table_name == "one" {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
-            let table_meta: Arc<dyn Table> =
-                binder.resolve_data_source(&query_ctx, catalog, database, "one", None, None)?;
+            let table_meta: Arc<dyn Table> = binder
+                .resolve_data_source(&query_ctx, catalog, database, "one", None, None, None)?;
 
             let table_index = metadata.write().add_table(
                 CATALOG_DEFAULT.to_owned(),
                 database.to_string(),
                 table_meta,
+                None,
                 None,
                 false,
                 false,
@@ -449,6 +451,7 @@ impl Dataframe {
             let table = TableReference::Table {
                 database: db.map(|db| Identifier::from_name(None, db)),
                 table: Identifier::from_name(None, table_name),
+                ref_name: None,
                 span: None,
                 catalog: None,
                 alias: None,
