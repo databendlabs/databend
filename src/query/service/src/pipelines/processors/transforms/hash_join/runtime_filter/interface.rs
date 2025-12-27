@@ -47,12 +47,17 @@ pub async fn build_and_push_down_runtime_filter(
         .ctx
         .get_settings()
         .get_join_runtime_filter_selectivity_threshold()?;
+    let probe_ratio_threshold = join
+        .ctx
+        .get_settings()
+        .get_join_runtime_filter_probe_ratio_threshold()? as f64;
     let max_threads = join.ctx.get_settings().get_max_threads()? as usize;
     let build_rows = packet.build_rows;
     let runtime_filter_infos = build_runtime_filter_infos(
         packet,
         runtime_filter_descs,
         selectivity_threshold,
+        probe_ratio_threshold,
         max_threads,
     )
     .await?;
