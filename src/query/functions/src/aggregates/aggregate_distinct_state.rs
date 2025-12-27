@@ -87,7 +87,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             .map(|entry| unsafe { entry.index_unchecked(row) }.to_owned())
             .collect::<Vec<_>>();
 
-        if skip_null && values.iter().all(Scalar::is_null) {
+        if skip_null && values.iter().any(Scalar::is_null) {
             return Ok(());
         }
 

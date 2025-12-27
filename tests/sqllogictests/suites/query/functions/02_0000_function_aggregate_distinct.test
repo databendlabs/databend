@@ -2,7 +2,7 @@ query TI
 select 'a', count(distinct a,b,c) 
 from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
 ----
-a 3
+a 0
 
 query TI
 select 'a', count(distinct b) 
@@ -20,7 +20,13 @@ query TI
 select 'a', count(distinct b,c) 
 from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
 ----
-a 2
+a 0
+
+query TI
+select count(distinct a,b,c) 
+from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+----
+0
 
 query TI
 select 'a',count(distinct null) from numbers(5);
