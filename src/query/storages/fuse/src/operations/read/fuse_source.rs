@@ -38,6 +38,7 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::TransformRuntimeFilter;
 use crate::operations::read::TransformRuntimeFilterWait;
 use crate::operations::read::block_partition_receiver_source::BlockPartitionReceiverSource;
 use crate::operations::read::block_partition_source::BlockPartitionSource;
@@ -117,6 +118,19 @@ pub fn build_fuse_native_source_pipeline(
             transform_output,
             index_reader.clone(),
         )
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        let output_schema = (&output_schema).into();
+        Ok(TransformRuntimeFilter::create(
+            ctx.clone(),
+            plan.scan_id,
+            output_schema,
+            input,
+            output,
+        ))
     })?;
 
     pipeline.try_resize(max_threads)?;
@@ -209,6 +223,19 @@ pub fn build_fuse_parquet_source_pipeline(
             index_reader.clone(),
             virtual_reader.clone(),
         )
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        let output_schema = (&output_schema).into();
+        Ok(TransformRuntimeFilter::create(
+            ctx.clone(),
+            plan.scan_id,
+            output_schema,
+            input,
+            output,
+        ))
     })?;
 
     Ok(())
