@@ -14,6 +14,8 @@
 
 //! A helper for building a string key from a structured key
 
+use std::io::Write;
+
 use crate::kvapi::helper::escape;
 use crate::kvapi::helper::escape_specified;
 
@@ -46,8 +48,15 @@ impl KeyBuilder {
         self.push_raw(&escape(s))
     }
 
-    pub fn push_u64(self, n: u64) -> Self {
-        self.push_raw(&format!("{}", n))
+    pub fn push_u64(mut self, n: u64) -> Self {
+        if !self.buf.is_empty() {
+            // `/`
+            self.buf.push(0x2f);
+        }
+        
+        // Write directly to buffer instead of allocating a string
+        write!(self.buf, "{}", n).unwrap();
+        self
     }
 
     pub fn done(self) -> String {
