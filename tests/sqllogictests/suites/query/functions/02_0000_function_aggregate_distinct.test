@@ -31,3 +31,19 @@ query TI
 select 'a',count(distinct null,null) from numbers(5);
 ----
 a 0
+
+query TI
+select 'a', count(distinct ts)
+from (values('2024-01-01 00:00:00'::timestamp),
+           ('2024-01-02 00:00:00'::timestamp),
+           ('2024-01-01 00:00:00'::timestamp)) t(ts);
+----
+a 2
+
+query TI
+select 'a', count(distinct d)
+from (values('2024-01-01'::date),
+           ('2024-01-02'::date),
+           ('2024-01-02'::date)) t(d);
+----
+a 2
