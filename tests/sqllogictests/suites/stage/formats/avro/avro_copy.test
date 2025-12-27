@@ -9,7 +9,7 @@ avro/map.avro 2 0 NULL NULL
 query 
 select * from t
 ----
-{'math':100}
+{"math":100}
 {}
 
 query 
@@ -29,7 +29,7 @@ avro/array.avro 2 0 NULL NULL
 query 
 select * from t
 ----
-['tall','rich','handsome']
+["tall","rich","handsome"]
 []
 
 query 
@@ -52,8 +52,8 @@ avro/nested_record.avro 2 0 NULL NULL
 query 
 select * from t
 ----
-0 1 ('yang',NULL,(NULL,'yang@m','911'))
-1 1 ('wang',NULL,(NULL,'wang@m',NULL))
+0 1 ("yang",NULL,(NULL,"yang@m","911"))
+1 1 ("wang",NULL,(NULL,"wang@m",NULL))
 
 statement ok
 create or replace table t(info variant)

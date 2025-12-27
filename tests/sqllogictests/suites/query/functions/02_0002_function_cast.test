@@ -549,17 +549,17 @@ select cast(position as String), cast(trim as String), cast(substring as String)
 query TTT
 select '[1,2,"3"]'::Variant a, a::Array(Variant) b, b::Variant = a;
 ----
-[1,2,"3"] ['1','2','"3"'] 1
+[1,2,"3"] [1,2,"3"] 1
 
 query TTT
 select '{"k1":"v1","k2":"v2"}'::Variant a, a::Map(String, String) b, b::Variant = a;
 ----
-{"k1":"v1","k2":"v2"} {'k1':'v1','k2':'v2'} 1
+{"k1":"v1","k2":"v2"} {"k1":"v1","k2":"v2"} 1
 
 query TTT
 select '{"a":1,"b":2}'::Variant a, a::Map(String, Int) b, b::Variant = a;
 ----
-{"a":1,"b":2} {'a':1,'b':2} 1
+{"a":1,"b":2} {"a":1,"b":2} 1
 
 query TTT
 select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));

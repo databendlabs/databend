@@ -78,7 +78,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format: Default::default(),
             },
-            quote_char: b'\'',
+            quote_char: b'"',
         }
     }
 
@@ -99,7 +99,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
-            quote_char: b'\'',
+            quote_char: b'"',
         }
     }
 
@@ -124,7 +124,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
-            quote_char: b'\'',
+            quote_char: b'"',
         }
     }
 
@@ -163,7 +163,7 @@ impl FieldEncoderValues {
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::TimestampTz(c) => self.write_timestamp_tz(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
-            Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
+            Column::Variant(c) => self.write_variant(c, row_index, out_buf),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
@@ -192,6 +192,7 @@ impl FieldEncoderValues {
             out_buf.extend_from_slice(in_buf);
         }
     }
+
     fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = if column.get_bit(row_index) {
             &self.common_settings().true_bytes
@@ -328,16 +329,10 @@ impl FieldEncoderValues {
         self.write_string_inner(bitmap_result, out_buf, in_nested);
     }
 
-    fn write_variant(
-        &self,
-        column: &BinaryColumn,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        in_nested: bool,
-    ) {
+    fn write_variant(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = RawJsonb::new(v).to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+        out_buf.extend_from_slice(s.as_bytes());
     }
 
     fn write_geometry(
@@ -360,7 +355,14 @@ impl FieldEncoderValues {
             })
             .unwrap_or_else(|_| v.to_vec());
 
-        self.write_string_inner(&s, out_buf, in_nested);
+        match self.common_settings().geometry_format {
+            GeometryDataType::GEOJSON => {
+                out_buf.extend_from_slice(&s);
+            }
+            _ => {
+                self.write_string_inner(&s, out_buf, in_nested);
+            }
+        }
     }
 
     fn write_geography(
@@ -383,7 +385,14 @@ impl FieldEncoderValues {
             })
             .unwrap_or_else(|_| v.0.to_vec());
 
-        self.write_string_inner(&s, out_buf, in_nested);
+        match self.common_settings().geometry_format {
+            GeometryDataType::GEOJSON => {
+                out_buf.extend_from_slice(&s);
+            }
+            _ => {
+                self.write_string_inner(&s, out_buf, in_nested);
+            }
+        }
     }
 
     fn write_array(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {

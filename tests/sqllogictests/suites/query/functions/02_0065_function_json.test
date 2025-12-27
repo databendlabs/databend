@@ -366,16 +366,16 @@ SELECT json_each(parse_json('{}'))
 query T
 SELECT json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
 ----
-('a','1')
-('b','[1,2,3]')
-('c','true')
-('d','{"k1":1,"k2":2}')
+("a",1)
+("b",[1,2,3])
+("c",true)
+("d",{"k1":1,"k2":2})
 
 query TT
 SELECT parse_json('{"k1": "v1", "k2": "v2"}') config, json_each(config)
 ----
-{"k1":"v1","k2":"v2"} ('k1','"v1"')
-{"k1":"v1","k2":"v2"} ('k2','"v2"')
+{"k1":"v1","k2":"v2"} ("k1","v1")
+{"k1":"v1","k2":"v2"} ("k2","v2")
 
 query TT
 SELECT * FROM json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))

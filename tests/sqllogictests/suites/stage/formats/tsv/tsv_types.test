@@ -13,7 +13,7 @@ tsv/complex_types.tsv 1 0 NULL NULL
 query 
 select * from complex
 ----
-(('c	d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)]) 1
+(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)]) 1
 
 statement ok
 drop stage if exists tsv_types
@@ -28,7 +28,7 @@ copy into @tsv_types from complex;
 query 
 select $1 from @tsv_types
 ----
-(('c	d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)])
+(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)])
 
 statement ok
 remove @tsv_types
@@ -40,7 +40,7 @@ copy into @tsv_types from complex file_format = (type = 'tsv' field_delimiter=',
 query 
 select $1 from @tsv_types(file_format => 'tsv');
 ----
-(('c	d'\,'{"a":1}')\,{1:'["a"\,0]'}\,[({'x':2}\,3)]),1
+(("c	d"\,{"a":1})\,{1:["a"\,0]}\,[({"x":2}\,3)]),1
 
 statement ok
 DROP TABLE if exists books;

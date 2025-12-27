@@ -130,8 +130,8 @@ select id, t:b from @data/parquet/tuple.parquet order by t:a desc, id desc limit
 query TT
 select t, t:a from @data/parquet/tuple.parquet order by id desc limit 2;
 ----
-(3,'c') 3
-(3,'b') 3
+(3,"c") 3
+(3,"b") 3
 
 # topk contains output
 query TT
@@ -143,8 +143,8 @@ select id, t:b, t:a from @data/parquet/tuple.parquet order by t:a desc, id desc 
 query TT
 select id, t:b, t:a, t from @data/parquet/tuple.parquet order by id desc limit 2;
 ----
-3 c 3 (3,'c')
-2 b 3 (3,'b')
+3 c 3 (3,"c")
+2 b 3 (3,"b")
 
 # POLICY PREDICATE AND TOPK
 
@@ -163,7 +163,7 @@ c 3
 query TT
 select t from @data/parquet/tuple.parquet where id > 1 and t:a > 2 order by id desc limit 1;
 ----
-(3,'c')
+(3,"c")
 
 # predicate contains output, but not topk
 query TT

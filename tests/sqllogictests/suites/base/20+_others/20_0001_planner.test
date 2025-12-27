@@ -856,11 +856,11 @@ drop table t
 query T
 select ('field', number) from numbers(5) order by number
 ----
-('field',0)
-('field',1)
-('field',2)
-('field',3)
-('field',4)
+("field",0)
+("field",1)
+("field",2)
+("field",3)
+("field",4)
 
 
 statement ok

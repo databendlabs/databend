@@ -69,7 +69,7 @@ tsv/complex_types.tsv 1 0 NULL NULL
 query
 select * from complex
 ----
-(('c	d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)]) 1
+(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)]) 1
 
 statement ok
 drop stage if exists csv_types
@@ -84,7 +84,7 @@ copy into @csv_types from complex;
 query
 select $1 from @csv_types
 ----
-(('c	d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)])
+(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)])
 
 statement ok
 drop file format if exists csv_raw
@@ -96,7 +96,7 @@ create file format csv_raw type = 'csv' field_delimiter='#' quote= '`'
 query
 select $1 from @csv_types (file_format => 'csv_raw');
 ----
-"(('c       d','{""a"":1}'),{1:'[""a"",0]'},[({'x':2},3)])",1
+"((""c	d"",{""a"":1}),{1:[""a"",0]},[({""x"":2},3)])",1
 
 statement ok
 remove @csv_types
@@ -114,13 +114,13 @@ copy into @csv_types from complex file_format = (format_name= 'csv_special');
 query
 select $1 from @csv_types(file_format => 'csv_special');
 ----
-(('c        d','{"a":1}'),{1:'["a",0]'},[({'x':2},3)])
+(("c        d",{"a":1}),{1:["a",0]},[({"x":2},3)])
 
 
 query
 select $1 from @csv_types(file_format => 'csv_raw');
 ----
- '((''c      d'',''{"a":1}''),{1:''["a",0]''},[({''x'':2},3)])'|1
+'(("c	   d",{"a":1}),{1:["a",0]},[({"x":2},3)])'|1
 
 statement ok
 CREATE OR REPLACE TABLE cast_ts_csv (t timestamp, tt tuple(a timestamp))

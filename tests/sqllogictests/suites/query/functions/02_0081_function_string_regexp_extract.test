@@ -88,27 +88,27 @@ select regexp_extract('foo-bar-baz', '([a-z]+)-([a-z]+)-([a-z]+)', 10)
 query T rowsort
 SELECT id, regexp_extract_all(text_string, pattern, group_index) FROM regex_test;
 ----
-1 ['John','Doe','age']
-2 ['test']
-3 ['123']
-4 ['2023-05-15']
-5 ['FF0000','00FF00','0000FF']
+1 ["John","Doe","age"]
+2 ["test"]
+3 ["123"]
+4 ["2023-05-15"]
+5 ["FF0000","00FF00","0000FF"]
 6 []
 
 query T
 select regexp_extract_all('2023-04-15 2024-05-20', '(\d{4})-(\d{2})-(\d{2})', 0)
 ----
-['2023-04-15','2024-05-20']
+["2023-04-15","2024-05-20"]
 
 query T
 select regexp_extract_all('John 30, Jane 25', '(\w+) (\d+)', 1)
 ----
-['John','Jane']
+["John","Jane"]
 
 query T
 select regexp_extract_all('A1 B2 C3', '([A-Z])(\d)', 2)
 ----
-['1','2','3']
+["1","2","3"]
 
 query T
 select regexp_extract_all('no numbers here', '(\d+)', 0)
@@ -123,12 +123,12 @@ select regexp_extract_all('', '(\d+)', 0)
 query T
 select regexp_extract_all('Order-123-456 Order-789-012', 'Order-(\d+)-(\d+)', 2)
 ----
-['456','012']
+["456","012"]
 
 query T
 select regexp_extract_all('img.jpg readme', '(\w+)(?:\.(\w+))?', 2)
 ----
-['jpg','']
+["jpg",""]
 
 statement error
 select regexp_extract_all('A1 B2 C3', '([A-Z])(\d)', 3)
@@ -153,61 +153,61 @@ query T
 SELECT id, regexp_extract(input_string, '(\d+)-(\d+)-(\d+)', ['y', 'm', 'd']) AS extracted_date
 FROM regex_test_1 WHERE id = 1;
 ----
-1 {'y':'2023','m':'04','d':'15'}
+1 {"y":"2023","m":"04","d":"15"}
 
 query T
 SELECT id, regexp_extract(input_string, '(\d+)\.(\d+)\.(\d+)\.(\d+)', ['octet1', 'octet2', 'octet3', 'octet4']) AS extracted_ip
 FROM regex_test_1 WHERE id = 2;
 ----
-2 {'octet1':'192','octet2':'168','octet3':'1','octet4':'1'}
+2 {"octet1":"192","octet2":"168","octet3":"1","octet4":"1"}
 
 query T
 SELECT id, regexp_extract(input_string, '(\w+)_(\w+)_(\w+)', ['part1', 'part2', 'part3']) AS extracted_parts
 FROM regex_test_1 WHERE id = 3;
 ----
-3 {'part1':'hello','part2':'world','part3':'rust'}
+3 {"part1":"hello","part2":"world","part3":"rust"}
 
 query T
 SELECT id, regexp_extract(input_string, '(\d+)-(\d+)-(\d+)', ['x', 'y', 'z']) AS no_match
 FROM regex_test_1 WHERE id = 4;
 ----
-4 {'x':'','y':'','z':''}
+4 {"x":"","y":"","z":""}
 
 query T
 SELECT id, regexp_extract(input_string, '(\d+)-(\d+)-(\d+)', ['a', 'b', 'c']) AS empty_string_result
 FROM regex_test_1 WHERE id = 5;
 ----
-5 {'a':'','b':'','c':''}
+5 {"a":"","b":"","c":""}
 
 query T
 select regexp_extract('2023-04-15', '(\d+)-(\d+)-(\d+)', ['y', 'm', 'd']);
 ----
-{'y':'2023','m':'04','d':'15'}
+{"y":"2023","m":"04","d":"15"}
 
 query T
 SELECT regexp_extract('192.168.1.1', '(\d+)\.(\d+)\.(\d+)\.(\d+)', ['octet1', 'octet2', 'octet3', 'octet4']);
 ----
-{'octet1':'192','octet2':'168','octet3':'1','octet4':'1'}
+{"octet1":"192","octet2":"168","octet3":"1","octet4":"1"}
 
 query T
 SELECT regexp_extract('hello_world_rust', '(\w+)_([\w]+)_(\w+)', ['part1', 'part2', 'part3']);
 ----
-{'part1':'hello','part2':'world','part3':'rust'}
+{"part1":"hello","part2":"world","part3":"rust"}
 
 query T
 SELECT regexp_extract('no-match-here', '(\d+)-(\d+)-(\d+)', ['x', 'y', 'z']);
 ----
-{'x':'','y':'','z':''}
+{"x":"","y":"","z":""}
 
 query T
 SELECT regexp_extract('', '(\d+)-(\d+)-(\d+)', ['a', 'b', 'c']);
 ----
-{'a':'','b':'','c':''}
+{"a":"","b":"","c":""}
 
 query T
 select regexp_extract('2023-04-15', '(\d+)-(\d+)-(\d+)', ['y', 'm']);
 ----
-{'y':'2023','m':'04'}
+{"y":"2023","m":"04"}
 
 statement error
 select regexp_extract('2023-04-15', '(\d+)-(\d+)', ['y', 'm', 'd']);
