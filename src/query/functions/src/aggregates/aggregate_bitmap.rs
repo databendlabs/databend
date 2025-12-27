@@ -41,6 +41,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::intersection_with_serialized;
 use databend_common_io::prelude::BinaryWrite;
 use num_traits::AsPrimitive;
 
@@ -153,6 +154,8 @@ macro_rules! with_bitmap_op_mapped_type {
 
 trait BitmapOperate: Send + Sync + 'static {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap);
+
+    fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()>;
 }
 
 struct BitmapAndOp;
@@ -167,11 +170,20 @@ impl BitmapOperate for BitmapAndOp {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitand_assign(rhs);
     }
+
+    fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+        intersection_with_serialized(lhs, buf)
+    }
 }
 
 impl BitmapOperate for BitmapOrOp {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitor_assign(rhs);
+    }
+
+    fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+        lhs.bitor_assign(deserialize_bitmap(buf)?);
+        Ok(())
     }
 }
 
@@ -179,11 +191,21 @@ impl BitmapOperate for BitmapXorOp {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitxor_assign(rhs);
     }
+
+    fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+        lhs.bitxor_assign(deserialize_bitmap(buf)?);
+        Ok(())
+    }
 }
 
 impl BitmapOperate for BitmapNotOp {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.sub_assign(rhs);
+    }
+
+    fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+        lhs.sub_assign(deserialize_bitmap(buf)?);
+        Ok(())
     }
 }
 
@@ -209,7 +231,17 @@ impl BitmapAggState {
         }
     }
 
-    fn add<OP: BitmapOperate>(&mut self, other: HybridBitmap) {
+    fn add<OP: BitmapOperate>(&mut self, other: &[u8]) -> Result<()> {
+        match &mut self.rb {
+            Some(v) => OP::operate_buf(v, other),
+            None => {
+                self.rb = Some(deserialize_bitmap(other)?);
+                Ok(())
+            }
+        }
+    }
+
+    fn add_bitmap<OP: BitmapOperate>(&mut self, other: HybridBitmap) {
         match &mut self.rb {
             Some(v) => {
                 OP::operate(v, other);
@@ -265,13 +297,11 @@ where
                 if !valid {
                     continue;
                 }
-                let rb = deserialize_bitmap(data)?;
-                state.add::<OP>(rb);
+                state.add::<OP>(data)?;
             }
         } else {
             for data in view.iter() {
-                let rb = deserialize_bitmap(data)?;
-                state.add::<OP>(rb);
+                state.add::<OP>(data)?;
             }
         }
         Ok(())
@@ -288,8 +318,7 @@ where
 
         for (data, addr) in view.iter().zip(places.iter().cloned()) {
             let state = AggrState::new(addr, loc).get::<BitmapAggState>();
-            let rb = deserialize_bitmap(data)?;
-            state.add::<OP>(rb);
+            state.add::<OP>(data)?;
         }
         Ok(())
     }
@@ -298,8 +327,7 @@ where
         let view = entries[0].downcast::<BitmapType>().unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = view.index(row) {
-            let rb = deserialize_bitmap(data)?;
-            state.add::<OP>(rb);
+            state.add::<OP>(data)?;
         }
         Ok(())
     }
@@ -344,8 +372,7 @@ where
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    let rb = deserialize_bitmap(data)?;
-                    state.add::<OP>(rb);
+                    state.add::<OP>(data)?;
                 }
             }
         } else {
@@ -355,8 +382,7 @@ where
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    let rb = deserialize_bitmap(data)?;
-                    state.add::<OP>(rb);
+                    state.add::<OP>(data)?;
                 }
             }
         }
@@ -368,7 +394,7 @@ where
         let other = rhs.get::<BitmapAggState>();
 
         if let Some(rb) = other.rb.take() {
-            state.add::<OP>(rb);
+            state.add_bitmap::<OP>(rb);
         }
         Ok(())
     }
@@ -532,8 +558,7 @@ where
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    let rb = deserialize_bitmap(data)?;
-                    state.add::<BitmapOrOp>(rb);
+                    state.add::<BitmapOrOp>(data)?;
                 }
             }
         } else {
@@ -542,8 +567,7 @@ where
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    let rb = deserialize_bitmap(data)?;
-                    state.add::<BitmapOrOp>(rb);
+                    state.add::<BitmapOrOp>(data)?;
                 }
             }
         }
@@ -555,7 +579,7 @@ where
         let other = rhs.get::<BitmapAggState>();
 
         if let Some(rb) = other.rb.take() {
-            state.add::<BitmapOrOp>(rb);
+            state.add_bitmap::<BitmapOrOp>(rb);
         }
         Ok(())
     }

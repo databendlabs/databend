@@ -37,6 +37,7 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::bitmap_len;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
@@ -154,9 +155,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match deserialize_bitmap(arg) {
-                Ok(rb) => {
-                    builder.push(rb.len());
+
+            match bitmap_len(arg) {
+                Ok(n) => {
+                    builder.push(n);
                 }
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
