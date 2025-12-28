@@ -313,8 +313,8 @@ impl Operator for Scan {
                     })
                 };
                 column_stats.insert(*k, ColumnStat {
-                    min,
-                    max,
+                    min: min.clone(),
+                    max: max.clone(),
                     ndv,
                     null_count: col_stat.null_count,
                     origin_min: min,
