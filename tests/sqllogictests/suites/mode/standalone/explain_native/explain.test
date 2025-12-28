@@ -644,6 +644,43 @@ AggregateFinal
                 └── estimated rows: 1.00
 
 query T
+explain select 'test_str' as str, count(distinct a, b) from t1;
+----
+EvalScalar
+├── output columns: [count(DISTINCT a, b) (#2), str (#3)]
+├── expressions: ['test_str']
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [count(DISTINCT a, b) (#2)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [t1.a (#0), t1.b (#1)]
+            ├── group by: [a, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a, b]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
 explain select count_distinct(a) from t1;
 ----
 AggregateFinal
