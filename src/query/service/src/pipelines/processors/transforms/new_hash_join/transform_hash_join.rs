@@ -16,7 +16,6 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -38,21 +37,17 @@ pub struct TransformHashJoin {
     probe_port: Arc<InputPort>,
     joined_port: Arc<OutputPort>,
 
-    plan_id: u32,
     stage: Stage,
     join: Box<dyn Join>,
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
     projection: ColumnSet,
     rf_desc: Arc<RuntimeFiltersDesc>,
-    instant: Instant,
-    probe_rows: usize,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
 }
 
 impl TransformHashJoin {
     pub fn create(
-        plan_id: u32,
         build_port: Arc<InputPort>,
         probe_port: Arc<InputPort>,
         joined_port: Arc<OutputPort>,
@@ -70,7 +65,6 @@ impl TransformHashJoin {
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
-            plan_id,
             build_port,
             probe_port,
             joined_port,
@@ -84,8 +78,6 @@ impl TransformHashJoin {
                 finished: false,
                 build_data: None,
             }),
-            probe_rows: 0,
-            instant: Instant::now(),
         })))
     }
 }
@@ -164,7 +156,6 @@ impl Processor for TransformHashJoin {
             }
             Stage::Probe(state) => {
                 if let Some(probe_data) = state.input_data.take() {
-                    self.probe_rows += probe_data.num_rows();
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
                     state.stream = Some(unsafe { std::mem::transmute(stream) });
@@ -225,19 +216,8 @@ impl Processor for TransformHashJoin {
 
                 Stage::BuildFinal(BuildFinalState::new())
             }
-            Stage::BuildFinal(_) => {
-                self.instant = Instant::now();
-                Stage::Probe(ProbeState::new())
-            }
-            Stage::Probe(_) => {
-                log::info!(
-                    "[NewHashJoin] {} HashJoin Probe completed: {} rows in {:?}",
-                    self.plan_id,
-                    self.probe_rows,
-                    self.instant.elapsed()
-                );
-                Stage::ProbeFinal(ProbeFinalState::new())
-            }
+            Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
+            Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
             Stage::ProbeFinal(state) => match state.finished {
                 true => Stage::Finished,
                 false => Stage::ProbeFinal(ProbeFinalState {
