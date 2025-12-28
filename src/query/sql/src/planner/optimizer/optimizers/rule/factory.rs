@@ -61,6 +61,7 @@ use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
+use crate::optimizer::optimizers::rule::RuleShrinkGroupByType;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
 
@@ -118,6 +119,7 @@ impl RuleFactory {
             }
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
+            RuleID::ShrinkGroupByType => Ok(Box::new(RuleShrinkGroupByType::new(metadata))),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
             RuleID::CommuteJoinBaseTable => Ok(Box::new(RuleCommuteJoinBaseTable::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),

@@ -317,6 +317,8 @@ impl Operator for Scan {
                     max,
                     ndv,
                     null_count: col_stat.null_count,
+                    origin_min: min,
+                    origin_max: max,
                     histogram,
                 });
             }

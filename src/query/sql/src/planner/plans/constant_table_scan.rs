@@ -226,6 +226,8 @@ impl Operator for ConstantTableScan {
                 max,
                 ndv: Ndv::Stat(ndv as _),
                 null_count,
+                origin_min: min,
+                origin_max: max,
                 histogram,
             };
             column_stats.insert(*index, column_stat);

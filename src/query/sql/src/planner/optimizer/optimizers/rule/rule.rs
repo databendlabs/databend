@@ -57,6 +57,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownLimitScan,
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
+        RuleID::ShrinkGroupByType,
         RuleID::TryApplyAggIndex,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
@@ -132,6 +133,7 @@ pub enum RuleID {
     HierarchicalGroupingSetsToUnion,
     SplitAggregate,
     FoldCountAggregate,
+    ShrinkGroupByType,
     PushDownPrewhere,
     TryApplyAggIndex,
     CommuteJoin,
@@ -183,6 +185,7 @@ impl Display for RuleID {
             RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
+            RuleID::ShrinkGroupByType => write!(f, "ShrinkGroupByType"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
