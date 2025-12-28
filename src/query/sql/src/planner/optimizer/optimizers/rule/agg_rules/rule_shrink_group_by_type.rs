@@ -91,6 +91,10 @@ impl Rule for RuleShrinkGroupByType {
                 continue;
             };
 
+            if target_type == *col_ref.column.data_type {
+                continue;
+            }
+
             let mut writer = self.metadata.write();
             let shrink_index = writer.add_derived_column(
                 format!("{}_shrink", col_ref.column.column_name),
@@ -102,7 +106,7 @@ impl Rule for RuleShrinkGroupByType {
                 format!("{}_shrink", col_ref.column.column_name),
                 shrink_index,
                 Box::new(target_type.clone()),
-                Visibility::Visible,
+                Visibility::InVisible,
             )
             .build();
 
