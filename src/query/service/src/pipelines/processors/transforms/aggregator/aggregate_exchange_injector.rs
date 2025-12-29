@@ -15,38 +15,31 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_pipeline::core::Pipe;
-use databend_common_pipeline::core::PipeItem;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 
 use crate::physical_plans::AggregateShuffleMode;
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
-use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
-use crate::servers::flight::v1::exchange::ScatterTransform;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
@@ -246,13 +239,13 @@ impl FlightScatter for HashTableHashScatter {
     }
 }
 
-pub struct AggregateInjector {
+pub struct AggregateInjector<const ENABLE_EXPERIMENT: bool> {
     ctx: Arc<QueryContext>,
     aggregator_params: Arc<AggregatorParams>,
     shuffle_mode: AggregateShuffleMode,
 }
 
-impl AggregateInjector {
+impl<const ENABLE_EXPERIMENT: bool> AggregateInjector<ENABLE_EXPERIMENT> {
     pub fn create(
         ctx: Arc<QueryContext>,
         params: Arc<AggregatorParams>,
@@ -266,7 +259,7 @@ impl AggregateInjector {
     }
 }
 
-impl ExchangeInjector for AggregateInjector {
+impl ExchangeInjector for AggregateInjector<false> {
     fn flight_scatter(
         &self,
         _: &Arc<QueryContext>,
@@ -285,11 +278,7 @@ impl ExchangeInjector for AggregateInjector {
     }
 
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        if self.aggregator_params.enable_experiment_aggregate {
-            None
-        } else {
-            Some(Arc::new(AggregateExchangeSorting {}))
-        }
+        Some(Arc::new(AggregateExchangeSorting {}))
     }
 
     fn apply_merge_serializer(
@@ -300,23 +289,21 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
 
-        if !self.aggregator_params.enable_experiment_aggregate {
-            let operator = DataOperator::instance().spill_operator();
-            let location_prefix = self.ctx.query_id_spill_prefix();
+        let operator = DataOperator::instance().spill_operator();
+        let location_prefix = self.ctx.query_id_spill_prefix();
 
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
-        }
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                TransformAggregateSpillWriter::try_create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    params.clone(),
+                    location_prefix.clone(),
+                )?,
+            ))
+        })?;
 
         pipeline.add_transform(|input, output| {
             TransformAggregateSerializer::try_create(input, output, params.clone())
@@ -375,52 +362,26 @@ impl ExchangeInjector for AggregateInjector {
         pipeline.add_transform(|input, output| {
             TransformAggregateDeserializer::try_create(input, output, &params.schema)
         })?;
-        if self.aggregator_params.enable_experiment_aggregate {
-            let output_len = match &self.shuffle_mode {
-                AggregateShuffleMode::Row => {
-                    // add a resize processor to avoid all spilled bucket flow into one reader processor
-                    let output_len = pipeline.output_len();
-                    pipeline.resize(output_len, true)?;
-
-                    pipeline.add_transform(|input, output| {
-                        let reader = NewAggregateSpillReader::try_create(self.ctx.clone())?;
-                        Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
-                            input, output, reader,
-                        )))
-                    })?;
-                    let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-                    pipeline.add_transform(|input, output| {
-                        Ok(ScatterTransform::create(
-                            input,
-                            output,
-                            Arc::new(Box::new(HashTableHashScatter {
-                                buckets: max_threads,
-                                aggregate_params: self.aggregator_params.clone(),
-                            })),
-                        ))
-                    })?;
-                    max_threads
-                }
-                AggregateShuffleMode::Bucket(hint) => {
-                    let local_id = self.ctx.get_cluster().local_id.clone();
-                    let thread_hint = hint
-                        .iter()
-                        .find(|(id, _)| *id == local_id)
-                        .expect("this node not in hint")
-                        .1 as usize;
-                    thread_hint
-                }
-            };
-            let input_len = pipeline.output_len();
-            let transform = ExchangeShuffleTransform::create(input_len, output_len, output_len);
-            let inputs = transform.get_inputs();
-            let outputs = transform.get_outputs();
-            pipeline.add_pipe(Pipe::create(input_len, output_len, vec![PipeItem::create(
-                ProcessorPtr::create(Box::new(transform)),
-                inputs,
-                outputs,
-            )]));
-        }
         Ok(())
+    }
+}
+
+impl ExchangeInjector for AggregateInjector<true> {
+    fn flight_scatter(
+        &self,
+        _: &Arc<QueryContext>,
+        exchange: &DataExchange,
+    ) -> Result<Arc<Box<dyn FlightScatter>>> {
+        match exchange {
+            DataExchange::Merge(_) => unreachable!(),
+            DataExchange::Broadcast(_) => unreachable!(),
+            DataExchange::NodeToNodeExchange(exchange) => match self.shuffle_mode {
+                AggregateShuffleMode::Row => Ok(Arc::new(Box::new(HashTableHashScatter {
+                    buckets: exchange.destination_ids.len(),
+                    aggregate_params: self.aggregator_params.clone(),
+                }))),
+                AggregateShuffleMode::Bucket(_) => {}
+            },
+        }
     }
 }

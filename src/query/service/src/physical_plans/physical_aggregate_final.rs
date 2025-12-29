@@ -187,11 +187,19 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = AggregateInjector::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            );
+            builder.exchange_injector = if params.enable_experiment_aggregate {
+                AggregateInjector::<true>::create(
+                    builder.ctx.clone(),
+                    params.clone(),
+                    self.shuffle_mode.clone(),
+                )
+            } else {
+                AggregateInjector::<false>::create(
+                    builder.ctx.clone(),
+                    params.clone(),
+                    self.shuffle_mode.clone(),
+                )
+            };
         }
 
         self.input.build_pipeline(builder)?;
