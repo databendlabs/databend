@@ -41,15 +41,16 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::scatter_partitioned_payload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
@@ -457,44 +458,25 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                     .spillers
                     .finish(self.is_row_shuffle, &self.dispatch_method)?;
 
-                let partition_count = hashtable.payload.partition_count();
-                let mut payloads = Vec::with_capacity(partition_count);
-
                 self.statistics.log_finish_statistics(&hashtable);
-                dbg!(&hashtable.payload.payloads.len());
-                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    payloads.push(AggregateMeta::create_agg_payload(
-                        bucket as isize,
-                        payload,
-                        partition_count,
-                    ));
-                }
 
-                if self.is_row_shuffle {
-                    blocks.extend(payloads.into_iter().map(DataBlock::empty_with_meta))
-                } else if self.dispatch_method.len() == 1 {
-                    blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                        payloads
-                            .into_iter()
-                            .map(DataBlock::empty_with_meta)
-                            .collect(),
-                    )))
-                } else {
-                    let mut chunks = Vec::with_capacity(self.dispatch_method.len());
-                    for bucket_num in self.dispatch_method.iter() {
-                        let chunk: Vec<AggregateMeta> = payloads
-                            .drain(0..*bucket_num as usize)
-                            .map(|payload| {
-                                AggregateMeta::downcast_from(payload)
-                                    .expect("AggregateMeta is expected")
-                            })
-                            .collect();
-                        chunks.push(AggregateMeta::create_partitioned(None, chunk));
-                    }
-                    blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                        chunks.into_iter().map(DataBlock::empty_with_meta).collect(),
-                    )))
-                }
+                let payloads = hashtable
+                    .payload
+                    .payloads
+                    .into_iter()
+                    .enumerate()
+                    .map(|(bucket, payload)| {
+                        AggregateMeta::AggregatePayload(AggregatePayload {
+                            bucket: bucket as isize,
+                            payload,
+                            max_partition_count: 0,
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                blocks.push(DataBlock::empty_with_meta(
+                    AggregateMeta::create_partitioned(None, payloads),
+                ));
                 blocks
             }
         })
