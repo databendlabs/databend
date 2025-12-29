@@ -46,15 +46,6 @@ impl Transform for ScatterTransform {
     const NAME: &'static str = "ScatterTransform";
 
     fn transform(&mut self, data: DataBlock) -> databend_common_exception::Result<DataBlock> {
-        if let Some(meta) = data.get_meta() {
-            if FlightSerializedMeta::downcast_ref_from(meta).is_some()
-                || ExchangeShuffleMeta::downcast_ref_from(meta).is_some()
-            {
-                // Already scattered or scattered and serialized, just pass through
-                return Ok(data);
-            }
-        }
-
         let blocks = self.scatter.execute(data)?;
 
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
