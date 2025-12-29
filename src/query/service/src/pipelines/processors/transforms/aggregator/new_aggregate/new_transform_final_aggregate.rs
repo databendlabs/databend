@@ -40,6 +40,7 @@ use super::new_final_aggregate_state::RoundPhase;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 
 pub struct NewFinalAggregateTransform {
     input: Arc<InputPort>,
@@ -61,6 +62,8 @@ pub struct NewFinalAggregateTransform {
 
     /// spill
     spiller: NewAggregateSpiller,
+
+    statistics: AggregationStatistics,
 }
 
 impl NewFinalAggregateTransform {
@@ -88,6 +91,7 @@ impl NewFinalAggregateTransform {
             barrier,
             shared_state,
             spiller,
+            statistics: AggregationStatistics::new("NewFinalAggregate"),
         }))
     }
 
@@ -219,6 +223,9 @@ impl NewFinalAggregateTransform {
             match meta {
                 AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                     Some(ht) => {
+                        let rows = payload.data_block.num_rows();
+                        let bytes = payload.data_block.memory_size();
+                        self.statistics.record_block(rows, bytes);
                         let payload = payload.convert_to_partitioned_payload(
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
@@ -229,6 +236,9 @@ impl NewFinalAggregateTransform {
                         ht.combine_payloads(&payload, &mut self.flush_state)?;
                     }
                     None => {
+                        let rows = payload.data_block.num_rows();
+                        let bytes = payload.data_block.memory_size();
+                        self.statistics.record_block(rows, bytes);
                         agg_hashtable = Some(payload.convert_to_aggregate_table(
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
@@ -241,9 +251,15 @@ impl NewFinalAggregateTransform {
                 },
                 AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
                     Some(ht) => {
+                        let rows = payload.payload.len();
+                        let bytes = payload.payload.memory_size();
+                        self.statistics.record_block(rows, bytes);
                         ht.combine_payload(&payload.payload, &mut self.flush_state)?;
                     }
                     None => {
+                        let rows = payload.payload.len();
+                        let bytes = payload.payload.memory_size();
+                        self.statistics.record_block(rows, bytes);
                         let capacity =
                             AggregateHashTable::get_capacity_for_count(payload.payload.len());
                         let mut hashtable = AggregateHashTable::new_with_capacity(
@@ -263,6 +279,7 @@ impl NewFinalAggregateTransform {
         }
 
         let output_block = if let Some(mut ht) = agg_hashtable {
+            self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
             self.flush_state.clear();
 

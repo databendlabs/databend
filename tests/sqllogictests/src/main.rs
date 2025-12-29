@@ -64,14 +64,15 @@ use std::sync::LazyLock;
 static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
     vec![
         (Box::new(ClientType::MySQL), 3),
-        (
-            Box::new(ClientType::Ttc {
-                image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
-                port: TTC_PORT_START,
-                query_result_format: QueryResultFormat::Arrow,
-            }),
-            5,
-        ),
+        // disable for now due to client change
+        // (
+        //     Box::new(ClientType::Ttc {
+        //         image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
+        //         port: TTC_PORT_START,
+        //         query_result_format: QueryResultFormat::Arrow,
+        //     }),
+        //     5,
+        // ),
         (
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),

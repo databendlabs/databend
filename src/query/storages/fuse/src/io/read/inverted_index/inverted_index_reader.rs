@@ -175,7 +175,7 @@ impl InvertedIndexReader {
 
         let (matched_rows, matched_scores) = if self.has_score {
             let collector = TopDocs::with_limit(self.row_count as usize);
-            let docs = searcher.search(&query, &collector)?;
+            let docs = searcher.search(&query, &collector.order_by_score())?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
             let mut matched_scores = Vec::with_capacity(docs.len());
@@ -436,7 +436,7 @@ impl InvertedIndexReader {
                 block_postings_map.insert(term_id, block_postings);
             } else if slice_name.starts_with("pos") {
                 let term_id = id;
-                let position_reader = PositionReader::open(slice_data)?;
+                let position_reader = PositionReader::open(slice_data, None)?;
                 position_reader_map.insert(term_id, position_reader);
             } else if slice_name.starts_with("fieldnorm") {
                 let field_id = id as u32;

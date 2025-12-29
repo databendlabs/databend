@@ -61,7 +61,7 @@ jobs:
       - self-hosted
       - X64
       - Linux
-      - 4c16g
+      - 4c
       - aws
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 4c16g
+      - 4c
       - aws
     strategy:
       fail-fast: false

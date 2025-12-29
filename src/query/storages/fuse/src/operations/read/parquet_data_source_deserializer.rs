@@ -164,12 +164,6 @@ impl DeserializeDataTransform {
                 .map(|f| f.filter_id)
                 .collect::<Vec<_>>();
             filter_ids.sort_unstable();
-            log::info!(
-                "RUNTIME-FILTER: scan_id={} bloom_filters={} filter_ids={:?}",
-                self.scan_id,
-                bloom_filters.len(),
-                filter_ids
-            );
             self.cached_runtime_filter = Some(bloom_filters);
         }
 

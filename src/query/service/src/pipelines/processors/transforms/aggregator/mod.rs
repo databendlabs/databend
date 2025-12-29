@@ -18,6 +18,7 @@ mod aggregator_params;
 mod build_partition_bucket;
 mod new_aggregate;
 mod serde;
+mod statistics;
 mod transform_aggregate_expand;
 mod transform_aggregate_final;
 mod transform_aggregate_partial;
