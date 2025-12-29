@@ -240,9 +240,8 @@ impl<'a> ParquetReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
-        let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
-        let transformer = source_type
-            .need_transformer()
+        let (_, _, output_schema, output_field_paths) = self.built_output.as_ref().unwrap();
+        let transformer = (source_type.need_transformer() && output_field_paths.is_none())
             .then(|| RecordBatchTransformer::build(output_schema.clone()));
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
@@ -277,8 +276,10 @@ impl<'a> ParquetReaderBuilder<'a> {
         let transformer = source_type
             .need_transformer()
             .then(|| {
-                self.built_output.as_ref().map(|(_, _, output_schema, _)| {
-                    RecordBatchTransformer::build(output_schema.clone())
+                self.built_output.as_ref().and_then(|(_, _, output_schema, output_field_paths)| {
+                    output_field_paths
+                        .is_none()
+                        .then(|| RecordBatchTransformer::build(output_schema.clone()))
                 })
             })
             .flatten();

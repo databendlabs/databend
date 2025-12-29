@@ -27,6 +27,7 @@ use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::DistributionLevel;
@@ -40,7 +41,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -407,13 +410,9 @@ impl IcebergTable {
 
         if let Some(push_downs) = &push_downs {
             if let Some(projection) = &push_downs.projection {
-                scan = scan.select(
-                    projection
-                        .project_schema(&self.schema())
-                        .fields
-                        .iter()
-                        .map(|v| v.name.clone()),
-                );
+                let select_fields =
+                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?;
+                scan = scan.select(select_fields);
             }
             if let Some(filter) = &push_downs.filters {
                 let (_, predicate) = PredicateBuilder::build(&filter.filter);
@@ -448,6 +447,84 @@ impl IcebergTable {
             PartStatistics::new_exact(read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
+    }
+
+    fn projection_to_iceberg_select_fields(
+        projection: &Projection,
+        schema: &TableSchema,
+    ) -> Result<Vec<String>> {
+        match projection {
+            Projection::Columns(_) => Ok(projection
+                .project_schema(schema)
+                .fields
+                .iter()
+                .map(|v| v.name.clone())
+                .collect()),
+            Projection::InnerColumns(path_indices) => {
+                let fields = schema.fields();
+                let mut names = Vec::with_capacity(path_indices.len());
+                for path in path_indices.values() {
+                    names.push(Self::inner_column_path_to_name(fields, path)?);
+                }
+                Ok(names)
+            }
+        }
+    }
+
+    fn inner_column_path_to_name(
+        fields: &[TableField],
+        path: &[FieldIndex],
+    ) -> Result<String> {
+        if path.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "Inner column path should not be empty".to_string(),
+            ));
+        }
+
+        let field = fields.get(path[0]).ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Inner column path {:?} is out of range",
+                path
+            ))
+        })?;
+        let mut name_parts = Vec::with_capacity(path.len());
+        name_parts.push(field.name().clone());
+
+        let mut current_type = field.data_type().remove_nullable();
+        for index in path.iter().skip(1) {
+            match &current_type {
+                TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                } => {
+                    let inner_name = fields_name.get(*index).ok_or_else(|| {
+                        ErrorCode::BadArguments(format!(
+                            "Inner column path {:?} is out of range for {}",
+                            path,
+                            name_parts.join(".")
+                        ))
+                    })?;
+                    name_parts.push(inner_name.clone());
+                    let inner_type = fields_type.get(*index).ok_or_else(|| {
+                        ErrorCode::BadArguments(format!(
+                            "Inner column path {:?} is out of range for {}",
+                            path,
+                            name_parts.join(".")
+                        ))
+                    })?;
+                    current_type = inner_type.remove_nullable();
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Inner column path {:?} is invalid for non-tuple field {}",
+                        path,
+                        name_parts.join(".")
+                    )));
+                }
+            }
+        }
+
+        Ok(name_parts.join("."))
     }
 
     fn convert_orc_schema(schema: &Schema) -> Schema {
