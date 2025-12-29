@@ -772,12 +772,6 @@ impl NativeDeserializeDataTransform {
                     .map(|f| f.filter_id)
                     .collect::<Vec<_>>();
                 filter_ids.sort_unstable();
-                log::info!(
-                    "RUNTIME-FILTER: scan_id={} bloom_filters={} filter_ids={:?}",
-                    self.scan_id,
-                    bloom_filters.len(),
-                    filter_ids
-                );
                 self.bloom_runtime_filter = Some(bloom_filters);
                 if self.filter_executor.is_none() {
                     self.filter_executor = Some(new_dummy_filter_executor(self.func_ctx.clone()));
