@@ -19,17 +19,24 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 
+use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::Visibility;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::ComparisonOp;
+use crate::plans::Filter;
+use crate::plans::FunctionCall;
+use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
@@ -39,17 +46,24 @@ use crate::plans::ScalarItem;
 use crate::plans::Scan;
 
 #[derive(Clone, Debug)]
-struct RelationWithPath {
-    expr: Arc<SExpr>,
-    /// Join-tree path from the current inner-join root to this relation.
-    path: Vec<usize>,
-}
-
-#[derive(Clone, Debug)]
 struct MultiJoin {
-    relations: Vec<RelationWithPath>,
+    relations: Vec<Arc<SExpr>>,
     equi_conditions: Vec<JoinEquiCondition>,
     non_equi_conditions: Vec<ScalarExpr>,
+}
+
+impl MultiJoin {
+    fn build_equivalence_classes(&self) -> Result<UnionFind> {
+        let mut uf = UnionFind::default();
+        for cond in self.equi_conditions.iter() {
+            if let (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) =
+                (&cond.left, &cond.right)
+            {
+                uf.union(l.column.index, r.column.index);
+            }
+        }
+        Ok(uf)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -70,28 +84,28 @@ struct AggFuncSignature {
 #[derive(Clone, Debug)]
 struct Candidate {
     table_id: u64,
-    group_key: Vec<GroupKeyItemSignature>,
-    group_key_indexes: HashMap<GroupKeyItemSignature, IndexType>,
+    group_key: GroupKeyItemSignature,
+    group_key_index: IndexType,
     agg_func_indexes: Vec<(AggFuncSignature, IndexType)>,
     strict: bool,
-    path: Vec<usize>,
+    relation_idx: usize,
 }
 
 pub struct RuleEliminateSelfJoin {
     id: RuleID,
     matchers: Vec<Matcher>,
-    metadata: MetadataRef,
+    opt_ctx: Arc<OptimizerContext>,
 }
 
 impl RuleEliminateSelfJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             id: RuleID::EliminateSelfJoin,
             matchers: vec![Matcher::MatchOp {
                 op_type: RelOp::Join,
                 children: vec![Matcher::Leaf, Matcher::Leaf],
             }],
-            metadata,
+            opt_ctx,
         }
     }
 
@@ -112,52 +126,35 @@ impl RuleEliminateSelfJoin {
     }
 
     fn extract_multi_join(&self, s_expr: &SExpr) -> Result<Option<MultiJoin>> {
-        let mut path = Vec::new();
-        self.extract_multi_join_with_path(s_expr, &mut path)
-    }
-
-    fn extract_multi_join_with_path(
-        &self,
-        s_expr: &SExpr,
-        current_path: &mut Vec<usize>,
-    ) -> Result<Option<MultiJoin>> {
         match s_expr.plan() {
-            RelOperator::Join(join) if matches!(join.join_type, JoinType::Inner) => {
+            RelOperator::Join(join)
+                if matches!(join.join_type, JoinType::Inner) && !join.has_null_equi_condition() =>
+            {
+                let mut relations = Vec::new();
                 let mut equi_conditions = join.equi_conditions.clone();
                 let mut non_equi_conditions = join.non_equi_conditions.clone();
-                let mut relations = Vec::new();
 
-                current_path.push(0);
-                match self.extract_multi_join_with_path(s_expr.child(0)?, current_path)? {
+                match self.extract_multi_join(s_expr.child(0)?)? {
                     Some(mut left) => {
                         relations.append(&mut left.relations);
                         equi_conditions.append(&mut left.equi_conditions);
                         non_equi_conditions.append(&mut left.non_equi_conditions);
                     }
                     None => {
-                        relations.push(RelationWithPath {
-                            expr: Arc::new(s_expr.child(0)?.clone()),
-                            path: current_path.clone(),
-                        });
+                        relations.push(Arc::new(s_expr.child(0)?.clone()));
                     }
                 }
-                current_path.pop();
 
-                current_path.push(1);
-                match self.extract_multi_join_with_path(s_expr.child(1)?, current_path)? {
+                match self.extract_multi_join(s_expr.child(1)?)? {
                     Some(mut right) => {
                         relations.append(&mut right.relations);
                         equi_conditions.append(&mut right.equi_conditions);
                         non_equi_conditions.append(&mut right.non_equi_conditions);
                     }
                     None => {
-                        relations.push(RelationWithPath {
-                            expr: Arc::new(s_expr.child(1)?.clone()),
-                            path: current_path.clone(),
-                        });
+                        relations.push(Arc::new(s_expr.child(1)?.clone()));
                     }
                 }
-                current_path.pop();
 
                 Ok(Some(MultiJoin {
                     relations,
@@ -170,18 +167,18 @@ impl RuleEliminateSelfJoin {
     }
 
     fn eliminate_multi_join(&self, multi_join: MultiJoin, original: &SExpr) -> Result<SExpr> {
-        let metadata = self.metadata.read();
+        let mut eq_classes = multi_join.build_equivalence_classes()?;
+        let metadata_ref: MetadataRef = self.opt_ctx.get_metadata();
+        let metadata = metadata_ref.read();
 
         let mut candidates = Vec::new();
-        for relation in multi_join.relations.iter() {
-            if let Some(candidate) =
-                self.try_parse_candidate(&relation.expr, &relation.path, &metadata)
-            {
+        for (relation_idx, relation) in multi_join.relations.iter().enumerate() {
+            if let Some(candidate) = self.try_parse_candidate(relation, relation_idx, &metadata) {
                 candidates.push(candidate);
             }
         }
 
-        let mut groups: HashMap<(u64, Vec<GroupKeyItemSignature>), Vec<Candidate>> = HashMap::new();
+        let mut groups: HashMap<(u64, GroupKeyItemSignature), Vec<Candidate>> = HashMap::new();
         for candidate in candidates.into_iter() {
             groups
                 .entry((candidate.table_id, candidate.group_key.clone()))
@@ -189,7 +186,7 @@ impl RuleEliminateSelfJoin {
                 .push(candidate);
         }
 
-        let mut remove_paths: HashSet<Vec<usize>> = HashSet::new();
+        let mut remove_relations: HashSet<usize> = HashSet::new();
         let mut removed_to_keep_column_mapping: HashMap<IndexType, IndexType> = HashMap::new();
         for (_key, group_candidates) in groups.iter() {
             let has_strict = group_candidates.iter().any(|c| c.strict);
@@ -209,47 +206,33 @@ impl RuleEliminateSelfJoin {
                 let Some(mapping) = Self::build_removed_to_keep_index_mapping(c, keep) else {
                     continue;
                 };
-                remove_paths.insert(c.path.clone());
+
+                if !eq_classes.same(c.group_key_index, keep.group_key_index) {
+                    continue;
+                }
+                remove_relations.insert(c.relation_idx);
                 removed_to_keep_column_mapping.extend(mapping);
             }
         }
 
-        if remove_paths.is_empty() {
+        if remove_relations.is_empty() {
             return Ok(original.clone());
         }
 
-        let mut path = Vec::new();
-        let mut rewritten = self
-            .remove_paths_from_inner_join_tree(original, &mut path, &remove_paths)?
-            .unwrap_or_else(|| original.clone());
+        let Some(rewritten) = self.build_new_join_tree(
+            &multi_join.relations,
+            &multi_join.equi_conditions,
+            &multi_join.non_equi_conditions,
+            &remove_relations,
+            &removed_to_keep_column_mapping,
+            &metadata,
+        )?
+        else {
+            return Ok(original.clone());
+        };
 
-        if !removed_to_keep_column_mapping.is_empty() {
-            let output_columns = rewritten.derive_relational_prop()?.output_columns.clone();
-            let mut items = Vec::new();
-            for (old, new) in removed_to_keep_column_mapping.iter() {
-                if old == new {
-                    continue;
-                }
-                if output_columns.contains(old) {
-                    continue;
-                }
-                if !output_columns.contains(new) {
-                    continue;
-                }
-                let scalar = Self::make_bound_column_ref(&metadata, *new);
-                items.push(ScalarItem {
-                    scalar,
-                    index: *old,
-                });
-            }
-
-            if !items.is_empty() {
-                rewritten = SExpr::create_unary(
-                    Arc::new(RelOperator::EvalScalar(crate::plans::EvalScalar { items })),
-                    Arc::new(rewritten),
-                );
-            }
-        }
+        let rewritten =
+            Self::project_columns(rewritten, &removed_to_keep_column_mapping, &metadata)?;
 
         Ok(rewritten)
     }
@@ -257,57 +240,57 @@ impl RuleEliminateSelfJoin {
     fn try_parse_candidate(
         &self,
         relation: &SExpr,
-        path: &[usize],
+        relation_idx: usize,
         metadata: &Metadata,
     ) -> Option<Candidate> {
         let mut strict = false;
         let mut node = relation;
 
         while matches!(node.plan(), RelOperator::EvalScalar(_)) {
-            node = node.child(0).ok()?;
+            node = node.unary_child();
         }
 
-        if matches!(node.plan(), RelOperator::Filter(_)) {
+        while matches!(node.plan(), RelOperator::Filter(_)) {
             strict = true;
-            node = node.child(0).ok()?;
+            node = node.unary_child();
         }
 
         if !self.core_candidate_matcher().matches(node) {
             return None;
         }
 
-        let final_agg = match node.plan() {
-            RelOperator::Aggregate(agg) => agg,
-            _ => return None,
-        };
+        let final_agg = node.plan().as_aggregate().unwrap();
 
-        if final_agg.group_items.is_empty() {
+        if final_agg.group_items.len() != 1 {
             return None;
         }
 
-        let group_key_indexes = Self::group_key_indexes(&final_agg.group_items, metadata)?;
-        let group_key = Self::group_key_signature(&final_agg.group_items, metadata)?;
+        let group_key = Self::group_key_signature(&final_agg.group_items[0], metadata)?;
+        let group_key_index = final_agg.group_items[0].index;
 
         let agg_func_indexes = Self::agg_func_indexes(&final_agg.aggregate_functions, metadata)?;
 
-        let scan = match node.child(0).ok()?.child(0).ok()?.child(0).ok()?.plan() {
-            RelOperator::Scan(scan) => scan,
-            _ => return None,
-        };
+        let scan = node
+            .unary_child()
+            .unary_child()
+            .unary_child()
+            .plan()
+            .as_scan()
+            .unwrap();
 
         let table_id = self.table_id_from_scan(scan, metadata)?;
 
         Some(Candidate {
             table_id,
             group_key,
-            group_key_indexes,
+            group_key_index,
             agg_func_indexes,
             strict,
-            path: path.to_vec(),
+            relation_idx,
         })
     }
 
-    fn group_key_item_signature(
+    fn group_key_signature(
         item: &crate::plans::ScalarItem,
         metadata: &Metadata,
     ) -> Option<GroupKeyItemSignature> {
@@ -322,28 +305,6 @@ impl RuleEliminateSelfJoin {
             column_position: base_col.column_position,
             column_name: base_col.column_name.clone(),
         })
-    }
-
-    fn group_key_signature(
-        group_items: &[crate::plans::ScalarItem],
-        metadata: &Metadata,
-    ) -> Option<Vec<GroupKeyItemSignature>> {
-        let mut sig = Vec::with_capacity(group_items.len());
-        for item in group_items.iter() {
-            sig.push(Self::group_key_item_signature(item, metadata)?);
-        }
-        Some(sig)
-    }
-
-    fn group_key_indexes(
-        group_items: &[crate::plans::ScalarItem],
-        metadata: &Metadata,
-    ) -> Option<HashMap<GroupKeyItemSignature, IndexType>> {
-        let mut sig = HashMap::with_capacity(group_items.len());
-        for item in group_items.iter() {
-            sig.insert(Self::group_key_item_signature(item, metadata)?, item.index);
-        }
-        Some(sig)
     }
 
     fn agg_func_signature(item: &ScalarItem, metadata: &Metadata) -> Option<AggFuncSignature> {
@@ -396,10 +357,7 @@ impl RuleEliminateSelfJoin {
     ) -> Option<HashMap<IndexType, IndexType>> {
         let mut mapping = HashMap::new();
 
-        for (sig, old_index) in remove.group_key_indexes.iter() {
-            let new_index = *keep.group_key_indexes.get(sig)?;
-            mapping.insert(*old_index, new_index);
-        }
+        mapping.insert(remove.group_key_index, keep.group_key_index);
 
         let mut keep_agg_by_sig: HashMap<&AggFuncSignature, Vec<IndexType>> = HashMap::new();
         for (sig, idx) in keep.agg_func_indexes.iter() {
@@ -420,15 +378,19 @@ impl RuleEliminateSelfJoin {
         Some(mapping)
     }
 
-    fn make_bound_column_ref(metadata: &Metadata, index: IndexType) -> ScalarExpr {
+    fn make_column_binding(metadata: &Metadata, index: IndexType) -> ColumnBinding {
         let entry = metadata.column(index);
-        let binding = ColumnBindingBuilder::new(
+        ColumnBindingBuilder::new(
             entry.name(),
             index,
             Box::new(entry.data_type()),
             Visibility::Visible,
         )
-        .build();
+        .build()
+    }
+
+    fn make_bound_column_ref(metadata: &Metadata, index: IndexType) -> ScalarExpr {
+        let binding = Self::make_column_binding(metadata, index);
         crate::plans::BoundColumnRef {
             span: None,
             column: binding,
@@ -436,44 +398,170 @@ impl RuleEliminateSelfJoin {
         .into()
     }
 
-    fn remove_paths_from_inner_join_tree(
+    fn project_columns(
+        rewritten: SExpr,
+        column_mapping: &HashMap<IndexType, IndexType>,
+        metadata: &Metadata,
+    ) -> Result<SExpr> {
+        let output_columns = rewritten.derive_relational_prop()?.output_columns.clone();
+        let mut items = Vec::new();
+        let mut has_mapping = false;
+
+        for col in output_columns.iter() {
+            let scalar = Self::make_bound_column_ref(metadata, *col);
+
+            // If there's a mapping from old to this column, output with old index
+            // Otherwise, output with its own index
+            if let Some((old, _)) = column_mapping.iter().find(|(_, new)| *new == col) {
+                has_mapping = true;
+                items.push(ScalarItem {
+                    scalar,
+                    index: *old,
+                });
+            } else {
+                items.push(ScalarItem {
+                    scalar,
+                    index: *col,
+                });
+            }
+        }
+
+        if !has_mapping {
+            return Ok(rewritten);
+        }
+
+        Ok(SExpr::create_unary(
+            Arc::new(RelOperator::EvalScalar(crate::plans::EvalScalar { items })),
+            Arc::new(rewritten),
+        ))
+    }
+
+    fn build_new_join_tree(
         &self,
-        s_expr: &SExpr,
-        current_path: &mut Vec<usize>,
-        remove_paths: &HashSet<Vec<usize>>,
+        relations: &[Arc<SExpr>],
+        equi_conditions: &[JoinEquiCondition],
+        non_equi_conditions: &[ScalarExpr],
+        remove_relations: &HashSet<usize>,
+        mapping: &HashMap<IndexType, IndexType>,
+        metadata: &Metadata,
     ) -> Result<Option<SExpr>> {
-        if remove_paths.contains(current_path) {
+        let mut kept_relations: Vec<Arc<SExpr>> = relations
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, rel)| {
+                if remove_relations.contains(&idx) {
+                    None
+                } else {
+                    Some(rel.clone())
+                }
+            })
+            .collect();
+
+        if kept_relations.is_empty() {
             return Ok(None);
         }
 
-        match s_expr.plan() {
-            RelOperator::Join(join) if matches!(join.join_type, JoinType::Inner) => {
-                current_path.push(0);
-                let left = self.remove_paths_from_inner_join_tree(
-                    s_expr.child(0)?,
-                    current_path,
-                    remove_paths,
-                )?;
-                current_path.pop();
+        // Step 1: replace column bindings in join conditions.
+        let mut equi_conditions = equi_conditions.to_vec();
+        let mut non_equi_conditions = non_equi_conditions.to_vec();
+        for (old, new) in mapping.iter() {
+            if old == new {
+                continue;
+            }
+            let new_column = Self::make_column_binding(metadata, *new);
+            for cond in equi_conditions.iter_mut() {
+                cond.left.replace_column_binding(*old, &new_column)?;
+                cond.right.replace_column_binding(*old, &new_column)?;
+            }
+            for cond in non_equi_conditions.iter_mut() {
+                cond.replace_column_binding(*old, &new_column)?;
+            }
+        }
 
-                current_path.push(1);
-                let right = self.remove_paths_from_inner_join_tree(
-                    s_expr.child(1)?,
-                    current_path,
-                    remove_paths,
-                )?;
-                current_path.pop();
+        // Step 2: rebuild a join tree from remaining relations (structure only).
+        let mut join_tree = kept_relations.remove(0);
+        for rel in kept_relations.into_iter() {
+            join_tree = Arc::new(SExpr::create_binary(
+                Arc::new(RelOperator::Join(Join::default())),
+                join_tree,
+                rel,
+            ));
+        }
 
-                match (left, right) {
-                    (None, None) => Ok(None),
-                    (Some(keep), None) | (None, Some(keep)) => Ok(Some(keep)),
-                    (Some(left), Some(right)) => {
-                        Ok(Some(SExpr::create_binary(s_expr.plan.clone(), left, right)))
-                    }
+        // Step 3: put all conditions into a single Filter above the join tree.
+        let mut predicates: Vec<ScalarExpr> = Vec::with_capacity(
+            equi_conditions
+                .len()
+                .saturating_add(non_equi_conditions.len()),
+        );
+        for cond in equi_conditions.into_iter() {
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: String::from(ComparisonOp::Equal.to_func_name()),
+                params: vec![],
+                arguments: vec![cond.left, cond.right],
+            }));
+        }
+        predicates.extend(non_equi_conditions);
+
+        // Safety check: all predicates must be evaluable from the rebuilt tree.
+        if !predicates.is_empty() {
+            let output_columns = join_tree.derive_relational_prop()?.output_columns.clone();
+            for pred in predicates.iter() {
+                if !pred.used_columns().is_subset(&output_columns) {
+                    return Ok(None);
                 }
             }
-            _ => Ok(Some(s_expr.clone())),
         }
+
+        let root = if predicates.is_empty() {
+            join_tree.as_ref().clone()
+        } else {
+            SExpr::create_unary(
+                Arc::new(RelOperator::Filter(Filter { predicates })),
+                join_tree,
+            )
+        };
+
+        let root = self.push_down_filter(root)?;
+        Ok(Some(root))
+    }
+
+    fn push_down_filter(&self, root: SExpr) -> Result<SExpr> {
+        static RULES: &[RuleID] = &[RuleID::PushDownFilterJoin, RuleID::EliminateFilter];
+        let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES);
+        optimizer.optimize_sync(&root)
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+struct UnionFind {
+    parent: HashMap<IndexType, IndexType>,
+}
+
+impl UnionFind {
+    fn find(&mut self, x: IndexType) -> IndexType {
+        let parent = *self.parent.get(&x).unwrap_or(&x);
+        if parent == x {
+            self.parent.insert(x, x);
+            return x;
+        }
+        let root = self.find(parent);
+        self.parent.insert(x, root);
+        root
+    }
+
+    fn union(&mut self, a: IndexType, b: IndexType) {
+        let ra = self.find(a);
+        let rb = self.find(b);
+        if ra == rb {
+            return;
+        }
+        self.parent.insert(rb, ra);
+    }
+
+    fn same(&mut self, a: IndexType, b: IndexType) -> bool {
+        self.find(a) == self.find(b)
     }
 }
 

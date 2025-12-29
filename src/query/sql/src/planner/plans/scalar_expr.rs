@@ -270,6 +270,30 @@ impl ScalarExpr {
         Ok(())
     }
 
+    pub fn replace_column_binding(
+        &mut self,
+        old: IndexType,
+        new_column: &ColumnBinding,
+    ) -> Result<()> {
+        struct ReplaceColumnBindingVisitor<'a> {
+            old: IndexType,
+            new_column: &'a ColumnBinding,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnBindingVisitor<'_> {
+            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+                if col.column.index == self.old {
+                    col.column = self.new_column.clone();
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = ReplaceColumnBindingVisitor { old, new_column };
+        visitor.visit(self)?;
+        Ok(())
+    }
+
     pub fn replace_sub_scalar(
         &mut self,
         from_scalar: ScalarExpr,
