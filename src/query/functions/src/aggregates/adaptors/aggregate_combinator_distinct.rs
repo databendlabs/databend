@@ -42,9 +42,11 @@ use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::CombinatorDescription;
 use super::StateAddr;
+use super::aggregate_distinct_state::AggregateDistinctDateState;
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateDistinctTimestampState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_null_result::AggregateNullResultFunction;
@@ -298,6 +300,26 @@ fn try_create(
                 }))
             }
         }),
+        [DataType::Timestamp] => Ok(Arc::new(AggregateDistinctCombinator::<
+            AggregateDistinctTimestampState,
+        > {
+            nested_name: nested_name.to_owned(),
+            arguments,
+            skip_null: false,
+            nested,
+            name,
+            _s: PhantomData,
+        })),
+        [DataType::Date] => Ok(Arc::new(AggregateDistinctCombinator::<
+            AggregateDistinctDateState,
+        > {
+            nested_name: nested_name.to_owned(),
+            arguments,
+            skip_null: false,
+            nested,
+            name,
+            _s: PhantomData,
+        })),
         [DataType::String] if matches!(nested_name, "count" | "uniq") => {
             Ok(Arc::new(AggregateDistinctCombinator::<
                 AggregateUniqStringState,

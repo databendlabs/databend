@@ -76,8 +76,17 @@ impl TransformExchangeDeserializer {
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        let data_block =
-            deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
+        let mut schema = self.schema.clone();
+        let mut arrow_schema = self.arrow_schema.clone();
+
+        if let Some(metadata) = &meta {
+            if let Some(dynamic_schema) = metadata.override_block_schema() {
+                arrow_schema = Arc::new(ArrowSchema::from(dynamic_schema.as_ref()));
+                schema = dynamic_schema;
+            }
+        }
+
+        let data_block = deserialize_block(dict, fragment_data, &schema, arrow_schema)?;
         if data_block.num_columns() == 0 {
             return Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta));
         }
