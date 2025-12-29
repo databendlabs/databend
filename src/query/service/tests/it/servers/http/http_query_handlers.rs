@@ -1771,7 +1771,7 @@ async fn test_max_size_per_page() -> Result<()> {
     assert!(reply.error.is_none(), "{:?}", reply.error);
     let target = (4_usize * 1024 * 1024) as f64;
     assert!(
-        (0.3..1.1).contains(&(body.len() as f64 / target)),
+        (0.9..1.1).contains(&(body.len() as f64 / target)),
         "body len {} rows {}",
         body.len(),
         reply.data.len()
