@@ -57,7 +57,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 8c32g
+      - 8c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -126,7 +126,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +152,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -165,7 +165,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -178,7 +178,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -191,7 +191,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -208,7 +208,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 8c32g
+      - 8c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -225,7 +225,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -238,7 +238,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -251,7 +251,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -268,7 +268,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -286,7 +286,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -309,7 +309,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -322,7 +322,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -341,7 +341,7 @@ jobs:
   #     - self-hosted
   #     - "${{ inputs.runner_arch }}"
   #     - Linux
-  #     - 2c8g
+  #     - 2c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
   #     - uses: actions/checkout@v4
@@ -359,7 +359,7 @@ jobs:
   #     - self-hosted
   #     - "${{ inputs.runner_arch }}"
   #     - Linux
-  #     - 2c8g
+  #     - 2c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
   #     - uses: actions/checkout@v4
@@ -373,7 +373,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -400,7 +400,7 @@ jobs:
   #      - self-hosted
   #      - "${{ inputs.runner_arch }}"
   #      - Linux
-  #      - 2c8g
+  #      - 2c
   #      - "${{ inputs.runner_provider }}"
   #    steps:
   #      - uses: actions/checkout@v4
@@ -422,7 +422,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
