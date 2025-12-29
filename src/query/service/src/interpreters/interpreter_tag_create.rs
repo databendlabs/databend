@@ -56,12 +56,15 @@ impl Interpreter for CreateTagInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let comment = self.plan.comment.clone().unwrap_or_default();
+        let normalized_allowed_values = self
+            .plan
+            .allowed_values
+            .as_ref()
+            .map(|vals| normalize_allowed_values(vals))
+            .unwrap_or_default();
         let meta = TagMeta {
-            allowed_values: self
-                .plan
-                .allowed_values
-                .as_ref()
-                .map(|vals| normalize_allowed_values(vals)),
+            allowed_values: normalized_allowed_values,
+            enforce_allowed_values: self.plan.allowed_values.is_some(),
             comment,
             created_on: Utc::now(),
             updated_on: None,

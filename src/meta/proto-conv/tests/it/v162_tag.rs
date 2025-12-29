@@ -27,10 +27,11 @@ fn test_decode_v162_tag_meta() -> anyhow::Result<()> {
         115, 99, 114, 105, 98, 105, 110, 103, 32, 112, 114, 105, 111, 114, 105, 116, 121, 26, 23,
         50, 48, 50, 52, 45, 49, 50, 45, 49, 50, 32, 48, 55, 58, 51, 48, 58, 48, 48, 32, 85, 84, 67,
         34, 23, 50, 48, 50, 52, 45, 49, 50, 45, 51, 49, 32, 48, 51, 58, 48, 53, 58, 48, 54, 32, 85,
-        84, 67, 160, 6, 162, 1, 168, 6, 24,
+        84, 67, 48, 1, 160, 6, 162, 1, 168, 6, 24,
     ];
     let want = || TagMeta {
-        allowed_values: Some(vec!["alpha".to_string(), "beta".to_string()]),
+        allowed_values: vec!["alpha".to_string(), "beta".to_string()],
+        enforce_allowed_values: true,
         comment: "tag describing priority".to_string(),
         created_on: Utc.with_ymd_and_hms(2024, 12, 12, 7, 30, 0).unwrap(),
         updated_on: Some(Utc.with_ymd_and_hms(2024, 12, 31, 3, 5, 6).unwrap()),

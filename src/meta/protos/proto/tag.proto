@@ -43,6 +43,12 @@ message TagMeta {
   string created_on = 3;
   optional string updated_on = 4;
   optional string drop_on = 5;
+  // Distinguishes between `CREATE TAG ... ALLOWED_VALUES` (even if the list is
+  // currently empty) and tags that never configured allowed values. When false,
+  // the tag accepts any string. When true, only entries from `allowed_values`
+  // are valid; the list may be empty when all values have been dropped but the
+  // constraint still exists until an UNSET command runs.
+  bool enforce_allowed_values = 6;
 }
 
 // Value stored for tag-to-object binding (indexed by object).

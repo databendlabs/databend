@@ -35,7 +35,7 @@ pub enum TagMetaError {
     #[error(transparent)]
     UnknownTagId(#[from] UnknownError<TagIdResource, TagId>),
 
-    #[error("Invalid value '{tag_value}' for TAG with id {tag_id}{allowed_values_display}.")]
+    #[error("Invalid value '{tag_value}' for TAG with id {tag_id}. {allowed_values_display}.")]
     NotAllowedValue {
         tag_id: u64,
         tag_value: String,
@@ -61,18 +61,19 @@ impl TagMetaError {
     pub fn not_allowed_value(
         tag_id: u64,
         tag_value: impl Into<String>,
-        allowed_values: Option<Vec<String>>,
+        allowed_values: Vec<String>,
     ) -> Self {
-        let allowed_values_display = match allowed_values {
-            Some(values) if !values.is_empty() => format!(
-                ". Allowed values: [{}]",
-                values
-                    .into_iter()
+        let allowed_values_display = if allowed_values.is_empty() {
+            "This tag currently does not allow any values.".to_string()
+        } else {
+            format!(
+                "Allowed values: [{}]",
+                allowed_values
+                    .iter()
                     .map(|v| format!("'{v}'"))
                     .collect::<Vec<_>>()
                     .join(", ")
-            ),
-            _ => String::new(),
+            )
         };
 
         Self::NotAllowedValue {

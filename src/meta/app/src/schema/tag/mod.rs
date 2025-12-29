@@ -49,32 +49,17 @@ use crate::tenant::Tenant;
 /// (databases, tables, stages, connections) for governance and classification.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagMeta {
-    /// Optional list of allowed values for this tag. Mirrors the semantics of
-    /// `CREATE TAG ... ALLOWED_VALUES`: declare before other options and accept
-    /// up to 5,000 entries. If unset, any string (including empty) is accepted
-    /// when binding tags. Keep a `Vec` here to preserve declaration order so
-    /// ON_CONFLICT = ALLOWED_VALUES_SEQUENCE can deterministically pick the
-    /// winning value during propagation. For example, `CREATE TAG my_tag
-    /// ALLOWED_VALUES 'blue', 'red' PROPAGATE = ON_DEPENDENCY ON_CONFLICT =
-    /// ALLOWED_VALUES_SEQUENCE` always resolves conflicts to `'blue'` because it
-    /// appears first in the declaration. A typical conflict looks like:
-    ///
-    /// ```text
-    ///   Tag definition: my_tag ALLOWED_VALUES 'blue', 'red'
-    ///   Object A --(my_tag='blue')--> \
-    ///                                   -> Object C (propagated tag = 'blue')
-    ///   Object B --(my_tag='red')-->  /
-    /// ```
-    ///
-    /// Object C inherits `my_tag` from both parents; ON_CONFLICT uses the value
-    /// whose declaration order comes first (`'blue'`). We intentionally avoid
-    /// map-based representations because their iteration order is undefined and
-    /// explicit index fields risk getting out of sync with the declared order.
-    /// Once indices fall out of sync (e.g. `{blue: 1, red: 3}` after a deletion),
-    /// ON_CONFLICT would no longer be able to pick the intended winner. We avoid
-    /// that entire class of bugs by preserving the declaration order in a plain
-    /// `Vec`. Duplicates are removed when tags are created.
-    pub allowed_values: Option<Vec<String>>,
+    /// Ordered list mirroring `CREATE TAG ... ALLOWED_VALUES`. Always preserves
+    /// declaration order so ON_CONFLICT = ALLOWED_VALUES_SEQUENCE can
+    /// deterministically pick winners. Duplicates are removed during creation.
+    /// The vector may be empty when all values are dropped but the constraint
+    /// remains active.
+    pub allowed_values: Vec<String>,
+    /// Whether the tag currently enforces `ALLOWED_VALUES`. When false, any
+    /// string (including empty) is accepted. When true and `allowed_values` is
+    /// empty, no value may be set until the list is repopulated or the
+    /// constraint is unset with `ALTER TAG ... UNSET ALLOWED_VALUES`.
+    pub enforce_allowed_values: bool,
     /// User-provided description of the tag.
     pub comment: String,
     pub created_on: DateTime<Utc>,

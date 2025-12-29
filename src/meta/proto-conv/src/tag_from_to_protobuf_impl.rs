@@ -34,14 +34,9 @@ impl FromToProto for mt::TagMeta {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let allowed_values = if p.allowed_values.is_empty() {
-            None
-        } else {
-            Some(p.allowed_values)
-        };
-
         Ok(Self {
-            allowed_values,
+            allowed_values: p.allowed_values,
+            enforce_allowed_values: p.enforce_allowed_values,
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: match p.updated_on {
@@ -59,7 +54,8 @@ impl FromToProto for mt::TagMeta {
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            allowed_values: self.allowed_values.clone().unwrap_or_default(),
+            allowed_values: self.allowed_values.clone(),
+            enforce_allowed_values: self.enforce_allowed_values,
             comment: self.comment.clone(),
             created_on: self.created_on.to_pb()?,
             updated_on: match self.updated_on {

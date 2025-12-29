@@ -64,15 +64,20 @@ impl AsyncSystemTable for TagsTable {
 
         for tag in tags {
             names.push(tag.name);
-            allowed_values.push(tag.meta.data.allowed_values.as_ref().map(|vals| {
-                format!(
+            if tag.meta.data.enforce_allowed_values {
+                allowed_values.push(Some(format!(
                     "[{}]",
-                    vals.iter()
+                    tag.meta
+                        .data
+                        .allowed_values
+                        .iter()
                         .map(|v| format!("'{}'", v.replace('\'', "\\'")))
                         .collect::<Vec<_>>()
                         .join(", ")
-                )
-            }));
+                )));
+            } else {
+                allowed_values.push(None);
+            }
             comments.push(tag.meta.data.comment.clone());
             created_on.push(tag.meta.data.created_on.timestamp_micros());
         }

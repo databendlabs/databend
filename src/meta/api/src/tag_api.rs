@@ -249,17 +249,20 @@ where
                 let Some(meta_seqv) = meta_opt else {
                     return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
                 };
-                // Check allowed_values: None means any value is allowed
-                if let Some(allowed) = &meta_seqv.data.allowed_values {
+                if meta_seqv.data.enforce_allowed_values {
                     // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
                     // for O(1) membership checks when validating bindings.
-                    let allowed_lookup: HashSet<&str> =
-                        allowed.iter().map(|value| value.as_str()).collect();
+                    let allowed_lookup: HashSet<&str> = meta_seqv
+                        .data
+                        .allowed_values
+                        .iter()
+                        .map(|value| value.as_str())
+                        .collect();
                     if !allowed_lookup.contains(tag_value.as_str()) {
                         return Ok(Err(TagMetaError::not_allowed_value(
                             *tag_id,
                             tag_value.clone(),
-                            Some(allowed.clone()),
+                            meta_seqv.data.allowed_values.clone(),
                         )));
                     }
                 }
