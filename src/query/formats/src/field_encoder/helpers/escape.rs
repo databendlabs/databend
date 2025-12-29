@@ -52,7 +52,7 @@ pub fn write_quoted_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
             if start < i {
                 buf.extend_from_slice(&bytes[start..i]);
             }
-            buf.push(quote);
+            buf.push(b'\\');
             buf.push(quote);
             start = i + 1;
         }
