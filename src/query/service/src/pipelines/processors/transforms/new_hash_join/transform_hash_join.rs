@@ -45,11 +45,13 @@ pub struct TransformHashJoin {
     projection: ColumnSet,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
+    plan_id: u32,
     instant: Instant,
 }
 
 impl TransformHashJoin {
     pub fn create(
+        plan_id: u32,
         build_port: Arc<InputPort>,
         probe_port: Arc<InputPort>,
         joined_port: Arc<OutputPort>,
@@ -72,6 +74,7 @@ impl TransformHashJoin {
             joined_port,
             join,
             rf_desc,
+            plan_id,
             projection,
             stage_sync_barrier,
             joined_data: None,
@@ -222,7 +225,8 @@ impl Processor for TransformHashJoin {
                 let wait_rf_elapsed = self.instant.elapsed() - before_wait;
 
                 log::info!(
-                    "HashJoin build stage, sync work elapsed: {:?}, build rf elapsed: {:?}, wait other node rf elapsed: {:?}",
+                    "HashJoin({}) build stage, sync work elapsed: {:?}, build rf elapsed: {:?}, wait other node rf elapsed: {:?}",
+                    self.plan_id,
                     elapsed,
                     rf_build_elapsed,
                     wait_rf_elapsed
@@ -234,7 +238,8 @@ impl Processor for TransformHashJoin {
             Stage::BuildFinal(_) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
-                    "HashJoin build final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    "HashJoin({}) build final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    self.plan_id,
                     elapsed,
                     wait_elapsed
                 );
@@ -245,7 +250,8 @@ impl Processor for TransformHashJoin {
             Stage::Probe(_) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
-                    "HashJoin probe stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    "HashJoin({}) probe stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    self.plan_id,
                     elapsed,
                     wait_elapsed
                 );
@@ -257,7 +263,8 @@ impl Processor for TransformHashJoin {
                 true => {
                     let wait_elapsed = self.instant.elapsed() - elapsed;
                     log::info!(
-                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        "HashJoin({}) probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        self.plan_id,
                         elapsed,
                         wait_elapsed
                     );
@@ -268,7 +275,8 @@ impl Processor for TransformHashJoin {
                 false => {
                     let wait_elapsed = self.instant.elapsed() - elapsed;
                     log::info!(
-                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        "HashJoin({}) probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        self.plan_id,
                         elapsed,
                         wait_elapsed
                     );
