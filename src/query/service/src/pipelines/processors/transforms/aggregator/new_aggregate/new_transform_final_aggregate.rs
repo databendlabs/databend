@@ -28,11 +28,11 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
+use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
-use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
-use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 
 pub struct NewTransformFinalAggregate {
@@ -77,7 +77,7 @@ impl NewTransformFinalAggregate {
         ))
     }
 
-    pub fn finish(&mut self) -> Result<DataBlock> {
+    pub fn finish(&mut self) -> Result<Vec<DataBlock>> {
         if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
             self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
@@ -95,13 +95,15 @@ impl NewTransformFinalAggregate {
                 }
             }
 
-            if blocks.is_empty() {
-                return Ok(self.params.empty_result_block());
+            if !blocks.is_empty() {
+                let concat = DataBlock::concat(&blocks)?;
+                if !concat.is_empty() {
+                    return Ok(vec![concat]);
+                }
             }
-            return DataBlock::concat(&blocks);
         }
 
-        Ok(self.params.empty_result_block())
+        Ok(vec![])
     }
 }
 
@@ -174,6 +176,6 @@ impl AccumulatingTransform for NewTransformFinalAggregate {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        Ok(vec![self.finish()?])
+        Ok(self.finish()?)
     }
 }

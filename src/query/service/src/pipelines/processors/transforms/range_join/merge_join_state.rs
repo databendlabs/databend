@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::types::NumberScalar;
 
-use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
 impl RangeJoinState {
     pub fn range_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
@@ -67,6 +67,8 @@ impl RangeJoinState {
             if i == left_len {
                 break;
             }
+            debug_assert!(left_join_key_col.index(i).is_some());
+            debug_assert!(right_join_key_col.index(j).is_some());
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
             let right_scalar = unsafe { right_join_key_col.index_unchecked(j) };
             if compare_scalar(
