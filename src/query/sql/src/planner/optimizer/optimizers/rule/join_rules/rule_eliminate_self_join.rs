@@ -410,20 +410,20 @@ impl RuleEliminateSelfJoin {
         for col in output_columns.iter() {
             let scalar = Self::make_bound_column_ref(metadata, *col);
 
-            // If there's a mapping from old to this column, output with old index
-            // Otherwise, output with its own index
-            if let Some((old, _)) = column_mapping.iter().find(|(_, new)| *new == col) {
-                has_mapping = true;
-                items.push(ScalarItem {
-                    scalar,
-                    index: *old,
-                });
-            } else {
-                items.push(ScalarItem {
-                    scalar,
-                    index: *col,
-                });
+            for (old, new) in column_mapping.iter() {
+                if new == col {
+                    has_mapping = true;
+                    items.push(ScalarItem {
+                        scalar: scalar.clone(),
+                        index: *old,
+                    });
+                }
             }
+
+            items.push(ScalarItem {
+                scalar,
+                index: *col,
+            });
         }
 
         if !has_mapping {
