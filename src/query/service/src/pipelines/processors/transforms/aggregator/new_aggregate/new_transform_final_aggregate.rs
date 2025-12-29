@@ -76,35 +76,6 @@ impl NewTransformFinalAggregate {
             },
         ))
     }
-
-    pub fn finish(&mut self) -> Result<Vec<DataBlock>> {
-        if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
-            self.statistics.log_finish_statistics(&ht);
-            let mut blocks = vec![];
-            self.flush_state.clear();
-
-            loop {
-                if ht.merge_result(&mut self.flush_state)? {
-                    let mut entries = self.flush_state.take_aggregate_results();
-                    let group_columns = self.flush_state.take_group_columns();
-                    entries.extend_from_slice(&group_columns);
-                    let num_rows = entries[0].len();
-                    blocks.push(DataBlock::new(entries, num_rows));
-                } else {
-                    break;
-                }
-            }
-
-            if !blocks.is_empty() {
-                let concat = DataBlock::concat(&blocks)?;
-                if !concat.is_empty() {
-                    return Ok(vec![concat]);
-                }
-            }
-        }
-
-        Ok(vec![])
-    }
 }
 
 impl AccumulatingTransform for NewTransformFinalAggregate {
@@ -176,6 +147,31 @@ impl AccumulatingTransform for NewTransformFinalAggregate {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        Ok(self.finish()?)
+        if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
+            self.statistics.log_finish_statistics(&ht);
+            let mut blocks = vec![];
+            self.flush_state.clear();
+
+            loop {
+                if ht.merge_result(&mut self.flush_state)? {
+                    let mut entries = self.flush_state.take_aggregate_results();
+                    let group_columns = self.flush_state.take_group_columns();
+                    entries.extend_from_slice(&group_columns);
+                    let num_rows = entries[0].len();
+                    blocks.push(DataBlock::new(entries, num_rows));
+                } else {
+                    break;
+                }
+            }
+
+            if !blocks.is_empty() {
+                let concat = DataBlock::concat(&blocks)?;
+                if !concat.is_empty() {
+                    return Ok(vec![concat]);
+                }
+            }
+        }
+
+        Ok(vec![])
     }
 }
