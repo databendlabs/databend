@@ -504,7 +504,7 @@ pub enum AggregateShuffleMode {
     Row,
     // calculate shuffle destination based on id of bucket
     // cpu_nums in cluster stored in it
-    Bucket(Arc<Vec<(String, u64)>>),
+    Bucket(u64),
 }
 
 impl AggregateShuffleMode {
@@ -514,10 +514,7 @@ impl AggregateShuffleMode {
             AggregateShuffleMode::Row => 0,
             AggregateShuffleMode::Bucket(hint) => {
                 if is_exchange {
-                    hint.iter()
-                        .map(|(_node_id, thread)| *thread)
-                        .sum::<u64>()
-                        .trailing_zeros() as u64
+                    hint.trailing_zeros() as u64
                 } else {
                     builder
                         .main_pipeline
@@ -535,19 +532,23 @@ impl AggregateShuffleMode {
         cluster: &Arc<Cluster>,
     ) -> Vec<u64> {
         let is_exchange = builder.is_exchange_parent();
+        let nodes_num = cluster.nodes.len() as u64;
         match &self {
             AggregateShuffleMode::Row => {
                 if is_exchange {
-                    vec![1; cluster.nodes.len()]
+                    vec![1; nodes_num as usize]
                 } else {
                     vec![1]
                 }
             }
             AggregateShuffleMode::Bucket(hint) => {
                 if is_exchange {
-                    hint.iter()
-                        .map(|(_node_id, thread)| *thread)
-                        .collect::<Vec<_>>()
+                    let base = *hint / nodes_num;
+                    let rem = *hint % nodes_num;
+
+                    (0..nodes_num)
+                        .map(|i| if i < rem { base + 1 } else { base })
+                        .collect()
                 } else {
                     vec![builder.main_pipeline.output_len().next_power_of_two() as u64]
                 }
@@ -559,37 +560,18 @@ impl AggregateShuffleMode {
 fn determine_shuffle_mode(ctx: Arc<dyn TableContext>) -> Result<AggregateShuffleMode> {
     let settings = ctx.get_settings();
     let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
-    let mut cpu_nums = ctx
-        .get_cluster()
-        .nodes
-        .iter()
-        .map(|n| (n.id.clone(), n.cpu_nums))
-        .collect::<Vec<_>>();
-    let parallelism = cpu_nums
-        .iter()
-        .map(|(_, v)| *v)
-        .sum::<u64>()
-        .next_power_of_two();
+    let thread_nums = settings.get_max_threads()?;
+    let parallelism = (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two();
 
     let use_bucket = match force_shuffle_mode.as_str() {
         "row" => false,
         "bucket" => true,
-        "auto" => parallelism <= 128, // TODO: this may need to be find
+        "auto" => parallelism <= 256, // TODO: this may need to be find
         _ => false,
     };
 
     let shuffle_mode = if use_bucket {
-        if !cpu_nums.is_empty() {
-            let node_count = cpu_nums.len() as u64;
-            let base = parallelism / node_count;
-            let remainder = parallelism % node_count;
-            for (idx, (_, cpu_num)) in cpu_nums.iter_mut().enumerate() {
-                *cpu_num = base + if (idx as u64) < remainder { 1 } else { 0 };
-            }
-        }
-
-        debug_assert_eq!(cpu_nums.iter().map(|(_, v)| *v).sum::<u64>(), parallelism);
-        AggregateShuffleMode::Bucket(Arc::new(cpu_nums))
+        AggregateShuffleMode::Bucket(parallelism)
     } else {
         AggregateShuffleMode::Row
     };
