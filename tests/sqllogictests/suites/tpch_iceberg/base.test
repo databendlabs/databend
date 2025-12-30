@@ -9,7 +9,7 @@ CONNECTION=(
     ADDRESS='http://127.0.0.1:8181'
     WAREHOUSE='s3://iceberg-tpch/'
     "s3.region"='us-east-1'
-    "s3.endpoint"='http://127.0.0.1:9000'
+    "s3.endpoint"='http://127.0.0.1:9002'
 );
 
 statement ok
@@ -18,7 +18,7 @@ use catalog ctl;
 statement ok
 use test;
 
-query II rowsort
+query IIT rowsort
 select * from t1;
 ----
 0 0 a
@@ -27,7 +27,7 @@ select * from t1;
 3 3 d
 4 NULL NULL
 
-query II rowsort
+query IIT rowsort
 select * from t1_orc;
 ----
 0 0 a
@@ -36,7 +36,7 @@ select * from t1_orc;
 3 3 d
 4 NULL NULL
 
-query II rowsort
+query IT rowsort
 select c1, c3 from t1;
 ----
 0 a
@@ -45,7 +45,7 @@ select c1, c3 from t1;
 3 d
 4 NULL
 
-query II rowsort
+query IT rowsort
 select c1, c3 from t1_orc;
 ----
 0 a
@@ -72,7 +72,7 @@ select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from
 
 # test_merge_on_read_deletes: DELETE FROM test_merge_on_read_deletes WHERE letter = 'k' OR number = 3 OR (number > 4 AND number < 7)
 # Tips: `2023-03-30 6 z` is new row
-query TTI rowsort
+query TIT rowsort
 select * from test_merge_on_read_deletes;
 ----
 2023-03-01 1 a

@@ -42,8 +42,8 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::TableField;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -471,10 +471,7 @@ impl IcebergTable {
         }
     }
 
-    fn inner_column_path_to_name(
-        fields: &[TableField],
-        path: &[FieldIndex],
-    ) -> Result<String> {
+    fn inner_column_path_to_name(fields: &[TableField], path: &[FieldIndex]) -> Result<String> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "Inner column path should not be empty".to_string(),
@@ -482,10 +479,7 @@ impl IcebergTable {
         }
 
         let field = fields.get(path[0]).ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "Inner column path {:?} is out of range",
-                path
-            ))
+            ErrorCode::BadArguments(format!("Inner column path {:?} is out of range", path))
         })?;
         let mut name_parts = Vec::with_capacity(path.len());
         name_parts.push(field.name().clone());

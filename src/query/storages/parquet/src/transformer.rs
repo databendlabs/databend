@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
+use arrow_array::StructArray;
 use arrow_cast::cast;
+use arrow_schema::DataType;
 use arrow_schema::FieldRef;
 use arrow_schema::Schema;
 use arrow_schema::SchemaRef;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::is_internal_column_id;
 use parquet::arrow::PARQUET_FIELD_ID_META_KEY;
 
 #[derive(Debug)]
@@ -39,10 +41,12 @@ enum SchemaComparison {
 enum ColumnSource {
     PassThrough {
         source_index: usize,
+        nested_indices: Vec<usize>,
     },
     Promote {
         target_type: arrow_schema::DataType,
         source_index: usize,
+        nested_indices: Vec<usize>,
     },
 }
 
@@ -61,23 +65,42 @@ enum BatchTransform {
 #[derive(Clone)]
 pub struct RecordBatchTransformer {
     target_schema: SchemaRef,
-    table_field_mapping: BTreeMap<ColumnId, usize>,
+    table_field_mappings: Vec<TableFieldMapping>,
 
     transforms: Option<BatchTransform>,
+}
+
+#[derive(Debug, Clone)]
+struct TableFieldMapping {
+    column_id: ColumnId,
+    target_index: usize,
+    column_path: Vec<String>,
 }
 
 impl RecordBatchTransformer {
     pub fn build(table_schema: TableSchemaRef) -> Self {
         let target_schema: Schema = table_schema.as_ref().into();
 
-        let mut table_field_mapping = BTreeMap::new();
+        let mut table_field_mappings = Vec::new();
         for (i, field) in table_schema.fields().iter().enumerate() {
-            table_field_mapping.insert(field.column_id(), i);
+            if is_internal_column_id(field.column_id()) {
+                continue;
+            }
+            let column_path = field
+                .name()
+                .split(':')
+                .map(|segment| segment.to_string())
+                .collect();
+            table_field_mappings.push(TableFieldMapping {
+                column_id: field.column_id(),
+                target_index: i,
+                column_path,
+            });
         }
 
         RecordBatchTransformer {
             target_schema: Arc::new(target_schema),
-            table_field_mapping,
+            table_field_mappings,
             transforms: None,
         }
     }
@@ -105,7 +128,7 @@ impl RecordBatchTransformer {
                 self.transforms = Some(Self::generate_batch_transform(
                     record_batch.schema_ref(),
                     &self.target_schema,
-                    &self.table_field_mapping,
+                    &self.table_field_mappings,
                 )?);
 
                 self.process_record_batch(record_batch)?
@@ -150,41 +173,152 @@ impl RecordBatchTransformer {
             .iter()
             .map(|op| {
                 Ok(match op {
-                    ColumnSource::PassThrough { source_index } => columns[*source_index].clone(),
+                    ColumnSource::PassThrough {
+                        source_index,
+                        nested_indices,
+                    } => Self::extract_nested_array(&columns[*source_index], nested_indices)?,
 
                     ColumnSource::Promote {
                         target_type,
                         source_index,
-                    } => cast(&*columns[*source_index], target_type)?,
+                        nested_indices,
+                    } => {
+                        let array =
+                            Self::extract_nested_array(&columns[*source_index], nested_indices)?;
+                        cast(&*array, target_type)?
+                    }
                 })
             })
             .collect()
     }
 
+    fn extract_nested_array(
+        column: &Arc<dyn Array>,
+        nested_indices: &[usize],
+    ) -> databend_common_exception::Result<Arc<dyn Array>> {
+        if nested_indices.is_empty() {
+            return Ok(column.clone());
+        }
+
+        let mut current = column.clone();
+        for &child_idx in nested_indices {
+            let struct_array = current
+                .as_any()
+                .downcast_ref::<StructArray>()
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Expected Struct array when traversing nested column, but found {}",
+                        current.data_type()
+                    ))
+                })?;
+            current = struct_array.column(child_idx).clone();
+        }
+        Ok(current)
+    }
+
     pub fn build_field_id_to_arrow_schema_map(
         source_schema: &SchemaRef,
-    ) -> databend_common_exception::Result<HashMap<ColumnId, (FieldRef, usize)>> {
+    ) -> databend_common_exception::Result<HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>> {
         let mut field_id_to_source_schema = HashMap::new();
         for (source_field_idx, source_field) in source_schema.fields.iter().enumerate() {
-            let this_field_id = source_field
-                .metadata()
-                .get(PARQUET_FIELD_ID_META_KEY)
-                .ok_or_else(|| ErrorCode::InvalidDate("field id not present in parquet metadata"))?
-                .parse()
-                .map_err(|e| {
-                    ErrorCode::InvalidDate(format!("field id not parseable as an column id: {}", e))
-                })?;
-
-            field_id_to_source_schema
-                .insert(this_field_id, (source_field.clone(), source_field_idx));
+            let mut current_index_path = Vec::new();
+            Self::insert_field_id_mapping(
+                source_field,
+                source_field_idx,
+                &mut current_index_path,
+                &mut field_id_to_source_schema,
+            )?;
         }
         Ok(field_id_to_source_schema)
+    }
+
+    fn insert_field_id_mapping(
+        field: &FieldRef,
+        source_field_idx: usize,
+        current_index_path: &mut Vec<usize>,
+        field_id_to_source_schema: &mut HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>,
+    ) -> databend_common_exception::Result<()> {
+        let this_field_id = field
+            .metadata()
+            .get(PARQUET_FIELD_ID_META_KEY)
+            .ok_or_else(|| ErrorCode::InvalidDate("field id not present in parquet metadata"))?
+            .parse()
+            .map_err(|e| {
+                ErrorCode::InvalidDate(format!("field id not parseable as an column id: {}", e))
+            })?;
+
+        field_id_to_source_schema.insert(
+            this_field_id,
+            (field.clone(), source_field_idx, current_index_path.clone()),
+        );
+
+        if let DataType::Struct(fields) = field.data_type() {
+            for (child_idx, nested_field) in fields.iter().enumerate() {
+                current_index_path.push(child_idx);
+                Self::insert_field_id_mapping(
+                    nested_field,
+                    source_field_idx,
+                    current_index_path,
+                    field_id_to_source_schema,
+                )?;
+                current_index_path.pop();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn build_field_path_to_arrow_schema_map(
+        source_schema: &SchemaRef,
+    ) -> HashMap<Vec<String>, (FieldRef, usize, Vec<usize>)> {
+        let mut field_path_map = HashMap::new();
+        for (source_index, source_field) in source_schema.fields.iter().enumerate() {
+            let mut current_path = vec![source_field.name().clone()];
+            let mut current_index_path = Vec::new();
+            Self::insert_field_path_mapping(
+                source_field,
+                source_index,
+                &mut current_path,
+                &mut current_index_path,
+                &mut field_path_map,
+            );
+        }
+        field_path_map
+    }
+
+    fn insert_field_path_mapping(
+        field: &FieldRef,
+        source_field_idx: usize,
+        current_path: &mut Vec<String>,
+        current_index_path: &mut Vec<usize>,
+        field_path_map: &mut HashMap<Vec<String>, (FieldRef, usize, Vec<usize>)>,
+    ) {
+        field_path_map.insert(
+            current_path.clone(),
+            (field.clone(), source_field_idx, current_index_path.clone()),
+        );
+
+        if let DataType::Struct(fields) = field.data_type() {
+            for (child_idx, nested_field) in fields.iter().enumerate() {
+                current_path.push(nested_field.name().clone());
+                current_index_path.push(child_idx);
+                Self::insert_field_path_mapping(
+                    nested_field,
+                    source_field_idx,
+                    current_path,
+                    current_index_path,
+                    field_path_map,
+                );
+                current_path.pop();
+                current_index_path.pop();
+            }
+        }
     }
 
     fn generate_batch_transform(
         source: &SchemaRef,
         target: &SchemaRef,
-        table_field_mapping: &BTreeMap<ColumnId, usize>,
+        table_field_mappings: &[TableFieldMapping],
     ) -> databend_common_exception::Result<BatchTransform> {
         match Self::compare_schemas(source, target) {
             SchemaComparison::Equivalent => Ok(BatchTransform::PassThrough),
@@ -195,7 +329,7 @@ impl RecordBatchTransformer {
                 operations: Self::generate_transform_operations(
                     source,
                     target,
-                    table_field_mapping,
+                    table_field_mappings,
                 )?,
                 target_schema: target.clone(),
             }),
@@ -205,20 +339,31 @@ impl RecordBatchTransformer {
     fn generate_transform_operations(
         source: &SchemaRef,
         target: &SchemaRef,
-        table_field_mapping: &BTreeMap<ColumnId, usize>,
+        table_field_mappings: &[TableFieldMapping],
     ) -> databend_common_exception::Result<Vec<ColumnSource>> {
-        let mut sources = Vec::with_capacity(table_field_mapping.len());
+        let mut sources = Vec::with_capacity(table_field_mappings.len());
 
         let source_map = Self::build_field_id_to_arrow_schema_map(source)?;
+        let source_path_map = Self::build_field_path_to_arrow_schema_map(source);
 
-        for (field_id, target_index) in table_field_mapping.iter() {
-            let target_field = target.field(*target_index);
+        for mapping in table_field_mappings.iter() {
+            let target_field = target.field(mapping.target_index);
             let target_type = target_field.data_type();
 
-            let Some((source_field, source_index)) = source_map.get(field_id) else {
+            let source_entry = source_path_map
+                .get(&mapping.column_path)
+                .cloned()
+                .or_else(|| source_map.get(&mapping.column_id).cloned());
+
+            let Some((source_field, source_index, nested_indices)) = source_entry else {
+                let path = if mapping.column_path.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    mapping.column_path.join(":")
+                };
                 return Err(ErrorCode::TableSchemaMismatch(format!(
-                    "The field with field_id: {field_id} does not exist in the source schema: {:#?}.",
-                    source
+                    "The field with field_id: {} (path: {path}) does not exist in the source schema: {:#?}.",
+                    mapping.column_id, source
                 )));
             };
 
@@ -228,12 +373,14 @@ impl RecordBatchTransformer {
                     .equals_datatype(target_field.data_type())
                 {
                     ColumnSource::PassThrough {
-                        source_index: *source_index,
+                        source_index,
+                        nested_indices,
                     }
                 } else {
                     ColumnSource::Promote {
                         target_type: target_type.clone(),
-                        source_index: *source_index,
+                        source_index,
+                        nested_indices,
                     }
                 },
             )
@@ -255,6 +402,7 @@ mod test {
     use arrow_array::StringViewArray;
     use arrow_schema::DataType;
     use arrow_schema::Field;
+    use arrow_schema::FieldRef;
     use arrow_schema::Fields;
     use arrow_schema::Schema;
     use databend_common_expression::TableDataType;
@@ -263,7 +411,9 @@ mod test {
     use databend_common_expression::types::NumberDataType;
     use parquet::arrow::PARQUET_FIELD_ID_META_KEY;
 
+    use crate::transformer::ColumnSource;
     use crate::transformer::RecordBatchTransformer;
+    use crate::transformer::TableFieldMapping;
 
     #[test]
     fn build_field_id_to_source_schema_map_works() {
@@ -273,12 +423,114 @@ mod test {
             RecordBatchTransformer::build_field_id_to_arrow_schema_map(&arrow_schema).unwrap();
 
         let expected = HashMap::from_iter([
-            (11, (arrow_schema.fields()[0].clone(), 0)),
-            (12, (arrow_schema.fields()[1].clone(), 1)),
-            (14, (arrow_schema.fields()[2].clone(), 2)),
+            (11, (arrow_schema.fields()[0].clone(), 0, vec![])),
+            (12, (arrow_schema.fields()[1].clone(), 1, vec![])),
+            (14, (arrow_schema.fields()[2].clone(), 2, vec![])),
         ]);
 
         assert!(result.eq(&expected));
+    }
+
+    #[test]
+    fn build_field_id_to_source_schema_map_handles_struct_fields() {
+        let arrow_schema = arrow_schema_with_struct();
+
+        let result =
+            RecordBatchTransformer::build_field_id_to_arrow_schema_map(&arrow_schema).unwrap();
+
+        let struct_field = arrow_schema.fields()[1].clone();
+        let DataType::Struct(struct_children) = struct_field.data_type() else {
+            unreachable!();
+        };
+        let struct_child_fields = struct_children.iter().cloned().collect::<Vec<FieldRef>>();
+        let nested_struct_field = struct_child_fields[1].clone();
+        let DataType::Struct(nested_children) = nested_struct_field.data_type() else {
+            unreachable!();
+        };
+        let nested_child_fields = nested_children.iter().cloned().collect::<Vec<FieldRef>>();
+
+        let expected = HashMap::from_iter([
+            (30, (arrow_schema.fields()[0].clone(), 0, vec![])),
+            (40, (struct_field.clone(), 1, vec![])),
+            (41, (struct_child_fields[0].clone(), 1, vec![0])),
+            (42, (nested_struct_field.clone(), 1, vec![1])),
+            (43, (nested_child_fields[0].clone(), 1, vec![1, 0])),
+        ]);
+
+        assert!(result.eq(&expected));
+    }
+
+    #[test]
+    fn generate_transform_operations_prefers_path_over_field_ids() {
+        let source_schema = Arc::new(Schema::new(vec![struct_field(
+            "item",
+            vec![simple_field("age", DataType::Int32, true, "5")],
+            true,
+            "3",
+        )]));
+        let target_schema = Arc::new(Schema::new(vec![Field::new(
+            "item:age",
+            DataType::Int32,
+            true,
+        )]));
+
+        let table_field_mapping = vec![TableFieldMapping {
+            column_id: 3,
+            target_index: 0,
+            column_path: vec!["item".to_string(), "age".to_string()],
+        }];
+
+        let operations = RecordBatchTransformer::generate_transform_operations(
+            &source_schema,
+            &target_schema,
+            &table_field_mapping,
+        )
+        .unwrap();
+
+        assert_eq!(operations.len(), 1);
+        assert!(matches!(
+            operations[0],
+            ColumnSource::PassThrough {
+                source_index: 0,
+                ref nested_indices,
+            } if nested_indices.as_slice() == [0]
+        ));
+    }
+
+    #[test]
+    fn generate_transform_operations_tracks_nested_indices() {
+        let source_schema = arrow_schema_with_struct();
+        let target_schema = Arc::new(Schema::new(vec![Field::new(
+            "struct_col:nested_struct:deep_leaf",
+            DataType::Utf8View,
+            false,
+        )]));
+
+        let table_field_mapping = vec![TableFieldMapping {
+            column_id: 43,
+            target_index: 0,
+            column_path: vec![
+                "struct_col".to_string(),
+                "nested_struct".to_string(),
+                "deep_leaf".to_string(),
+            ],
+        }];
+
+        let operations = RecordBatchTransformer::generate_transform_operations(
+            &source_schema,
+            &target_schema,
+            &table_field_mapping,
+        )
+        .unwrap();
+
+        assert_eq!(operations.len(), 1);
+        assert!(matches!(
+            operations[0],
+            ColumnSource::PassThrough {
+                source_index: 1,
+                ref nested_indices,
+            } if nested_indices.as_slice() == [1, 0]
+        ));
     }
 
     #[test]
@@ -428,10 +680,36 @@ mod test {
         ]))
     }
 
+    fn arrow_schema_with_struct() -> Arc<Schema> {
+        Arc::new(Schema::new(vec![
+            simple_field("plain", DataType::Int32, false, "30"),
+            struct_field(
+                "struct_col",
+                vec![
+                    simple_field("leaf", DataType::Float64, true, "41"),
+                    struct_field(
+                        "nested_struct",
+                        vec![simple_field("deep_leaf", DataType::Utf8View, false, "43")],
+                        true,
+                        "42",
+                    ),
+                ],
+                false,
+                "40",
+            ),
+        ]))
+    }
+
     fn simple_field(name: &str, ty: DataType, nullable: bool, value: &str) -> Field {
         Field::new(name, ty, nullable).with_metadata(HashMap::from([(
             PARQUET_FIELD_ID_META_KEY.to_string(),
             value.to_string(),
         )]))
+    }
+
+    fn struct_field(name: &str, fields: Vec<Field>, nullable: bool, value: &str) -> Field {
+        Field::new(name, DataType::Struct(Fields::from(fields)), nullable).with_metadata(
+            HashMap::from([(PARQUET_FIELD_ID_META_KEY.to_string(), value.to_string())]),
+        )
     }
 }

@@ -24,10 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_store::MetaStore;
@@ -39,7 +36,6 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::ColumnBinding;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::parse_result_scan_args;
@@ -118,27 +114,7 @@ impl SelectInterpreter {
     }
 
     pub fn get_result_table_schema(&self) -> Result<TableSchemaRef> {
-        let metadata = self.metadata.read();
-        let mut fields = Vec::with_capacity(self.bind_context.columns.len());
-        for column_binding in &self.bind_context.columns {
-            let table_data_type = if column_binding.index < metadata.columns().len() {
-                match metadata.column(column_binding.index) {
-                    ColumnEntry::BaseTableColumn(base) => base.data_type.clone(),
-                    ColumnEntry::VirtualColumn(virtual_column) => virtual_column.data_type.clone(),
-                    ColumnEntry::DerivedColumn(derived) => infer_schema_type(&derived.data_type)?,
-                    ColumnEntry::InternalColumn(internal) => {
-                        infer_schema_type(&internal.internal_column.data_type())?
-                    }
-                }
-            } else {
-                infer_schema_type(column_binding.data_type.as_ref())?
-            };
-            fields.push(TableField::new(
-                &column_binding.column_name,
-                table_data_type,
-            ));
-        }
-        Ok(TableSchemaRefExt::create(fields))
+        self.bind_context.output_table_schema(self.metadata.clone())
     }
 
     #[fastrace::trace(name = "SelectInterpreter::build_physical_plan")]

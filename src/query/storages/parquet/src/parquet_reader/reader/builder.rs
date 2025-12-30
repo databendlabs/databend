@@ -240,9 +240,12 @@ impl<'a> ParquetReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
-        let (_, _, output_schema, output_field_paths) = self.built_output.as_ref().unwrap();
-        let transformer = (source_type.need_transformer() && output_field_paths.is_none())
-            .then(|| RecordBatchTransformer::build(output_schema.clone()));
+        let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
+        let transformer = if source_type.need_transformer() {
+            Some(RecordBatchTransformer::build(output_schema.clone()))
+        } else {
+            None
+        };
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
             expect_file_schema: self
@@ -273,16 +276,16 @@ impl<'a> ParquetReaderBuilder<'a> {
         }
         self.build_output()?;
 
-        let transformer = source_type
-            .need_transformer()
-            .then(|| {
-                self.built_output.as_ref().and_then(|(_, _, output_schema, output_field_paths)| {
-                    output_field_paths
-                        .is_none()
-                        .then(|| RecordBatchTransformer::build(output_schema.clone()))
-                })
-            })
-            .flatten();
+        let transformer = self
+            .built_output
+            .as_ref()
+            .and_then(|(_, _, output_schema, _)| {
+                if source_type.need_transformer() {
+                    Some(RecordBatchTransformer::build(output_schema.clone()))
+                } else {
+                    None
+                }
+            });
 
         let mut policy_builders = default_policy_builders();
         let default_policy = match (self.built_predicate.as_ref(), self.built_topk.as_ref()) {

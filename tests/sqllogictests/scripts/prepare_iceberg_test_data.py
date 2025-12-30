@@ -11,7 +11,7 @@ spark = (
     .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
     .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
     .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
-    .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9000")
+    .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9002")
     .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
     .config(
         "spark.jars.packages",
