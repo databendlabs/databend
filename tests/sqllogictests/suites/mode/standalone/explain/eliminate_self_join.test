@@ -314,6 +314,93 @@ order by t3.c1
 81 1 81 1
 91 1 91 1
 
+# Regression: if the eliminated side has an EvalScalar above the Aggregate that
+# introduces new columns (e.g. `sum(c2)+1`), the elimination rewrite currently
+# must recreate those derived column indices; otherwise parent operators may
+# reference missing columns.
+query T
+explain select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, c2, c2 + 1 as c3
+    from (
+        select c1, sum(c2) as c2
+        from t1
+        group by c1
+    ) as s
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+Sort(Single)
+├── output columns: [sum(c2) (#2), t1.c1 (#0), c3 (#6)]
+├── sort keys: [c1 ASC NULLS LAST]
+├── estimated rows: 50.00
+└── EvalScalar
+    ├── output columns: [sum(c2) (#2), t1.c1 (#0), c3 (#6)]
+    ├── expressions: [sum(c2) (#2) + 1]
+    ├── estimated rows: 50.00
+    └── Filter
+        ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+        ├── filters: [is_true(sum(c2) (#2) = 1)]
+        ├── estimated rows: 50.00
+        └── AggregateFinal
+            ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 100.00
+            └── AggregatePartial
+                ├── group by: [c1]
+                ├── aggregate functions: [sum(c2)]
+                ├── estimated rows: 100.00
+                └── TableScan
+                    ├── table: default.eliminate_self_join.t1
+                    ├── scan id: 0
+                    ├── output columns: [c1 (#0), c2 (#1)]
+                    ├── read rows: 100
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 100.00
+
+
+query III
+select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, c2, c2 + 1 as c3
+    from (
+        select c1, sum(c2) as c2
+        from t1
+        group by c1
+    ) as s
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+1 1 2
+11 1 2
+21 1 2
+31 1 2
+41 1 2
+51 1 2
+61 1 2
+71 1 2
+81 1 2
+91 1 2
+
 query T
 explain
 select t3.c1, t3.c2, t4.c3

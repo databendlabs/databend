@@ -22,6 +22,7 @@ use databend_common_expression::Scalar;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
@@ -87,6 +88,12 @@ struct Candidate {
     group_key: GroupKeyItemSignature,
     group_key_index: IndexType,
     agg_func_indexes: Vec<(AggFuncSignature, IndexType)>,
+    /// Scalar items introduced above the (Filter +) Aggregate chain.
+    ///
+    /// If the corresponding relation is eliminated, these derived columns must be
+    /// recreated on top of the kept relation; otherwise parent operators may
+    /// reference missing columns.
+    extra_scalar_items: Vec<ScalarItem>,
     strict: bool,
     relation_idx: usize,
 }
@@ -188,6 +195,7 @@ impl RuleEliminateSelfJoin {
 
         let mut remove_relations: HashSet<usize> = HashSet::new();
         let mut removed_to_keep_column_mapping: HashMap<IndexType, IndexType> = HashMap::new();
+        let mut extra_scalar_items: Vec<ScalarItem> = Vec::new();
         for (_key, group_candidates) in groups.iter() {
             let has_strict = group_candidates.iter().any(|c| c.strict);
             let has_loose = group_candidates.iter().any(|c| !c.strict);
@@ -210,8 +218,15 @@ impl RuleEliminateSelfJoin {
                 if !eq_classes.same(c.group_key_index, keep.group_key_index) {
                     continue;
                 }
+
+                let Some(rewritten_extra_items) =
+                    Self::rewrite_extra_scalar_items(&c.extra_scalar_items, &mapping, &metadata)
+                else {
+                    continue;
+                };
                 remove_relations.insert(c.relation_idx);
                 removed_to_keep_column_mapping.extend(mapping);
+                extra_scalar_items.extend(rewritten_extra_items);
             }
         }
 
@@ -233,8 +248,47 @@ impl RuleEliminateSelfJoin {
 
         let rewritten =
             Self::project_columns(rewritten, &removed_to_keep_column_mapping, &metadata)?;
+        let rewritten = Self::add_extra_scalar_items(rewritten, &extra_scalar_items, &metadata)?;
 
         Ok(rewritten)
+    }
+
+    fn rewrite_extra_scalar_items(
+        items: &[ScalarItem],
+        mapping: &HashMap<IndexType, IndexType>,
+        metadata: &Metadata,
+    ) -> Option<Vec<ScalarItem>> {
+        if items.is_empty() {
+            return Some(vec![]);
+        }
+
+        let mut available_columns: ColumnSet = mapping.values().copied().collect();
+
+        let mut rewritten = Vec::with_capacity(items.len());
+        for item in items.iter() {
+            let mut scalar = item.scalar.clone();
+            for (old, new) in mapping.iter() {
+                if old == new {
+                    continue;
+                }
+                let new_column = Self::make_column_binding(metadata, *new);
+                if scalar.replace_column_binding(*old, &new_column).is_err() {
+                    return None;
+                }
+            }
+
+            // After rewriting, the expression should be evaluable solely from the kept side's
+            // mapped columns. If not, eliminating this relation would drop required inputs.
+            if !scalar.used_columns().is_subset(&available_columns) {
+                return None;
+            }
+            rewritten.push(ScalarItem {
+                scalar,
+                index: item.index,
+            });
+            available_columns.insert(item.index);
+        }
+        Some(rewritten)
     }
 
     fn try_parse_candidate(
@@ -245,8 +299,21 @@ impl RuleEliminateSelfJoin {
     ) -> Option<Candidate> {
         let mut strict = false;
         let mut node = relation;
+        let mut extra_scalar_items = Vec::new();
 
-        while matches!(node.plan(), RelOperator::EvalScalar(_)) {
+        if matches!(node.plan(), RelOperator::EvalScalar(_)) {
+            let eval_scalar = node.plan().as_eval_scalar().unwrap();
+            let child = node.unary_child();
+            let child_output_columns = child.derive_relational_prop().ok()?.output_columns.clone();
+
+            // Collect only those items that introduce new output column indices.
+            let mut new_items = Vec::new();
+            for item in eval_scalar.items.iter() {
+                if !child_output_columns.contains(&item.index) {
+                    new_items.push(item.clone());
+                }
+            }
+            extra_scalar_items.extend(new_items);
             node = node.unary_child();
         }
 
@@ -285,6 +352,7 @@ impl RuleEliminateSelfJoin {
             group_key,
             group_key_index,
             agg_func_indexes,
+            extra_scalar_items,
             strict,
             relation_idx,
         })
@@ -428,6 +496,37 @@ impl RuleEliminateSelfJoin {
 
         if !has_mapping {
             return Ok(rewritten);
+        }
+
+        Ok(SExpr::create_unary(
+            Arc::new(RelOperator::EvalScalar(crate::plans::EvalScalar { items })),
+            Arc::new(rewritten),
+        ))
+    }
+
+    fn add_extra_scalar_items(
+        rewritten: SExpr,
+        extra_scalar_items: &[ScalarItem],
+        metadata: &Metadata,
+    ) -> Result<SExpr> {
+        if extra_scalar_items.is_empty() {
+            return Ok(rewritten);
+        }
+
+        let output_columns = rewritten.derive_relational_prop()?.output_columns.clone();
+        let mut items = Vec::with_capacity(output_columns.len() + extra_scalar_items.len());
+        for col in output_columns.iter() {
+            items.push(ScalarItem {
+                scalar: Self::make_bound_column_ref(metadata, *col),
+                index: *col,
+            });
+        }
+
+        for item in extra_scalar_items.iter() {
+            if output_columns.contains(&item.index) {
+                continue;
+            }
+            items.push(item.clone());
         }
 
         Ok(SExpr::create_unary(
