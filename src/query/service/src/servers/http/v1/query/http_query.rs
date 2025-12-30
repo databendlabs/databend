@@ -581,7 +581,7 @@ pub struct HttpQuery {
 
     // client states
     client_state: Arc<Mutex<ClientState>>,
-    page_manager: Arc<TokioMutex<PageManager>>,
+    pub(crate) page_manager: Arc<TokioMutex<PageManager>>,
     last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
     pub(crate) is_txn_mgr_saved: AtomicBool,
 }
