@@ -265,13 +265,13 @@ impl DataExchangeManager {
                     Entry::Occupied(mut v) => {
                         let query_coordinator = v.get_mut();
                         query_coordinator.info = query_info;
-                        query_coordinator.add_data_channel(targets_exchanges)?;
+                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
                         query_coordinator.info = query_info;
-                        query_coordinator.add_data_channel(targets_exchanges)?;
+                        query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                 };
@@ -453,10 +453,10 @@ impl DataExchangeManager {
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(channel_id),
+            Entry::Occupied(mut v) => v.get_mut().register_flight_channel_sender(channel_id),
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
-                .add_fragment_exchange(channel_id),
+                .register_flight_channel_sender(channel_id),
         }
     }
 
@@ -545,14 +545,26 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
-                assert!(
-                    query_coordinator.fragment_exchanges.is_empty(),
-                    "query_coordinator.fragment_exchanges is not empty: {:?}",
-                    query_coordinator
-                        .fragment_exchanges
-                        .keys()
-                        .collect::<Vec<_>>()
-                );
+                if !query_coordinator.flight_data_senders.is_empty() {
+                    unreachable!(
+                        "query_coordinator.fragment_senders is not empty: {:?}",
+                        query_coordinator
+                            .flight_data_senders
+                            .keys()
+                            .collect::<Vec<_>>()
+                    );
+                }
+
+                if !query_coordinator.flight_data_receivers.is_empty() {
+                    unreachable!(
+                        "query_coordinator.fragment_receivers is not empty: {:?}",
+                        query_coordinator
+                            .flight_data_receivers
+                            .keys()
+                            .collect::<Vec<_>>()
+                    );
+                }
+
                 let injector = DefaultExchangeInjector::create();
                 let mut build_res = query_coordinator.subscribe_fragment(
                     &ctx,
@@ -615,7 +627,7 @@ impl DataExchangeManager {
 
         match queries_coordinator.get_mut(&params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
-            Some(coordinator) => coordinator.get_flight_senders(params),
+            Some(coordinator) => params.take_flight_sender(&mut coordinator.flight_data_senders),
         }
     }
 
@@ -625,7 +637,9 @@ impl DataExchangeManager {
 
         match queries_coordinator.get_mut(&params.get_query_id()) {
             None => Err(ErrorCode::Internal("Query not exists.")),
-            Some(coordinator) => coordinator.get_flight_receiver(params),
+            Some(coordinator) => {
+                params.take_flight_receiver(&mut coordinator.flight_data_receivers)
+            }
         }
     }
 
@@ -663,24 +677,23 @@ struct QueryInfo {
     query_executor: Option<Arc<PipelineCompleteExecutor>>,
 }
 
-static FLIGHT_SENDER: u8 = 1;
-static FLIGHT_RECEIVER: u8 = 2;
-
-struct QueryCoordinator {
+pub(crate) struct QueryCoordinator {
     info: Option<QueryInfo>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 
     statistics_exchanges: HashMap<String, FlightExchange>,
-    fragment_exchanges: HashMap<(String, u8), Vec<FlightExchange>>,
+    flight_data_senders: HashMap<String, Vec<FlightSender>>,
+    flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
 }
 
 impl QueryCoordinator {
     pub fn create() -> QueryCoordinator {
         QueryCoordinator {
             info: None,
-            fragments_coordinator: HashMap::new(),
-            fragment_exchanges: HashMap::new(),
+            flight_data_senders: HashMap::new(),
+            flight_data_receivers: HashMap::new(),
             statistics_exchanges: HashMap::new(),
+            fragments_coordinator: HashMap::new(),
         }
     }
 
@@ -715,194 +728,49 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn add_fragment_exchange(
+    pub fn register_flight_channel_sender(
         &mut self,
         channel_id: String,
     ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
-        let sender_id = (channel_id, FLIGHT_SENDER);
-        match self.fragment_exchanges.entry(sender_id) {
+        match self.flight_data_senders.entry(channel_id) {
             Entry::Occupied(mut v) => {
-                v.get_mut().push(FlightExchange::create_sender(tx));
+                v.get_mut()
+                    .push(FlightExchange::create_sender(tx).convert_to_sender());
             }
             Entry::Vacant(v) => {
-                v.insert(vec![FlightExchange::create_sender(tx)]);
+                v.insert(vec![FlightExchange::create_sender(tx).convert_to_sender()]);
             }
         }
 
         Ok(rx)
     }
 
-    pub fn add_data_channel(
+    pub fn register_flight_channel_receiver(
         &mut self,
         channels: HashMap<String, Vec<FlightExchange>>,
     ) -> Result<()> {
         for (id, exchanges) in channels.into_iter() {
-            let receiver_id = (id, FLIGHT_RECEIVER);
-            match self.fragment_exchanges.entry(receiver_id) {
+            match self.flight_data_receivers.entry(id) {
                 Entry::Occupied(mut v) => {
-                    v.get_mut().extend(exchanges);
+                    v.get_mut().extend(
+                        exchanges
+                            .into_iter()
+                            .map(FlightExchange::convert_to_receiver),
+                    );
                 }
                 Entry::Vacant(v) => {
-                    v.insert(exchanges);
+                    v.insert(
+                        exchanges
+                            .into_iter()
+                            .map(FlightExchange::convert_to_receiver)
+                            .collect(),
+                    );
                 }
             }
         }
 
         Ok(())
-    }
-
-    pub fn get_flight_senders(
-        &mut self,
-        params: &ExchangeParams,
-    ) -> Result<Vec<(String, FlightSender)>> {
-        match params {
-            ExchangeParams::MergeExchange(params) => {
-                let Some(sender) = self
-                    .fragment_exchanges
-                    .remove(&(params.channel_id.clone(), FLIGHT_SENDER))
-                else {
-                    return Err(ErrorCode::UnknownFragmentExchange(format!(
-                        "Unknown fragment exchange channel, {}, {}",
-                        params.destination_id, params.fragment_id
-                    )));
-                };
-
-                Ok(sender
-                    .into_iter()
-                    .map(|x| (params.destination_id.clone(), x.convert_to_sender()))
-                    .collect())
-            }
-            ExchangeParams::BroadcastExchange(params) => {
-                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
-
-                for (destination, channels) in &params.destination_channels {
-                    for channel in channels {
-                        if destination == &params.executor_id {
-                            exchanges.push((
-                                destination.clone(),
-                                FlightSender::create(async_channel::bounded(1).0),
-                            ));
-
-                            continue;
-                        }
-
-                        let key = (channel.clone(), FLIGHT_SENDER);
-                        let Some(senders) = self.fragment_exchanges.remove(&key) else {
-                            return Err(ErrorCode::UnknownFragmentExchange(format!(
-                                "Unknown fragment broadcast exchange channel, {}",
-                                destination
-                            )));
-                        };
-
-                        exchanges.extend(
-                            senders
-                                .into_iter()
-                                .map(|x| (destination.clone(), x.convert_to_sender())),
-                        );
-                    }
-                }
-
-                Ok(exchanges)
-            }
-            ExchangeParams::NodeShuffleExchange(params) => {
-                let mut exchanges = Vec::with_capacity(params.destination_ids.len());
-
-                for (destination, channels) in &params.destination_channels {
-                    for channel in channels {
-                        if destination == &params.executor_id {
-                            exchanges.push((
-                                destination.clone(),
-                                FlightSender::create(async_channel::bounded(1).0),
-                            ));
-
-                            continue;
-                        }
-
-                        let key = (channel.clone(), FLIGHT_SENDER);
-                        let Some(senders) = self.fragment_exchanges.remove(&key) else {
-                            return Err(ErrorCode::UnknownFragmentExchange(format!(
-                                "Unknown fragment exchange channel, {}, {}",
-                                destination, params.fragment_id
-                            )));
-                        };
-
-                        exchanges.extend(
-                            senders
-                                .into_iter()
-                                .map(|x| (destination.clone(), x.convert_to_sender())),
-                        );
-                    }
-                }
-
-                Ok(exchanges)
-            }
-        }
-    }
-
-    pub fn get_flight_receiver(&mut self, params: &ExchangeParams) -> Result<Vec<FlightReceiver>> {
-        match params {
-            ExchangeParams::MergeExchange(params) => {
-                let Some(receivers) = self
-                    .fragment_exchanges
-                    .remove(&(params.channel_id.clone(), FLIGHT_RECEIVER))
-                else {
-                    return Err(ErrorCode::UnknownFragmentExchange(format!(
-                        "Unknown fragment flight receiver, {}, {}",
-                        params.destination_id, params.fragment_id
-                    )));
-                };
-
-                Ok(receivers
-                    .into_iter()
-                    .map(|x| x.convert_to_receiver())
-                    .collect::<Vec<_>>())
-            }
-            ExchangeParams::BroadcastExchange(params) => {
-                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
-
-                for (destination, channels) in &params.destination_channels {
-                    if destination == &params.executor_id {
-                        for channel in channels {
-                            let key = (channel.clone(), FLIGHT_RECEIVER);
-
-                            let Some(receivers) = self.fragment_exchanges.remove(&key) else {
-                                return Err(ErrorCode::UnknownFragmentExchange(format!(
-                                    "Unknown fragment broadcast flight receiver, {}",
-                                    params.executor_id
-                                )));
-                            };
-                            exchanges
-                                .extend(receivers.into_iter().map(|x| x.convert_to_receiver()));
-                        }
-                    }
-                }
-
-                Ok(exchanges)
-            }
-            ExchangeParams::NodeShuffleExchange(params) => {
-                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
-
-                for (destination, channels) in &params.destination_channels {
-                    if destination == &params.executor_id {
-                        for channel in channels {
-                            let key = (channel.clone(), FLIGHT_RECEIVER);
-
-                            let Some(receivers) = self.fragment_exchanges.remove(&key) else {
-                                return Err(ErrorCode::UnknownFragmentExchange(format!(
-                                    "Unknown fragment flight receiver, {}, {}",
-                                    params.executor_id, params.fragment_id
-                                )));
-                            };
-                            exchanges
-                                .extend(receivers.into_iter().map(|x| x.convert_to_receiver()));
-                        }
-                    }
-                }
-
-                Ok(exchanges)
-            }
-        }
     }
 
     pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {
@@ -1071,7 +939,7 @@ impl QueryCoordinator {
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
-        assert!(self.fragment_exchanges.is_empty());
+        assert!(self.flight_data_senders.is_empty() && self.flight_data_receivers.is_empty());
         let info_mut = self.info.as_mut().expect("Query info is None");
         info_mut.query_executor = Some(executor.clone());
 

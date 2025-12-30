@@ -20,7 +20,6 @@ use async_channel::Sender;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
@@ -70,8 +69,8 @@ pub struct SortSampleState<C: BroadcastChannel> {
 }
 
 pub trait BroadcastChannel: Clone + Send + 'static {
-    fn sender(&self) -> Sender<BlockMetaInfoPtr>;
-    fn receiver(&self) -> Receiver<BlockMetaInfoPtr>;
+    fn sender(&self) -> Sender<DataBlock>;
+    fn receiver(&self) -> Receiver<DataBlock>;
 }
 
 impl<C: BroadcastChannel> SortSampleState<C> {
@@ -91,7 +90,7 @@ impl<C: BroadcastChannel> SortSampleState<C> {
         let is_empty = meta.is_none();
         let meta = meta.map(|meta| meta.boxed()).unwrap_or(().boxed());
         sender
-            .send(meta)
+            .send(DataBlock::empty_with_meta(meta))
             .await
             .map_err(|_| ErrorCode::TokioError("send sort bounds failed"))?;
         sender.close();
@@ -99,8 +98,8 @@ impl<C: BroadcastChannel> SortSampleState<C> {
 
         let receiver = self.channel.receiver();
         let mut all = Vec::new();
-        while let Ok(r) = receiver.recv().await {
-            match SortExchangeMeta::downcast_from_err(r) {
+        while let Ok(mut r) = receiver.recv().await {
+            match SortExchangeMeta::downcast_from_err(r.take_meta().unwrap()) {
                 Ok(meta) => all.push(meta),
                 Err(r) => {
                     debug_assert!(().boxed().equals(&r))

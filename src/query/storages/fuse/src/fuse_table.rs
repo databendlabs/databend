@@ -194,6 +194,10 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
+                        // Special handling for history tables.
+                        // Since history tables storage params are fully generated from config,
+                        // we can safely allow credential chain.
+                        let sp = allow_system_history_credential_chain(&table_info, sp);
                         let operator = init_operator(&sp)?;
 
                         let table_meta_options = &table_info.meta.options;
@@ -539,39 +543,34 @@ impl FuseTable {
 
     /// Returns the data retention policy for this table.
     /// Policy is determined in the following priority order:
-    ///   1. Number of snapshots to keep (from table option or setting)
-    ///   2. Time-based retention period (if snapshot count is not specified)
+    ///   1. Table options (number of snapshots first, then time period)
+    ///   2. Settings (number of snapshots first, then time period)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        let policy = if self.is_transient() {
-            RetentionPolicy::ByNumOfSnapshotsToKeep(1)
-        } else {
-            // Try to get number of snapshots to keep
-            if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
-                RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
-            } else {
-                // Fall back to time-based retention policy
-                let duration = self.get_data_retention_period(ctx)?;
-                RetentionPolicy::ByTimePeriod(duration)
-            }
-        };
+        if self.is_transient() {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(1));
+        }
 
-        Ok(policy)
+        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
+        }
+
+        if let Some(duration) = self.try_get_table_option_retention_period()? {
+            return Ok(RetentionPolicy::ByTimePeriod(duration));
+        }
+
+        if let Some(num_snapshots) = self.try_get_setting_num_snapshots_to_keep(ctx)? {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
+        }
+
+        let duration = self.get_data_retention_period_from_settings(ctx)?;
+        Ok(RetentionPolicy::ByTimePeriod(duration))
     }
 
-    /// Tries to retrieve the number of snapshots to keep for the retention policy.
-    /// Priority order:
-    ///   1. Table option (if set to a positive value)
-    ///   2. Global setting (if set to a positive value and table option is not applicable)
-    ///
-    /// Returns Some(value) if a valid positive value is found, None otherwise.
-    fn try_get_policy_by_num_snapshots_to_keep(
-        &self,
-        ctx: &dyn TableContext,
-    ) -> Result<Option<u64>> {
-        // Check table option first (highest priority).
-        //
-        // A positive value means we use this many snapshots for retention.
-        // If value of this table option is not set or is Some(0), we'll check the corresponding setting instead.
+    fn try_get_table_option_num_snapshots_to_keep(&self) -> Result<Option<u64>> {
         if let Some(tbl_opt) = self
             .table_info
             .meta
@@ -583,33 +582,44 @@ impl FuseTable {
                 return Ok(Some(num_snapshots));
             }
         }
+        Ok(None)
+    }
 
-        // Check if there is a valid setting of num snapshots to keep:
-        // Only positive value of setting counts.
+    fn try_get_setting_num_snapshots_to_keep(&self, ctx: &dyn TableContext) -> Result<Option<u64>> {
         let settings_value = ctx
             .get_settings()
             .get_data_retention_num_snapshots_to_keep()?;
         if settings_value > 0 {
             return Ok(Some(settings_value));
         }
-
-        // No valid num_snapshots_to_keep found
         Ok(None)
     }
 
-    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
-        let retention_period = if let Some(v) = self
+    fn try_get_table_option_retention_period(&self) -> Result<Option<Duration>> {
+        if let Some(v) = self
             .table_info
             .meta
             .options
             .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
         {
             let retention_period = v.parse::<u64>()?;
-            Duration::hours(retention_period as i64)
+            return Ok(Some(Duration::hours(retention_period as i64)));
+        }
+        Ok(None)
+    }
+
+    fn get_data_retention_period_from_settings(&self, ctx: &dyn TableContext) -> Result<Duration> {
+        Ok(Duration::days(
+            ctx.get_settings().get_data_retention_time_in_days()? as i64,
+        ))
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
+        if let Some(retention_period) = self.try_get_table_option_retention_period()? {
+            Ok(retention_period)
         } else {
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
-        };
-        Ok(retention_period)
+            self.get_data_retention_period_from_settings(ctx)
+        }
     }
 
     pub fn get_storage_format(&self) -> FuseStorageFormat {
@@ -1403,4 +1413,23 @@ fn apply_storage_class(
 pub enum RetentionPolicy {
     ByTimePeriod(TimeDelta),
     ByNumOfSnapshotsToKeep(usize),
+}
+
+fn allow_system_history_credential_chain(
+    table_info: &TableInfo,
+    storage_params: StorageParams,
+) -> StorageParams {
+    let mut sp = storage_params;
+    let Ok(db_name) = table_info.database_name() else {
+        return sp;
+    };
+    if !db_name.eq_ignore_ascii_case("system_history") {
+        return sp;
+    }
+    if let StorageParams::S3(cfg) = &mut sp {
+        if cfg.allow_credential_chain.is_none() {
+            cfg.allow_credential_chain = Some(true);
+        }
+    }
+    sp
 }
