@@ -12,7 +12,7 @@ create or replace table target (c int);
 statement ok
 create or replace table empty like target;
 
-# merge into
+# mutations in autocommit mode
 
 statement ok
 merge into target using (select c from empty) s on s.c = target.c when matched then update * when not matched then insert *;
@@ -22,8 +22,6 @@ select count() from fuse_snapshot('issue_19173', 'target');
 ----
 0
 
-# delete
-
 statement ok
 delete from target where c = 1;
 
@@ -32,20 +30,74 @@ select count() from fuse_snapshot('issue_19173', 'target');
 ----
 0
 
-# update
-
 statement ok
-update target set c =2 where c = 1
+update target set c =2 where c = 1;
 
 query I
 select count() from fuse_snapshot('issue_19173', 'target');
 ----
 0
 
-# insert
+statement ok
+insert into target select * from empty;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+# mutations inside explicit transactions
+
+statement ok
+start transaction;
+
+statement ok
+merge into target using (select c from empty) s on s.c = target.c when matched then update * when not matched then insert *;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+start transaction;
+
+statement ok
+delete from target where c = 1;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+start transaction;
+
+statement ok
+update target set c =2 where c = 1;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+start transaction;
 
 statement ok
 insert into target select * from empty;
+
+statement ok
+commit;
 
 query I
 select count() from fuse_snapshot('issue_19173', 'target');

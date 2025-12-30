@@ -388,7 +388,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
     /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if
     /// nothing was written. Overwrite/CTAS (`CREATE OR REPLACE TABLE t AS SELECT ...`
-    /// or `INSERT OVERWRITE ...`) still need a snapshot even when nothing was written,
+    /// ir `INSERT OVERWRITE ...`) still need a snapshot even when nothing was written,
     /// so we disable skipping when `AppendGenerator` is in overwrite mode.
     fn allow_append_only_skip(&self) -> bool {
         self.snapshot_gen
