@@ -61,6 +61,7 @@ use crate::field_encoder::helpers::write_quoted_string;
 
 pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
+    pub escape_char: u8,
     pub quote_char: u8,
 }
 
@@ -78,6 +79,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format: Default::default(),
             },
+            escape_char: b'"',
             quote_char: b'"',
         }
     }
@@ -99,6 +101,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
+            escape_char: b'\\',
             quote_char: b'"',
         }
     }
@@ -124,6 +127,7 @@ impl FieldEncoderValues {
                 binary_format: Default::default(),
                 geometry_format,
             },
+            escape_char: b'\\',
             quote_char: b'"',
         }
     }
@@ -186,7 +190,7 @@ impl FieldEncoderValues {
             // so we do not expect the scalar literal to be used in sql.
             // it is better to keep it simple: minimal escape.
             // it make result easier to decode csv, tsv and http handler result.
-            write_quoted_string(in_buf, out_buf, self.quote_char);
+            write_quoted_string(in_buf, out_buf, self.escape_char, self.quote_char);
             out_buf.push(self.quote_char);
         } else {
             out_buf.extend_from_slice(in_buf);
