@@ -178,11 +178,17 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     let mut buckets = Vec::with_capacity(data.len());
                     let mut payload_row_counts = Vec::with_capacity(data.len());
                     let mut payload_blocks = Vec::with_capacity(data.len());
+                    let mut empty_block_template = None;
 
                     for meta in data {
                         let AggregateMeta::AggregatePayload(payload) = meta else {
                             unreachable!("Partitioned meta only contains AggregatePayload");
                         };
+
+                        // Create empty block template from first payload before flushing
+                        if empty_block_template.is_none() {
+                            empty_block_template = Some(payload.payload.empty_block(1));
+                        }
 
                         let block = payload.payload.aggregate_flush_all()?;
                         if block.num_rows() == 0 {
@@ -193,12 +199,16 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         payload_blocks.push(block);
                     }
 
+                    // Only create empty block when ALL payloads are empty
                     if payload_blocks.is_empty() {
-                        let block = DataBlock::empty_with_meta(
-                            AggregateSerdeMeta::create_partitioned_payload(vec![], vec![], true),
-                        );
-                        let serialized = serialize_block(-1, block, &self.options)?;
-                        serialized_blocks.push(FlightSerialized::DataBlock(serialized));
+                        if let Some(empty) = empty_block_template {
+                            let block = empty.add_meta(Some(
+                                AggregateSerdeMeta::create_partitioned_payload(vec![], vec![], true),
+                            ))?;
+                            let serialized = serialize_block(-1, block, &self.options)?;
+                            serialized_blocks.push(FlightSerialized::DataBlock(serialized));
+                        }
+                        continue;
                     }
 
                     let mut merged_block = DataBlock::concat(&payload_blocks)?;
