@@ -675,7 +675,18 @@ impl Binder {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
-                let schema = bind_context.output_table_schema(self.metadata.clone())?;
+                let mut schema = bind_context.output_table_schema(self.metadata.clone())?;
+                let mut fields = schema.fields().clone();
+                for field in fields.iter_mut() {
+                    if field.data_type == TableDataType::Null {
+                        field.data_type = TableDataType::String.wrap_nullable();
+                    } else if !field.data_type().is_nullable_or_null() && !self.is_column_not_null()
+                    {
+                        field.data_type = field.data_type().clone().wrap_nullable();
+                    }
+                }
+                schema = TableSchemaRefExt::create(fields);
+
                 Self::validate_create_table_schema(&schema)?;
                 (
                     AnalyzeCreateTableResult {
