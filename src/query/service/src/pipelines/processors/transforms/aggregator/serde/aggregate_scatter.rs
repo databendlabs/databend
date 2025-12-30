@@ -19,10 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -48,7 +48,7 @@ impl LocalScatterTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        scatter: Arc<Box<dyn FlightScatter>>,
+        scatter: Arc<Box<dyn LocalScatter>>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(input, output, LocalScatterTransform {
             scatter,
@@ -260,18 +260,30 @@ impl AggregateBucketScatter {
                 match block_meta {
                     AggregateMeta::Partitioned { data, .. } => {
                         if is_local {
-                            data.into_iter().map(DataBlock::empty_with_meta).collect()
+                            let blocks = data
+                                .into_iter()
+                                .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
+                                .collect::<Vec<_>>();
+                            return Ok(blocks);
                         } else {
-                            let mut chunks = vec![vec![]; self.buckets];
+                            let mut chunks = Vec::with_capacity(self.buckets);
+                            chunks.resize_with(self.buckets, Vec::new);
                             for bucket_payload in data {
-                                let AggregateMeta::AggregatePayload(payload) = bucket_payload
-                                else {
-                                    return Err(ErrorCode::Internal(
-                                        "Internal, AggregateBucketScatter only recv AggregatePayload in Partitioned",
-                                    ));
-                                };
-                                chunks[payload.bucket as usize]
-                                    .push(AggregateMeta::AggregatePayload(payload));
+                                match bucket_payload {
+                                    AggregateMeta::Serialized(payload) => {
+                                        chunks[payload.bucket as usize % self.buckets]
+                                            .push(AggregateMeta::Serialized(payload));
+                                    }
+                                    AggregateMeta::AggregatePayload(payload) => {
+                                        chunks[payload.bucket as usize % self.buckets]
+                                            .push(AggregateMeta::AggregatePayload(payload));
+                                    }
+                                    _ => {
+                                        unreachable!(
+                                            "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
+                                        )
+                                    }
+                                }
                             }
                             let blocks = chunks
                                 .into_iter()
@@ -292,6 +304,7 @@ impl AggregateBucketScatter {
                 };
             }
         }
+
         Err(ErrorCode::Internal(
             "Internal, AggregateBucketScatter only recv AggregateMeta",
         ))

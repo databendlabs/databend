@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -23,7 +22,6 @@ use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 
 use super::exchange_transform_shuffle::ExchangeShuffleMeta;
-use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub struct ScatterTransform {
@@ -47,7 +45,6 @@ impl Transform for ScatterTransform {
 
     fn transform(&mut self, data: DataBlock) -> databend_common_exception::Result<DataBlock> {
         let blocks = self.scatter.execute(data)?;
-
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
             blocks,
         )))

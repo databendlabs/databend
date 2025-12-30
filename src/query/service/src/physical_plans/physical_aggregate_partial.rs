@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -26,16 +27,13 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_pipeline::core::Pipe;
-use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
-use databend_common_sql::IndexType;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
+use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
@@ -47,18 +45,13 @@ use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
-use crate::pipelines::processors::transforms::aggregator::HashTableHashScatter;
-use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
-use crate::servers::flight::v1::exchange::ScatterTransform;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -267,50 +260,6 @@ impl IPhysicalPlan for AggregatePartial {
                     )?,
                 ))
             })?;
-
-            if !builder.is_exchange_parent() {
-                let input_len = builder.main_pipeline.output_len();
-
-                if matches!(self.shuffle_mode, AggregateShuffleMode::Row) {
-                    // add a resize processor to avoid all spilled bucket flow into one reader processor
-                    builder.main_pipeline.resize(input_len, true)?;
-
-                    builder.main_pipeline.add_transform(|input, output| {
-                        let reader = NewAggregateSpillReader::try_create(builder.ctx.clone())?;
-                        Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
-                            input, output, reader,
-                        )))
-                    })?;
-                    builder.main_pipeline.add_transform(|input, output| {
-                        Ok(ScatterTransform::create(
-                            input,
-                            output,
-                            Arc::new(Box::new(HashTableHashScatter {
-                                buckets: input_len,
-                                aggregate_params: params.clone(),
-                            })),
-                        ))
-                    })?;
-                }
-
-                let output_len = if matches!(self.shuffle_mode, AggregateShuffleMode::Bucket(_)) {
-                    let adjust_parallelism =
-                        2_usize.pow(partial_agg_config.initial_radix_bits as u32);
-                    adjust_parallelism
-                } else {
-                    input_len
-                };
-                let transform = ExchangeShuffleTransform::create(input_len, output_len, output_len);
-                let inputs = transform.get_inputs();
-                let outputs = transform.get_outputs();
-                builder
-                    .main_pipeline
-                    .add_pipe(Pipe::create(input_len, output_len, vec![PipeItem::create(
-                        ProcessorPtr::create(Box::new(transform)),
-                        inputs,
-                        outputs,
-                    )]));
-            }
         } else {
             builder.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(

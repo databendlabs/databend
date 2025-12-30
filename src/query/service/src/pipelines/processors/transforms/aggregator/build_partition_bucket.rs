@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -25,11 +26,17 @@ use databend_common_pipeline::core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
+use crate::clusters::ClusterHelper;
+use crate::physical_plans::AggregateShuffleMode;
+use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
+use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
+use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
 use crate::pipelines::processors::transforms::aggregator::NewTransformFinalAggregate;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
-use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
+use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
 
 fn build_partition_bucket_experimental(
@@ -37,9 +44,59 @@ fn build_partition_bucket_experimental(
     params: Arc<AggregatorParams>,
     after_worker: usize,
     ctx: Arc<QueryContext>,
+    shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
+    let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+    match shuffle_mode {
+        AggregateShuffleMode::Row => {
+            pipeline.add_transform(|input, output| {
+                Ok(LocalScatterTransform::create(
+                    input,
+                    output,
+                    Arc::new(Box::new(AggregateRowScatter {
+                        buckets: final_parallelism,
+                        aggregate_params: params.clone(),
+                    })),
+                ))
+            })?;
+        }
+        AggregateShuffleMode::Bucket(hint) => {
+            let hint = hint as usize;
+            final_parallelism = if params.cluster_aggregator {
+                let cluster = ctx.get_cluster();
+                let local_pos = cluster.ordered_index();
+                let nodes_num = cluster.nodes.len();
+                let base = hint / nodes_num;
+                let rem = hint % nodes_num;
+                if local_pos < rem { base + 1 } else { base }
+            } else {
+                hint
+            };
+
+            pipeline.add_transform(|input, output| {
+                Ok(LocalScatterTransform::create(
+                    input,
+                    output,
+                    Arc::new(Box::new(AggregateBucketScatter {
+                        buckets: final_parallelism,
+                        aggregate_params: params.clone(),
+                    })),
+                ))
+            })?;
+        }
+    }
+
+    let input_len = pipeline.output_len();
+    let transform =
+        ExchangeShuffleTransform::create(input_len, final_parallelism, final_parallelism);
+    let inputs = transform.get_inputs();
+    let outputs = transform.get_outputs();
+    pipeline.add_pipe(Pipe::create(input_len, final_parallelism, vec![
+        PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
+    ]));
+
     let mut builder = TransformPipeBuilder::create();
-    for id in 0..pipeline.output_len() {
+    for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
         let processor = NewTransformFinalAggregate::try_create(
@@ -105,9 +162,10 @@ pub fn build_partition_bucket(
     max_restore_worker: u64,
     after_worker: usize,
     ctx: Arc<QueryContext>,
+    shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
     if params.enable_experiment_aggregate {
-        build_partition_bucket_experimental(pipeline, params, after_worker, ctx)
+        build_partition_bucket_experimental(pipeline, params, after_worker, ctx, shuffle_mode)
     } else {
         build_partition_bucket_legacy(pipeline, params, max_restore_worker, after_worker)
     }

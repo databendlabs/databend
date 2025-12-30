@@ -27,7 +27,6 @@ mod transform_single_key;
 mod udaf_script;
 
 pub use aggregate_exchange_injector::AggregateInjector;
-pub use aggregate_exchange_injector::HashTableHashScatter;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;
 pub use build_partition_bucket::build_partition_bucket;

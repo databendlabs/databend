@@ -19,28 +19,32 @@ use bumpalo::Bump;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::StringType;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::StringType;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::scatter_partitioned_payload;
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -48,12 +52,8 @@ use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
-use crate::pipelines::processors::transforms::aggregator::scatter_partitioned_payload;
-use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
-use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
@@ -454,9 +454,9 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                 }
             },
             HashTable::AggregateHashTable(hashtable) => {
-                let mut blocks = self
-                    .spillers
-                    .finish(self.is_row_shuffle, &self.dispatch_method)?;
+                // let mut blocks = self
+                //     .spillers
+                //     .finish(self.is_row_shuffle, &self.dispatch_method)?;
 
                 self.statistics.log_finish_statistics(&hashtable);
 
@@ -473,7 +473,7 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                         })
                     })
                     .collect::<Vec<_>>();
-
+                let mut blocks = vec![];
                 blocks.push(DataBlock::empty_with_meta(
                     AggregateMeta::create_partitioned(None, payloads),
                 ));

@@ -15,46 +15,46 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use arrow_ipc::CompressionType;
 use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::CompressionType;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use databend_common_expression::PartitionedPayload;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::PartitionedPayload;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_pipeline_transforms::UnknownMode;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::UnknownMode;
 use databend_common_settings::FlightCompression;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
 use super::SerializePayload;
+use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
-use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
-use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -169,13 +169,8 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 }
                 Some(AggregateMeta::Partitioned { data, .. }) => {
                     if index == self.local_pos {
-                        let blocks = data
-                            .into_iter()
-                            .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
-                            .collect::<Vec<_>>();
-
                         serialized_blocks.push(FlightSerialized::DataBlock(
-                            block.add_meta(Some(ExchangeShuffleMeta::create(blocks)))?,
+                            block.add_meta(Some(AggregateMeta::create_partitioned(None, data)))?,
                         ));
                         continue;
                     }
@@ -190,20 +185,30 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         };
 
                         let block = payload.payload.aggregate_flush_all()?;
+                        if block.num_rows() == 0 {
+                            continue;
+                        }
                         buckets.push(payload.bucket);
                         payload_row_counts.push(block.num_rows());
                         payload_blocks.push(block);
                     }
 
                     if payload_blocks.is_empty() {
-                        continue;
+                        let block = DataBlock::empty_with_meta(
+                            AggregateSerdeMeta::create_partitioned_payload(vec![], vec![], true),
+                        );
+                        let serialized = serialize_block(-1, block, &self.options)?;
+                        serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                     }
 
                     let mut merged_block = DataBlock::concat(&payload_blocks)?;
                     merged_block = merged_block.add_meta(Some(
-                        AggregateSerdeMeta::create_partitioned_payload(buckets, payload_row_counts),
+                        AggregateSerdeMeta::create_partitioned_payload(
+                            buckets,
+                            payload_row_counts,
+                            false,
+                        ),
                     ))?;
-
                     let serialized = serialize_block(-1, merged_block, &self.options)?;
                     serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                 }

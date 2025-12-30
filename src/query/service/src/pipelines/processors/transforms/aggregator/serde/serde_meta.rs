@@ -124,6 +124,7 @@ impl AggregateSerdeMeta {
     pub fn create_partitioned_payload(
         buckets: Vec<isize>,
         payload_row_counts: Vec<usize>,
+        is_empty: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: PARTITIONED_AGGREGATE_TYPE,
@@ -132,7 +133,7 @@ impl AggregateSerdeMeta {
             location: None,
             data_range: None,
             max_partition_count: 0,
-            is_empty: false,
+            is_empty: is_empty,
             buckets,
             payload_row_counts,
             shuffle_bucket: 0,
