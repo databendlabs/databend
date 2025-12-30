@@ -2974,15 +2974,13 @@ impl SchemaApiTestSuite {
             {
                 let table = util.get_table().await.unwrap();
                 let table_id = table.ident.table_id;
-                let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
-                let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
-                mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
-                    .await?;
-
-                // LVT was changed.
-                let mut new_table_meta = table.meta.clone();
-                new_table_meta.comment = "lvt guard should fail".to_string();
                 let small_ts = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
+                let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
+                let big_time = DateTime::<Utc>::from_timestamp(3_000, 0).unwrap();
+
+                // LVT no set.
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.comment = "lvt no set".to_string();
                 let req = UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table.ident.seq),
@@ -2990,7 +2988,34 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
-                        lvt: LeastVisibleTime::new(small_ts),
+                        time: small_ts,
+                    }),
+                };
+                let result = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await;
+                assert!(result.is_ok());
+                let table = util.get_table().await.unwrap();
+                assert_eq!(table.meta.comment, "lvt no set");
+
+                let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
+                mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
+                    .await?;
+
+                // LVT is smaller.
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.comment = "lvt guard should fail".to_string();
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table.ident.seq),
+                    new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
+                    lvt_check: Some(TableLvtCheck {
+                        tenant: tenant.clone(),
+                        time: small_ts,
                     }),
                 };
                 let result = mt
@@ -3001,7 +3026,7 @@ impl SchemaApiTestSuite {
                     .await;
                 assert!(result.is_err());
 
-                // LVT unchanged.
+                // LVT is large enough.
                 let table = util.get_table().await.unwrap();
                 let mut ok_table_meta = table.meta.clone();
                 ok_table_meta.comment = "lvt guard success".to_string();
@@ -3012,7 +3037,7 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
-                        lvt: LeastVisibleTime::new(lvt_time),
+                        time: big_time,
                     }),
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {

@@ -32,6 +32,7 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
@@ -99,7 +100,6 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -1244,10 +1244,26 @@ where
             // Add LVT check if provided
             if let Some(check) = req.lvt_check.as_ref() {
                 let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
-                txn.condition.push(TxnCondition::eq_value(
-                    lvt_ident.to_string_key(),
-                    serialize_struct(&check.lvt)?,
-                ));
+                let res = self.get_pb(&lvt_ident).await?;
+                let (seq, current_lvt) = match res {
+                    Some(v) => (v.seq, Some(v.data)),
+                    None => (0, None),
+                };
+                if let Some(current_lvt) = current_lvt {
+                    if current_lvt.time > check.time {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                req.table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check.time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                }
+                // no other one has updated LVT since we read it
+                txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
             }
 
             txn.if_then

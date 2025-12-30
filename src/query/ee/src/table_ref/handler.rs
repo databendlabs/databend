@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateTableRefPlan;
 use databend_common_sql::plans::DropTableRefPlan;
@@ -95,6 +94,14 @@ impl TableRefHandler for RealTableRefHandler {
             .read_table_snapshot_with_location(snapshot_loc)
             .await?
         {
+            if snapshot.timestamp.is_none() {
+                return Err(ErrorCode::IllegalReference(format!(
+                    "Table {} snapshot lacks required timestamp. This table was created with a significantly outdated version \
+                    that is no longer directly supported by the current version and requires migration. \
+                    Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
+                    table_id
+                )));
+            }
             let mut new_snapshot = TableSnapshot::try_from_previous(
                 snapshot.clone(),
                 Some(seq),
@@ -122,22 +129,11 @@ impl TableRefHandler for RealTableRefHandler {
             .as_ref()
             .is_some_and(|v| !matches!(v, NavigationPoint::TableRef { .. }))
         {
-            if let Some(ts) = prev_ts {
-                let current_lvt = catalog
-                    .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, table_id))
-                    .await?;
-                if let Some(lvt) = current_lvt {
-                    if ts < lvt.time {
-                        return Err(ErrorCode::IllegalReference(format!(
-                            "Cannot create {} '{}', because the referred snapshot timestamp {} is older than table least visible time {}",
-                            plan.ref_type, plan.ref_name, ts, lvt.time,
-                        )));
-                    }
-                    lvt_check = Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        lvt,
-                    });
-                }
+            if let Some(time) = prev_ts {
+                lvt_check = Some(TableLvtCheck {
+                    tenant: tenant.clone(),
+                    time,
+                });
             }
         }
 
