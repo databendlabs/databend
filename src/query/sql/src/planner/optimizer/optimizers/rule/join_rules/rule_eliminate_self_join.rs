@@ -345,6 +345,23 @@ impl RuleEliminateSelfJoin {
             .as_scan()
             .unwrap();
 
+        if scan
+            .push_down_predicates
+            .as_ref()
+            .is_some_and(|v| !v.is_empty())
+            || scan.limit.is_some()
+            || scan.order_by.as_ref().is_some_and(|v| !v.is_empty())
+            || scan.prewhere.is_some()
+            || scan.agg_index.is_some()
+            || scan.change_type.is_some()
+            || scan.update_stream_columns
+            || scan.inverted_index.is_some()
+            || scan.vector_index.is_some()
+            || scan.is_lazy_table
+        {
+            return None;
+        }
+
         let table_id = self.table_id_from_scan(scan, metadata)?;
 
         Some(Candidate {
