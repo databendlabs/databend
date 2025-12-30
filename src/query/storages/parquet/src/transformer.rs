@@ -77,6 +77,8 @@ struct TableFieldMapping {
     column_path: Vec<String>,
 }
 
+type FieldIdToArrowSchemaMap = HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>;
+
 impl RecordBatchTransformer {
     pub fn build(table_schema: TableSchemaRef) -> Self {
         let target_schema: Schema = table_schema.as_ref().into();
@@ -218,7 +220,7 @@ impl RecordBatchTransformer {
 
     pub fn build_field_id_to_arrow_schema_map(
         source_schema: &SchemaRef,
-    ) -> databend_common_exception::Result<HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>> {
+    ) -> databend_common_exception::Result<FieldIdToArrowSchemaMap> {
         let mut field_id_to_source_schema = HashMap::new();
         for (source_field_idx, source_field) in source_schema.fields.iter().enumerate() {
             let mut current_index_path = Vec::new();

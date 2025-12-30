@@ -62,6 +62,15 @@ select id, item['name'], item['age'] from t_nested;
 3 Charlie 35
 4 NULL NULL
 
+
+query ITI rowsort
+select item, item['name'] from t_nested;
+----
+('Alice',30) Alice
+('Bob',25) Bob
+('Charlie',35) Charlie
+NULL NULL
+
 query ITII rowsort
 select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from t_nested;
 ----
