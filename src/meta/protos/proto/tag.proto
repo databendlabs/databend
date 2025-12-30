@@ -20,35 +20,33 @@ message TagMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // Ordered list of string values that may be set on this tag.
-  // Matches CREATE TAG ... ALLOWED_VALUES semantics: must be declared before
-  // other parameters, accepts up to 5,000 entries, and when omitted any string
-  // (including empty) is accepted. Propagating tags rely on this order to
-  // resolve conflicts when ON_CONFLICT = ALLOWED_VALUES_SEQUENCE (e.g. `CREATE
-  // TAG my_tag ALLOWED_VALUES 'blue', 'red' PROPAGATE = ON_DEPENDENCY
-  // ON_CONFLICT = ALLOWED_VALUES_SEQUENCE` always picks `'blue'`). A conflict
-  // arises when the same downstream object inherits different values:
-  //
-  //   Tag definition: my_tag ALLOWED_VALUES 'blue', 'red'
-  //   Object A --(my_tag='blue')--> \
-  //                                   -> Object C (final = 'blue')
-  //   Object B --(my_tag='red')-->  /
-  //
-  // We keep a repeated field instead of a map to avoid undefined iteration
-  // order or manually maintained indices. With maps, gaps like `{blue:1, red:3}`
-  // (after deletes/edits) would desync the conflict priority from the declared
-  // order, so we store the sequence directly.
-  repeated string allowed_values = 1;
+  message AllowedValues {
+    // Ordered list of string values that may be set on this tag.
+    // Matches CREATE TAG ... ALLOWED_VALUES semantics: must be declared before
+    // other parameters, accepts up to 5,000 entries, and when omitted any string
+    // (including empty) is accepted. Propagating tags rely on this order to
+    // resolve conflicts when ON_CONFLICT = ALLOWED_VALUES_SEQUENCE (e.g. `CREATE
+    // TAG my_tag ALLOWED_VALUES 'blue', 'red' PROPAGATE = ON_DEPENDENCY
+    // ON_CONFLICT = ALLOWED_VALUES_SEQUENCE` always picks `'blue'`). A conflict
+    // arises when the same downstream object inherits different values:
+    //
+    //   Tag definition: my_tag ALLOWED_VALUES 'blue', 'red'
+    //   Object A --(my_tag='blue')--> \
+    //                                   -> Object C (final = 'blue')
+    //   Object B --(my_tag='red')-->  /
+    //
+    // We keep a repeated field instead of a map to avoid undefined iteration
+    // order or manually maintained indices. With maps, gaps like `{blue:1, red:3}`
+    // (after deletes/edits) would desync the conflict priority from the declared
+    // order, so we store the sequence directly.
+    repeated string values = 1;
+  }
+
+  optional AllowedValues allowed_values = 1;
   string comment = 2;
   string created_on = 3;
   optional string updated_on = 4;
   optional string drop_on = 5;
-  // Distinguishes between `CREATE TAG ... ALLOWED_VALUES` (even if the list is
-  // currently empty) and tags that never configured allowed values. When false,
-  // the tag accepts any string. When true, only entries from `allowed_values`
-  // are valid; the list may be empty when all values have been dropped but the
-  // constraint still exists until an UNSET command runs.
-  bool enforce_allowed_values = 6;
 }
 
 // Value stored for tag-to-object binding (indexed by object).

@@ -60,11 +60,9 @@ impl Interpreter for CreateTagInterpreter {
             .plan
             .allowed_values
             .as_ref()
-            .map(|vals| normalize_allowed_values(vals))
-            .unwrap_or_default();
+            .map(|vals| normalize_allowed_values(vals));
         let meta = TagMeta {
             allowed_values: normalized_allowed_values,
-            enforce_allowed_values: self.plan.allowed_values.is_some(),
             comment,
             created_on: Utc::now(),
             updated_on: None,

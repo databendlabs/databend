@@ -52,14 +52,10 @@ pub struct TagMeta {
     /// Ordered list mirroring `CREATE TAG ... ALLOWED_VALUES`. Always preserves
     /// declaration order so ON_CONFLICT = ALLOWED_VALUES_SEQUENCE can
     /// deterministically pick winners. Duplicates are removed during creation.
-    /// The vector may be empty when all values are dropped but the constraint
-    /// remains active.
-    pub allowed_values: Vec<String>,
-    /// Whether the tag currently enforces `ALLOWED_VALUES`. When false, any
-    /// string (including empty) is accepted. When true and `allowed_values` is
-    /// empty, no value may be set until the list is repopulated or the
-    /// constraint is unset with `ALTER TAG ... UNSET ALLOWED_VALUES`.
-    pub enforce_allowed_values: bool,
+    /// When `Some`, the contained vector may be empty (meaning the constraint
+    /// exists but currently rejects all values). When `None`, the tag accepts
+    /// any string.
+    pub allowed_values: Option<Vec<String>>,
     /// User-provided description of the tag.
     pub comment: String,
     pub created_on: DateTime<Utc>,
@@ -178,7 +174,7 @@ pub struct UnsetObjectTagsReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectTagIdRefValue {
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
-    /// is present, this string must match one of the configured entries,
+    /// is `Some`, this string must match one of the configured entries,
     /// otherwise any string (including empty) is allowed.
     pub tag_allowed_value: String,
 }

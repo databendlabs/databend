@@ -64,12 +64,10 @@ impl AsyncSystemTable for TagsTable {
 
         for tag in tags {
             names.push(tag.name);
-            if tag.meta.data.enforce_allowed_values {
+            if let Some(values) = tag.meta.data.allowed_values.as_ref() {
                 allowed_values.push(Some(format!(
                     "[{}]",
-                    tag.meta
-                        .data
-                        .allowed_values
+                    values
                         .iter()
                         .map(|v| format!("'{}'", v.replace('\'', "\\'")))
                         .collect::<Vec<_>>()
