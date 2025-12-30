@@ -17,6 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VectorDataType;
 use itertools::Itertools;
 
 use crate::MetadataRef;
@@ -33,6 +36,22 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+
+fn may_contain_nan(data_type: &DataType) -> bool {
+    match data_type {
+        DataType::Number(NumberDataType::Float32 | NumberDataType::Float64) => true,
+        DataType::Vector(VectorDataType::Float32(_)) => true,
+        DataType::Nullable(inner) => may_contain_nan(inner),
+        DataType::Array(inner) => may_contain_nan(inner),
+        DataType::Map(inner) => may_contain_nan(inner),
+        DataType::Tuple(inner) => inner.iter().any(may_contain_nan),
+        _ => false,
+    }
+}
+
+fn can_eliminate_self_eq(data_type: &DataType) -> bool {
+    !data_type.is_nullable() && !may_contain_nan(data_type)
+}
 
 pub struct RuleEliminateFilter {
     id: RuleID,
@@ -106,7 +125,7 @@ impl Rule for RuleEliminateFilter {
                     ) = (&func.arguments[0], &func.arguments[1])
                     {
                         left_col.column.index != right_col.column.index
-                            || left_col.column.data_type.is_nullable()
+                            || !can_eliminate_self_eq(left_col.column.data_type.as_ref())
                     } else {
                         true
                     }
@@ -128,7 +147,7 @@ impl Rule for RuleEliminateFilter {
                     ) = (&inner.arguments[0], &inner.arguments[1])
                     {
                         left_col.column.index != right_col.column.index
-                            || left_col.column.data_type.is_nullable()
+                            || !can_eliminate_self_eq(left_col.column.data_type.as_ref())
                     } else {
                         true
                     }
