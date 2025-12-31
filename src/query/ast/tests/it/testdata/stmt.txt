@@ -29252,3 +29252,36 @@ ShowObjectPrivileges(
 )
 
 
+---------- Input ----------
+create tag if not exists tag_a ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'
+---------- Output ---------
+CREATE TAG IF NOT EXISTS tag_a ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'
+---------- AST ------------
+CreateTag(
+    CreateTagStmt {
+        create_option: CreateIfNotExists,
+        name: Identifier {
+            span: Some(
+                25..30,
+            ),
+            name: "tag_a",
+            quote: None,
+            ident_type: None,
+        },
+        allowed_values: Some(
+            [
+                String(
+                    "dev",
+                ),
+                String(
+                    "prod",
+                ),
+            ],
+        ),
+        comment: Some(
+            "environment tag",
+        ),
+    },
+)
+
+

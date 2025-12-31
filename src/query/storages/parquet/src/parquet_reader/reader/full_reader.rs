@@ -50,7 +50,6 @@ use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::utils::FieldPaths;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::parquet_reader::utils::transform_record_batch_by_field_paths;
 use crate::transformer::RecordBatchTransformer;
 
 /// The reader to read a whole parquet file.
@@ -237,27 +236,16 @@ impl ParquetWholeFileReader {
         let field_paths = self.field_paths.clone();
         let mut transformer = self.transformer.clone();
 
-        if let Some(field_paths) = field_paths.as_ref() {
+        Ok(Box::new(iter.map(move |r| {
+            let output_data_schema = output_data_schema.clone();
             let field_paths = field_paths.clone();
-            let iter = iter.map(move |r| {
-                r.and_then(|mut batch| {
-                    if let Some(transformer) = &mut transformer {
-                        batch = transformer.process_record_batch(batch)?;
-                    }
-                    transform_record_batch_by_field_paths(&batch, &field_paths)
-                })
-            });
-            Ok(Box::new(iter))
-        } else {
-            Ok(Box::new(iter.map(move |r| {
-                r.and_then(|mut batch| {
-                    if let Some(transformer) = &mut transformer {
-                        batch = transformer.process_record_batch(batch)?
-                    }
-                    DataBlock::from_record_batch(&output_data_schema, &batch)
-                })
-            })))
-        }
+            r.and_then(|mut batch| {
+                if let Some(transformer) = &mut transformer {
+                    batch = transformer.process_record_batch(batch)?;
+                }
+                transform_record_batch(&output_data_schema, &batch, field_paths.as_ref())
+            })
+        })))
     }
 }
 
