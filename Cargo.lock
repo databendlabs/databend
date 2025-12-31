@@ -9079,7 +9079,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -9128,7 +9128,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9145,7 +9145,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9169,7 +9169,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9189,7 +9189,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
