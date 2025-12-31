@@ -16,8 +16,8 @@ INSERT INTO t1 (id, m) VALUES(1, {100:'abc',200:'def'}),(2, {'300':123}),(3, {})
 query IT
 select * from t1
 ----
-1 {100:'abc',200:'def'}
-2 {300:'123'}
+1 {100:"abc",200:"def"}
+2 {300:"123"}
 3 {}
 
 query TTTT
@@ -30,7 +30,7 @@ NULL NULL NULL NULL
 query IT
 select * from t1 where m[300] = '123'
 ----
-2 {300:'123'}
+2 {300:"123"}
 
 statement error 1006
 INSERT INTO t1 (id, m) VALUES(1, {100:'k1',100:'k2'})
@@ -44,40 +44,40 @@ INSERT INTO t2 (id, m) VALUES(1, {'k1':['2020-01-01','2021-01-02'],'k2':['2022-0
 query IT
 select * from t2
 ----
-1 {'k1':['2020-01-01','2021-01-02'],'k2':['2022-01-01']}
-2 {'k3':['2023-01-01']}
+1 {"k1":["2020-01-01","2021-01-02"],"k2":["2022-01-01"]}
+2 {"k3":["2023-01-01"]}
 
 query TTTT
 select m['k1'], m['k2'], m['k3'], m['k4'] from t2
 ----
-['2020-01-01','2021-01-02'] ['2022-01-01'] NULL NULL
-NULL NULL ['2023-01-01'] NULL
+["2020-01-01","2021-01-02"] ["2022-01-01"] NULL NULL
+NULL NULL ["2023-01-01"] NULL
 
 query TTTT
 select m:k1, m:k2, m['k3'], m['k4'] from t2
 ----
-['2020-01-01','2021-01-02'] ['2022-01-01'] NULL NULL
-NULL NULL ['2023-01-01'] NULL
+["2020-01-01","2021-01-02"] ["2022-01-01"] NULL NULL
+NULL NULL ["2023-01-01"] NULL
 
 query IT
 select * from t2 where m['k3'] = ['2023-01-01'::date]
 ----
-2 {'k3':['2023-01-01']}
+2 {"k3":["2023-01-01"]}
 
 query T
 select {'id':id} from t2
 ----
-{'id':1}
-{'id':2}
+{"id":1}
+{"id":2}
 
 query T
 select {'id':number} from numbers(5)
 ----
-{'id':0}
-{'id':1}
-{'id':2}
-{'id':3}
-{'id':4}
+{"id":0}
+{"id":1}
+{"id":2}
+{"id":3}
+{"id":4}
 
 statement ok
 CREATE OR REPLACE TABLE t1(tags Map(String, String)) Engine = Fuse

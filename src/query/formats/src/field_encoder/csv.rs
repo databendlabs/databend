@@ -93,7 +93,8 @@ impl FieldEncoderCSV {
                     binary_format: params.binary_format,
                     geometry_format: params.geometry_format,
                 },
-                quote_char: 0, // not used
+                escape_char: 0, // not used
+                quote_char: 0,  // not used
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -116,7 +117,8 @@ impl FieldEncoderCSV {
                     binary_format: Default::default(),
                     geometry_format: Default::default(),
                 },
-                quote_char: 0, // not used
+                escape_char: 0, // not used
+                quote_char: 0,  // not used
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],

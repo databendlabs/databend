@@ -113,6 +113,10 @@ impl SelectInterpreter {
         DataSchemaRefExt::create(fields)
     }
 
+    pub fn get_result_table_schema(&self) -> Result<TableSchemaRef> {
+        self.bind_context.output_table_schema(self.metadata.clone())
+    }
+
     #[fastrace::trace(name = "SelectInterpreter::build_physical_plan")]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {

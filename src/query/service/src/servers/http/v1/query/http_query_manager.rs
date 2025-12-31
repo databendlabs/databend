@@ -68,9 +68,18 @@ impl Queries {
         self.active.get(query_id).cloned()
     }
 
-    pub(crate) fn insert(&mut self, query: Arc<HttpQuery>) {
-        self.num_active_queries += 1;
-        self.active.insert(query.id.clone(), query);
+    pub(crate) fn insert(&mut self, query: Arc<HttpQuery>) -> Result<()> {
+        let query_id = query.id.clone();
+        if self.active.contains_key(&query_id) {
+            let err = ErrorCode::BadArguments(format!(
+                "fail to start query: query_id {query_id} already exists"
+            ));
+            return Err(err);
+        } else {
+            self.num_active_queries += 1;
+            self.active.insert(query.id.clone(), query);
+        }
+        return Ok(());
     }
 
     pub(crate) fn remove(&mut self, query_id: &str) -> Option<Arc<HttpQuery>> {
@@ -143,9 +152,8 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn add_query(self: &Arc<Self>, query: HttpQuery) -> Arc<HttpQuery> {
-        let query = Arc::new(query);
-        self.queries.write().insert(query.clone());
+    pub async fn add_query(self: &Arc<Self>, query: Arc<HttpQuery>) -> Result<Arc<HttpQuery>> {
+        self.queries.write().insert(query.clone())?;
 
         let self_clone = self.clone();
         let query_id_clone = query.id.clone();
@@ -182,7 +190,7 @@ impl HttpQueryManager {
                 }
             }
         });
-        query
+        Ok(query)
     }
 
     #[async_backtrace::framed]
