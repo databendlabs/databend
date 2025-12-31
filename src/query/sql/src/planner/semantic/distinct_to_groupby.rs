@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -68,6 +69,32 @@ impl DistinctToGroupBy {
                     || name.name.eq_ignore_ascii_case("count_distinct"))
                     && args.iter().all(|arg| !matches!(arg, Expr::Literal { .. }))
                 {
+                    let extra_selection = args
+                        .iter()
+                        .cloned()
+                        .map(|arg| Expr::IsNull {
+                            span: None,
+                            expr: Box::new(arg),
+                            not: true,
+                        })
+                        .reduce(|left, right| Expr::BinaryOp {
+                            span: None,
+                            op: BinaryOperator::And,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        });
+
+                    let selection = match (selection.clone(), extra_selection) {
+                        (Some(orig), Some(extra)) => Some(Expr::BinaryOp {
+                            span: None,
+                            op: BinaryOperator::And,
+                            left: Box::new(orig),
+                            right: Box::new(extra),
+                        }),
+                        (None, Some(extra)) => Some(extra),
+                        (orig, None) => orig,
+                    };
+
                     let subquery = Query {
                         span: None,
                         with: None,
@@ -84,7 +111,7 @@ impl DistinctToGroupBy {
                                 })
                                 .collect(),
                             from: from.clone(),
-                            selection: selection.clone(),
+                            selection,
                             group_by: Some(GroupBy::Normal(args.clone())),
                             having: None,
                             window_list: None,

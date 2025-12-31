@@ -53,8 +53,8 @@ query TT
 select c, min(h), max(h) from t_min_max_any group by c order by c
 ----
 1 (1460608685,NULL) (1460608685,NULL)
-2 (-698945516,'0DGdV') (-698945516,'0DGdV')
-3 (-468605495,'2s3RO') (460198171,'qcCz9')
+2 (-698945516,"0DGdV") (-698945516,"0DGdV")
+3 (-468605495,"2s3RO") (460198171,"qcCz9")
 
 
 statement ok

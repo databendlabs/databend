@@ -67,7 +67,7 @@ query SS
 select name, predecessors from task_dependents(task_name => 'mytaskchild', recursive => true)
 ----
 mytaskroot []
-mytaskchild ['mytaskroot']
+mytaskchild ["mytaskroot"]
 
 
 statement ok
@@ -77,7 +77,7 @@ call TASK_DEPENDENTS_ENABLE('mytaskchild');
 query SS
 select name, state, predecessors from task_dependents(task_name => 'mytaskchild')
 ----
-mytaskchild Started ['mytaskroot']
+mytaskchild Started ["mytaskroot"]
 
 
 statement ok
