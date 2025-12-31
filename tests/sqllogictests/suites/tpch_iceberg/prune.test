@@ -9,7 +9,7 @@ CONNECTION=(
     ADDRESS='http://127.0.0.1:8181'
     WAREHOUSE='s3://iceberg-tpch'
     "s3.region"='us-east-1'
-    "s3.endpoint"='http://127.0.0.1:9000'
+    "s3.endpoint"='http://127.0.0.1:9002'
 );
 
 ## note: the tests only cover standalone mode
@@ -26,6 +26,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0)]
         ├── read rows: 0
         ├── read size: 0
@@ -47,6 +48,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 0
         ├── read size: 0
@@ -68,6 +70,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 0
         ├── read size: 0
@@ -82,13 +85,14 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate =
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 243.54
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) > 1), is_true(lineitem.l_commitdate (#11) = '1992-01-22')]
-    ├── estimated rows: 243.54
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 0
         ├── read size: 0
@@ -111,6 +115,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0)]
         ├── read rows: 0
         ├── read size: 0
@@ -132,10 +137,11 @@ EvalScalar
     ├── estimated rows: 600572.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 600572
-        ├── read size: 14.27 MiB
-        ├── partitions total: 4
-        ├── partitions scanned: 4
+        ├── read size: 14.54 MiB
+        ├── partitions total: 18
+        ├── partitions scanned: 18
         ├── push downs: [filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))], limit: NONE]
         └── estimated rows: 600572.00

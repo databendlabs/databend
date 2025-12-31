@@ -396,14 +396,18 @@ impl MutationExpression {
             let column = match name_map.get(field.name()) {
                 None => {
                     return Err(ErrorCode::SemanticError(
-                        format!("can't find {} in source output", field.name).to_string(),
+                        format!(
+                            "Column `{}` is not found in the mutation source output",
+                            field.name
+                        )
+                        .to_string(),
                     ));
                 }
                 Some(indices) => {
                     if indices.len() != 1 {
                         return Err(ErrorCode::SemanticError(
                             format!(
-                                "there should be only one {} in source output,but we get {}",
+                                "There should be only one column `{}` in the mutation source output, but we get {}",
                                 field.name,
                                 indices.len()
                             )
