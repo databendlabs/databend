@@ -123,7 +123,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2')
+a b ["c1","c2"] ("d1","d2")
 
 statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN a binary not null
@@ -167,7 +167,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2')
+a b ["c1","c2"] ("d1","d2")
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t4`

@@ -12,9 +12,9 @@ ndjson/cast_sample.ndjson 3 0 NULL NULL
 query TT
 select * from cast_ndjson
 ----
-data1 {'env':'test1','length':'ok'}
-data2 {'env':'test2','length':'true'}
-data3 {'env':'test3','length':'10'}
+data1 {"env":"test1","length":"ok"}
+data2 {"env":"test2","length":"true"}
+data3 {"env":"test3","length":"10"}
 
 statement ok
 CREATE OR REPLACE TABLE cast_ts_ndjson (t timestamp)

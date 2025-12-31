@@ -3702,6 +3702,7 @@ dependencies = [
  "num",
  "num-traits",
  "pretty_assertions",
+ "serde",
  "serde_json",
  "tokio",
 ]
