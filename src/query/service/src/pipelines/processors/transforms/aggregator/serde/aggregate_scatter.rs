@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -30,6 +29,7 @@ use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::Transformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
@@ -186,16 +186,73 @@ impl AggregateRowScatter {
                                 .enumerate()
                             {
                                 blocks.push(DataBlock::empty_with_meta(
-                                    AggregateMeta::create_agg_payload(
-                                        bucket as isize,
-                                        payload,
-                                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                                    ),
+                                    AggregateMeta::create_agg_payload(bucket as isize, payload, 0),
                                 ));
                             }
                         }
                     }
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::Partitioned { data, bucket } => {
+                        let mut partitions = Vec::with_capacity(self.buckets);
+                        partitions.resize_with(self.buckets, Vec::new);
+
+                        for meta in data {
+                            match meta {
+                                AggregateMeta::AggregatePayload(payload) => {
+                                    let bucket_id = payload.bucket;
+                                    for (index, payload) in
+                                        scatter_payload(payload.payload, self.buckets)?
+                                            .into_iter()
+                                            .enumerate()
+                                    {
+                                        partitions[index].push(AggregateMeta::AggregatePayload(
+                                            AggregatePayload {
+                                                bucket: bucket_id,
+                                                payload,
+                                                max_partition_count: 0,
+                                            },
+                                        ));
+                                    }
+                                }
+                                AggregateMeta::Serialized(payload) => {
+                                    let bucket_id = payload.bucket;
+                                    let mut partition = payload.convert_to_partitioned_payload(
+                                        self.aggregate_params.group_data_types.clone(),
+                                        self.aggregate_params.aggregate_functions.clone(),
+                                        self.aggregate_params.num_states(),
+                                        0,
+                                        Arc::new(Bump::new()),
+                                    )?;
+                                    let payload = partition.payloads.pop();
+                                    if let Some(payload) = payload {
+                                        for (index, payload) in
+                                            scatter_payload(payload, self.buckets)?
+                                                .into_iter()
+                                                .enumerate()
+                                        {
+                                            partitions[index].push(
+                                                AggregateMeta::AggregatePayload(AggregatePayload {
+                                                    bucket: bucket_id,
+                                                    payload,
+                                                    max_partition_count: 0,
+                                                }),
+                                            );
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    unreachable!(
+                                        "Internal, AggregateRowScatter only recv AggregatePayload/Serialized in Partitioned"
+                                    )
+                                }
+                            }
+                        }
+
+                        for payloads in partitions {
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::create_partitioned(bucket, payloads),
+                            ));
+                        }
+                    }
                     AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::NewSpilled(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(payload) => {
