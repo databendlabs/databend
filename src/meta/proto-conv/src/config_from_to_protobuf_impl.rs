@@ -132,6 +132,7 @@ impl FromToProto for StorageS3Config {
             root: p.root,
             master_key: p.master_key,
             disable_credential_loader: p.disable_credential_loader,
+            allow_credential_chain: None,
             enable_virtual_host_style: p.enable_virtual_host_style,
             role_arn: p.role_arn,
             external_id: p.external_id,

@@ -88,6 +88,18 @@ impl InnerConfig {
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
+        // Set default allow_credential_chain to true for config storage params.
+        if let StorageParams::S3(s3) = &mut cfg.storage.params
+            && s3.allow_credential_chain.is_none()
+        {
+            s3.allow_credential_chain = Some(true);
+        }
+        if let Some(StorageParams::S3(s3)) = &mut cfg.spill.storage_params
+            && s3.allow_credential_chain.is_none()
+        {
+            s3.allow_credential_chain = Some(true);
+        }
+
         if check_meta {
             cfg.meta.check_valid()?;
         }

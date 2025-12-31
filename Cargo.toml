@@ -11,80 +11,16 @@ members = [
     "src/bendpy",
     "src/bendsave",
     "src/binaries",
-    "src/common/auth",
-    "src/common/base",
-    "src/common/building",
-    "src/common/cache",
-    "src/common/cloud_control",
-    "src/common/column",
-    "src/common/compress",
-    "src/common/exception",
-    "src/common/frozen_api",
-    "src/common/grpc",
-    "src/common/hashtable",
-    "src/common/http",
-    "src/common/io",
-    "src/common/license",
-    "src/common/metrics",
-    "src/common/native",
-    "src/common/storage",
-    "src/common/telemetry",
-    "src/common/timezone",
-    "src/common/tracing",
-    "src/common/vector",
-    "src/common/version",
     "src/meta/*",
-    "src/query/ast",
-    "src/query/catalog",
     "src/query/codegen",
-    "src/query/config",
-    "src/query/datavalues",
-    "src/query/ee_features/attach_table",
-    "src/query/ee_features/data_mask",
-    "src/query/ee_features/resources_management",
-    "src/query/ee_features/storage_encryption",
-    "src/query/ee_features/stream_handler",
-    "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/virtual_column",
-    "src/query/ee",
-    "src/query/expression",
-    "src/query/formats",
-    "src/query/functions",
-    "src/query/functions",
-    "src/query/functions/src/scalars/arithmetic",
-    "src/query/functions/src/scalars/geographic",
-    "src/query/functions/src/scalars/integer_arithmetic",
-    "src/query/functions/src/scalars/mathematics",
-    "src/query/functions/src/scalars/numeric_basic_arithmetic",
-    "src/query/functions/src/scalars/timestamp",
-    "src/query/management",
-    "src/query/pipeline",
-    "src/query/pipeline/transforms",
-    "src/query/script",
-    "src/query/service",
-    "src/query/settings",
-    "src/query/sql",
-    "src/query/storages/basic",
-    "src/query/storages/common/blocks",
-    "src/query/storages/common/cache",
-    "src/query/storages/common/index",
-    "src/query/storages/common/io",
-    "src/query/storages/common/pruner",
-    "src/query/storages/common/session",
-    "src/query/storages/common/stage",
-    "src/query/storages/common/table_meta",
-    "src/query/storages/delta",
-    "src/query/storages/factory",
-    "src/query/storages/fuse",
-    "src/query/storages/hive/hive",
-    "src/query/storages/iceberg",
-    "src/query/storages/information_schema",
-    "src/query/storages/orc",
-    "src/query/storages/parquet",
-    "src/query/storages/stage",
-    "src/query/storages/stream",
-    "src/query/storages/system",
-    "src/query/users",
+    "src/tests/sqlsmith",
+    "tests/sqllogictests",
+]
+default-members = [
+    "src/bendsave",
+    "src/binaries",
+    "src/meta/*",
+    "src/query/codegen",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
 ]
@@ -242,7 +178,7 @@ buf-list = "1.0.3"
 bumpalo = "3.12.0"
 byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive", "extern_crate_alloc", "must_cast", "transparentwrapper_extra"] }
-byteorder = "1.4.3"
+byteorder = "1.5.0"
 bytes = "1.5.0"
 bytesize = "2"
 cbordata = { version = "0.6.0" }
@@ -312,13 +248,13 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 lru = "0.12"
 
 ## in branch dev
-iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c", features = [
+iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
-iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6536f9c" }
+iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
+iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
+iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
+iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -367,9 +303,9 @@ num-derive = "0.4.2"
 num-traits = "0.2.19"
 num_cpus = "1.17"
 object = "0.36.5"
-object_store_opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
+object_store_opendal = { version = "0.54.1" }
 once_cell = "1.15.0"
-opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef", features = [
+opendal = { version = "0.54.1", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -387,8 +323,6 @@ opendal = { git = "https://github.com/apache/opendal.git", rev = "02953ef", feat
     "services-webhdfs",
     "services-huggingface",
 ] }
-opendal-layer-immutable-index = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
-opendal-layer-observe-metrics-common = { git = "https://github.com/apache/opendal.git", rev = "02953ef" }
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
@@ -485,7 +419,7 @@ strum = "0.24.1"
 sub-cache = "0.2.1"
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.25.0"
+tantivy = "0.26.0"
 tantivy-common = "0.10.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.17.0"
@@ -596,14 +530,6 @@ overflow-checks = true
 incremental = false
 debug-assertions = true
 
-[profile.unit-test]
-inherits = "test"
-opt-level = 0
-codegen-units = 16
-lto = false
-debug = true
-panic = "abort"
-
 # [profile.release.package]
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }
@@ -651,9 +577,9 @@ recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "1
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "ac27464" }
-tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-query-grammar" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "18a0ae9" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

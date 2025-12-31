@@ -263,8 +263,8 @@ INSERT INTO t12 (id, arr) VALUES(3, ['1000000-01-01', '2000000-01-01'])
 query IT
 select * from t12
 ----
-1 ['2021-01-01','2022-01-01']
-2 ['1990-12-01','2030-01-12']
+1 ["2021-01-01","2022-01-01"]
+2 ["1990-12-01","2030-01-12"]
 
 query TT
 select arr[1], arr[2] from t12
@@ -287,8 +287,8 @@ INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01
 query IT
 select * from t13
 ----
-1 ['2021-01-01 01:01:01.000000','2022-01-01 01:01:01.000000']
-2 ['1990-12-01 10:11:12.000000','2030-01-12 22:00:00.000000']
+1 ["2021-01-01 01:01:01.000000","2022-01-01 01:01:01.000000"]
+2 ["1990-12-01 10:11:12.000000","2030-01-12 22:00:00.000000"]
 
 query TT
 select arr[1], arr[2] from t13
@@ -308,8 +308,8 @@ INSERT INTO t14 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd'])
 query IT
 select * from t14
 ----
-1 ['aa','bb']
-2 ['cc','dd']
+1 ["aa","bb"]
+2 ["cc","dd"]
 
 query TT
 select arr[1], arr[2] from t14
@@ -329,9 +329,9 @@ INSERT INTO t15 (id, arr) VALUES(1, ['aa', 'bb']), (2, ['cc', 'dd']), (3, [12, 3
 query IT
 select * from t15
 ----
-1 ['aa','bb']
-2 ['cc','dd']
-3 ['12','34']
+1 ["aa","bb"]
+2 ["cc","dd"]
+3 ["12","34"]
 
 query TT
 select arr[1], arr[2] from t15
@@ -380,10 +380,10 @@ INSERT INTO t17 (id, arr) VALUES(1, ['aa', 'bb']), (2, [null, 'cc']), (3, ['dd',
 query IT
 select * from t17
 ----
-1 ['aa','bb']
-2 [NULL,'cc']
-3 ['dd',NULL]
-4 ['ee','ff']
+1 ["aa","bb"]
+2 [NULL,"cc"]
+3 ["dd",NULL]
+4 ["ee","ff"]
 
 query TT
 select arr[1], arr[2] from t17

@@ -274,9 +274,9 @@ where
         self.get_id_and_value(key).await
     }
 
-    /// list by name prefix, returns a list of `(name, id, value)`
+    /// list by name prefix, returns a list of `(name, SeqV<id>, SeqV<value>)`
     ///
-    /// Returns an iterator of `(name, id, SeqV<value>)` tuples.
+    /// Returns an iterator of `(name, SeqV<id>, SeqV<value>)` tuples.
     /// This function list all the ids by a name prefix,
     /// then get the `id->value` mapping and finally zip these two together.
     // Using `async fn` does not allow using `impl Iterator` in the return type.
@@ -286,7 +286,7 @@ where
         prefix: &DirName<K>,
     ) -> impl Future<
         Output = Result<
-            impl Iterator<Item = (K, DataId<IdRsc>, SeqV<IdRsc::ValueType>)>,
+            impl Iterator<Item = (K, SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>,
             MetaError,
         >,
     > + Send {
@@ -295,10 +295,9 @@ where
             let strm = self.list_pb(prefix).await?;
             let name_ids = strm.try_collect::<Vec<_>>().await?;
 
-            let id_idents = name_ids.iter().map(|itm| {
-                let id = itm.seqv.data;
-                id.into_t_ident(tenant)
-            });
+            let id_idents = name_ids
+                .iter()
+                .map(|itm| itm.seqv.data.into_t_ident(tenant));
 
             let strm = self.get_pb_values(id_idents).await?;
             let seq_metas = strm.try_collect::<Vec<_>>().await?;
@@ -308,7 +307,7 @@ where
                     .into_iter()
                     .zip(seq_metas)
                     .filter_map(|(itm, opt_seq_meta)| {
-                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv.data, seq_meta))
+                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv, seq_meta))
                     });
 
             Ok(name_id_values)

@@ -50,6 +50,7 @@ impl FieldEncoderJSON {
                     binary_format: Default::default(),
                     geometry_format: Default::default(),
                 },
+                escape_char: 0,
                 quote_char: 0,
             },
             quote_denormals: false,

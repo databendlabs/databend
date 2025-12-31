@@ -16,7 +16,6 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -53,16 +52,17 @@ use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::HttpClientLayer;
+use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
-use opendal_layer_immutable_index::ImmutableIndexLayer;
 
 use crate::StorageConfig;
 use crate::StorageHttpClient;
+use crate::config::CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -404,8 +404,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // Don't enable it otherwise we will get Permission in stat unknown files
-        // .allow_anonymous()
+        // It's safe to allow anonymous since opendal will perform the check first.
+        .allow_anonymous()
         // Root.
         .root(&cfg.root);
 
@@ -416,19 +416,31 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // Disable credential loader
-    if cfg.disable_credential_loader {
+    // If allow_credential_chain is not set, default to false for security.
+    let allow_credential_chain = cfg.allow_credential_chain.unwrap_or(false);
+
+    // Disallowing the credential chain forces unsigned or fully explicit access.
+    if !allow_credential_chain {
         builder = builder.disable_config_load().disable_ec2_metadata();
+    } else if let Some(global) = CredentialChainConfig::try_get() {
+        // Apply global limits to the credential chain.
+        if global.disable_config_load {
+            builder = builder.disable_config_load();
+        }
+        if global.disable_instance_profile {
+            builder = builder.disable_ec2_metadata();
+        }
     }
 
     // If credential loading is disabled and no credentials are provided, use unsigned requests.
     // This allows accessing public buckets reliably in environments where signing could be rejected.
-    if cfg.disable_credential_loader
+    if !allow_credential_chain
         && cfg.access_key_id.is_empty()
         && cfg.secret_access_key.is_empty()
         && cfg.security_token.is_empty()
         && cfg.role_arn.is_empty()
     {
+        // Allow anonymous is actually forcing unsigned requests in OpenDAL.
         builder = builder.allow_anonymous();
     }
 
@@ -569,6 +581,10 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<()> {
+        CredentialChainConfig::init(CredentialChainConfig {
+            disable_config_load: conf.disable_config_load,
+            disable_instance_profile: conf.disable_instance_profile,
+        })?;
         GlobalInstance::set(Self::try_create(conf, spill_params).await?);
 
         Ok(())
@@ -579,8 +595,9 @@ impl DataOperator {
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(&conf.params)?;
-        check_operator(&operator, &conf.params).await?;
+        let data_params = conf.params.clone();
+        let operator = init_operator(&data_params)?;
+        check_operator(&operator, &data_params).await?;
 
         // Init spill operator
         let mut params = spill_params.as_ref().unwrap_or(&conf.params).clone();
@@ -591,7 +608,7 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            params: conf.params.clone(),
+            params: data_params,
             spill_operator,
             spill_params,
         })
@@ -664,78 +681,5 @@ impl OperatorRegistry for iceberg::io::FileIO {
 
         let pos = file_io.relative_path_pos();
         Ok((file_io.get_operator().clone(), &location[pos..]))
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Scheme {
-    Azblob,
-    Gcs,
-    Hdfs,
-    Ipfs,
-    S3,
-    Oss,
-    Obs,
-    Cos,
-    Http,
-    Fs,
-    Webhdfs,
-    Huggingface,
-    Custom(&'static str),
-}
-
-impl Scheme {
-    /// Convert self into static str.
-    pub fn into_static(self) -> &'static str {
-        self.into()
-    }
-}
-
-impl From<Scheme> for &'static str {
-    fn from(v: Scheme) -> Self {
-        match v {
-            Scheme::Azblob => "azblob",
-            Scheme::Gcs => "gcs",
-            Scheme::Hdfs => "hdfs",
-            Scheme::Ipfs => "ipfs",
-            Scheme::S3 => "s3",
-            Scheme::Oss => "oss",
-            Scheme::Obs => "obs",
-            Scheme::Cos => "cos",
-            Scheme::Http => "http",
-            Scheme::Fs => "fs",
-            Scheme::Webhdfs => "webhdfs",
-            Scheme::Huggingface => "huggingface",
-            Scheme::Custom(s) => s,
-        }
-    }
-}
-
-impl FromStr for Scheme {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "azblob" => Ok(Scheme::Azblob),
-            "gcs" => Ok(Scheme::Gcs),
-            "hdfs" => Ok(Scheme::Hdfs),
-            "ipfs" => Ok(Scheme::Ipfs),
-            "s3" | "s3a" => Ok(Scheme::S3),
-            "oss" => Ok(Scheme::Oss),
-            "obs" => Ok(Scheme::Obs),
-            "cos" => Ok(Scheme::Cos),
-            "http" | "https" => Ok(Scheme::Http),
-            "fs" => Ok(Scheme::Fs),
-            "webhdfs" => Ok(Scheme::Webhdfs),
-            "huggingface" | "hf" => Ok(Scheme::Huggingface),
-            _ => Ok(Scheme::Custom(Box::leak(s.into_boxed_str()))),
-        }
-    }
-}
-
-impl std::fmt::Display for Scheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.into_static())
     }
 }

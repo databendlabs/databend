@@ -19,7 +19,6 @@ use async_channel::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -30,13 +29,13 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
 pub struct BroadcastSourceProcessor {
-    pub receiver: Receiver<BlockMetaInfoPtr>,
+    pub receiver: Receiver<DataBlock>,
 }
 
 impl BroadcastSourceProcessor {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        receiver: Receiver<BlockMetaInfoPtr>,
+        receiver: Receiver<DataBlock>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.get_scan_progress(), output_port, Self { receiver })
@@ -50,23 +49,20 @@ impl AsyncSource for BroadcastSourceProcessor {
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let received = self.receiver.recv().await;
-        match received {
-            Ok(meta) => Ok(Some(DataBlock::empty_with_meta(meta))),
-            Err(_) => {
-                // The channel is closed, we should return None to stop generating
-                Ok(None)
-            }
+        match self.receiver.recv().await {
+            Ok(block) => Ok(Some(block)),
+            // The channel is closed, we should return None to stop generating
+            Err(_) => Ok(None),
         }
     }
 }
 
 pub struct BroadcastSinkProcessor {
-    sender: Sender<BlockMetaInfoPtr>,
+    sender: Sender<DataBlock>,
 }
 
 impl BroadcastSinkProcessor {
-    pub fn create(input: Arc<InputPort>, sender: Sender<BlockMetaInfoPtr>) -> Result<ProcessorPtr> {
+    pub fn create(input: Arc<InputPort>, sender: Sender<DataBlock>) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
             sender,
         })))
@@ -82,12 +78,9 @@ impl AsyncSink for BroadcastSinkProcessor {
         Ok(())
     }
 
-    async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
-        let meta = data_block
-            .take_meta()
-            .ok_or_else(|| ErrorCode::Internal("Cannot downcast meta to BroadcastMeta"))?;
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         self.sender
-            .send(meta)
+            .send(data_block)
             .await
             .map_err(|_| ErrorCode::Internal("BroadcastSinkProcessor send error"))?;
         Ok(false)

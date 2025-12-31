@@ -13,34 +13,34 @@ EvalScalar
                     ├── build keys: [a5r.a5t (#151)]
                     ├── probe keys: [a0c.a0l (#8)]
                     ├── other filters: []
-                    ├── Join(Left)
-                    │   ├── build keys: [a0m (#149)]
-                    │   ├── probe keys: [a0c.a0m (#9)]
-                    │   ├── other filters: []
-                    │   ├── Join(Left)
-                    │   │   ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
-                    │   │   ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
-                    │   │   ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
-                    │   │   ├── Scan
-                    │   │   │   ├── table: default.a0c (#0)
-                    │   │   │   ├── filters: []
-                    │   │   │   ├── order by: []
-                    │   │   │   └── limit: NONE
-                    │   │   └── Scan
-                    │   │       ├── table: default.a1z (#1)
-                    │   │       ├── filters: []
-                    │   │       ├── order by: []
-                    │   │       └── limit: NONE
-                    │   └── EvalScalar
-                    │       ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
-                    │       └── Scan
-                    │           ├── table: default.a2x (#2)
-                    │           ├── filters: []
-                    │           ├── order by: []
-                    │           └── limit: NONE
-                    └── Scan
-                        ├── table: default.a5r (#3)
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE
+                    ├── Scan
+                    │   ├── table: default.a5r (#3)
+                    │   ├── filters: []
+                    │   ├── order by: []
+                    │   └── limit: NONE
+                    └── Join(Left)
+                        ├── build keys: [a0m (#149)]
+                        ├── probe keys: [a0c.a0m (#9)]
+                        ├── other filters: []
+                        ├── EvalScalar
+                        │   ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
+                        │   └── Scan
+                        │       ├── table: default.a2x (#2)
+                        │       ├── filters: []
+                        │       ├── order by: []
+                        │       └── limit: NONE
+                        └── Join(Left)
+                            ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
+                            ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
+                            ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
+                            ├── Scan
+                            │   ├── table: default.a1z (#1)
+                            │   ├── filters: []
+                            │   ├── order by: []
+                            │   └── limit: NONE
+                            └── Scan
+                                ├── table: default.a0c (#0)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
 
