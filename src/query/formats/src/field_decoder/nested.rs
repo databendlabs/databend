@@ -353,13 +353,13 @@ impl NestedValues {
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        let buf = if let Ok(val) = self.read_json(reader) {
-            val.as_bytes().to_vec()
-        } else {
-            let mut buf = Vec::new();
-            reader.read_quoted_text(&mut buf, b'\'')?;
-            buf
-        };
+        let mut buf = Vec::new();
+        if reader.read_quoted_text(&mut buf, b'"').is_err()
+            && reader.read_quoted_text(&mut buf, b'\'').is_err()
+        {
+            let val = self.read_json(reader)?;
+            buf = val.as_bytes().to_vec();
+        }
         let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
@@ -371,13 +371,13 @@ impl NestedValues {
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        let buf = if let Ok(val) = self.read_json(reader) {
-            val.as_bytes().to_vec()
-        } else {
-            let mut buf = Vec::new();
-            reader.read_quoted_text(&mut buf, b'\'')?;
-            buf
-        };
+        let mut buf = Vec::new();
+        if reader.read_quoted_text(&mut buf, b'"').is_err()
+            && reader.read_quoted_text(&mut buf, b'\'').is_err()
+        {
+            let val = self.read_json(reader)?;
+            buf = val.as_bytes().to_vec();
+        }
         let geog = geography_from_ewkt_bytes(&buf)?;
         column.put_slice(geog.as_bytes());
         column.commit_row();
