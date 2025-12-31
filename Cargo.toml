@@ -16,6 +16,14 @@ members = [
     "src/tests/sqlsmith",
     "tests/sqllogictests",
 ]
+default-members = [
+    "src/bendsave",
+    "src/binaries",
+    "src/meta/*",
+    "src/query/codegen",
+    "src/tests/sqlsmith",
+    "tests/sqllogictests",
+]
 
 # Workspace dependencies
 [workspace.dependencies]
