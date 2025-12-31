@@ -28,11 +28,14 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
 
 pub struct NewTransformFinalAggregate {
@@ -79,7 +82,7 @@ impl NewTransformFinalAggregate {
 }
 
 impl NewTransformFinalAggregate {
-    fn handle_serialized(&mut self, payload: crate::pipelines::processors::transforms::aggregator::SerializedPayload) -> Result<()> {
+    fn handle_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
         if payload.data_block.is_empty() {
             return Ok(());
         }
@@ -103,7 +106,7 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn handle_aggregate_payload(&mut self, payload: crate::pipelines::processors::transforms::aggregator::AggregatePayload) -> Result<()> {
+    fn handle_aggregate_payload(&mut self, payload: AggregatePayload) -> Result<()> {
         let rows = payload.payload.len();
         let bytes = payload.payload.memory_size();
         self.statistics.record_block(rows, bytes);
@@ -115,14 +118,11 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn handle_new_spilled(&mut self, payloads: Vec<crate::pipelines::processors::transforms::aggregator::NewSpilledPayload>) -> Result<()> {
+    fn handle_new_spilled(&mut self, payloads: Vec<NewSpilledPayload>) -> Result<()> {
         for payload in payloads {
             let restored = self.reader.restore(payload)?;
             let AggregateMeta::Serialized(restored) = restored else {
-                unreachable!(
-                    "unexpected aggregate meta, found type: {:?}",
-                    restored
-                )
+                unreachable!("unexpected aggregate meta, found type: {:?}", restored)
             };
             self.handle_serialized(restored)?;
         }

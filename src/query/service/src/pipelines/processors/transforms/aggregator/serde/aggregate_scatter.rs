@@ -111,7 +111,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
 pub fn scatter_partitioned_payload(
     partitioned_payload: PartitionedPayload,
     buckets: usize,
-) -> databend_common_exception::Result<Vec<PartitionedPayload>> {
+) -> Result<Vec<PartitionedPayload>> {
     let mut buckets = Vec::with_capacity(buckets);
 
     let group_types = partitioned_payload.group_types.clone();
