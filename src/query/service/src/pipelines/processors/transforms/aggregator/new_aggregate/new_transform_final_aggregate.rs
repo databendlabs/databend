@@ -78,68 +78,90 @@ impl NewTransformFinalAggregate {
     }
 }
 
+impl NewTransformFinalAggregate {
+    fn handle_serialized(&mut self, payload: crate::pipelines::processors::transforms::aggregator::SerializedPayload) -> Result<()> {
+        if payload.data_block.is_empty() {
+            return Ok(());
+        }
+
+        let rows = payload.data_block.num_rows();
+        let bytes = payload.data_block.memory_size();
+        self.statistics.record_block(rows, bytes);
+
+        let partitioned_payload = payload.convert_to_partitioned_payload(
+            self.params.group_data_types.clone(),
+            self.params.aggregate_functions.clone(),
+            self.params.num_states(),
+            0,
+            Arc::new(Bump::new()),
+        )?;
+
+        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+            ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_aggregate_payload(&mut self, payload: crate::pipelines::processors::transforms::aggregator::AggregatePayload) -> Result<()> {
+        let rows = payload.payload.len();
+        let bytes = payload.payload.memory_size();
+        self.statistics.record_block(rows, bytes);
+
+        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+            ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_new_spilled(&mut self, payloads: Vec<crate::pipelines::processors::transforms::aggregator::NewSpilledPayload>) -> Result<()> {
+        for payload in payloads {
+            let restored = self.reader.restore(payload)?;
+            let AggregateMeta::Serialized(restored) = restored else {
+                unreachable!(
+                    "unexpected aggregate meta, found type: {:?}",
+                    restored
+                )
+            };
+            self.handle_serialized(restored)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_meta(&mut self, meta: AggregateMeta) -> Result<()> {
+        match meta {
+            AggregateMeta::Serialized(payload) => {
+                self.handle_serialized(payload)?;
+            }
+            AggregateMeta::AggregatePayload(payload) => {
+                self.handle_aggregate_payload(payload)?;
+            }
+            AggregateMeta::NewSpilled(payloads) => {
+                self.handle_new_spilled(payloads)?;
+            }
+            AggregateMeta::Partitioned { bucket: _, data } => {
+                for meta in data {
+                    self.handle_meta(meta)?;
+                }
+            }
+            _ => {
+                unreachable!("unexpected aggregate meta, found type: {:?}", meta);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl AccumulatingTransform for NewTransformFinalAggregate {
     const NAME: &'static str = "NewTransformFinalAggregate";
 
     fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(meta) = data.take_meta() {
             if let Some(meta) = AggregateMeta::downcast_from(meta) {
-                if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
-                    match meta {
-                        AggregateMeta::Serialized(payload) => {
-                            if payload.data_block.is_empty() {
-                                return Ok(vec![]);
-                            }
-                            let rows = payload.data_block.num_rows();
-                            let bytes = payload.data_block.memory_size();
-                            self.statistics.record_block(rows, bytes);
-                            let payload = payload.convert_to_partitioned_payload(
-                                self.params.group_data_types.clone(),
-                                self.params.aggregate_functions.clone(),
-                                self.params.num_states(),
-                                0,
-                                Arc::new(Bump::new()),
-                            )?;
-                            ht.combine_payloads(&payload, &mut self.flush_state)?;
-                        }
-                        AggregateMeta::AggregatePayload(payload) => {
-                            let rows = payload.payload.len();
-                            let bytes = payload.payload.memory_size();
-                            self.statistics.record_block(rows, bytes);
-                            if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
-                                ht.combine_payload(&payload.payload, &mut self.flush_state)?;
-                            }
-                        }
-                        AggregateMeta::NewSpilled(payloads) => {
-                            for payload in payloads {
-                                let restored = self.reader.restore(payload)?;
-                                let AggregateMeta::Serialized(restored) = restored else {
-                                    unreachable!(
-                                        "unexpected aggregate meta, found type: {:?}",
-                                        restored
-                                    )
-                                };
-                                if restored.data_block.is_empty() {
-                                    return Ok(vec![]);
-                                }
-                                let rows = restored.data_block.num_rows();
-                                let bytes = restored.data_block.memory_size();
-                                self.statistics.record_block(rows, bytes);
-                                let payload = restored.convert_to_partitioned_payload(
-                                    self.params.group_data_types.clone(),
-                                    self.params.aggregate_functions.clone(),
-                                    self.params.num_states(),
-                                    0,
-                                    Arc::new(Bump::new()),
-                                )?;
-                                ht.combine_payloads(&payload, &mut self.flush_state)?;
-                            }
-                        }
-                        _ => {
-                            unreachable!("unexpected aggregate meta, found type: {:?}", meta);
-                        }
-                    }
-                }
+                self.handle_meta(meta)?;
                 return Ok(vec![]);
             }
         }

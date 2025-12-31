@@ -259,42 +259,41 @@ impl AggregateBucketScatter {
             if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                 match block_meta {
                     AggregateMeta::Partitioned { data, .. } => {
-                        if is_local {
-                            let blocks = data
-                                .into_iter()
-                                .map(|meta| DataBlock::empty_with_meta(Box::new(meta)))
-                                .collect::<Vec<_>>();
-                            return Ok(blocks);
-                        } else {
-                            let mut chunks = Vec::with_capacity(self.buckets);
-                            chunks.resize_with(self.buckets, Vec::new);
-                            for bucket_payload in data {
-                                match bucket_payload {
-                                    AggregateMeta::Serialized(payload) => {
-                                        chunks[payload.bucket as usize % self.buckets]
-                                            .push(AggregateMeta::Serialized(payload));
+                        let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                        for bucket_payload in data {
+                            match bucket_payload {
+                                AggregateMeta::Serialized(mut payload) => {
+                                    let bucket = payload.bucket as usize;
+                                    if !is_local {
+                                        payload.bucket = payload.bucket / self.buckets as isize;
                                     }
-                                    AggregateMeta::AggregatePayload(payload) => {
-                                        chunks[payload.bucket as usize % self.buckets]
-                                            .push(AggregateMeta::AggregatePayload(payload));
+                                    chunks[bucket % self.buckets]
+                                        .push(AggregateMeta::Serialized(payload));
+                                }
+                                AggregateMeta::AggregatePayload(mut payload) => {
+                                    let bucket = payload.bucket as usize;
+                                    if !is_local {
+                                        payload.bucket = payload.bucket / self.buckets as isize;
                                     }
-                                    _ => {
-                                        unreachable!(
-                                            "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
-                                        )
-                                    }
+                                    chunks[bucket % self.buckets]
+                                        .push(AggregateMeta::AggregatePayload(payload));
+                                }
+                                _ => {
+                                    unreachable!(
+                                        "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
+                                    )
                                 }
                             }
-                            let blocks = chunks
-                                .into_iter()
-                                .map(|payload| {
-                                    DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
-                                        None, payload,
-                                    ))
-                                })
-                                .collect::<Vec<_>>();
-                            return Ok(blocks);
                         }
+                        let blocks = chunks
+                            .into_iter()
+                            .map(|payload| {
+                                DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+                                    None, payload,
+                                ))
+                            })
+                            .collect::<Vec<_>>();
+                        return Ok(blocks);
                     }
                     _ => {
                         unreachable!(
