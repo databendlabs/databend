@@ -15,7 +15,7 @@
 use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use std::intrinsics::unlikely;
+use std::hint::unlikely;
 
 use bytesize::ByteSize;
 use databend_common_base::containers::FixedHeap;

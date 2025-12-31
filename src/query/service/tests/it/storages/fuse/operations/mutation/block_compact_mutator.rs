@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-#![allow(clippy::manual_is_multiple_of)]
-
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -204,7 +202,7 @@ async fn test_safety() -> Result<()> {
             number_of_segments, number_of_blocks,
         );
 
-        let cluster_key_id = if number_of_segments % 2 == 0 {
+        let cluster_key_id = if number_of_segments.is_multiple_of(2) {
             Some(0)
         } else {
             None

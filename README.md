@@ -1,6 +1,6 @@
 <h1 align="center">Databend</h1>
-<h3 align="center">The All-in-One Cloud Data Warehouse for Analytics & AI</h3>
-<p align="center">Built in <strong>Rust</strong> for blazing fast, cost-efficient analytics.<br> Open-source, <strong>Snowflake-compatible</strong>, and designed to unify BI, Search, and AI on object storage.</p>
+<h3 align="center">One Rust Warehouse for Analytics, Search, AI</h3>
+<p align="center">Snowflake + Elasticsearch + Vector Search — unified in one Rust-powered warehouse. Native on S3.</p>
 
 <div align="center">
 

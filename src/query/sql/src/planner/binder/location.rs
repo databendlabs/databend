@@ -25,7 +25,6 @@ use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
@@ -44,9 +43,9 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
-use databend_common_storage::Scheme;
 use log::LevelFilter;
 use log::info;
+use opendal::Scheme;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 
@@ -173,16 +172,15 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
-    let mut disable_credential_loader =
-        role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
+    // If role_arn is empty, we should not allow credential chain.
+    let mut allow_credential_chain = Some(!role_arn.is_empty());
 
     // If we are in history table scope, we allow credential loader to be enabled
     let in_history_table_scope = ThreadTracker::capture_log_settings()
         .is_some_and(|settings| settings.level == LevelFilter::Off);
     if in_history_table_scope {
-        info!("Enable credential loader for history tables");
-        disable_credential_loader = false;
+        info!("Allow credential chain for history tables");
+        allow_credential_chain = Some(true);
     }
 
     let sp = StorageParams::S3(StorageS3Config {
@@ -194,7 +192,8 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         security_token,
         master_key,
         root,
-        disable_credential_loader,
+        disable_credential_loader: false,
+        allow_credential_chain,
         enable_virtual_host_style,
         role_arn,
         external_id,

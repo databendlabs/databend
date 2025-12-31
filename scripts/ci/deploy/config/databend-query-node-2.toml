@@ -35,6 +35,7 @@ flight_sql_handler_port = 8902
 
 tenant_id = "test_tenant"
 cluster_id = "test_cluster"
+warehouse_id = "test_warehouse"
 
 table_engine_memory_enabled = true
 default_storage_format = 'parquet'

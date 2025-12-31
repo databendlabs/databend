@@ -42,6 +42,7 @@ pub struct HttpQueryContext {
     pub session: Arc<Session>,
     pub credential: Credential,
     pub query_id: String,
+    pub is_query_id_from_client: bool,
     pub node_id: String,
     pub expected_node_id: Option<String>,
     pub deduplicate_label: Option<String>,

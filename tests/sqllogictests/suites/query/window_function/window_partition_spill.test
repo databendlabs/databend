@@ -10,7 +10,7 @@ SET force_window_data_spill = 1;
 statement ok
 set enable_dio = 1;
 
-query T
+query I
 SELECT SUM(number + a + b)
 FROM (
     SELECT
@@ -41,7 +41,7 @@ unset enable_dio;
 statement ok
 set enable_dio = 0;
 
-query T
+query I
 SELECT SUM(number + a + b)
 FROM (
     SELECT

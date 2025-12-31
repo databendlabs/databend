@@ -356,6 +356,7 @@ impl<E> HTTPSessionEndpoint<E> {
         &self,
         req: &Request,
         query_id: String,
+        is_query_id_from_client: bool,
         login_history: &mut LoginHistory,
         is_sticky_node: bool,
     ) -> Result<HttpQueryContext> {
@@ -484,6 +485,7 @@ impl<E> HTTPSessionEndpoint<E> {
         Ok(HttpQueryContext {
             session,
             query_id,
+            is_query_id_from_client,
             node_id,
             credential,
             expected_node_id,
@@ -678,11 +680,12 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let method = req.method().clone();
         let uri = req.uri().clone();
 
-        let query_id = req
-            .headers()
-            .get(HEADER_QUERY_ID)
-            .map(|id| id.to_str().unwrap().to_string())
-            .unwrap_or_else(|| Uuid::now_v7().simple().to_string());
+        let (query_id, is_query_id_from_client) =
+            if let Some(v) = req.headers().get(HEADER_QUERY_ID) {
+                (v.to_str().unwrap().to_string(), true)
+            } else {
+                (Uuid::now_v7().simple().to_string(), false)
+            };
 
         let mut login_history = LoginHistory::new();
         login_history.handler = LoginHandler::HTTP;
@@ -690,7 +693,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
         ThreadTracker::tracking_future(async move {
             match self
-                .auth(&req, query_id, &mut login_history, is_sticky_node)
+                .auth(
+                    &req,
+                    query_id,
+                    is_query_id_from_client,
+                    &mut login_history,
+                    is_sticky_node,
+                )
                 .await
             {
                 Ok(ctx) => {

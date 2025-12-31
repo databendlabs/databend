@@ -15,37 +15,37 @@ Exchange(Merge)
                         ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
                         ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
                         ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
-                        ├── Join(Inner)
-                        │   ├── build keys: [a0m (#149)]
-                        │   ├── probe keys: [a0c.a0m (#9)]
-                        │   ├── other filters: []
-                        │   ├── Join(Inner)
-                        │   │   ├── build keys: [a5r.a5t (#151)]
-                        │   │   ├── probe keys: [a0c.a0l (#8)]
-                        │   │   ├── other filters: []
-                        │   │   ├── Scan
-                        │   │   │   ├── table: default.a0c (#0)
-                        │   │   │   ├── filters: [gte(a0c.a0d (#0), '20240526'), lte(a0c.a0d (#0), '20250525')]
-                        │   │   │   ├── order by: []
-                        │   │   │   └── limit: NONE
-                        │   │   └── Exchange(Broadcast)
-                        │   │       └── Scan
-                        │   │           ├── table: default.a5r (#3)
-                        │   │           ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
-                        │   │           ├── order by: []
-                        │   │           └── limit: NONE
-                        │   └── Exchange(Broadcast)
-                        │       └── EvalScalar
-                        │           ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
-                        │           └── Scan
-                        │               ├── table: default.a2x (#2)
-                        │               ├── filters: [eq(substring(a2x.a4m (#118), 20, 1), '1')]
-                        │               ├── order by: []
-                        │               └── limit: NONE
-                        └── Exchange(Broadcast)
-                            └── Scan
-                                ├── table: default.a1z (#1)
-                                ├── filters: [eq(a1z.a2t (#70), '624100')]
-                                ├── order by: []
-                                └── limit: NONE
+                        ├── Exchange(Broadcast)
+                        │   └── Scan
+                        │       ├── table: default.a1z (#1)
+                        │       ├── filters: [eq(a1z.a2t (#70), '624100')]
+                        │       ├── order by: []
+                        │       └── limit: NONE
+                        └── Join(Inner)
+                            ├── build keys: [a0m (#149)]
+                            ├── probe keys: [a0c.a0m (#9)]
+                            ├── other filters: []
+                            ├── Exchange(Broadcast)
+                            │   └── EvalScalar
+                            │       ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
+                            │       └── Scan
+                            │           ├── table: default.a2x (#2)
+                            │           ├── filters: [eq(substring(a2x.a4m (#118), 20, 1), '1')]
+                            │           ├── order by: []
+                            │           └── limit: NONE
+                            └── Join(Inner)
+                                ├── build keys: [a5r.a5t (#151)]
+                                ├── probe keys: [a0c.a0l (#8)]
+                                ├── other filters: []
+                                ├── Exchange(Broadcast)
+                                │   └── Scan
+                                │       ├── table: default.a5r (#3)
+                                │       ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
+                                │       ├── order by: []
+                                │       └── limit: NONE
+                                └── Scan
+                                    ├── table: default.a0c (#0)
+                                    ├── filters: [gte(a0c.a0d (#0), '20240526'), lte(a0c.a0d (#0), '20250525')]
+                                    ├── order by: []
+                                    └── limit: NONE
 

@@ -37,7 +37,7 @@ INSERT INTO Scoreboard VALUES ('Simpsons', 'Marge', 990);
 statement ok
 INSERT INTO Scoreboard VALUES ('Simpsons', 'Bart', 2010);
 
-query IIII
+query TTII
 SELECT
   TeamName,
   Player,
@@ -55,7 +55,7 @@ Simpsons	Lisa	710	1
 Simpsons	Marge	990	2
 Simpsons	Bart	2010	2
 
-query IIII
+query TTII
 SELECT
   TeamName,
   Player,
@@ -73,7 +73,7 @@ Mongrels	Meg	1030	2
 Mongrels	Burns	1270	2
 Simpsons	Bart	2010	2
 
-query IIII
+query TTII
 SELECT
   TeamName,
   Player,
@@ -91,7 +91,7 @@ Simpsons	Lisa	710	2
 Simpsons	Marge	990	3
 Simpsons	Bart	2010	4
 
-query IIII
+query TTII
 SELECT
   TeamName,
   Player,
@@ -197,7 +197,7 @@ INSERT INTO t (id, kind, per) VALUES
 (17, 'a', 1000.0), (17, 'a', 1000.0), (17, 'a', 1000.0), (17, 'a', 1000.0), (17, 'a', 1000.0);
 
 
-query TTTT
+query IIIT
 SELECT
     COUNT(*), quantile, id, kind
 FROM
@@ -223,7 +223,7 @@ ORDER BY
 10	9	17	a
 10	10	17	a
 
-query TTTT
+query IIIT
 SELECT
     COUNT(*), quantile, id, kind
 FROM

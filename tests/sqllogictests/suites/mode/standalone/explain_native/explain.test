@@ -115,12 +115,12 @@ EvalScalar
         ├── probe keys: []
         ├── other filters: []
         ├── Scan
-        │   ├── table: default.t1 (#0)
+        │   ├── table: default.t2 (#1)
         │   ├── filters: []
         │   ├── order by: []
         │   └── limit: NONE
         └── Scan
-            ├── table: default.t2 (#1)
+            ├── table: default.t1 (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
@@ -134,18 +134,18 @@ EvalScalar
     ├── build keys: [t2.a (#2), t2.b (#3)]
     ├── probe keys: [t1.a (#0), t1.b (#1)]
     ├── other filters: []
-    ├── Filter
-    │   ├── filters: [gt(t1.a (#0), 2)]
-    │   └── Scan
-    │       ├── table: default.t1 (#0)
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Scan
-        ├── table: default.t2 (#1)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+    ├── Scan
+    │   ├── table: default.t2 (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(t1.a (#0), 2)]
+        └── Scan
+            ├── table: default.t1 (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 query T
 explain syntax select 1, 'ab', [1,2,3], (1, 'a')
@@ -609,6 +609,174 @@ AggregateFinal
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
+
+query T
+explain select count(distinct a, b) from t1;
+----
+AggregateFinal
+├── output columns: [count(_1) (#2)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── group by: [a, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [a, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── scan id: 0
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 1
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
+
+query T
+explain select 'test_str' as str, count(distinct a, b) from t1;
+----
+EvalScalar
+├── output columns: [count(DISTINCT a, b) (#2), str (#3)]
+├── expressions: ['test_str']
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [count(DISTINCT a, b) (#2)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [t1.a (#0), t1.b (#1)]
+            ├── group by: [a, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a, b]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
+explain select count(distinct a + 1, b) as c from t1;
+----
+AggregateFinal
+├── output columns: [count(_1) (#4)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [a + 1 (#2), t1.b (#1)]
+        ├── group by: [a + 1, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [a + 1, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [t1.b (#1), a + 1 (#2)]
+                ├── expressions: [t1.a (#0) + 1]
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
+explain select a as g, count(distinct a, b) as c from t1 group by a;
+----
+AggregateFinal
+├── output columns: [count(DISTINCT a, b) (#2), t1.a (#0)]
+├── group by: [a]
+├── aggregate functions: [count_distinct(a, b)]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: [a]
+    ├── aggregate functions: [count_distinct(a, b)]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
+
+query T
+explain select count(distinct nullable_a, b) from (select nullif(a, 0) as nullable_a, b from t1) t;
+----
+AggregateFinal
+├── output columns: [count(_1) (#3)]
+├── group by: []
+├── aggregate functions: [count(_1)]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count(_1)]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [_1 (#2), t1.b (#1)]
+        ├── group by: [_1, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [_1, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [t1.b (#1), _1 (#2)]
+                ├── expressions: [if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL))]
+                ├── estimated rows: 0.20
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 1
+                    ├── partitions scanned: 0
+                    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: 1 ms>]
+                    ├── push downs: [filters: [is_not_null(if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL)))], limit: NONE]
+                    └── estimated rows: 0.20
 
 query T
 explain select count_distinct(a) from t1;

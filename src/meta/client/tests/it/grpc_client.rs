@@ -68,7 +68,7 @@ async fn test_grpc_client_handshake_timeout() {
         // our mock grpc server's handshake impl will sleep 2secs.
         // see: GrpcServiceForTestImp.handshake
         let timeout = Duration::from_secs(1);
-        let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None)
+        let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None, None)
             .await
             .unwrap();
 
@@ -86,7 +86,7 @@ async fn test_grpc_client_handshake_timeout() {
     // handshake success
     {
         let timeout = Duration::from_secs(3);
-        let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None)
+        let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None, None)
             .await
             .unwrap();
 

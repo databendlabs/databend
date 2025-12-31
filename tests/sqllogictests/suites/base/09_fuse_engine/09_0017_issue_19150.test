@@ -1,0 +1,74 @@
+statement ok
+CREATE OR REPLACE database db_09_0017;
+
+statement ok
+use db_09_0017
+
+statement ok
+create table t5(a int) cluster by(a) row_per_block=4;
+
+query I
+insert into t5 values(1);
+----
+1
+
+query I
+insert into t5 values(8);
+----
+1
+
+statement ok
+alter table t5 recluster;
+
+query I
+insert into t5 values(2);
+----
+1
+
+query I
+insert into t5 values(7);
+----
+1
+
+statement ok
+alter table t5 recluster final;
+
+query TTI
+select min, max, level from clustering_statistics('db_09_0017', 't5');
+----
+[1] [8] 2
+
+query I
+insert into t5 values(3);
+----
+1
+
+query I
+insert into t5 values(6);
+----
+1
+
+statement ok
+alter table t5 recluster;
+
+query I
+insert into t5 values(4);
+----
+1
+
+query I
+insert into t5 values(5);
+----
+1
+
+statement ok
+alter table t5 recluster final;
+
+query TTI
+select min, max, level from clustering_statistics('db_09_0017', 't5') order by block_name;
+----
+[1] [8] 2
+[3] [6] 2
+
+statement ok
+DROP DATABASE db_09_0017

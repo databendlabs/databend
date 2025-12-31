@@ -72,10 +72,22 @@ pub fn transform_record_batch(
     field_paths: &Option<FieldPaths>,
 ) -> Result<DataBlock> {
     if let Some(field_paths) = field_paths {
-        transform_record_batch_by_field_paths(batch, field_paths)
-    } else {
-        Ok(DataBlock::from_record_batch(data_schema, batch)?)
+        let schema_aligned = batch.schema().fields().len() == data_schema.fields().len()
+            && batch
+                .schema()
+                .fields()
+                .iter()
+                .zip(data_schema.fields().iter())
+                .all(|(arrow_field, data_field)| arrow_field.name() == data_field.name());
+
+        if schema_aligned {
+            return DataBlock::from_record_batch(data_schema, batch);
+        }
+
+        return transform_record_batch_by_field_paths(batch, field_paths);
     }
+
+    DataBlock::from_record_batch(data_schema, batch)
 }
 
 pub fn transform_record_batch_by_field_paths(

@@ -9,7 +9,7 @@ CONNECTION=(
     ADDRESS='http://127.0.0.1:8181'
     WAREHOUSE='s3://iceberg-tpch'
     "s3.region"='us-east-1'
-    "s3.endpoint"='http://127.0.0.1:9000'
+    "s3.endpoint"='http://127.0.0.1:9002'
 );
 
 statement ok

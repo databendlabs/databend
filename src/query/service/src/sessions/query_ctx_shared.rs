@@ -48,7 +48,6 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
@@ -192,10 +191,10 @@ pub struct QueryContextShared {
 
 #[derive(Default)]
 pub struct BroadcastChannel {
-    pub source_sender: Option<Sender<BlockMetaInfoPtr>>,
-    pub source_receiver: Option<Receiver<BlockMetaInfoPtr>>,
-    pub sink_sender: Option<Sender<BlockMetaInfoPtr>>,
-    pub sink_receiver: Option<Receiver<BlockMetaInfoPtr>>,
+    pub source_sender: Option<Sender<DataBlock>>,
+    pub source_receiver: Option<Receiver<DataBlock>>,
+    pub sink_sender: Option<Sender<DataBlock>>,
+    pub sink_receiver: Option<Receiver<DataBlock>>,
 }
 
 impl QueryContextShared {
@@ -273,7 +272,7 @@ impl QueryContextShared {
         }))
     }
 
-    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.source_receiver.take() {
@@ -285,7 +284,7 @@ impl QueryContextShared {
             }
         }
     }
-    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.source_sender.take() {
@@ -298,7 +297,7 @@ impl QueryContextShared {
         }
     }
 
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.sink_receiver.take() {
@@ -310,7 +309,7 @@ impl QueryContextShared {
             }
         }
     }
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         let mut broadcast_channels = self.broadcast_channels.lock();
         let entry = broadcast_channels.entry(broadcast_id).or_default();
         match entry.sink_sender.take() {

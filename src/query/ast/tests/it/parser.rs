@@ -999,6 +999,8 @@ SELECT * from s;"#,
         r#"GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'"#,
         r#"GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'"#,
         r#"SHOW GRANTS ON ROW ACCESS POLICY ssn_mask"#,
+        // tag
+        r#"create tag if not exists tag_a ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'"#,
     ];
 
     for case in cases {

@@ -140,6 +140,13 @@ impl Future for DNSServiceFuture {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TcpKeepAliveConfig {
+    pub time: Option<Duration>,
+    pub interval: Option<Duration>,
+    pub retries: Option<u32>,
+}
+
 pub struct ConnectionFactory;
 
 impl ConnectionFactory {
@@ -147,12 +154,24 @@ impl ConnectionFactory {
         addr: impl ToString,
         timeout: Option<Duration>,
         rpc_client_config: Option<RpcClientTlsConfig>,
+        keep_alive: Option<TcpKeepAliveConfig>,
     ) -> std::result::Result<Channel, GrpcConnectionError> {
         let endpoint = Self::create_rpc_endpoint(addr, timeout, rpc_client_config)?;
 
         let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
         inner_connector.set_nodelay(true);
-        inner_connector.set_keepalive(None);
+        match keep_alive {
+            Some(config) => {
+                inner_connector.set_keepalive(config.time);
+                inner_connector.set_keepalive_interval(config.interval);
+                inner_connector.set_keepalive_retries(config.retries);
+            }
+            None => {
+                inner_connector.set_keepalive(None);
+                inner_connector.set_keepalive_interval(None);
+                inner_connector.set_keepalive_retries(None);
+            }
+        }
         inner_connector.enforce_http(false);
         inner_connector.set_connect_timeout(timeout);
 

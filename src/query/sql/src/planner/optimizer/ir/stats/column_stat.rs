@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 
+use super::selectivity::DEFAULT_SELECTIVITY;
 use crate::IndexType;
 
 pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
@@ -31,7 +32,7 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: f64,
+    pub ndv: Ndv,
 
     /// Count of null values
     pub null_count: u64,
@@ -40,9 +41,45 @@ pub struct ColumnStat {
     pub histogram: Option<Histogram>,
 }
 
-#[derive(Debug, Clone)]
-pub struct NewStatistic {
-    pub min: Option<Datum>,
-    pub max: Option<Datum>,
-    pub ndv: Option<f64>,
+#[derive(Debug, Clone, Copy)]
+pub enum Ndv {
+    // safe for selectivity
+    Stat(f64),
+    Max(f64),
+}
+
+impl Ndv {
+    pub fn reduce(self, ndv: f64) -> Self {
+        match self {
+            Ndv::Stat(v) => Ndv::Stat(v.min(ndv)),
+            Ndv::Max(v) => Ndv::Max(v.min(ndv)),
+        }
+    }
+
+    pub fn reduce_by_selectivity(self, selectivity: f64) -> Self {
+        match self {
+            Ndv::Stat(v) => Ndv::Stat((v * selectivity).ceil()),
+            Ndv::Max(v) => Ndv::Max((v * selectivity).ceil()),
+        }
+    }
+
+    pub fn value(self) -> f64 {
+        match self {
+            Ndv::Stat(v) => v,
+            Ndv::Max(v) => v,
+        }
+    }
+
+    pub fn equal_selectivity(&self, not: bool) -> f64 {
+        let ndv = self.value();
+        if ndv == 0.0 {
+            0.0
+        } else {
+            let selectivity = if not { 1.0 - 1.0 / ndv } else { 1.0 / ndv };
+            match self {
+                Ndv::Stat(_) => selectivity,
+                Ndv::Max(_) => selectivity.max(DEFAULT_SELECTIVITY),
+            }
+        }
+    }
 }

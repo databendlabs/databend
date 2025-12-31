@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::let_and_return)]
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -298,15 +297,17 @@ mod test_accessor {
     }
 
     impl oio::Delete for MockDeleter {
-        async fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.size += 1;
             Ok(())
         }
 
-        async fn close(&mut self) -> opendal::Result<()> {
+        async fn flush(&mut self) -> opendal::Result<usize> {
             self.hit_batch.store(true, Ordering::Release);
+
+            let n = self.size;
             self.size = 0;
-            Ok(())
+            Ok(n)
         }
     }
 
@@ -900,10 +901,7 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 async fn new_local_meta() -> MetaStore {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
-    let meta = {
-        let config = meta_config.to_meta_grpc_client_conf(version);
-        let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await.unwrap()
-    };
-    meta
+    let config = meta_config.to_meta_grpc_client_conf(version);
+    let provider = MetaStoreProvider::new(config);
+    provider.create_meta_store().await.unwrap()
 }

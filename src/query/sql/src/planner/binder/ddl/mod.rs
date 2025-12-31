@@ -31,6 +31,7 @@ mod sequence;
 mod stage;
 mod stream;
 mod table;
+mod tag;
 mod task;
 mod view;
 mod warehouse;

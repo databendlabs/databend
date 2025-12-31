@@ -534,14 +534,14 @@ impl KWayMergeCombinerProcessor {
         let buffer = &mut self.buffer[i];
         let cur_state = &mut self.state[i];
 
-        if let Some(cur) = cur_state {
-            if cur.done() {
-                return if cur.id == self.cur_task {
-                    Ok(PullEvent::Data)
-                } else {
-                    Ok(PullEvent::Pending)
-                };
-            }
+        if let Some(cur) = cur_state
+            && cur.done()
+        {
+            return if cur.id == self.cur_task {
+                Ok(PullEvent::Data)
+            } else {
+                Ok(PullEvent::Pending)
+            };
         }
 
         if input.has_data() {

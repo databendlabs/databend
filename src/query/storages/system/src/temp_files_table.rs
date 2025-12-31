@@ -52,7 +52,7 @@ use futures::stream::Take;
 use opendal::Lister;
 use opendal::Metadata;
 use opendal::Operator;
-use opendal::options::ListOptions;
+use opendal::operator_futures::FutureLister;
 
 use crate::table::SystemTablePart;
 
@@ -152,35 +152,22 @@ impl TempFilesTable {
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
         let operator = DataOperator::instance().spill_operator();
-        let lister = {
-            let op = operator.clone();
-            let path = location_prefix.clone();
-            async move {
-                op.lister_options(&path, ListOptions {
-                    recursive: true,
-                    ..Default::default()
-                })
-                .await
-            }
-        };
+        let lister = operator.lister_with(&location_prefix).recursive(true);
 
         let stream = {
             let prefix = location_prefix.clone();
             let mut counter = 0;
             let ctx = ctx.clone();
-
-            stream_source_from_entry_lister_with_chunk_size(
-                operator.clone(),
-                lister,
-                limit,
-                MAX_BATCH_SIZE,
-                move |entries| {
+            let builder = ListerStreamSourceBuilder::with_lister_fut(operator, lister);
+            builder
+                .limit_opt(limit)
+                .chunk_size(MAX_BATCH_SIZE)
+                .build(move |entries| {
                     counter += entries.len();
                     let block = Self::block_from_entries(&prefix, entries)?;
                     ctx.set_status_info(format!("{} entries processed", counter).as_str());
                     Ok(block)
-                },
-            )?
+                })?
         };
 
         StreamSource::create(ctx.get_scan_progress(), Some(stream), output)
@@ -215,11 +202,8 @@ impl TempFilesTable {
             if metadata.is_file() {
                 temp_files_name.push(path.trim_start_matches(location_prefix).to_string());
 
-                temp_files_last_modified.push(
-                    metadata
-                        .last_modified()
-                        .map(|x| x.into_inner().as_microsecond()),
-                );
+                temp_files_last_modified
+                    .push(metadata.last_modified().map(|x| x.timestamp_micros()));
                 temp_files_content_length.push(metadata.content_length());
             }
         }
@@ -235,9 +219,54 @@ impl TempFilesTable {
 
 const MAX_BATCH_SIZE: usize = 1000;
 
+pub struct ListerStreamSourceBuilder<T>
+where T: Future<Output = opendal::Result<Lister>> + Send + 'static
+{
+    op: Operator,
+    lister_fut: FutureLister<T>,
+    limit: Option<usize>,
+    chunk_size: usize,
+}
+
+impl<T> ListerStreamSourceBuilder<T>
+where T: Future<Output = opendal::Result<Lister>> + Send + 'static
+{
+    pub fn with_lister_fut(op: Operator, lister_fut: FutureLister<T>) -> Self {
+        Self {
+            op,
+            lister_fut,
+            limit: None,
+            chunk_size: MAX_BATCH_SIZE,
+        }
+    }
+
+    pub fn limit_opt(mut self, limit: Option<usize>) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn chunk_size(mut self, chunk_size: usize) -> Self {
+        self.chunk_size = chunk_size;
+        self
+    }
+
+    pub fn build(
+        self,
+        block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
+    ) -> Result<SendableDataBlockStream> {
+        stream_source_from_entry_lister_with_chunk_size(
+            self.op.clone(),
+            self.lister_fut,
+            self.limit,
+            self.chunk_size,
+            block_builder,
+        )
+    }
+}
+
 fn stream_source_from_entry_lister_with_chunk_size<T>(
     op: Operator,
-    lister_fut: T,
+    lister_fut: FutureLister<T>,
     limit: Option<usize>,
     chunk_size: usize,
     block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
@@ -246,7 +275,7 @@ where
     T: Future<Output = opendal::Result<Lister>> + Send + 'static,
 {
     enum ListerState<U: Future<Output = opendal::Result<Lister>> + Send + 'static> {
-        Uninitialized(U),
+        Uninitialized(FutureLister<U>),
         Initialized(Chunks<Take<Lister>>),
     }
 

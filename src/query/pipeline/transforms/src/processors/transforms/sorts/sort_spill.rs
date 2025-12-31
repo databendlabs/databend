@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::intrinsics::unlikely;
+use std::hint::unlikely;
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::atomic;
@@ -503,8 +503,7 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
         unspilled.sort_by(|s1, s2| {
             let r1 = s1.domain::<A::Rows>();
             let r2 = s2.domain::<A::Rows>();
-            let cmp = r1.first().cmp(&r2.first());
-            cmp
+            r1.first().cmp(&r2.first())
         });
 
         let mut released = 0;

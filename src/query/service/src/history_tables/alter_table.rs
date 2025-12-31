@@ -23,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::parse_uri_location;
 use databend_common_sql::plans::Plan;
@@ -154,7 +155,10 @@ pub async fn should_reset(
 
         // External1 -> External2
         // return error to prevent cyclic conversion
-        if current_storage_params != Some(&new_storage_params) {
+        let is_same_params = current_storage_params
+            .map(|sp| storage_params_equal(sp, &new_storage_params))
+            .unwrap_or(false);
+        if !is_same_params {
             info!(
                 "Storage parameters have changed, current {:?} vs new {:?}",
                 current_storage_params, new_storage_params
@@ -184,6 +188,21 @@ pub async fn get_log_table(context: Arc<QueryContext>) -> Result<Option<Arc<dyn 
     }
 
     Ok(Some(table?))
+}
+
+fn storage_params_equal(lhs: &StorageParams, rhs: &StorageParams) -> bool {
+    match (lhs, rhs) {
+        (StorageParams::S3(left), StorageParams::S3(right)) => {
+            let mut left = left.clone();
+            let mut right = right.clone();
+            left.disable_credential_loader = false;
+            right.disable_credential_loader = false;
+            left.allow_credential_chain = None;
+            right.allow_credential_chain = None;
+            left == right
+        }
+        _ => lhs == rhs,
+    }
 }
 
 #[cfg(test)]

@@ -247,3 +247,104 @@ remove @stage_av;
 
 statement ok
 drop stage stage_av;
+
+###############################################################
+# CASE 4: Table option ByNum overrides table option ByTime    #
+###############################################################
+
+statement ok
+set data_retention_time_in_days = 1;
+
+statement ok
+set enable_auto_vacuum = 1;
+
+statement ok
+create or replace table t_case4 (c int) 'fs:///tmp/auto_vacuum_case4/' data_retention_num_snapshots_to_keep = 2;
+
+statement ok
+alter table t_case4 set options(data_retention_period_in_hours = 1);
+
+statement ok
+create or replace stage stage_av_case4 url = 'fs:///tmp/auto_vacuum_case4/';
+
+statement ok
+remove @stage_av_case4/ pattern = '.*';
+
+statement ok
+insert into t_case4 values(1);
+
+statement ok
+insert into t_case4 values(2);
+
+statement ok
+insert into t_case4 values(3);
+
+statement ok
+insert into t_case4 values(4);
+
+skipif mysql
+query I
+select count() from list_stage(location=> '@stage_av_case4') where name like '%_ss%';
+----
+2
+
+statement ok
+drop table t_case4;
+
+statement ok
+remove @stage_av_case4;
+
+statement ok
+drop stage stage_av_case4;
+
+###############################################################
+# CASE 5: Settings ByNum overrides settings ByTime            #
+###############################################################
+
+statement ok
+set data_retention_time_in_days = 1;
+
+statement ok
+set data_retention_num_snapshots_to_keep = 2;
+
+statement ok
+set enable_auto_vacuum = 1;
+
+statement ok
+create or replace table t_case5 (c int) 'fs:///tmp/auto_vacuum_case5/';
+
+statement ok
+create or replace stage stage_av_case5 url = 'fs:///tmp/auto_vacuum_case5/';
+
+statement ok
+remove @stage_av_case5/ pattern = '.*';
+
+statement ok
+insert into t_case5 values(1);
+
+statement ok
+insert into t_case5 values(2);
+
+statement ok
+insert into t_case5 values(3);
+
+statement ok
+insert into t_case5 values(4);
+
+skipif mysql
+query I
+select count() from list_stage(location=> '@stage_av_case5') where name like '%_ss%';
+----
+2
+
+statement ok
+drop table t_case5;
+
+statement ok
+remove @stage_av_case5;
+
+statement ok
+drop stage stage_av_case5;
+
+statement ok
+unset data_retention_num_snapshots_to_keep;

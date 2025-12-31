@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 bincode = { workspace = true }
 borsh = { workspace = true }
+byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -32,6 +33,7 @@ wkt = { workspace = true }
 
 [dev-dependencies]
 aho-corasick = { workspace = true }
+rand = { workspace = true }
 rmp-serde = { workspace = true }
 
 [lints]

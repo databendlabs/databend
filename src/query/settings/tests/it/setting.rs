@@ -218,3 +218,48 @@ async fn test_set_data_retention_time_in_days_from_config() {
         assert_eq!(expect, format!("{}", result.unwrap_err()));
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_keep_alive_settings() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+
+    let params = settings.get_flight_keep_alive_params().unwrap();
+    assert!(params.is_disabled());
+
+    settings
+        .set_setting(
+            "flight_client_keep_alive_time_secs".to_string(),
+            "15".to_string(),
+        )
+        .unwrap();
+    settings
+        .set_setting(
+            "flight_client_keep_alive_interval_secs".to_string(),
+            "5".to_string(),
+        )
+        .unwrap();
+    settings
+        .set_setting(
+            "flight_client_keep_alive_retries".to_string(),
+            "3".to_string(),
+        )
+        .unwrap();
+
+    let params = settings.get_flight_keep_alive_params().unwrap();
+    assert_eq!(params.time.unwrap().as_secs(), 15);
+    assert_eq!(params.interval.unwrap().as_secs(), 5);
+    assert_eq!(params.retries.unwrap(), 3);
+
+    // Values larger than u32::MAX should trigger an error when read.
+    settings
+        .set_setting(
+            "flight_client_keep_alive_retries".to_string(),
+            (u32::MAX as u64 + 1).to_string(),
+        )
+        .unwrap();
+    let err = settings.get_flight_keep_alive_params().unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("flight_client_keep_alive_retries must be less than or equal to u32::MAX")
+    );
+}

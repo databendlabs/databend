@@ -365,6 +365,14 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    /// Disable loading credentials from env/shared config/web identity files globally.
+    #[clap(long = "storage-disable-config-load")]
+    pub disable_config_load: bool,
+
+    /// Disable all instance-profile based credential providers globally.
+    #[clap(long = "storage-disable-instance-profile")]
+    pub disable_instance_profile: bool,
+
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
 
@@ -432,6 +440,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            disable_config_load: inner.disable_config_load,
+            disable_instance_profile: inner.disable_instance_profile,
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -542,6 +552,9 @@ impl From<InnerStorageConfig> for StorageConfig {
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
+        cfg.disable_config_load = inner.disable_config_load;
+        cfg.disable_instance_profile = inner.disable_instance_profile;
+
         cfg
     }
 }
@@ -587,6 +600,8 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            disable_config_load: self.disable_config_load,
+            disable_instance_profile: self.disable_instance_profile,
             params: {
                 match self.typ.as_str() {
                     "azblob" => {
@@ -1008,6 +1023,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             master_key: self.master_key,
             root: self.root,
             disable_credential_loader: false,
+            allow_credential_chain: None,
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,

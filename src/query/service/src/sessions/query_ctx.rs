@@ -76,7 +76,6 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -322,14 +321,14 @@ impl QueryContext {
         self.shared.attach_table(catalog, database, name, table)
     }
 
-    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         self.shared.broadcast_source_receiver(broadcast_id)
     }
 
     /// Get a sender to broadcast data
     ///
     /// Note: The channel must be closed by calling close() after data transmission is completed
-    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         self.shared.broadcast_source_sender(broadcast_id)
     }
 
@@ -337,11 +336,11 @@ impl QueryContext {
     ///
     /// Note: receive() can be called repeatedly until an Error is returned, indicating
     /// that the upstream channel has been closed
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         self.shared.broadcast_sink_receiver(broadcast_id)
     }
 
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         self.shared.broadcast_sink_sender(broadcast_id)
     }
 

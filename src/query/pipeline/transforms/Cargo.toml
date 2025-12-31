@@ -10,6 +10,7 @@ edition = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
+bumpalo = { workspace = true }
 bytesize = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -26,6 +27,7 @@ databend-storages-common-cache = { workspace = true }
 enum-as-inner = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }

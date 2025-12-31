@@ -52,8 +52,9 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let c = ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None)
-        .await?;
+    let c =
+        ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None, None)
+            .await?;
     let (mut client, _once) = MetaChannelManager::new_real_client(c);
 
     info!("--- client has smaller ver than S.min_cli_ver");

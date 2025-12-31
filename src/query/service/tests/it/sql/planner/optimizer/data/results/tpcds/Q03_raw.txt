@@ -17,23 +17,23 @@ Limit
                         ├── build keys: []
                         ├── probe keys: []
                         ├── other filters: []
-                        ├── Join(Cross)
-                        │   ├── build keys: []
-                        │   ├── probe keys: []
-                        │   ├── other filters: []
-                        │   ├── Scan
-                        │   │   ├── table: default.date_dim (#0)
-                        │   │   ├── filters: []
-                        │   │   ├── order by: []
-                        │   │   └── limit: NONE
-                        │   └── Scan
-                        │       ├── table: default.store_sales (#1)
-                        │       ├── filters: []
-                        │       ├── order by: []
-                        │       └── limit: NONE
-                        └── Scan
-                            ├── table: default.item (#2)
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE
+                        ├── Scan
+                        │   ├── table: default.item (#2)
+                        │   ├── filters: []
+                        │   ├── order by: []
+                        │   └── limit: NONE
+                        └── Join(Cross)
+                            ├── build keys: []
+                            ├── probe keys: []
+                            ├── other filters: []
+                            ├── Scan
+                            │   ├── table: default.store_sales (#1)
+                            │   ├── filters: []
+                            │   ├── order by: []
+                            │   └── limit: NONE
+                            └── Scan
+                                ├── table: default.date_dim (#0)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
 

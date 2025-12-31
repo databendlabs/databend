@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -26,7 +24,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
@@ -38,121 +35,50 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::SimpleArgFunc;
-use crate::table_functions::SimpleArgFuncTemplate;
-use crate::table_functions::parse_db_tb_args;
-use crate::table_functions::string_literal;
-
-pub struct ClusteringStatsArgs {
-    database_name: String,
-    table_name: String,
-}
-
-impl From<&ClusteringStatsArgs> for TableArgs {
-    fn from(args: &ClusteringStatsArgs) -> Self {
-        let tbl_args = vec![
-            string_literal(args.database_name.as_str()),
-            string_literal(args.table_name.as_str()),
-        ];
-        TableArgs::new_positioned(tbl_args)
-    }
-}
-
-impl TryFrom<(&str, TableArgs)> for ClusteringStatsArgs {
-    type Error = ErrorCode;
-    fn try_from(
-        (func_name, table_args): (&str, TableArgs),
-    ) -> std::result::Result<Self, Self::Error> {
-        let (database_name, table_name) = parse_db_tb_args(&table_args, func_name)?;
-        Ok(Self {
-            database_name,
-            table_name,
-        })
-    }
-}
-
-pub type ClusteringStatisticsFunc = SimpleArgFuncTemplate<ClusteringStatistics>;
+use crate::table_functions::TableMetaFunc;
+use crate::table_functions::TableMetaFuncTemplate;
 
 pub struct ClusteringStatistics;
 
-#[async_trait::async_trait]
-impl SimpleArgFunc for ClusteringStatistics {
-    type Args = ClusteringStatsArgs;
+pub type ClusteringStatisticsFunc = TableMetaFuncTemplate<ClusteringStatistics>;
 
-    fn schema() -> TableSchemaRef {
-        ClusteringStatisticsImpl::schema()
+#[async_trait::async_trait]
+impl TableMetaFunc for ClusteringStatistics {
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("segment_name", TableDataType::String),
+            TableField::new("block_name", TableDataType::String),
+            TableField::new("min", TableDataType::String.wrap_nullable()),
+            TableField::new("max", TableDataType::String.wrap_nullable()),
+            TableField::new(
+                "level",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
+            TableField::new("pages", TableDataType::String.wrap_nullable()),
+        ])
     }
 
     async fn apply(
         ctx: &Arc<dyn TableContext>,
-        args: &Self::Args,
-        plan: &DataSourcePlan,
+        tbl: &FuseTable,
+        snapshot: Arc<TableSnapshot>,
+        limit: Option<usize>,
     ) -> Result<DataBlock> {
-        let tenant_id = ctx.get_tenant();
-
-        let tbl = ctx
-            .get_catalog(databend_common_catalog::catalog_kind::CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                args.database_name.as_str(),
-                args.table_name.as_str(),
-            )
-            .await?;
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
+        // NOTE (design choice):
+        // Clustering statistics are only meaningful for the current cluster key definition.
+        // Historical cluster information stored in snapshots is intentionally ignored.
+        //
+        // Once the cluster key changes, historical cluster_stats cannot be interpreted
+        // or compared correctly, so snapshots are evaluated against the live table's
+        // cluster key only.
         let Some(cluster_key_id) = tbl.cluster_key_id() else {
             return Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table '{}.{}'",
-                args.database_name, args.table_name,
+                "Unclustered table {}",
+                tbl.get_table_info().desc,
             )));
         };
 
-        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
-        ClusteringStatisticsImpl::new(ctx.clone(), tbl, limit, cluster_key_id)
-            .get_blocks()
-            .await
-    }
-}
-
-pub struct ClusteringStatisticsImpl<'a> {
-    pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
-    pub limit: Option<usize>,
-    pub cluster_key_id: u32,
-}
-
-impl<'a> ClusteringStatisticsImpl<'a> {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        table: &'a FuseTable,
-        limit: Option<usize>,
-        cluster_key_id: u32,
-    ) -> Self {
-        Self {
-            ctx,
-            table,
-            limit,
-            cluster_key_id,
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_blocks(&self) -> Result<DataBlock> {
-        let tbl = self.table;
-        let maybe_snapshot = tbl.read_table_snapshot().await?;
-        if let Some(snapshot) = maybe_snapshot {
-            return self.to_block(snapshot).await;
-        }
-
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            Self::schema().into(),
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
-        let limit = self.limit.unwrap_or(usize::MAX);
+        let limit = limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let mut segment_name = Vec::with_capacity(len);
@@ -162,16 +88,11 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         let mut level = Vec::with_capacity(len);
         let mut pages = Vec::with_capacity(len);
 
-        let segments_io = SegmentsIO::create(
-            self.ctx.clone(),
-            self.table.operator.clone(),
-            self.table.schema(),
-        );
+        let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
         let mut row_num = 0;
         let chunk_size =
-            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
-
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         let format_vec = |v: &[Scalar]| -> String {
             format!(
                 "[{}]",
@@ -200,7 +121,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
                     let clustered = block
                         .cluster_stats
                         .as_ref()
-                        .is_some_and(|v| v.cluster_key_id == self.cluster_key_id);
+                        .is_some_and(|v| v.cluster_key_id == cluster_key_id);
 
                     if clustered {
                         // Safe to unwrap
@@ -235,19 +156,5 @@ impl<'a> ClusteringStatisticsImpl<'a> {
             ],
             row_num,
         ))
-    }
-
-    pub fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("segment_name", TableDataType::String),
-            TableField::new("block_name", TableDataType::String),
-            TableField::new("min", TableDataType::String.wrap_nullable()),
-            TableField::new("max", TableDataType::String.wrap_nullable()),
-            TableField::new(
-                "level",
-                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
-            ),
-            TableField::new("pages", TableDataType::String.wrap_nullable()),
-        ])
     }
 }

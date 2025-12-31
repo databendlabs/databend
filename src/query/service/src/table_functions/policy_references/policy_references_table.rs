@@ -462,7 +462,7 @@ async fn collect_policy_reference_rows(
                 let ident = DataMaskNameIdent::new(&tenant, "");
                 meta.list_id_value(&DirName::new(ident))
                     .await?
-                    .map(|(key, id, _)| (*id, key.data_mask_name().to_string()))
+                    .map(|(key, id_seqv, _)| (*id_seqv.data, key.data_mask_name().to_string()))
                     .collect::<HashMap<_, _>>()
             };
 
@@ -470,7 +470,7 @@ async fn collect_policy_reference_rows(
                 let ident = RowAccessPolicyNameIdent::new(&tenant, "");
                 meta.list_id_value(&DirName::new(ident))
                     .await?
-                    .map(|(key, id, _)| (*id, key.row_access_name().to_string()))
+                    .map(|(key, id_seqv, _)| (*id_seqv.data, key.row_access_name().to_string()))
                     .collect::<HashMap<_, _>>()
             };
 

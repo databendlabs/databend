@@ -22,25 +22,25 @@ Limit
                                 ├── build keys: [item.i_item_sk (#51)]
                                 ├── probe keys: [store_sales.ss_item_sk (#30)]
                                 ├── other filters: []
-                                ├── Join(Inner)
-                                │   ├── build keys: [date_dim.d_date_sk (#0)]
-                                │   ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
-                                │   ├── other filters: []
-                                │   ├── Scan
-                                │   │   ├── table: default.store_sales (#1)
-                                │   │   ├── filters: []
-                                │   │   ├── order by: []
-                                │   │   └── limit: NONE
-                                │   └── Exchange(Broadcast)
-                                │       └── Scan
-                                │           ├── table: default.date_dim (#0)
-                                │           ├── filters: [eq(date_dim.d_moy (#8), 11)]
-                                │           ├── order by: []
-                                │           └── limit: NONE
-                                └── Exchange(Broadcast)
+                                ├── Exchange(Broadcast)
+                                │   └── Scan
+                                │       ├── table: default.item (#2)
+                                │       ├── filters: [eq(item.i_manufact_id (#64), 128)]
+                                │       ├── order by: []
+                                │       └── limit: NONE
+                                └── Join(Inner)
+                                    ├── build keys: [date_dim.d_date_sk (#0)]
+                                    ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
+                                    ├── other filters: []
+                                    ├── Exchange(Broadcast)
+                                    │   └── Scan
+                                    │       ├── table: default.date_dim (#0)
+                                    │       ├── filters: [eq(date_dim.d_moy (#8), 11)]
+                                    │       ├── order by: []
+                                    │       └── limit: NONE
                                     └── Scan
-                                        ├── table: default.item (#2)
-                                        ├── filters: [eq(item.i_manufact_id (#64), 128)]
+                                        ├── table: default.store_sales (#1)
+                                        ├── filters: []
                                         ├── order by: []
                                         └── limit: NONE
 

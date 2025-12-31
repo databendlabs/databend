@@ -159,6 +159,6 @@ make profile
 
 After building, key binaries are available in `target/debug/` or `target/release/`:
 - `databend-query`: Main query engine
-- `databend-meta`: Metadata service  
+- `databend-meta`: Metadata service
 - `databend-metactl`: Meta service administration tool
 - `databend-sqllogictests`: SQL logic test runner

@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
 use std::vec;
 
 use bumpalo::Bump;
-use databend_common_base::base::convert_byte_size;
-use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -52,6 +49,7 @@ use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
 
@@ -64,52 +62,6 @@ enum HashTable {
 impl Default for HashTable {
     fn default() -> Self {
         Self::MovedOut
-    }
-}
-
-struct PartialAggregationStatistics {
-    start: Instant,
-    first_block_start: Option<Instant>,
-    processed_bytes: usize,
-    processed_rows: usize,
-}
-
-impl PartialAggregationStatistics {
-    fn new() -> Self {
-        Self {
-            start: Instant::now(),
-            first_block_start: None,
-            processed_bytes: 0,
-            processed_rows: 0,
-        }
-    }
-
-    fn record_block(&mut self, rows: usize, bytes: usize) {
-        self.processed_rows += rows;
-        self.processed_bytes += bytes;
-        if self.first_block_start.is_none() {
-            self.first_block_start = Some(Instant::now());
-        }
-    }
-
-    fn log_finish_statistics(&self, hashtable: &AggregateHashTable) {
-        let elapsed = self.start.elapsed().as_secs_f64();
-        let real_elapsed = self
-            .first_block_start
-            .as_ref()
-            .map(|t| t.elapsed().as_secs_f64())
-            .unwrap_or(elapsed);
-
-        log::info!(
-            "[TRANSFORM-AGGREGATOR] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}",
-            self.processed_rows,
-            hashtable.payload.len(),
-            elapsed,
-            real_elapsed,
-            convert_number_size(self.processed_rows as f64 / elapsed),
-            convert_byte_size(self.processed_bytes as f64 / elapsed),
-            convert_byte_size(self.processed_bytes as f64),
-        );
     }
 }
 
@@ -269,7 +221,7 @@ pub struct NewTransformPartialAggregate {
     hash_table: HashTable,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
-    statistics: PartialAggregationStatistics,
+    statistics: AggregationStatistics,
     settings: MemorySettings,
     spillers: Spiller,
 }
@@ -302,7 +254,7 @@ impl NewTransformPartialAggregate {
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
-                statistics: PartialAggregationStatistics::new(),
+                statistics: AggregationStatistics::new("NewPartialAggregate"),
                 spillers,
             },
         ))

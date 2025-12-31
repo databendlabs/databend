@@ -28,6 +28,8 @@ use roaring::RoaringTreemap;
 use roaring::treemap::Iter;
 use smallvec::SmallVec;
 
+mod reader;
+
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
 pub const LARGE_THRESHOLD: usize = 32;
 pub const HYBRID_MAGIC: [u8; 2] = *b"HB";
@@ -481,13 +483,46 @@ pub fn deserialize_bitmap(buf: &[u8]) -> Result<HybridBitmap> {
         return result;
     }
 
-    RoaringTreemap::deserialize_from(buf)
+    RoaringTreemap::deserialize_unchecked_from(buf)
         .map(HybridBitmap::from)
         .map_err(|e| {
             let len = buf.len();
             let msg = format!("fail to decode bitmap from buffer of size {len}: {e}");
             ErrorCode::BadBytes(msg)
         })
+}
+
+pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
+    if buf.is_empty() {
+        return Ok(0);
+    }
+
+    if buf.len() > 3
+        && buf[3] == HYBRID_KIND_LARGE
+        && buf[..2] == HYBRID_MAGIC
+        && buf[2] == HYBRID_VERSION
+    {
+        Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64)
+    } else {
+        Ok(deserialize_bitmap(buf)?.len())
+    }
+}
+
+pub fn intersection_with_serialized(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+    if let HybridBitmap::Large(lhs) = lhs
+        && buf.len() > 3
+        && buf[3] == HYBRID_KIND_LARGE
+        && buf[..2] == HYBRID_MAGIC
+        && buf[2] == HYBRID_VERSION
+    {
+        Ok(reader::intersection_with_serialized(
+            lhs,
+            &buf[HYBRID_HEADER_LEN..],
+        )?)
+    } else {
+        *lhs &= deserialize_bitmap(buf)?;
+        Ok(())
+    }
 }
 
 fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
@@ -511,7 +546,7 @@ fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
     match kind {
         HYBRID_KIND_SMALL => Some(decode_small_bitmap(payload)),
         HYBRID_KIND_LARGE => Some(
-            RoaringTreemap::deserialize_from(payload)
+            RoaringTreemap::deserialize_unchecked_from(payload)
                 .map(HybridBitmap::from)
                 .map_err(|e| {
                     let len = payload.len();

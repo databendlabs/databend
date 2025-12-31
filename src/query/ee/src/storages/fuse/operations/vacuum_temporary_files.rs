@@ -105,7 +105,7 @@ async fn vacuum_by_duration(
                 let meta = meta.unwrap();
 
                 if let Some(modified) = meta.last_modified() {
-                    if timestamp - modified.into_inner().as_millisecond() < expire_time {
+                    if timestamp - modified.timestamp_millis() < expire_time {
                         continue;
                     }
                 }

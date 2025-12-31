@@ -217,6 +217,7 @@ impl FromToProto for mt::principal::StageInfo {
                 || Incompatible::new("StageInfo.stage_params cannot be None".to_string()),
             )?)?,
             is_temporary: false,
+            allow_credential_chain: false,
             file_format_params,
             copy_options: mt::principal::CopyOptions::from_pb(p.copy_options.ok_or_else(
                 || Incompatible::new("StageInfo.copy_options cannot be None".to_string()),

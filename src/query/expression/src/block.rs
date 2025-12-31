@@ -368,6 +368,10 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
             "The reason for not implementing clone_self is usually because the higher-level logic doesn't allow/need the associated block to be cloned."
         )
     }
+
+    fn override_block_schema(&self) -> Option<DataSchemaRef> {
+        None
+    }
 }
 
 pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {

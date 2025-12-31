@@ -33,6 +33,7 @@ use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -223,7 +224,7 @@ impl Operator for ConstantTableScan {
             let column_stat = ColumnStat {
                 min,
                 max,
-                ndv: ndv as f64,
+                ndv: Ndv::Stat(ndv as _),
                 null_count,
                 histogram,
             };

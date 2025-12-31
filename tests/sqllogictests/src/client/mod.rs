@@ -34,6 +34,7 @@ use crate::util::ColumnType;
 #[derive(Debug, Clone, Copy)]
 pub enum QueryResultFormat {
     Json,
+    #[allow(dead_code)]
     Arrow,
 }
 

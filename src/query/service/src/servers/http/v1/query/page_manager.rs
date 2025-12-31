@@ -36,8 +36,8 @@ pub struct ResponseData {
 }
 
 pub struct PageManager {
-    total_rows: usize,
-    total_pages: usize,
+    rows_returned: usize,
+    pages_returned: usize,
     end: bool,
     last_page: Option<Page>,
     receiver: SizedChannelReceiver<LiteSpiller>,
@@ -50,9 +50,9 @@ impl PageManager {
 
         (
             PageManager {
-                total_rows: 0,
+                rows_returned: 0,
                 last_page: None,
-                total_pages: 0,
+                pages_returned: 0,
                 end: false,
                 receiver,
             },
@@ -64,14 +64,14 @@ impl PageManager {
         if self.end {
             None
         } else {
-            Some(self.total_pages)
+            Some(self.pages_returned)
         }
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace(name = "PageManager::get_a_page")]
     pub async fn get_a_page(&mut self, page_no: usize, wait: &Wait) -> Result<Page> {
-        let next_no = self.total_pages;
+        let next_no = self.pages_returned;
         if page_no == next_no {
             if !self.end {
                 let start_time = std::time::Instant::now();
@@ -86,14 +86,14 @@ impl PageManager {
                     log::info!(
                         target: "result-set-spill",
                         "[RESULT-SET-SPILL] Page received page_no={}, rows={}, total_rows={}, end={}, duration_ms={}",
-                        self.total_pages, num_row, self.total_rows + num_row, end, duration_ms
+                        self.pages_returned, num_row, self.rows_returned + num_row, end, duration_ms
                     );
                 } else if end {
                     // Only log empty page when query ends
                     log::info!(
                         target: "result-set-spill",
                         "[RESULT-SET-SPILL] Query completed with empty final page page_no={}, total_rows={}",
-                        self.total_pages, self.total_rows
+                        self.pages_returned, self.rows_returned
                     );
                 }
 
@@ -101,8 +101,8 @@ impl PageManager {
                     data: Arc::new(serializer),
                 };
                 if num_row > 0 {
-                    self.total_rows += num_row;
-                    self.total_pages += 1;
+                    self.rows_returned += num_row;
+                    self.pages_returned += 1;
                     self.last_page = Some(page.clone());
                 }
                 self.end = end;
@@ -137,7 +137,7 @@ impl PageManager {
         log::info!(
             target: "result-set-spill",
             "[RESULT-SET-SPILL] Query completed total_pages={}, total_rows={}",
-            self.total_pages, self.total_rows
+            self.pages_returned, self.rows_returned
         );
         if let Some(spiller) = self.receiver.close() {
             let start_time = std::time::Instant::now();

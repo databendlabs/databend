@@ -217,10 +217,10 @@ where
         let index_metas = name_id_metas
             // table_id is not specified
             // or table_id is specified and equals to the given table_id.
-            .filter(|(_k, _id, seq_meta)| {
+            .filter(|(_k, _seq_id, seq_meta)| {
                 req.table_id.is_none() || req.table_id == Some(seq_meta.table_id)
             })
-            .map(|(k, id, seq_meta)| (k.index_name().to_string(), id, seq_meta.data))
+            .map(|(k, id_seqv, seq_meta)| (k.index_name().to_string(), id_seqv.data, seq_meta.data))
             .collect::<Vec<_>>();
 
         Ok(index_metas)

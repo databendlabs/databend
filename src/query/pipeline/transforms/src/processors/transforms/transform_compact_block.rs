@@ -14,7 +14,7 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::intrinsics::unlikely;
+use std::hint::unlikely;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;

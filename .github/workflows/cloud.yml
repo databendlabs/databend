@@ -51,7 +51,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 8c32g
+      - 8c
       - aws
     strategy:
       matrix:
@@ -87,7 +87,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}

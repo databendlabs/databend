@@ -29,10 +29,9 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
+use databend_common_sql::executor::physical_plans::window::WindowFunction;
 use itertools::Itertools;
-
-use crate::physical_plans::LagLeadDefault;
-use crate::physical_plans::WindowFunction;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -67,7 +66,7 @@ impl WindowFuncAggImpl {
     }
 
     #[inline]
-    pub fn arg_columns<'a>(&'a self, data: &'a DataBlock) -> ProjectedBlock {
+    pub fn arg_columns<'a>(&'a self, data: &'a DataBlock) -> ProjectedBlock<'a> {
         ProjectedBlock::project(&self.args, data)
     }
 
@@ -99,7 +98,7 @@ impl Drop for WindowFuncAggImpl {
 #[derive(Clone)]
 pub struct WindowFuncLagLeadImpl {
     pub arg: usize,
-    pub default: LagLeadDefault,
+    pub default: Option<usize>,
     pub return_type: DataType,
 }
 
@@ -234,21 +233,14 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
-            WindowFunction::LagLead(ll) => {
-                let new_arg = schema.index_of(&ll.arg.to_string())?;
-                let new_default = match &ll.default {
-                    LagLeadDefault::Null => LagLeadDefault::Null,
-                    LagLeadDefault::Index(i) => {
-                        let offset = schema.index_of(&i.to_string())?;
-                        LagLeadDefault::Index(offset)
-                    }
-                };
-                Self::LagLead(WindowFuncLagLeadImpl {
-                    arg: new_arg,
-                    default: new_default,
-                    return_type: ll.return_type.clone(),
-                })
-            }
+            WindowFunction::LagLead(ll) => Self::LagLead(WindowFuncLagLeadImpl {
+                arg: schema.index_of(&ll.arg.to_string())?,
+                default: match &ll.default {
+                    LagLeadDefault::Null => None,
+                    LagLeadDefault::Index(i) => Some(schema.index_of(&i.to_string())?),
+                },
+                return_type: ll.return_type.clone(),
+            }),
             WindowFunction::NthValue(func) => {
                 let new_arg = schema.index_of(&func.arg.to_string())?;
                 Self::NthValue(WindowFuncNthValueImpl {
@@ -272,7 +264,7 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut states_layout = get_states_layout(&[agg.clone()])?;
+                let mut states_layout = get_states_layout(std::slice::from_ref(&agg))?;
                 let addr = arena.alloc_layout(states_layout.layout).into();
                 let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {

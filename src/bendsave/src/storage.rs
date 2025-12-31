@@ -219,7 +219,7 @@ mod tests {
     use std::path::Path;
 
     use databend_common_base::base::tokio;
-    use databend_common_storage::Scheme;
+    use opendal::Scheme;
 
     use super::*;
 
@@ -237,12 +237,12 @@ mod tests {
     #[tokio::test]
     async fn test_load_epochfs_storage() -> Result<()> {
         let op = load_bendsave_storage("s3://bendsave/tmp?region=us-east-1").await?;
-        assert_eq!(op.info().scheme(), Scheme::S3.to_string());
+        assert_eq!(op.info().scheme(), Scheme::S3);
         assert_eq!(op.info().name(), "bendsave");
         assert_eq!(op.info().root(), "/tmp/");
 
         let op = load_bendsave_storage("fs://opt").await?;
-        assert_eq!(op.info().scheme(), Scheme::Fs.to_string());
+        assert_eq!(op.info().scheme(), Scheme::Fs);
         assert_eq!(op.info().root(), "/opt");
         Ok(())
     }

@@ -54,13 +54,13 @@ impl Transform for TransformAddStreamColumns {
     const NAME: &'static str = "AddStreamColumnsTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        if !block.is_empty() {
-            if let Some(meta) = block.take_meta() {
-                let meta = StreamColumnMeta::downcast_from(meta)
-                    .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+        if !block.is_empty()
+            && let Some(meta) = block.take_meta()
+        {
+            let meta = StreamColumnMeta::downcast_from(meta)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
-                block = self.stream_ctx.apply(block, &meta)?.add_meta(meta.inner)?;
-            }
+            block = self.stream_ctx.apply(block, &meta)?.add_meta(meta.inner)?;
         }
 
         Ok(block)

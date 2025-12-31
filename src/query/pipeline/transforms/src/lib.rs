@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(internal_features)]
-#![allow(
-    clippy::collapsible_if,
-    clippy::let_and_return,
-    clippy::unconditional_recursion
-)]
-#![feature(core_intrinsics)]
+#![feature(likely_unlikely)]
 #![feature(int_roundings)]
 #![feature(iter_map_windows)]
 #![feature(assert_matches)]
 #![feature(debug_closure_helpers)]
+#![feature(try_blocks)]
 
 // Logs from this crate will show up as "...".
 databend_common_tracing::register_module_tag!("[TRANSFORMS]");

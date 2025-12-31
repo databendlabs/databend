@@ -15,7 +15,7 @@ CREATE TABLE tenk1 ( unique1 int, unique2 int, two int, four int, ten int, twent
 statement ok
 insert into tenk1 values (4, 1621, 0, 0, 4, 4, 4, 4, 4, 4, 4, 8 ,9 ,'EAAAAA', 'JKCAAA', 'HHHHxx'), (2, 2716, 0, 2, 2, 2, 2, 2, 2, 2, 2, 4 ,5 ,'CAAAAA', 'MAEAAA', 'AAAAxx'), (1, 2838, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2 ,3 ,'BAAAAA', 'EFEAAA', 'OOOOxx'), (6, 2855, 0, 2, 6, 6, 6, 6, 6, 6, 6, 12 ,13 ,'GAAAAA', 'VFEAAA', 'VVVVxx'), (9, 4463, 1, 1, 9, 9, 9, 9, 9, 9, 9, 18 ,19 ,'JAAAAA', 'RPGAAA', 'VVVVxx'),(8, 5435, 0, 0, 8, 8, 8, 8, 8, 8, 8, 16 ,17 ,'IAAAAA', 'BBIAAA', 'VVVVxx'), (5, 5557, 1, 1, 5, 5, 5, 5, 5, 5, 5, 10 ,11,'FAAAAA', 'TFIAAA', 'HHHHxx'), (3, 5679, 1, 3, 3, 3, 3, 3, 3, 3, 3, 6 ,7 ,'DAAAAA', 'LKIAAA', 'VVVVxx'), (7, 8518, 1,3, 7, 7, 7, 7, 7, 7, 7, 14 ,15 ,'HAAAAA', 'QPMAAA', 'OOOOxx'), (0, 9998, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,1 ,'AAAAAA','OUOAAA', 'OOOOxx')
 
-query R
+query I
 SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 2 following) su FROM tenk1 order by unique1
 ----
 3
@@ -29,7 +29,7 @@ SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 2 follow
 30
 24
 
-query R
+query I
 SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 1 preceding) su FROM tenk1 order by unique1
 ----
 NULL
@@ -43,7 +43,7 @@ NULL
 13
 15
 
-query R
+query I
 SELECT sum(unique1) over (order by unique1 rows between 1 following and 3 following) su FROM tenk1 order by unique1
 ----
 6
@@ -57,7 +57,7 @@ SELECT sum(unique1) over (order by unique1 rows between 1 following and 3 follow
 9
 NULL
 
-query R
+query I
 SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 1 following) su FROM tenk1 order by unique1
 ----
 1
@@ -267,7 +267,7 @@ SELECT a, DENSE_RANK() OVER (ORDER BY a ROWS BETWEEN UNBOUNDED PRECEDING AND UNB
 6 4
 7 5
 
-query I rowsort
+query ? rowsort
 SELECT DISTINCT lead((861, FALSE, FALSE), 9, (849, TRUE, TRUE)) OVER (
     PARTITION BY 15560425903542832284, 965871850213131579 
     ORDER BY 13746504519650342222, 5897530378272856518 ASC NULLS FIRST) 
@@ -276,7 +276,7 @@ FROM range(100, 12000000, 467);
 (849,1,1)
 (861,0,0)
 
-query II rowsort
+query ? rowsort
 SELECT DISTINCT lead((861, FALSE, FALSE), 9, (849, TRUE, TRUE)) OVER (
     PARTITION BY 15560425903542832284, 965871850213131579 
     ORDER BY 13746504519650342222, 5897530378272856518 ASC NULLS FIRST) 

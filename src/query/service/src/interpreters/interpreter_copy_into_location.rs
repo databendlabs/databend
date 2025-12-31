@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
-use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_storages_common_stage::CopyIntoLocationInfo;
@@ -88,8 +87,7 @@ impl CopyIntoLocationInterpreter {
         let (query_interpreter, update_stream_meta_req) = self.build_query(query).await?;
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
         let query_result_schema = query_interpreter.get_result_schema();
-        let table_schema = infer_table_schema(&query_result_schema)?;
-
+        let table_schema = query_interpreter.get_result_table_schema()?;
         let mut physical_plan = PhysicalPlan::new(CopyIntoLocation {
             input: query_physical_plan,
             project_columns: query_interpreter.get_result_columns(),

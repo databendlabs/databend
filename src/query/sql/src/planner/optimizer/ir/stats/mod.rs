@@ -16,9 +16,7 @@ mod column_stat;
 mod histogram;
 mod selectivity;
 
-pub use column_stat::ColumnStat;
-pub use column_stat::ColumnStatSet;
-pub use column_stat::NewStatistic;
+pub use column_stat::*;
 pub use histogram::HistogramBuilder;
 pub use histogram::UniformSampleSet;
 pub use selectivity::MAX_SELECTIVITY;

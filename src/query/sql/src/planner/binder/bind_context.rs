@@ -32,12 +32,17 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::infer_schema_type;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -557,6 +562,30 @@ impl BindContext {
             })
             .collect();
         DataSchemaRefExt::create(fields)
+    }
+
+    pub fn output_table_schema(&self, metadata: MetadataRef) -> Result<TableSchemaRef> {
+        let metadata = metadata.read();
+        let mut fields = Vec::with_capacity(self.columns.len());
+        for column_binding in &self.columns {
+            let table_data_type = if column_binding.index < metadata.columns().len() {
+                match metadata.column(column_binding.index) {
+                    ColumnEntry::BaseTableColumn(base) => base.data_type.clone(),
+                    ColumnEntry::VirtualColumn(virtual_column) => virtual_column.data_type.clone(),
+                    ColumnEntry::DerivedColumn(derived) => infer_schema_type(&derived.data_type)?,
+                    ColumnEntry::InternalColumn(internal) => {
+                        infer_schema_type(&internal.internal_column.data_type())?
+                    }
+                }
+            } else {
+                infer_schema_type(column_binding.data_type.as_ref())?
+            };
+            fields.push(TableField::new(
+                &column_binding.column_name,
+                table_data_type,
+            ));
+        }
+        Ok(TableSchemaRefExt::create(fields))
     }
 
     fn get_internal_column_table_index(

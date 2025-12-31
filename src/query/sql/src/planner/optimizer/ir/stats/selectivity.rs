@@ -24,8 +24,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
@@ -249,7 +247,7 @@ impl<'a> SelectivityEstimator<'a> {
                         // For equal predicate, we just use cardinality of a single
                         // value to estimate the selectivity. This assumes that
                         // the column is in a uniform distribution.
-                        let selectivity = evaluate_equal(column_stat, constant);
+                        let selectivity = evaluate_equal(column_stat, false, constant);
                         if update {
                             update_statistic(
                                 column_stat,
@@ -263,7 +261,7 @@ impl<'a> SelectivityEstimator<'a> {
                     }
                     ComparisonOp::NotEqual => {
                         // For not equal predicate, we treat it as opposite of equal predicate.
-                        let selectivity = 1.0 - evaluate_equal(column_stat, constant);
+                        let selectivity = evaluate_equal(column_stat, true, constant);
                         if update {
                             update_statistic(
                                 column_stat,
@@ -342,25 +340,26 @@ impl<'a> SelectivityEstimator<'a> {
     // Update other columns' statistic according to selectivity.
     pub fn update_other_statistic_by_selectivity(&mut self, selectivity: f64) {
         for (index, column_stat) in self.input_stat.column_stats.iter_mut() {
-            if !self.updated_column_indexes.contains(index) {
-                let new_ndv = (column_stat.ndv * selectivity).ceil();
-                column_stat.ndv = new_ndv;
-                if let Some(histogram) = &mut column_stat.histogram {
-                    if histogram.accuracy {
-                        // If selectivity < 0.2, most buckets are invalid and
-                        // the accuracy histogram can be discarded.
-                        // Todo: find a better way to update histogram.
-                        if selectivity < 0.2 {
-                            column_stat.histogram = None;
-                        }
-                        continue;
-                    }
-                    if new_ndv as u64 <= 2 {
+            if self.updated_column_indexes.contains(index) {
+                continue;
+            }
+            column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
+
+            if let Some(histogram) = &mut column_stat.histogram {
+                if histogram.accuracy {
+                    // If selectivity < 0.2, most buckets are invalid and
+                    // the accuracy histogram can be discarded.
+                    // Todo: find a better way to update histogram.
+                    if selectivity < 0.2 {
                         column_stat.histogram = None;
-                    } else {
-                        for bucket in histogram.buckets.iter_mut() {
-                            bucket.update(selectivity);
-                        }
+                    }
+                    continue;
+                }
+                if column_stat.ndv.value() as u64 <= 2 {
+                    column_stat.histogram = None;
+                } else {
+                    for bucket in histogram.buckets.iter_mut() {
+                        bucket.update(selectivity);
                     }
                 }
             }
@@ -375,161 +374,123 @@ impl<'a> SelectivityEstimator<'a> {
         column_stat: &mut ColumnStat,
         updated_column_indexes: &mut HashSet<IndexType>,
     ) -> Result<f64> {
-        let histogram = column_stat.histogram.as_ref();
+        let selectivity = match column_stat.histogram.as_ref() {
+            None if const_datum.is_numeric() => {
+                // If there is no histogram and the column isn't numeric, return default selectivity.
+                if !column_stat.min.is_numeric() || !column_stat.max.is_numeric() {
+                    return Ok(DEFAULT_SELECTIVITY);
+                }
 
-        if histogram.is_none() && const_datum.is_numeric() {
-            // If there is no histogram and the column isn't numeric, return default selectivity.
-            if !column_stat.min.is_numeric() || !column_stat.max.is_numeric() {
-                return Ok(DEFAULT_SELECTIVITY);
-            }
+                let min = column_stat.min.to_double()?;
+                let max = column_stat.max.to_double()?;
+                let ndv = column_stat.ndv;
+                let numeric_literal = const_datum.to_double()?;
 
-            let min = column_stat.min.to_double()?;
-            let max = column_stat.max.to_double()?;
-            let ndv = column_stat.ndv;
-            let numeric_literal = const_datum.to_double()?;
+                let cmp_min = numeric_literal.total_cmp(&min);
+                let cmp_max = numeric_literal.total_cmp(&max);
 
-            let (no_overlap, complete_overlap) = match comparison_op {
-                ComparisonOp::LT => (numeric_literal <= min, numeric_literal > max),
-                ComparisonOp::LTE => (numeric_literal < min, numeric_literal >= max),
-                ComparisonOp::GT => (numeric_literal >= max, numeric_literal < min),
-                ComparisonOp::GTE => (numeric_literal > max, numeric_literal <= min),
-                _ => unreachable!(),
-            };
+                use Ordering::*;
+                match (comparison_op, cmp_min, cmp_max) {
+                    (ComparisonOp::LT, Less | Equal, _) => 0.0,
+                    (ComparisonOp::LTE, Less, _) => 0.0,
+                    (ComparisonOp::LTE, Equal, _) => ndv.equal_selectivity(false),
+                    (ComparisonOp::LT | ComparisonOp::LTE, Greater, Greater) => 1.0,
+                    (ComparisonOp::LT, Greater, Equal) => ndv.equal_selectivity(true),
+                    (ComparisonOp::LT | ComparisonOp::LTE, _, _) => {
+                        (numeric_literal - min) / (max - min + 1.0)
+                    }
 
-            let percent = if no_overlap {
-                0.0
-            } else if complete_overlap {
-                1.0
-            } else {
-                match comparison_op {
-                    ComparisonOp::LT => {
-                        if numeric_literal == max {
-                            1.0 - 1.0 / ndv
-                        } else {
-                            (numeric_literal - min) / (max - min + 1.0)
-                        }
+                    (ComparisonOp::GT, _, Greater | Equal) => 0.0,
+                    (ComparisonOp::GTE, _, Greater) => 0.0,
+                    (ComparisonOp::GTE, Less | Equal, _) => 1.0,
+                    (ComparisonOp::GT, Less, _) => 1.0,
+                    (ComparisonOp::GT, Equal, _) => ndv.equal_selectivity(true),
+                    (ComparisonOp::GTE, _, Equal) => ndv.equal_selectivity(false),
+                    (ComparisonOp::GT | ComparisonOp::GTE, _, _) => {
+                        (max - numeric_literal) / (max - min + 1.0)
                     }
-                    ComparisonOp::LTE => {
-                        if numeric_literal == min {
-                            1.0 / ndv
-                        } else {
-                            (numeric_literal - min) / (max - min + 1.0)
-                        }
-                    }
-                    ComparisonOp::GT => {
-                        if numeric_literal == min {
-                            1.0 - 1.0 / ndv
-                        } else {
-                            (max - numeric_literal) / (max - min + 1.0)
-                        }
-                    }
-                    ComparisonOp::GTE => {
-                        if numeric_literal == max {
-                            1.0 / ndv
-                        } else {
-                            (max - numeric_literal) / (max - min + 1.0)
-                        }
-                    }
+
                     _ => unreachable!(),
                 }
-            };
-
-            if update {
-                let new_min = if matches!(comparison_op, ComparisonOp::GT | ComparisonOp::GTE) {
-                    const_datum.clone()
-                } else {
-                    column_stat.min.clone()
-                };
-
-                let new_max = if matches!(comparison_op, ComparisonOp::LT | ComparisonOp::LTE) {
-                    const_datum.clone()
-                } else {
-                    column_stat.max.clone()
-                };
-
-                update_statistic(column_stat, new_min, new_max, percent)?;
-                updated_column_indexes.insert(column_ref.column.index);
             }
-
-            return Ok(percent);
-        }
-
-        let Some(histogram) = histogram else {
-            return Ok(DEFAULT_SELECTIVITY);
-        };
-
-        let mut num_selected = 0.0;
-        for bucket in histogram.buckets_iter() {
-            let lower_bound = bucket.lower_bound();
-            let upper_bound = bucket.upper_bound();
-
-            if !const_datum.can_compare(lower_bound) {
+            None => {
                 return Ok(DEFAULT_SELECTIVITY);
             }
+            Some(histogram) => {
+                let mut num_selected = 0.0;
+                for bucket in histogram.buckets_iter() {
+                    let lower_bound = bucket.lower_bound();
+                    let upper_bound = bucket.upper_bound();
 
-            let const_gte_upper_bound = matches!(
-                const_datum.compare(upper_bound)?,
-                Ordering::Greater | Ordering::Equal
-            );
-            let (no_overlap, complete_overlap) = match comparison_op {
-                ComparisonOp::LT => (
-                    matches!(
-                        const_datum.compare(lower_bound)?,
-                        Ordering::Less | Ordering::Equal
-                    ),
-                    const_gte_upper_bound,
-                ),
-                ComparisonOp::LTE => (
-                    matches!(const_datum.compare(lower_bound)?, Ordering::Less),
-                    const_gte_upper_bound,
-                ),
-                ComparisonOp::GT => (
-                    const_gte_upper_bound,
-                    matches!(const_datum.compare(lower_bound)?, Ordering::Less),
-                ),
-                ComparisonOp::GTE => (
-                    const_gte_upper_bound,
-                    matches!(
-                        const_datum.compare(lower_bound)?,
-                        Ordering::Less | Ordering::Equal
-                    ),
-                ),
-                _ => unreachable!(),
-            };
-
-            if complete_overlap {
-                num_selected += bucket.num_values();
-            } else if !no_overlap && const_datum.is_numeric() {
-                let ndv = bucket.num_distinct();
-                let lower_bound = lower_bound.to_double()?;
-                let upper_bound = upper_bound.to_double()?;
-                let const_value = const_datum.to_double()?;
-
-                let bucket_range = upper_bound - lower_bound;
-                let bucket_selectivity = match comparison_op {
-                    ComparisonOp::LT => (const_value - lower_bound) / bucket_range,
-                    ComparisonOp::LTE => {
-                        if const_value == lower_bound {
-                            1.0 / ndv
-                        } else {
-                            (const_value - lower_bound + 1.0) / bucket_range
-                        }
+                    if !const_datum.can_compare(lower_bound) {
+                        return Ok(DEFAULT_SELECTIVITY);
                     }
-                    ComparisonOp::GT => {
-                        if const_value == lower_bound {
-                            1.0 - 1.0 / ndv
-                        } else {
-                            (upper_bound - const_value - 1.0).max(0.0) / bucket_range
-                        }
+
+                    let const_gte_upper_bound = matches!(
+                        const_datum.compare(upper_bound)?,
+                        Ordering::Greater | Ordering::Equal
+                    );
+                    let (no_overlap, complete_overlap) = match comparison_op {
+                        ComparisonOp::LT => (
+                            matches!(
+                                const_datum.compare(lower_bound)?,
+                                Ordering::Less | Ordering::Equal
+                            ),
+                            const_gte_upper_bound,
+                        ),
+                        ComparisonOp::LTE => (
+                            matches!(const_datum.compare(lower_bound)?, Ordering::Less),
+                            const_gte_upper_bound,
+                        ),
+                        ComparisonOp::GT => (
+                            const_gte_upper_bound,
+                            matches!(const_datum.compare(lower_bound)?, Ordering::Less),
+                        ),
+                        ComparisonOp::GTE => (
+                            const_gte_upper_bound,
+                            matches!(
+                                const_datum.compare(lower_bound)?,
+                                Ordering::Less | Ordering::Equal
+                            ),
+                        ),
+                        _ => unreachable!(),
+                    };
+
+                    if complete_overlap {
+                        num_selected += bucket.num_values();
+                    } else if !no_overlap && const_datum.is_numeric() {
+                        let ndv = bucket.num_distinct();
+                        let lower_bound = lower_bound.to_double()?;
+                        let upper_bound = upper_bound.to_double()?;
+                        let const_value = const_datum.to_double()?;
+
+                        let bucket_range = upper_bound - lower_bound;
+                        let bucket_selectivity = match comparison_op {
+                            ComparisonOp::LT => (const_value - lower_bound) / bucket_range,
+                            ComparisonOp::LTE => {
+                                if const_value == lower_bound {
+                                    1.0 / ndv
+                                } else {
+                                    (const_value - lower_bound + 1.0) / bucket_range
+                                }
+                            }
+                            ComparisonOp::GT => {
+                                if const_value == lower_bound {
+                                    1.0 - 1.0 / ndv
+                                } else {
+                                    (upper_bound - const_value - 1.0).max(0.0) / bucket_range
+                                }
+                            }
+                            ComparisonOp::GTE => (upper_bound - const_value) / bucket_range,
+                            _ => unreachable!(),
+                        };
+                        num_selected += bucket.num_values() * bucket_selectivity;
                     }
-                    ComparisonOp::GTE => (upper_bound - const_value) / bucket_range,
-                    _ => unreachable!(),
-                };
-                num_selected += bucket.num_values() * bucket_selectivity;
+                }
+
+                num_selected / histogram.num_values()
             }
-        }
-
-        let selectivity = num_selected / histogram.num_values();
+        };
 
         if update {
             let (new_min, new_max) = match comparison_op {
@@ -565,54 +526,20 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     }
 }
 
-fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
-    let constant_datum = Datum::from_scalar(constant.value.clone());
-    match constant.value.as_ref().infer_data_type() {
-        DataType::Null => 0.0,
-        DataType::Number(number) => match number {
-            NumberDataType::UInt8
-            | NumberDataType::UInt16
-            | NumberDataType::UInt32
-            | NumberDataType::UInt64
-            | NumberDataType::Int8
-            | NumberDataType::Int16
-            | NumberDataType::Int32
-            | NumberDataType::Int64
-            | NumberDataType::Float32
-            | NumberDataType::Float64 => compare_equal(&constant_datum, column_stat),
-        },
-        DataType::Boolean | DataType::Binary | DataType::String => {
-            compare_equal(&constant_datum, column_stat)
-        }
+fn evaluate_equal(column_stat: &ColumnStat, not_eq: bool, constant: &ConstantExpr) -> f64 {
+    match &constant.value {
+        Scalar::Null => return if not_eq { 1.0 } else { 0.0 },
         _ => {
-            if column_stat.ndv == 0.0 {
-                0.0
-            } else {
-                1.0 / column_stat.ndv
-            }
-        }
-    }
-}
-
-fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
-    let col_min = &column_stat.min;
-    let col_max = &column_stat.max;
-    if let Some(constant_datum) = datum {
-        if col_min.type_comparable(constant_datum) {
-            // Safe to unwrap, because type is comparable.
-            if constant_datum.compare(col_min).unwrap() == Ordering::Less
-                || constant_datum.compare(col_max).unwrap() == Ordering::Greater
+            if let Some(constant) = Datum::from_scalar(constant.value.clone())
+                && (matches!(constant.compare(&column_stat.min), Ok(Ordering::Less))
+                    || matches!(constant.compare(&column_stat.max), Ok(Ordering::Greater)))
             {
-                return 0.0;
+                return if not_eq { 1.0 } else { 0.0 };
             }
         }
     }
 
-    if column_stat.ndv == 0.0 {
-        0.0
-    } else {
-        1.0 / column_stat.ndv
-    }
+    column_stat.ndv.equal_selectivity(not_eq)
 }
 
 fn update_statistic(
@@ -621,8 +548,8 @@ fn update_statistic(
     mut new_max: Datum,
     selectivity: f64,
 ) -> Result<()> {
-    let new_ndv = (column_stat.ndv * selectivity).ceil();
-    column_stat.ndv = new_ndv;
+    column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
+
     if matches!(
         new_min,
         Datum::Bool(_) | Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
@@ -642,7 +569,7 @@ fn update_statistic(
         } else {
             let num_values = histogram.num_values();
             let new_num_values = (num_values * selectivity).ceil() as u64;
-            let new_ndv = new_ndv as u64;
+            let new_ndv = column_stat.ndv.value() as u64;
             if new_ndv <= 2 {
                 column_stat.histogram = None;
                 return Ok(());

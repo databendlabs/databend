@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod frame_bound;
 mod partition;
-mod transform_window;
-mod window_function;
 
-pub use frame_bound::FrameBound;
+pub use databend_common_pipeline_transforms::window::FrameBound;
+pub use databend_common_pipeline_transforms::window::TransformWindow;
+pub use databend_common_pipeline_transforms::window::WindowFunctionInfo;
+pub use databend_common_pipeline_transforms::window::WindowSortDesc;
 pub use partition::*;
-pub use transform_window::*;
-pub use window_function::WindowFunctionInfo;

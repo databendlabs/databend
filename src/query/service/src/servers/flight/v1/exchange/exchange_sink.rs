@@ -103,6 +103,7 @@ impl ExchangeSink {
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }
+            ExchangeParams::GlobalShuffleExchange(_) => Ok(()),
         }
     }
 }

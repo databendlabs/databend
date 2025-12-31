@@ -28,7 +28,6 @@ use sqllogictest::QueryExpect;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
-use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use testcontainers::ContainerAsync;
@@ -65,14 +64,15 @@ use std::sync::LazyLock;
 static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
     vec![
         (Box::new(ClientType::MySQL), 3),
-        (
-            Box::new(ClientType::Ttc {
-                image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
-                port: TTC_PORT_START,
-                query_result_format: QueryResultFormat::Arrow,
-            }),
-            5,
-        ),
+        // disable for now due to client change
+        // (
+        //     Box::new(ClientType::Ttc {
+        //         image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
+        //         port: TTC_PORT_START,
+        //         query_result_format: QueryResultFormat::Arrow,
+        //     }),
+        //     5,
+        // ),
         (
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
@@ -350,13 +350,14 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             let validator = default_validator;
             let mut runner =
                 Runner::new(|| async { create_databend(&client_type, &file_name).await });
+            // todo: The behavior of normalizer for multi line string is incorrect
             runner
                 .update_test_file(
                     file.unwrap().path(),
                     col_separator,
                     validator,
                     sqllogictest::default_normalizer,
-                    default_column_validator,
+                    |actual, expected| actual == expected,
                 )
                 .await
                 .unwrap();

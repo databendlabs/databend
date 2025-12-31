@@ -10,12 +10,12 @@ EvalScalar
             ├── probe keys: []
             ├── other filters: []
             ├── Scan
-            │   ├── table: default.integers (#0)
+            │   ├── table: default.integers (#1)
             │   ├── filters: []
             │   ├── order by: []
             │   └── limit: NONE
             └── Scan
-                ├── table: default.integers (#1)
+                ├── table: default.integers (#0)
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE

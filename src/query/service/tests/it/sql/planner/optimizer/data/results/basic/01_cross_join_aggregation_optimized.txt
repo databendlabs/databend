@@ -9,15 +9,15 @@ Aggregate(Final)
             ├── build keys: []
             ├── probe keys: []
             ├── other filters: []
-            ├── Scan
-            │   ├── table: default.integers (#0)
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Exchange(Broadcast)
-                └── Scan
-                    ├── table: default.integers (#1)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+            ├── Exchange(Broadcast)
+            │   └── Scan
+            │       ├── table: default.integers (#1)
+            │       ├── filters: []
+            │       ├── order by: []
+            │       └── limit: NONE
+            └── Scan
+                ├── table: default.integers (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 

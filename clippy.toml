@@ -12,7 +12,7 @@ disallowed-methods = [
     { path = "tokio::task::spawn_local", reason = "Please use `databend_common_base::runtime::spawn_local` instead." },
 
     { path = "tokio::runtime::Handle::block_on", reason = "Please use `databend_common_base::runtime::block_on` instead." },
-#    { path = "tokio::runtime::Runtime::block_on", reason = "Please use `databend_common_base::runtime::Runtime::block_on` instead." },
+    # { path = "tokio::runtime::Runtime::block_on", reason = "Please use `databend_common_base::runtime::Runtime::block_on` instead." },
 
     { path = "tokio::task::spawn_blocking", reason = "Please use `databend_common_base::runtime::spawn_blocking` instead." },
     { path = "tokio::runtime::Handle::spawn_blocking", reason = "Please use `databend_common_base::runtime::spawn_blocking` instead." },

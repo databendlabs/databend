@@ -48,6 +48,7 @@ def run_jdbc_test(session, driver_version, main_version):
         env = {"DATABEND_JDBC_VERSION": driver_version}
     session.run(
         "java",
+        "-Duser.timezone=Asia/Shanghai",
         "-cp",
         ":".join(["cache/lib/*", main_jar, test_jar]),
         "org.testng.TestNG",

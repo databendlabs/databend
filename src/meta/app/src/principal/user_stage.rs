@@ -426,6 +426,11 @@ pub struct StageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
+    /// Runtime flag to allow ambient credential chain usage for stage operators.
+    ///
+    /// This value is not persisted to meta and must be set explicitly when needed.
+    #[serde(skip)]
+    pub allow_credential_chain: bool,
     // on `COPY INTO xx FROM 's3://xxx?ak=?&sk=?'`, the URL(ExternalLocation) will be treated as an temporary stage.
     pub is_temporary: bool,
     pub file_format_params: FileFormatParams,
@@ -470,6 +475,11 @@ impl StageInfo {
     /// Update user stage with stage name.
     pub fn with_stage_name(mut self, name: &str) -> StageInfo {
         self.stage_name = name.to_string();
+        self
+    }
+
+    pub fn with_allow_credential_chain(mut self, allow: bool) -> StageInfo {
+        self.allow_credential_chain = allow;
         self
     }
 

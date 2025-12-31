@@ -34,6 +34,7 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
@@ -61,6 +62,7 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use derive_visitor::Drive;
+use log::LevelFilter;
 use log::debug;
 use log::warn;
 use parking_lot::RwLock;
@@ -661,13 +663,20 @@ pub async fn resolve_stage_location(
         ));
     }
 
-    let stage = if names[0] == "~" {
+    let mut stage = if names[0] == "~" {
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
             .get_stage(&ctx.get_tenant(), names[0])
             .await?
     };
+    if ThreadTracker::capture_log_settings()
+        .is_some_and(|settings| settings.level == LevelFilter::Off)
+    {
+        // History log transform queries use the internal history stage.
+        // Enable credential chain at runtime since the flag is not persisted in meta.
+        stage.allow_credential_chain = true;
+    }
 
     let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
     let path = if path.is_empty() { "/" } else { path };

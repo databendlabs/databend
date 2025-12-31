@@ -23,7 +23,7 @@ statement ok
 INSERT INTO t1 VALUES (1),(1),(1),(3),(3),(5),(5)
 
 # named window
-query TIIR
+query TIII
 SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY empno) ORDER BY depname, empno
 ----
 develop 7 4200 4200
@@ -38,7 +38,7 @@ sales 3 4800 9800
 sales 4 4800 14600
 
 # sum
-query R
+query I
 SELECT sum(salary) OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary) ORDER BY depname, ss
 ----
 4200
@@ -173,7 +173,7 @@ sales 4800 1
 sales 5000 3
 
 # percent_rank
-query TII
+query TIR
 SELECT depname, salary, percent_rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary) order by depname, salary
 ----
 develop 4200 0.0
@@ -188,7 +188,7 @@ sales 4800 0.0
 sales 5000 1.0
 
 # percent_rank
-query TII
+query TIR
 SELECT depname, salary, percent_rank() OVER w FROM empsalary WINDOW w AS (ORDER BY salary) order by salary
 ----
 personnel 3500 0.0

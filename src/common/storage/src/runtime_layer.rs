@@ -307,18 +307,26 @@ impl<R: oio::List> oio::List for RuntimeIO<R> {
 }
 
 impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
-    async fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
-        self.inner.as_mut().unwrap().delete(path, args).await
+    fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
+        self.inner.as_mut().unwrap().delete(path, args)
     }
 
-    async fn close(&mut self) -> Result<()> {
+    async fn flush(&mut self) -> Result<usize> {
         let mut r = self.inner.take().expect("deleter must be valid");
         let runtime = self.runtime.clone();
 
-        let _ = runtime
-            .spawn(async move { r.close().await })
+        let (r, res) = runtime
+            .try_spawn(
+                async move {
+                    let res = r.flush().await;
+                    (r, res)
+                },
+                Some(self.spawn_task_name.clone()),
+            )
+            .expect("spawn must success")
             .await
-            .expect("join must success")?;
-        Ok(())
+            .expect("join must success");
+        self.inner = Some(r);
+        res
     }
 }
