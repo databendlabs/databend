@@ -28,14 +28,14 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
-use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
+use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 
 pub struct NewTransformFinalAggregate {
@@ -140,6 +140,9 @@ impl NewTransformFinalAggregate {
             }
             AggregateMeta::NewSpilled(payloads) => {
                 self.handle_new_spilled(payloads)?;
+            }
+            AggregateMeta::NewBucketSpilled(payload) => {
+                self.handle_new_spilled(vec![payload])?;
             }
             AggregateMeta::Partitioned { bucket: _, data } => {
                 for meta in data {

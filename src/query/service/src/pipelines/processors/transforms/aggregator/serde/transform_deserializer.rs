@@ -17,17 +17,17 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::BinaryRead;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -35,19 +35,19 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_storages_parquet::deserialize_row_group_meta_from_bytes;
 
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
+use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::NEW_SPILLED_TYPE;
+use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
-use crate::servers::flight::v1::exchange::serde::deserialize_block;
-use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
+use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
+use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
+use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
@@ -252,21 +252,15 @@ impl TransformDeserializer {
 
                 let shuffle_bucket = meta.shuffle_bucket;
                 if shuffle_bucket == -1 {
-                    let mut blocks = Vec::with_capacity(spilled_payloads.len());
-                    for payload in spilled_payloads {
-                        let meta = AggregateMeta::create_new_bucket_spilled(payload);
-                        blocks.push(DataBlock::empty_with_meta(meta));
-                    }
-                    return Ok(blocks);
+                    todo!()
                 } else {
-                    let dispatch_blocks = AggregateMeta::create_new_spilled_blocks(
-                        shuffle_bucket as usize,
-                        spilled_payloads,
-                    );
+                    let payloads = spilled_payloads
+                        .into_iter()
+                        .map(|p| AggregateMeta::NewBucketSpilled(p))
+                        .collect();
 
-                    return Ok(vec![DataBlock::empty_with_meta(
-                        ExchangeShuffleMeta::create(dispatch_blocks),
-                    )]);
+                    let partitioned = AggregateMeta::create_partitioned(None, payloads);
+                    return Ok(vec![DataBlock::empty_with_meta(partitioned)]);
                 }
             }
             other => Err(ErrorCode::Internal(format!(

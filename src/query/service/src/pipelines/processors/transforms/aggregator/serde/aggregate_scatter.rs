@@ -335,6 +335,16 @@ impl AggregateBucketScatter {
                                     chunks[bucket % self.buckets]
                                         .push(AggregateMeta::AggregatePayload(payload));
                                 }
+                                AggregateMeta::NewBucketSpilled(mut spilled_payload) => {
+                                    let bucket = spilled_payload.bucket as usize;
+                                    if !is_local {
+                                        spilled_payload.bucket =
+                                            spilled_payload.bucket / self.buckets as isize;
+                                    }
+                                    chunks[bucket % self.buckets]
+                                        .push(AggregateMeta::NewBucketSpilled(spilled_payload));
+                                }
+
                                 _ => {
                                     unreachable!(
                                         "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"

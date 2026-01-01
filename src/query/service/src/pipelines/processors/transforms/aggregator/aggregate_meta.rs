@@ -194,29 +194,6 @@ impl AggregateMeta {
     pub fn create_new_spilled(payloads: Vec<NewSpilledPayload>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::NewSpilled(payloads))
     }
-
-    pub fn create_new_spilled_blocks(
-        thread_num: usize,
-        payloads: Vec<NewSpilledPayload>,
-    ) -> Vec<DataBlock> {
-        let mut grouped_payloads = Vec::with_capacity(thread_num);
-        grouped_payloads.resize_with(thread_num, Vec::new);
-        for payload in payloads {
-            let bucket_index = payload.bucket as usize;
-            grouped_payloads[bucket_index].push(payload);
-        }
-
-        grouped_payloads
-            .into_iter()
-            .map(|bucket_payloads| {
-                if bucket_payloads.is_empty() {
-                    DataBlock::empty()
-                } else {
-                    DataBlock::empty_with_meta(Self::create_new_spilled(bucket_payloads))
-                }
-            })
-            .collect()
-    }
 }
 
 impl serde::Serialize for AggregateMeta {

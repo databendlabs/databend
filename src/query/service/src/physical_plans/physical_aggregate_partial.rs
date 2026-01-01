@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -27,13 +26,14 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
+use databend_common_sql::IndexType;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
@@ -45,13 +45,13 @@ use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::pipelines::PipelineBuilder;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -228,22 +228,13 @@ impl IPhysicalPlan for AggregatePartial {
         }
 
         if params.enable_experiment_aggregate {
-            let local_pos = cluster.ordered_index();
-
-            let dispatch_method = self
-                .shuffle_mode
-                .determine_shuffle_dispatch(builder, cluster);
-            let shared_partition_streams = dispatch_method
-                .iter()
-                .map(|thread_num| {
-                    SharedPartitionStream::new(
-                        builder.main_pipeline.output_len(),
-                        max_block_rows,
-                        max_block_bytes,
-                        *thread_num as usize,
-                    )
-                })
-                .collect::<Vec<_>>();
+            let bucket_num = 2_usize.pow(partial_agg_config.initial_radix_bits as u32);
+            let shared_partition_streams = SharedPartitionStream::new(
+                builder.main_pipeline.output_len(),
+                max_block_rows,
+                max_block_bytes,
+                bucket_num,
+            );
 
             builder.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(
@@ -254,8 +245,7 @@ impl IPhysicalPlan for AggregatePartial {
                         params.clone(),
                         partial_agg_config.clone(),
                         shared_partition_streams.clone(),
-                        local_pos,
-                        dispatch_method.clone(),
+                        bucket_num,
                         matches!(self.shuffle_mode, AggregateShuffleMode::Row),
                     )?,
                 ))

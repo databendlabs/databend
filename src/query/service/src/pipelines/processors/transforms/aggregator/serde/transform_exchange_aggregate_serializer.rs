@@ -15,46 +15,49 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::CompressionType;
+use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::serialize_column;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ArrayType;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::ReturnType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::PartitionedPayload;
+use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::ReturnType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
+use databend_common_pipeline_transforms::UnknownMode;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
-use databend_common_pipeline_transforms::UnknownMode;
 use databend_common_settings::FlightCompression;
+use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
 use super::SerializePayload;
-use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
-use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
-use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
-use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate_payload as local_agg_spilling_aggregate_payload;
+use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
+use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -174,56 +177,94 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         ));
                         continue;
                     }
+                    let first = data.first();
+                    match first {
+                        Some(AggregateMeta::AggregatePayload(_)) => {
+                            let mut buckets = Vec::with_capacity(data.len());
+                            let mut payload_row_counts = Vec::with_capacity(data.len());
+                            let mut payload_blocks = Vec::with_capacity(data.len());
 
-                    let mut buckets = Vec::with_capacity(data.len());
-                    let mut payload_row_counts = Vec::with_capacity(data.len());
-                    let mut payload_blocks = Vec::with_capacity(data.len());
-                    let mut empty_block_template = None;
+                            for meta in data {
+                                let AggregateMeta::AggregatePayload(payload) = meta else {
+                                    unreachable!("Partitioned meta only contains AggregatePayload");
+                                };
 
-                    for meta in data {
-                        let AggregateMeta::AggregatePayload(payload) = meta else {
-                            unreachable!("Partitioned meta only contains AggregatePayload");
-                        };
+                                let block = payload.payload.aggregate_flush_all()?;
+                                if block.num_rows() == 0 {
+                                    continue;
+                                }
+                                buckets.push(payload.bucket);
+                                payload_row_counts.push(block.num_rows());
+                                payload_blocks.push(block);
+                            }
 
-                        // Create empty block template from first payload before flushing
-                        if empty_block_template.is_none() {
-                            empty_block_template = Some(payload.payload.empty_block(1));
-                        }
+                            // Only create empty block when ALL payloads are empty
+                            if payload_blocks.is_empty() {
+                                let serialized =
+                                    serialize_block(-1, DataBlock::empty(), &self.options)?;
+                                serialized_blocks.push(FlightSerialized::DataBlock(serialized));
 
-                        let block = payload.payload.aggregate_flush_all()?;
-                        if block.num_rows() == 0 {
-                            continue;
-                        }
-                        buckets.push(payload.bucket);
-                        payload_row_counts.push(block.num_rows());
-                        payload_blocks.push(block);
-                    }
+                                continue;
+                            }
 
-                    // Only create empty block when ALL payloads are empty
-                    if payload_blocks.is_empty() {
-                        if let Some(empty) = empty_block_template {
-                            let block = empty.add_meta(Some(
-                                AggregateSerdeMeta::create_partitioned_payload(vec![], vec![], true),
+                            let mut merged_block = DataBlock::concat(&payload_blocks)?;
+                            merged_block = merged_block.add_meta(Some(
+                                AggregateSerdeMeta::create_partitioned_payload(
+                                    buckets,
+                                    payload_row_counts,
+                                    false,
+                                ),
                             ))?;
-                            let serialized = serialize_block(-1, block, &self.options)?;
+                            let serialized = serialize_block(-1, merged_block, &self.options)?;
                             serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                         }
-                        continue;
+                        Some(AggregateMeta::NewBucketSpilled(_)) => {
+                            let bucket_num = data.len();
+                            let mut bucket_column = Vec::with_capacity(bucket_num);
+                            let mut row_group_column = Vec::with_capacity(bucket_num);
+                            let mut location_column = Vec::with_capacity(bucket_num);
+
+                            for meta in data {
+                                let AggregateMeta::NewBucketSpilled(payload) = meta else {
+                                    unreachable!("Partitioned meta only contains NewBucketSpilled");
+                                };
+
+                                bucket_column.push(payload.bucket as i64);
+                                location_column.push(payload.location);
+                                row_group_column
+                                    .push(serialize_row_group_meta_to_bytes(&payload.row_group)?);
+                            }
+                            let data_block = DataBlock::new_from_columns(vec![
+                                Int64Type::from_data(bucket_column),
+                                StringType::from_data(location_column),
+                                BinaryType::from_data(row_group_column),
+                            ]);
+
+                            let meta = AggregateSerdeMeta::create_new_spilled(bucket_num as isize);
+
+                            let data_block = data_block.add_meta(Some(meta))?;
+
+                            serialized_blocks.push(FlightSerialized::DataBlock(serialize_block(
+                                -1,
+                                data_block,
+                                &self.options,
+                            )?));
+                        }
+                        None => {
+                            let serialized =
+                                serialize_block(-1, DataBlock::empty(), &self.options)?;
+                            serialized_blocks.push(FlightSerialized::DataBlock(serialized));
+                        }
+
+                        _ => {
+                            unreachable!(
+                                "Partitioned meta only contains AggregatePayload or NewBucketSpilled but found {:?}",
+                                first
+                            );
+                        }
                     }
-
-                    let mut merged_block = DataBlock::concat(&payload_blocks)?;
-                    merged_block = merged_block.add_meta(Some(
-                        AggregateSerdeMeta::create_partitioned_payload(
-                            buckets,
-                            payload_row_counts,
-                            false,
-                        ),
-                    ))?;
-                    let serialized = serialize_block(-1, merged_block, &self.options)?;
-                    serialized_blocks.push(FlightSerialized::DataBlock(serialized));
                 }
-
-                _ => unreachable!(),
+                _ => unreachable!("unexpected aggregate meta"),
             };
         }
 
