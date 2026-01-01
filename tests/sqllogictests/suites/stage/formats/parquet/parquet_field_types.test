@@ -1,26 +1,26 @@
 query 
 select * from @data/parquet/tuple.parquet;
 ----
-1 (1,'a')
-2 (3,'b')
-3 (3,'c')
+1 (1,"a")
+2 (3,"b")
+3 (3,"c")
 
 query 
 select * from @data/parquet/tuple.parquet where t:a = 1;
 ----
-1 (1,'a')
+1 (1,"a")
 
 query 
 select * from @data/parquet/tuple.parquet where t:a = id;
 ----
-1 (1,'a')
-3 (3,'c')
+1 (1,"a")
+3 (3,"c")
 
 query 
 select * from @data/parquet/tuple.parquet where t:a >= 2;
 ----
-2 (3,'b')
-3 (3,'c')
+2 (3,"b")
+3 (3,"c")
 
 query 
 select t:b from @data/parquet/tuple.parquet where t:a >= 2;
@@ -38,55 +38,55 @@ c
 query 
 select id, t:a, t from @data/parquet/tuple.parquet
 ----
-1 1 (1,'a')
-2 3 (3,'b')
-3 3 (3,'c')
+1 1 (1,"a")
+2 3 (3,"b")
+3 3 (3,"c")
 
 query 
 select id, t:a, t from @data/parquet/tuple.parquet where id > 2
 ----
-3 3 (3,'c')
+3 3 (3,"c")
 
 query 
 select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
 ----
-1 1 (1,'a')
-2 3 (3,'b')
+1 1 (1,"a")
+2 3 (3,"b")
 
 query 
 select meta from @data/parquet/complex.parquet limit 3
 ----
 NULL
-(NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
-(NULL,NULL,NULL,NULL,NULL,['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient'],NULL,NULL)
+(NULL,NULL,NULL,NULL,NULL,["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"],NULL,NULL)
+(NULL,NULL,NULL,NULL,NULL,["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"],NULL,NULL)
 
 query 
 select name from @data/parquet/complex.parquet limit 3
 ----
-[(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL),(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)]
-[(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)]
-[(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL),(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)]
+[(NULL,NULL,"official","Jennifer Infection Control","Infection Control",["Jennifer"],NULL,NULL,NULL),(NULL,NULL,"usual","Jennifer Infection Control","Infection Control",["Jennifer"],NULL,NULL,NULL)]
+[(NULL,NULL,"official",NULL,"Quigley282",["Wilmer32"],["Mr."],NULL,NULL)]
+[(NULL,NULL,"official",NULL,"Collier206",["Towanda270"],["Mrs."],NULL,NULL),(NULL,NULL,"maiden",NULL,"Mayer370",["Towanda270"],["Mrs."],NULL,NULL)]
 
 query 
 select meta.2, meta.6 from @data/parquet/complex.parquet limit 3
 ----
 NULL NULL
-NULL ['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
-NULL ['http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient']
+NULL ["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"]
+NULL ["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"]
 
 query 
 select name from @data/parquet/complex.parquet limit 3
 ----
-[(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL),(NULL,NULL,'usual','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)]
-[(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)]
-[(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL),(NULL,NULL,'maiden',NULL,'Mayer370',['Towanda270'],['Mrs.'],NULL,NULL)]
+[(NULL,NULL,"official","Jennifer Infection Control","Infection Control",["Jennifer"],NULL,NULL,NULL),(NULL,NULL,"usual","Jennifer Infection Control","Infection Control",["Jennifer"],NULL,NULL,NULL)]
+[(NULL,NULL,"official",NULL,"Quigley282",["Wilmer32"],["Mr."],NULL,NULL)]
+[(NULL,NULL,"official",NULL,"Collier206",["Towanda270"],["Mrs."],NULL,NULL),(NULL,NULL,"maiden",NULL,"Mayer370",["Towanda270"],["Mrs."],NULL,NULL)]
 
 query 
 select name[1] from @data/parquet/complex.parquet limit 3
 ----
-(NULL,NULL,'official','Jennifer Infection Control','Infection Control',['Jennifer'],NULL,NULL,NULL)
-(NULL,NULL,'official',NULL,'Quigley282',['Wilmer32'],['Mr.'],NULL,NULL)
-(NULL,NULL,'official',NULL,'Collier206',['Towanda270'],['Mrs.'],NULL,NULL)
+(NULL,NULL,"official","Jennifer Infection Control","Infection Control",["Jennifer"],NULL,NULL,NULL)
+(NULL,NULL,"official",NULL,"Quigley282",["Wilmer32"],["Mr."],NULL,NULL)
+(NULL,NULL,"official",NULL,"Collier206",["Towanda270"],["Mrs."],NULL,NULL)
 
 query 
 select name[1].5 from @data/parquet/complex.parquet limit 3
@@ -98,9 +98,9 @@ Collier206
 query 
 select name[2].6 from @data/parquet/complex.parquet limit 3
 ----
-['Jennifer']
+["Jennifer"]
 NULL
-['Towanda270']
+["Towanda270"]
 
 # the physical type of column t_timestamp is INT96
 query 
