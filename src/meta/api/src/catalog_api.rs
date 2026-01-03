@@ -128,7 +128,9 @@ where
         let name_id_values = self.list_id_value(&dir).await?;
 
         let catalog_infos = name_id_values
-            .map(|(name, id, seq_meta)| Arc::new(CatalogInfo::new(name, id, seq_meta.data)))
+            .map(|(name, id_seqv, seq_meta)| {
+                Arc::new(CatalogInfo::new(name, id_seqv.data, seq_meta.data))
+            })
             .collect::<Vec<_>>();
 
         Ok(catalog_infos)

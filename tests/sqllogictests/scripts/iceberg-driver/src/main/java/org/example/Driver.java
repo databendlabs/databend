@@ -49,7 +49,7 @@ public class Driver {
                 .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
                 .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
                 .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
-                .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9000")
+                .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9002")
                 .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
                 .config("spark.jars.packages",
                         "org.apache.iceberg:iceberg-aws-bundle:1.6.1,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1")
@@ -89,7 +89,7 @@ public class Driver {
         properties.put("io-impl", "org.apache.iceberg.aws.s3.S3FileIO");
         properties.put("s3.access-key-id", "admin");
         properties.put("s3.secret-access-key", "password");
-        properties.put("s3.endpoint", "http://127.0.0.1:9000");
+        properties.put("s3.endpoint", "http://127.0.0.1:9002");
         properties.put("s3.path-style-access", "true");
         properties.put("s3.region", "us-east-1");
 

@@ -294,22 +294,22 @@ select json_concat([parse_json('{"age": 30, "isPremium": "false", "lastActive": 
 query T
 select tuple_access(([NULL, parse_json('{"color":"red", "fontSize":16, "theme":"dark"}')], 2, 'foo'), 0, 1);
 ----
-(NULL,'[null,{"color":"red","fontSize":16,"theme":"dark"}]')
+(NULL,[null,{"color":"red","fontSize":16,"theme":"dark"}])
 
 query T
 select return_all(true, NULL, NULL, 3, 4, NULL, 6, 7, 8, NULL, 10.2, NULL, to_datetime(1630833797), 'foo', NULL);
 ----
-(1,NULL,NULL,3,4,NULL,6,7,8,NULL,10.2,NULL,'2021-09-05 09:23:17.000000','foo',NULL)
+(1,NULL,NULL,3,4,NULL,6,7,8,NULL,10.2,NULL,"2021-09-05 09:23:17.000000","foo",NULL)
 
 query T
 select return_all_non_nullable(true, -1, 2, 3, 4, 5, 6, 7, 8, 9.1, 10.2, to_date(18866), to_datetime(1630833797), 'foo', parse_json('{"foo": 30, "bar": "false"}'));
 ----
-(1,-1,2,3,4,5,6,7,8,9.1,10.2,'2021-08-27','2021-09-05 09:23:17.000000','foo','{"bar":"false","foo":30}')
+(1,-1,2,3,4,5,6,7,8,9.1,10.2,"2021-08-27","2021-09-05 09:23:17.000000","foo",{"bar":"false","foo":30})
 
 query T
 select return_all_arrays([true], [-1, -2], [2,64,67], [3,1234], [4,2341], [5,10], [6,1231], [7,1234], [8,63435], [9.1,231.123], [10.2,6547.789], [to_date(18866)], [to_datetime(1630833797)], ['foo'], [parse_json('{"foo": 30, "bar": "false"}')]);
 ----
-([1],[-1,-2],[2,64,67],[3,1234],[4,2341],[5,10],[6,1231],[7,1234],[8,63435],[9.1,231.123],[10.2,6547.789],['2021-08-27'],['2021-09-05 09:23:17.000000'],['foo'],['{"bar":"false","foo":30}'])
+([1],[-1,-2],[2,64,67],[3,1234],[4,2341],[5,10],[6,1231],[7,1234],[8,63435],[9.1,231.123],[10.2,6547.789],["2021-08-27"],["2021-09-05 09:23:17.000000"],["foo"],[{"bar":"false","foo":30}])
 
 ## table test
 
@@ -383,7 +383,7 @@ SELECT map_access(traffic_info, 'ip') as ip_address, COUNT(*) as visits FROM web
 query T
 select traffic_info from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
 ----
-{'ip':'192.168.1.2','url':'example.com/about'}
+{"ip":"192.168.1.2","url":"example.com/about"}
 
 query IT
 select max(id), map_access(traffic_info, 'ip') from web_traffic_data group by map_access(traffic_info, 'ip') order by map_access(traffic_info, 'ip')

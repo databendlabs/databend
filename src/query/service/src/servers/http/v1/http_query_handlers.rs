@@ -580,6 +580,41 @@ pub(crate) async fn query_handler(
         );
         let sql = req.sql.clone();
 
+        let http_query_manager = HttpQueryManager::instance();
+        if ctx.is_query_id_from_client {
+            if let Some(query) = http_query_manager.get_query(&ctx.query_id) {
+                return if query.user_name != ctx.user_name {
+                    Err(poem::Error::from_string(
+                        format!(
+                            "fail to start query: query_id {} already exists",
+                            ctx.query_id
+                        ),
+                        StatusCode::BAD_REQUEST,
+                    ))
+                } else {
+                    info!("get retry to start query: {}", ctx.query_id);
+                    let resp = query.get_response_page(0).await.map_err(|err| {
+                        info!(
+                            "/query/{}/page/{} - get response page error (reason: {})",
+                            ctx.query_id,
+                            0,
+                            err.message()
+                        );
+                        poem::Error::from_string(
+                            format!("{}", err.message()),
+                            StatusCode::NOT_FOUND,
+                        )
+                    })?;
+                    Ok(QueryResponse::from_internal(
+                        ctx.query_id.clone(),
+                        resp,
+                        false,
+                        query_result_format,
+                    ))
+                };
+            };
+        }
+
         match HttpQuery::try_create(ctx, req.clone()).await {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
@@ -595,9 +630,14 @@ pub(crate) async fn query_handler(
                     return Ok(req.fail_to_start_sql(err).into_response());
                 }
 
-                let http_query_manager = HttpQueryManager::instance();
-                let query = http_query_manager.add_query(query).await;
-
+                let query = Arc::new(query);
+                let query = match http_query_manager.add_query(query.clone()).await {
+                    Err(err) => {
+                        query.kill(err.clone()).await;
+                        return Err(HttpErrorCode::bad_request(err).into());
+                    }
+                    Ok(query) => query,
+                };
                 let resp = query
                     .get_response_page(0)
                     .await

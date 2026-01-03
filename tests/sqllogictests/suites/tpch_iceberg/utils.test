@@ -9,7 +9,7 @@ CONNECTION=(
     ADDRESS='http://127.0.0.1:8181'
     WAREHOUSE='s3://iceberg-tpch'
     "s3.region"='us-east-1'
-    "s3.endpoint"='http://127.0.0.1:9000'
+    "s3.endpoint"='http://127.0.0.1:9002'
 );
 
 statement ok
@@ -145,8 +145,8 @@ t1
 query T
 show columns from abc.t1;
 ----
-c1 DATE YES (empty) NULL NULL
-c2 VARCHAR YES (empty) NULL NULL
+c1 date YES (empty) NULL NULL
+c2 varchar(16382) YES (empty) NULL NULL
 
 statement error 1302
 CREATE TABLE IF NOT EXISTS abc.t2(c1 int) ENGINE = fuse

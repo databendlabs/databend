@@ -34,7 +34,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -55,14 +55,14 @@ jobs:
       fail-fast: false
       matrix:
         tests:
-          - { dirs: "query", runner: "4c16g" }
-          - { dirs: "duckdb", runner: "4c16g" }
-          - { dirs: "crdb", runner: "2c8g" }
-          - { dirs: "base", runner: "2c8g" }
-          - { dirs: "ydb", runner: "2c8g" }
-          - { dirs: "tpcds", runner: "2c8g" }
-          - { dirs: "tpch", runner: "2c8g" }
-          - { dirs: "standalone", runner: "2c8g" }
+          - { dirs: "query", runner: "4c" }
+          - { dirs: "duckdb", runner: "4c" }
+          - { dirs: "crdb", runner: "2c" }
+          - { dirs: "base", runner: "2c" }
+          - { dirs: "ydb", runner: "2c" }
+          - { dirs: "tpcds", runner: "4c" }
+          - { dirs: "tpch", runner: "2c" }
+          - { dirs: "standalone", runner: "2c" }
         handler:
           - "hybrid"
           - "http"
@@ -86,7 +86,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +117,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 4c16g
+      - 4c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -146,7 +146,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
@@ -178,7 +178,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
@@ -199,7 +199,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
@@ -234,7 +234,7 @@ jobs:
   #     - self-hosted
   #     - ${{ inputs.runner_arch }}
   #     - Linux
-  #     - 4c16g
+  #     - 4c
   #     - "${{ inputs.runner_provider }}"
   #   steps:
   #     - uses: actions/checkout@v4
@@ -264,14 +264,14 @@ jobs:
       fail-fast: false
       matrix:
         tests:
-          - { dirs: "query", runner: "4c16g" }
-          - { dirs: "duckdb", runner: "4c16g" }
-          - { dirs: "crdb", runner: "2c8g", parallel: "2" }
-          - { dirs: "base", runner: "2c8g", parallel: "2" }
-          - { dirs: "ydb", runner: "2c8g" }
-          - { dirs: "tpcds", runner: "2c8g" }
-          - { dirs: "tpch", runner: "2c8g" }
-          - { dirs: "cluster", runner: "2c8g" }
+          - { dirs: "query", runner: "4c" }
+          - { dirs: "duckdb", runner: "4c" }
+          - { dirs: "crdb", runner: "2c", parallel: "2" }
+          - { dirs: "base", runner: "2c", parallel: "2" }
+          - { dirs: "ydb", runner: "2c" }
+          - { dirs: "tpcds", runner: "4c" }
+          - { dirs: "tpch", runner: "2c" }
+          - { dirs: "cluster", runner: "2c" }
         handler:
           - "hybrid"
           - "http"
@@ -298,7 +298,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
@@ -335,7 +335,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
@@ -364,7 +364,7 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_arch }}
       - Linux
-      - 2c8g
+      - 2c
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false

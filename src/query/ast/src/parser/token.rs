@@ -341,6 +341,8 @@ pub enum TokenKind {
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
     ALLOWED_IP_LIST,
+    #[token("ALLOWED_VALUES", ignore(ascii_case))]
+    ALLOWED_VALUES,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("AFTER", ignore(ascii_case))]
@@ -1218,6 +1220,10 @@ pub enum TokenKind {
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
     SYSTEM,
+    #[token("TAG", ignore(ascii_case))]
+    TAG,
+    #[token("TAGS", ignore(ascii_case))]
+    TAGS,
     #[token("STORAGE_TYPE", ignore(ascii_case))]
     STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]

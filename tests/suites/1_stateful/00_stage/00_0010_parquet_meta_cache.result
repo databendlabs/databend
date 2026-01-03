@@ -1,9 +1,9 @@
 >>>> DROP STAGE IF EXISTS s1;
 >>>> CREATE STAGE s1;
 >>>> select /*+ set_var(parquet_fast_read_bytes=0) */ * from @s1/parquet_cache.parquet
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
+1	(1,"a")
+2	(3,"b")
+3	(3,"c")
 <<<<
 >>>> select /*+ set_var(parquet_fast_read_bytes=0) */ * from @s1/parquet_cache.parquet
 1	{"a":11}
