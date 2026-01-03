@@ -577,9 +577,9 @@ recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "1
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "18a0ae9" }
-tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "26446bc", package = "tantivy-query-grammar" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "68ab55c" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
