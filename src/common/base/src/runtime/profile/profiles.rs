@@ -65,6 +65,7 @@ pub enum ProfileStatisticsName {
     MemoryUsage,
     ExternalServerRetryCount,
     ExternalServerRequestCount,
+    ScheduleTime,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -367,6 +368,13 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 index: ProfileStatisticsName::ExternalServerRequestCount as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
+            }),
+            (ProfileStatisticsName::ScheduleTime, ProfileDesc {
+                display_name: "schedule time",
+                desc: "The time spent to wait in nanoseconds, usually used to measure the time spent on waiting for Executor",
+                index: ProfileStatisticsName::ScheduleTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
             }),
         ]))
     }).clone()

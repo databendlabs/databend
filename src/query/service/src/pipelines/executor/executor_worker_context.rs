@@ -60,6 +60,7 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
+    pub instant: Instant,
     pub graph: Arc<RunningGraph>,
 }
 
@@ -75,6 +76,7 @@ impl CompletedAsyncTask {
             worker_id,
             res,
             graph,
+            instant: Instant::now(),
         }
     }
 }
@@ -152,7 +154,18 @@ impl ExecutorWorkerContext {
                     }
                 }
                 ExecutorTask::AsyncCompleted(task) => match task.res {
-                    Ok(_) => Ok(Some((task.id, task.graph))),
+                    Ok(_) => {
+                        let payload = task.graph.get_node_tracking_payload(task.id);
+                        let _guard = ThreadTracker::tracking(payload.clone());
+                        let nanos = task.instant.elapsed().as_nanos();
+                        assume(nanos < 18446744073709551615_u128);
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::ScheduleTime,
+                            nanos as usize,
+                        );
+
+                        Ok(Some((task.id, task.graph)))
+                    }
                     Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
                 },
             }
