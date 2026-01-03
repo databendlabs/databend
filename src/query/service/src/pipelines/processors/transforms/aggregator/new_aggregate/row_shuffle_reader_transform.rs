@@ -45,14 +45,33 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         &mut self,
         meta: AggregateMeta,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
-        if !matches!(meta, AggregateMeta::NewBucketSpilled(_)) {
+        if let AggregateMeta::Partitioned { data, .. } = &meta {
+            let first = data.first();
+            if !matches!(first, Some(AggregateMeta::NewBucketSpilled(_))) {
+                return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]);
+            }
+        } else {
             return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]);
         }
-        if let AggregateMeta::NewBucketSpilled(spilled_payload) = meta {
-            let payload = self.reader.restore(spilled_payload)?;
-            return Ok(vec![DataBlock::empty_with_meta(Box::new(payload))]);
+        if let AggregateMeta::Partitioned { data, .. } = meta {
+            let mut restored = Vec::with_capacity(data.len());
+            for partition_meta in data {
+                if let AggregateMeta::NewBucketSpilled(spilled_payload) = partition_meta {
+                    let payload = self.reader.restore(spilled_payload)?;
+                    restored.push(payload);
+                } else {
+                    return Err(databend_common_exception::ErrorCode::Internal(
+                        "Unexpected aggregate meta in RowShuffleReaderTransform",
+                    ));
+                }
+            }
+            return Ok(vec![DataBlock::empty_with_meta(
+                AggregateMeta::create_partitioned(None, restored),
+            )]);
         } else {
-            unreachable!("RowShuffleReaderTransform");
+            unreachable!()
         }
+
+        // let payload = self.reader.restore(spilled_payload)?;
     }
 }

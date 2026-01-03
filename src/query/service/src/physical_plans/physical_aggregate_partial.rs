@@ -228,7 +228,12 @@ impl IPhysicalPlan for AggregatePartial {
         }
 
         if params.enable_experiment_aggregate {
-            let bucket_num = 2_usize.pow(partial_agg_config.initial_radix_bits as u32);
+            let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
+            let bucket_num = if is_row_shuffle {
+                cluster.nodes.len()
+            } else {
+                2_usize.pow(partial_agg_config.initial_radix_bits as u32)
+            };
             let shared_partition_streams = SharedPartitionStream::new(
                 builder.main_pipeline.output_len(),
                 max_block_rows,
@@ -246,7 +251,7 @@ impl IPhysicalPlan for AggregatePartial {
                         partial_agg_config.clone(),
                         shared_partition_streams.clone(),
                         bucket_num,
-                        matches!(self.shuffle_mode, AggregateShuffleMode::Row),
+                        is_row_shuffle,
                     )?,
                 ))
             })?;

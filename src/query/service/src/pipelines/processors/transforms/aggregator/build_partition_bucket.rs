@@ -28,14 +28,16 @@ use tokio::sync::Semaphore;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::AggregateShuffleMode;
-use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::NewTransformFinalAggregate;
+use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
+use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
 
@@ -49,6 +51,14 @@ fn build_partition_bucket_experimental(
     let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
     match shuffle_mode {
         AggregateShuffleMode::Row => {
+            pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
+                    input,
+                    output,
+                    NewAggregateSpillReader::try_create(ctx.clone())?,
+                )))
+            })?;
+
             pipeline.add_transform(|input, output| {
                 Ok(LocalScatterTransform::create(
                     input,

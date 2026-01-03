@@ -86,18 +86,13 @@ impl Spiller {
         if payloads.is_empty() {
             return Ok(vec![]);
         }
-
-        if is_row_shuffle {
-            todo!()
-        } else {
-            let payloads = payloads
-                .into_iter()
-                .map(|p| AggregateMeta::NewBucketSpilled(p))
-                .collect::<Vec<_>>();
-            let partitioned_payload =
-                DataBlock::empty_with_meta(AggregateMeta::create_partitioned(None, payloads));
-            return Ok(vec![partitioned_payload]);
-        }
+        let payloads = payloads
+            .into_iter()
+            .map(|p| AggregateMeta::NewBucketSpilled(p))
+            .collect::<Vec<_>>();
+        let partitioned_payload =
+            DataBlock::empty_with_meta(AggregateMeta::create_partitioned(None, payloads));
+        return Ok(vec![partitioned_payload]);
     }
 }
 
@@ -128,7 +123,7 @@ impl NewTransformPartialAggregate {
         let spillers = Spiller::create(ctx.clone(), partition_stream, bucket_num)?;
 
         let arena = Arc::new(Bump::new());
-        dbg!(&config.initial_radix_bits);
+
         let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),

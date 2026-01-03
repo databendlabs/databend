@@ -239,6 +239,13 @@ impl AggregateRowScatter {
                                         }
                                     }
                                 }
+                                AggregateMeta::NewBucketSpilled(payload) => {
+                                    // we will restore it after sending to the target node
+                                    // so we just use bucket id to scatter here
+                                    let bucket = payload.bucket as usize;
+                                    partitions[bucket % self.buckets]
+                                        .push(AggregateMeta::NewBucketSpilled(payload));
+                                }
                                 _ => {
                                     unreachable!(
                                         "Internal, AggregateRowScatter only recv AggregatePayload/Serialized in Partitioned"
