@@ -515,37 +515,10 @@ impl AggregateShuffleMode {
             AggregateShuffleMode::Bucket(hint) => hint.trailing_zeros() as u64,
         }
     }
-
-    pub fn determine_shuffle_dispatch(
-        &self,
-        builder: &PipelineBuilder,
-        cluster: &Arc<Cluster>,
-    ) -> Vec<u64> {
-        let is_exchange = builder.is_exchange_parent();
-        let nodes_num = cluster.nodes.len() as u64;
-        match &self {
-            AggregateShuffleMode::Row => {
-                if is_exchange {
-                    vec![1; nodes_num as usize]
-                } else {
-                    vec![1]
-                }
-            }
-            AggregateShuffleMode::Bucket(hint) => {
-                if is_exchange {
-                    let base = *hint / nodes_num;
-                    let rem = *hint % nodes_num;
-
-                    (0..nodes_num)
-                        .map(|i| if i < rem { base + 1 } else { base })
-                        .collect()
-                } else {
-                    vec![*hint]
-                }
-            }
-        }
-    }
 }
+
+// TODO: ROW_SHUFFLE_ENABLE_THRESHOLD need to find
+const ROW_SHUFFLE_ENABLE_THRESHOLD: u64 = 256;
 
 fn determine_shuffle_mode(ctx: Arc<dyn TableContext>) -> Result<AggregateShuffleMode> {
     let settings = ctx.get_settings();
@@ -556,7 +529,7 @@ fn determine_shuffle_mode(ctx: Arc<dyn TableContext>) -> Result<AggregateShuffle
     let use_bucket = match force_shuffle_mode.as_str() {
         "row" => false,
         "bucket" => true,
-        "auto" => parallelism <= 256, // TODO: this may need to be find
+        "auto" => parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
         _ => false,
     };
 

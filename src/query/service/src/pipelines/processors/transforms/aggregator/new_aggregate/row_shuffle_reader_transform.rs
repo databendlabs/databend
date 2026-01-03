@@ -45,6 +45,7 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         &mut self,
         meta: AggregateMeta,
     ) -> databend_common_exception::Result<Vec<DataBlock>> {
+        // We only processed Partitioned meta with new spilled buckets in it.
         if let AggregateMeta::Partitioned { data, .. } = &meta {
             let first = data.first();
             if !matches!(first, Some(AggregateMeta::NewBucketSpilled(_))) {
@@ -53,6 +54,7 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         } else {
             return Ok(vec![DataBlock::empty_with_meta(Box::new(meta))]);
         }
+
         if let AggregateMeta::Partitioned { data, .. } = meta {
             let mut restored = Vec::with_capacity(data.len());
             for partition_meta in data {
@@ -71,7 +73,5 @@ impl BlockMetaTransform<AggregateMeta> for RowShuffleReaderTransform {
         } else {
             unreachable!()
         }
-
-        // let payload = self.reader.restore(spilled_payload)?;
     }
 }
