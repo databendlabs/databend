@@ -23,7 +23,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 
-use crate::clusters::ClusterHelper;
 use crate::physical_plans::AggregateShuffleMode;
 use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
@@ -222,7 +221,6 @@ impl ExchangeInjector for AggregateInjector<true> {
                 }))),
                 AggregateShuffleMode::Bucket(_) => Ok(Arc::new(Box::new(AggregateBucketScatter {
                     buckets: exchange.destination_ids.len(),
-                    aggregate_params: self.aggregator_params.clone(),
                 }))),
             },
         }

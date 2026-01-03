@@ -133,7 +133,7 @@ impl AggregateSerdeMeta {
             location: None,
             data_range: None,
             max_partition_count: 0,
-            is_empty: is_empty,
+            is_empty,
             buckets,
             payload_row_counts,
             shuffle_bucket: 0,

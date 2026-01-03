@@ -45,7 +45,6 @@ use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
-use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -256,7 +255,7 @@ impl TransformDeserializer {
                 } else {
                     let payloads = spilled_payloads
                         .into_iter()
-                        .map(|p| AggregateMeta::NewBucketSpilled(p))
+                        .map(AggregateMeta::NewBucketSpilled)
                         .collect();
 
                     let partitioned = AggregateMeta::create_partitioned(None, payloads);

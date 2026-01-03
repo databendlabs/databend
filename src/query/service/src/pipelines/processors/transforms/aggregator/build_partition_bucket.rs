@@ -89,7 +89,6 @@ fn build_partition_bucket_experimental(
                     output,
                     Arc::new(Box::new(AggregateBucketScatter {
                         buckets: final_parallelism,
-                        aggregate_params: params.clone(),
                     })),
                 ))
             })?;

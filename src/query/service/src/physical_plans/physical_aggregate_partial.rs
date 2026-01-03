@@ -37,7 +37,6 @@ use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
-use crate::clusters::ClusterHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -202,7 +201,7 @@ impl IPhysicalPlan for AggregatePartial {
         let schema_before_group_by = params.input_schema.clone();
 
         let partial_agg_config = if enable_experiment_aggregate {
-            let radix_bits = self.shuffle_mode.determine_radix_bits(builder);
+            let radix_bits = self.shuffle_mode.determine_radix_bits();
             HashTableConfig::new_experiment_partial(
                 radix_bits,
                 cluster.nodes.len(),

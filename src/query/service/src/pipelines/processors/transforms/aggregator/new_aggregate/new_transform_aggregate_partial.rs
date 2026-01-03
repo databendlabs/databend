@@ -68,7 +68,7 @@ impl Spiller {
         Ok(Self { inner: spiller })
     }
 
-    pub fn spill(&mut self, mut partition: PartitionedPayload, is_row_shuffle: bool) -> Result<()> {
+    pub fn spill(&mut self, partition: PartitionedPayload) -> Result<()> {
         for (bucket, payload) in partition.payloads.into_iter().enumerate() {
             if payload.len() == 0 {
                 continue;
@@ -80,7 +80,7 @@ impl Spiller {
         Ok(())
     }
 
-    pub fn finish(&mut self, is_row_shuffle: bool) -> Result<Vec<DataBlock>> {
+    pub fn finish(&mut self) -> Result<Vec<DataBlock>> {
         let payloads = self.inner.spill_finish()?;
 
         if payloads.is_empty() {
@@ -88,7 +88,7 @@ impl Spiller {
         }
         let payloads = payloads
             .into_iter()
-            .map(|p| AggregateMeta::NewBucketSpilled(p))
+            .map(AggregateMeta::NewBucketSpilled)
             .collect::<Vec<_>>();
         let partitioned_payload =
             DataBlock::empty_with_meta(AggregateMeta::create_partitioned(None, payloads));
@@ -106,7 +106,7 @@ pub struct NewTransformPartialAggregate {
     statistics: AggregationStatistics,
     settings: MemorySettings,
     spillers: Spiller,
-    is_row_shuffle: bool,
+    _is_row_shuffle: bool,
 }
 
 impl NewTransformPartialAggregate {
@@ -118,7 +118,7 @@ impl NewTransformPartialAggregate {
         config: HashTableConfig,
         partition_stream: SharedPartitionStream,
         bucket_num: usize,
-        is_row_shuffle: bool,
+        _is_row_shuffle: bool,
     ) -> Result<Box<dyn Processor>> {
         let spillers = Spiller::create(ctx.clone(), partition_stream, bucket_num)?;
 
@@ -141,7 +141,7 @@ impl NewTransformPartialAggregate {
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("NewPartialAggregate"),
                 spillers,
-                is_row_shuffle,
+                _is_row_shuffle,
             },
         ))
     }
@@ -224,7 +224,7 @@ impl NewTransformPartialAggregate {
             let aggrs = v.payload.aggrs.clone();
             let config = v.config.clone();
 
-            self.spillers.spill(v.payload, self.is_row_shuffle)?;
+            self.spillers.spill(v.payload)?;
 
             let arena = Arc::new(Bump::new());
             self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
@@ -262,7 +262,7 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                 }
             },
             HashTable::AggregateHashTable(hashtable) => {
-                let mut blocks = self.spillers.finish(self.is_row_shuffle)?;
+                let mut blocks = self.spillers.finish()?;
 
                 self.statistics.log_finish_statistics(&hashtable);
 

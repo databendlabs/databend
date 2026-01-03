@@ -1,0 +1,19 @@
+# TPC-H spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch_test;
+
+statement ok
+set force_aggregate_shuffle_mode = 'row';
+
+# TPC-H TEST
+include ./queries.test
+
+statement ok
+set force_aggregate_shuffle_mode = 'bucket';
+
+# TPC-H TEST
+include ./queries.test
+

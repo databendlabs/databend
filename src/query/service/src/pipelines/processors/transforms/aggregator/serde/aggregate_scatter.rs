@@ -314,7 +314,6 @@ impl LocalScatter for AggregateRowScatter {
 
 pub struct AggregateBucketScatter {
     pub buckets: usize,
-    pub(crate) aggregate_params: Arc<AggregatorParams>,
 }
 
 impl AggregateBucketScatter {
@@ -329,7 +328,7 @@ impl AggregateBucketScatter {
                                 AggregateMeta::Serialized(mut payload) => {
                                     let bucket = payload.bucket as usize;
                                     if !is_local {
-                                        payload.bucket = payload.bucket / self.buckets as isize;
+                                        payload.bucket /= self.buckets as isize;
                                     }
                                     chunks[bucket % self.buckets]
                                         .push(AggregateMeta::Serialized(payload));
@@ -337,7 +336,7 @@ impl AggregateBucketScatter {
                                 AggregateMeta::AggregatePayload(mut payload) => {
                                     let bucket = payload.bucket as usize;
                                     if !is_local {
-                                        payload.bucket = payload.bucket / self.buckets as isize;
+                                        payload.bucket /= self.buckets as isize;
                                     }
                                     chunks[bucket % self.buckets]
                                         .push(AggregateMeta::AggregatePayload(payload));
@@ -345,8 +344,7 @@ impl AggregateBucketScatter {
                                 AggregateMeta::NewBucketSpilled(mut spilled_payload) => {
                                     let bucket = spilled_payload.bucket as usize;
                                     if !is_local {
-                                        spilled_payload.bucket =
-                                            spilled_payload.bucket / self.buckets as isize;
+                                        spilled_payload.bucket /= self.buckets as isize;
                                     }
                                     chunks[bucket % self.buckets]
                                         .push(AggregateMeta::NewBucketSpilled(spilled_payload));
