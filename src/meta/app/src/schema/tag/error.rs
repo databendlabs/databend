@@ -21,6 +21,9 @@ use crate::tenant_key::errors::UnknownError;
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
+    #[error("TAG `{tag_name}` not found.")]
+    TagNotFound { tag_name: String },
+
     #[error(
         "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
     )]
@@ -28,6 +31,15 @@ pub enum TagError {
         tag_name: String,
         reference_count: usize,
     },
+}
+
+impl TagError {
+    pub fn tag_has_references(tag_name: String, reference_count: usize) -> Self {
+        Self::TagHasReferences {
+            tag_name,
+            reference_count,
+        }
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -41,15 +53,12 @@ pub enum TagMetaError {
         tag_value: String,
         allowed_values_display: String,
     },
-}
 
-impl TagError {
-    pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
-        Self::TagHasReferences {
-            tag_name: tag_name.into(),
-            reference_count,
-        }
-    }
+    #[error("{object_type} '{object_name}' does not exist.")]
+    ObjectNotFound {
+        object_type: String,
+        object_name: String,
+    },
 }
 
 impl TagMetaError {
@@ -82,12 +91,20 @@ impl TagMetaError {
             allowed_values_display,
         }
     }
+
+    pub fn object_not_found(object_type: impl Into<String>, object_name: impl Into<String>) -> Self {
+        Self::ObjectNotFound {
+            object_type: object_type.into(),
+            object_name: object_name.into(),
+        }
+    }
 }
 
 impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
+            TagError::TagNotFound { .. } => ErrorCode::UnknownTag(s),
             TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
         }
     }
@@ -99,6 +116,13 @@ impl From<TagMetaError> for ErrorCode {
         match err {
             TagMetaError::UnknownTagId(err) => ErrorCode::from(err),
             TagMetaError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
+            TagMetaError::ObjectNotFound { object_type, .. } => match object_type.as_str() {
+                "connection" => ErrorCode::UnknownConnection(s),
+                "stage" => ErrorCode::UnknownStage(s),
+                "database" => ErrorCode::UnknownDatabase(s),
+                "table" => ErrorCode::UnknownTable(s),
+                _ => ErrorCode::Internal(s),
+            },
         }
     }
 }

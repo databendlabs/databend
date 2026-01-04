@@ -80,11 +80,31 @@ impl Interpreter for DropConnectionInterpreter {
             .drop_connection(&tenant, &plan.name, plan.if_exists)
             .await?;
 
-        // Clean up tag associations for this connection.
+        // Clean up tag references for this connection.
         // Since Connection does not support UNDROP, we must remove tag bindings
-        // to prevent orphaned references that would block tag deletion.
+        // to prevent orphaned references.
         //
-        // Design notes:
+        // # Concurrency Safety
+        //
+        // The order "drop object first, then cleanup tags" is critical for concurrency safety.
+        // Together with the object existence check in `set_object_tags`, this prevents orphans:
+        //
+        // ```text
+        // Timeline: ──────────────────────────────────────────────>
+        // SET TAG:  [read tag_meta]              [txn commit: write tag ref]
+        // DROP:              [delete object]  [get_tags] [unset tags]
+        // ```
+        //
+        // - If SET TAG commits after DROP deletes the object, the txn fails
+        //   (object existence check: seq >= 1 not met).
+        // - If SET TAG commits before DROP, DROP's get_tags will see it and clean it up.
+        //
+        // Both mechanisms are required:
+        // - `set_object_tags` check → prevents writing tag refs after object is dropped
+        // - This cleanup → ensures existing tag refs are removed after drop
+        //
+        // # Other Design Notes
+        //
         // - This runs regardless of whether the connection existed, so repeated
         //   `DROP CONNECTION IF EXISTS` can clean up any leftover tag references
         //   from a previous failed attempt.
@@ -93,8 +113,6 @@ impl Interpreter for DropConnectionInterpreter {
         //   - If a new connection with the same name is created before cleanup,
         //     it may "inherit" orphaned tag associations. Users can fix this
         //     via `ALTER CONNECTION UNSET TAG` or `DROP CONNECTION IF EXISTS`.
-        // - Concurrent `DROP CONNECTION` and `DROP TAG` may cause `DROP TAG` to
-        //   fail due to existing references; retry will succeed after cleanup.
         let taggable_object = TaggableObject::Connection {
             name: plan.name.clone(),
         };

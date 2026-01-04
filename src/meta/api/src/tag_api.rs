@@ -16,8 +16,11 @@ use std::collections::HashSet;
 
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::principal::connection_ident::ConnectionIdent;
+use databend_common_meta_app::principal::user_stage_ident::StageIdent;
 use databend_common_meta_app::schema::CreateTagReply;
 use databend_common_meta_app::schema::CreateTagReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::GetTagReply;
 use databend_common_meta_app::schema::ObjectTagIdRef;
@@ -25,10 +28,11 @@ use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
-use databend_common_meta_app::schema::TagError;
+use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
+use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagInfo;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagReferenceInfo;
@@ -44,8 +48,13 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
+use seq_marked::SeqValue;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use futures::TryStreamExt;
@@ -59,9 +68,33 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_core_util::txn_delete_exact;
 use crate::txn_op_builder_util::txn_op_del;
 use crate::txn_op_builder_util::txn_op_put_pb;
+
+/// Returns the meta-service key for a taggable object and its display name.
+///
+/// The key is used to check if the object exists (seq >= 1) before setting tags.
+/// This prevents orphaned tag references when the object is dropped concurrently.
+fn get_object_key_and_name(tenant: &Tenant, object: &TaggableObject) -> (String, String) {
+    match object {
+        TaggableObject::Connection { name } => {
+            let key = ConnectionIdent::new(tenant.clone(), name);
+            (key.to_string_key(), name.clone())
+        }
+        TaggableObject::Stage { name } => {
+            let key = StageIdent::new(tenant.clone(), name);
+            (key.to_string_key(), name.clone())
+        }
+        TaggableObject::Database { db_id } => {
+            let key = DatabaseId::new(*db_id);
+            (key.to_string_key(), db_id.to_string())
+        }
+        TaggableObject::Table { table_id } => {
+            let key = TableId::new(*table_id);
+            (key.to_string_key(), table_id.to_string())
+        }
+    }
+}
 
 impl<T> TagApi for T
 where
@@ -114,6 +147,11 @@ where
         }
     }
 
+    /// Hard-delete a tag by removing all its keys.
+    ///
+    /// Returns `Err(TagError::TagHasReferences)` if the tag is still referenced by objects.
+    /// Since tags do not support UNDROP, we must prevent deletion when references exist
+    /// to avoid orphaned tag-object mappings.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn drop_tag(
@@ -131,34 +169,40 @@ where
             };
 
             let tag_id = *id_seqv.data;
+            let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
+            let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
+
+            // Build the prefix for tag references: __fd_tag_id_object_ref/<tenant>/<tag_id>/
             let refs_dir = DirName::new_with_level(
                 TagIdObjectRefIdent::new_generic(tenant.clone(), TagIdObjectRef::prefix(tag_id)),
                 2,
             );
+
+            // Hard delete: remove all keys
             let mut txn = TxnRequest::default();
-            let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
-            let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
-
-            txn_delete_exact(&mut txn, name_ident, id_seqv.seq);
-            txn_delete_exact(&mut txn, &tag_meta_key, meta_seqv.seq);
-            txn.if_then.push(txn_op_del(&id_to_name_key));
-
-            // Ensure no references were added during the transaction
+            txn.condition
+                .push(txn_cond_eq_seq(name_ident, id_seqv.seq));
+            // Ensure no references exist before deletion
             txn.condition
                 .push(txn_cond_eq_keys_with_prefix(&refs_dir, 0));
+            txn.if_then.push(txn_op_del(name_ident)); // name -> id
+            txn.if_then.push(txn_op_del(&tag_meta_key)); // id -> meta
+            txn.if_then.push(txn_op_del(&id_to_name_key)); // id -> name
 
             let (success, _) = send_txn(self, txn).await?;
             if success {
                 return Ok(Ok(Some((id_seqv, meta_seqv))));
-            } else {
-                let reference_count = self.list_pb_vec(&refs_dir).await?.len();
-                if reference_count > 0 {
-                    return Ok(Err(TagError::tag_has_references(
-                        name_ident.tag_name().to_string(),
-                        reference_count,
-                    )));
-                }
             }
+
+            // Transaction failed. Check if it's due to references or concurrent modification.
+            let reference_count = self.list_pb_vec(&refs_dir).await?.len();
+            if reference_count > 0 {
+                return Ok(Err(TagError::tag_has_references(
+                    name_ident.tag_name().to_string(),
+                    reference_count,
+                )));
+            }
+            // No references, must be concurrent modification. Retry.
         }
     }
 
@@ -176,6 +220,7 @@ where
         }
     }
 
+    /// List all tags for a tenant.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn list_tags(&self, tenant: &Tenant) -> Result<Vec<TagInfo>, MetaError> {
@@ -200,12 +245,42 @@ where
     /// Attach multiple tags to an object in a single transaction.
     /// Validates tag existence and allowed_values constraints.
     ///
+    /// # Optimistic Locking
+    ///
     /// The txn uses optimistic locking:
     /// - We must re-fetch `TagMeta` and verify values on every retry so each attempt uses the
     ///   latest `allowed_values`.
     /// - The generated conditions include `tag_meta.seq`, ensuring no concurrent update sneaks in
     ///   between validation and commit. If any `TagMeta` changes, the txn fails and the loop
     ///   re-executes the entire validation/write process.
+    ///
+    /// # Concurrency Safety with DROP
+    ///
+    /// The transaction includes a condition that the target object must exist (seq >= 1).
+    /// This is **critical** to prevent orphaned tag references when DROP runs concurrently.
+    ///
+    /// Consider this race condition without the object existence check:
+    /// ```text
+    /// Timeline: ──────────────────────────────────────────────>
+    /// SET TAG:  [read tag_meta]              [txn commit: write tag ref]
+    /// DROP:              [delete object]  [get_tags] [unset tags]
+    /// ```
+    ///
+    /// 1. SET TAG reads tag_meta
+    /// 2. DROP deletes object ✓
+    /// 3. SET TAG commits, writes tag ref ✓ (no object check, succeeds!)
+    /// 4. DROP executes get_tags (SET TAG not yet visible, misses new tag)
+    /// 5. DROP cleans up old tag refs
+    /// Result: The newly written tag ref becomes orphaned! ❌
+    ///
+    /// With the object existence check (`seq >= 1` in txn condition):
+    /// - Step 3 fails because object was deleted (seq = 0), condition `seq >= 1` not met.
+    ///
+    /// Together with the interpreter's "drop first, cleanup after" pattern:
+    /// - `set_object_tags` check → prevents writing tag refs after object is dropped
+    /// - Interpreter cleanup → ensures existing tag refs are removed after drop
+    ///
+    /// Both are required for complete concurrency safety.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn set_object_tags(
@@ -217,6 +292,11 @@ where
         if req.tags.is_empty() {
             return Ok(Ok(()));
         }
+
+        // Build the object existence check key and name for error messages.
+        // This key is used in the transaction condition to ensure the object exists.
+        let (object_key, object_name) = get_object_key_and_name(&req.tenant, &req.taggable_object);
+        let object_type = req.taggable_object.type_str();
 
         // Batch fetch all tag metadata to validate allowed_values
         let tag_meta_keys: Vec<TagIdIdent> = req
@@ -230,14 +310,33 @@ where
         loop {
             trials.next().unwrap()?.await;
 
+            // Check if the object exists before proceeding.
+            // We fetch the object's seq to verify existence and include it in the transaction condition.
+            let object_seqv = self.get_kv(&object_key).await?;
+            if object_seqv.seq() == 0 {
+                return Ok(Err(TagMetaError::object_not_found(
+                    object_type,
+                    &object_name,
+                )));
+            }
+
             // Each retry must refetch tag meta because the txn conditions compare the latest seq.
             // If another session updated tag meta (e.g. allowed_values), our previous snapshot is stale.
             let tag_metas = self
                 .get_pb_values_vec::<TagIdIdent, _>(tag_meta_keys.clone())
                 .await?;
 
-            let mut txn_conditions = Vec::with_capacity(req.tags.len());
+            // +1 for the object existence condition
+            let mut txn_conditions = Vec::with_capacity(req.tags.len() + 1);
             let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
+
+            // Add condition: object must exist (seq >= 1).
+            // This ensures that if the object is dropped concurrently, the transaction fails.
+            txn_conditions.push(TxnCondition::match_seq(
+                object_key.clone(),
+                ConditionResult::Ge,
+                1,
+            ));
 
             for (((tag_id, tag_value), meta_opt), tag_meta_key) in req
                 .tags
@@ -289,8 +388,11 @@ where
             if succ {
                 return Ok(Ok(()));
             } else {
-                // Transaction failed because tag meta was modified concurrently; re-loop to read latest seq.
-                debug!(req :? =(&req), tag_ids :? = Vec::from_iter(req.tags.iter().map(|(tag_id, _)| *tag_id)); "set_object_tags retry due to concurrent tag meta modification");
+                // Transaction failed, could be:
+                // 1. Object was dropped concurrently (seq became 0)
+                // 2. Tag meta was modified concurrently
+                // Re-loop to check and retry.
+                debug!(req :? =(&req), tag_ids :? = Vec::from_iter(req.tags.iter().map(|(tag_id, _)| *tag_id)); "set_object_tags retry due to concurrent modification");
             }
         }
     }
