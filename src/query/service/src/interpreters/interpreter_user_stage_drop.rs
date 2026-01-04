@@ -16,8 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
+use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::schema::TaggableObject;
+use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
@@ -65,6 +68,36 @@ impl Interpreter for DropUserStageInterpreter {
         user_mgr
             .drop_stage(&tenant, &plan.name, plan.if_exists)
             .await?;
+
+        // Clean up tag associations for this stage.
+        // Since Stage does not support UNDROP, we must remove tag bindings
+        // to prevent orphaned references that would block tag deletion.
+        //
+        // Design notes:
+        // - This runs regardless of whether the stage existed, so repeated
+        //   `DROP STAGE IF EXISTS` can clean up any leftover tag references
+        //   from a previous failed attempt.
+        // - Tag associations are indexed by stage name (not a unique ID), so:
+        //   - Only this stage's tags are affected; other stages are safe.
+        //   - If a new stage with the same name is created before cleanup,
+        //     it may "inherit" orphaned tag associations. Users can fix this
+        //     via `ALTER STAGE UNSET TAG` or `DROP STAGE IF EXISTS`.
+        // - Concurrent `DROP STAGE` and `DROP TAG` may cause `DROP TAG` to
+        //   fail due to existing references; retry will succeed after cleanup.
+        let taggable_object = TaggableObject::Stage {
+            name: plan.name.clone(),
+        };
+        let meta_api = user_mgr.get_meta_store_client();
+        let tag_values = meta_api.get_object_tags(&tenant, &taggable_object).await?;
+        if !tag_values.is_empty() {
+            let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
+            let req = UnsetObjectTagsReq {
+                tenant: tenant.clone(),
+                taggable_object,
+                tags: tag_ids,
+            };
+            meta_api.unset_object_tags(req).await?;
+        }
 
         if let Ok(stage) = stage {
             // we should do `drop ownership` after actually drop stage,
