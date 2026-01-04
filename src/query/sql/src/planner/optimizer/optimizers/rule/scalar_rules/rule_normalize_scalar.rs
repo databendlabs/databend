@@ -77,11 +77,7 @@ impl Rule for RuleNormalizeScalarFilter {
                 let Some(predicates) = RewritePredicates {}.rewrite(&filter.predicates)? else {
                     return Ok(());
                 };
-                state.add_result(
-                    s_expr
-                        .unary_child_arc()
-                        .ref_build_unary(Filter { predicates }),
-                );
+                state.add_result(s_expr.replace_plan(Filter { predicates }));
                 Ok(())
             }
             1 => {
@@ -94,7 +90,7 @@ impl Rule for RuleNormalizeScalarFilter {
                 };
                 let mut scan = scan.clone();
                 scan.push_down_predicates = Some(predicates);
-                state.add_result(SExpr::create_leaf(scan));
+                state.add_result(s_expr.replace_plan(scan));
                 Ok(())
             }
             _ => unreachable!(),
