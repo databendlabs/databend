@@ -28,10 +28,13 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::TaggableObject;
+use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -90,6 +93,59 @@ impl VacuumDropTablesInterpreter {
         let chunk_size = 50;
 
         let mut num_meta_keys_removed = 0;
+
+        // Clean up tag references for tables and databases before GC.
+        // Since Table and Database support UNDROP, tag references are preserved on drop.
+        // We clean them up here when the objects are permanently vacuumed.
+        let tenant = self.ctx.get_tenant();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+
+        // Clean up tag references for tables
+        for drop_id in &drop_db_table_ids {
+            if let DroppedId::Table { id, .. } = drop_id {
+                let taggable_object = TaggableObject::Table {
+                    table_id: id.table_id,
+                };
+                let tag_values = meta_api.get_object_tags(&tenant, &taggable_object).await?;
+                if !tag_values.is_empty() {
+                    let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
+                    info!(
+                        "vacuum table id {}: cleaning up {} tag references",
+                        id.table_id,
+                        tag_ids.len()
+                    );
+                    let req = UnsetObjectTagsReq {
+                        tenant: tenant.clone(),
+                        taggable_object,
+                        tags: tag_ids,
+                    };
+                    meta_api.unset_object_tags(req).await?;
+                }
+            }
+        }
+
+        // Clean up tag references for databases
+        for drop_id in &drop_db_ids {
+            if let DroppedId::Db { db_id, .. } = drop_id {
+                let taggable_object = TaggableObject::Database { db_id: *db_id };
+                let tag_values = meta_api.get_object_tags(&tenant, &taggable_object).await?;
+                if !tag_values.is_empty() {
+                    let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
+                    info!(
+                        "vacuum db id {}: cleaning up {} tag references",
+                        db_id,
+                        tag_ids.len()
+                    );
+                    let req = UnsetObjectTagsReq {
+                        tenant: tenant.clone(),
+                        taggable_object,
+                        tags: tag_ids,
+                    };
+                    meta_api.unset_object_tags(req).await?;
+                }
+            }
+        }
+
         // first gc drop table ids
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);

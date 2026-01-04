@@ -24,12 +24,19 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
+use databend_common_meta_app::schema::ObjectTagIdRef;
+use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::TagIdObjectRef;
+use databend_common_meta_app::schema::TagIdObjectRefIdent;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
+use futures::TryStreamExt;
 use log::debug;
 use log::warn;
 
@@ -137,7 +144,36 @@ pub(crate) async fn drop_database_meta(
         txn.if_then.push(txn_op_del(&ownership_key));
     }
 
-    Ok(*seq_db_id.data)
+    // Clean up tag references for this database.
+    // Since UNDROP DATABASE will not restore tags, we remove the bindings atomically
+    // with the drop operation. Using txn_op_del is safe here because:
+    // 1. Deleting non-existent keys is idempotent
+    // 2. The db_meta.seq condition protects against concurrent modifications
+    let db_id = *seq_db_id.data;
+    let taggable_object = TaggableObject::Database { db_id };
+    let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(
+        tenant_dbname.tenant().clone(),
+        ObjectTagIdRef::new(taggable_object.clone(), 0),
+    );
+    let obj_tag_dir = DirName::new(obj_tag_prefix);
+    let tag_entries: Vec<_> = kv_api.list_pb(&obj_tag_dir).await?.try_collect().await?;
+    for entry in tag_entries {
+        let tag_id = entry.key.name().tag_id;
+        // Delete object -> tag reference
+        let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+            tenant_dbname.tenant().clone(),
+            ObjectTagIdRef::new(taggable_object.clone(), tag_id),
+        );
+        // Delete tag -> object reference
+        let tag_ref_key = TagIdObjectRefIdent::new_generic(
+            tenant_dbname.tenant().clone(),
+            TagIdObjectRef::new(tag_id, taggable_object.clone()),
+        );
+        txn.if_then.push(txn_op_del(&obj_ref_key));
+        txn.if_then.push(txn_op_del(&tag_ref_key));
+    }
+
+    Ok(db_id)
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)

@@ -41,6 +41,11 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::ObjectTagIdRef;
+use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::TagIdObjectRef;
+use databend_common_meta_app::schema::TagIdObjectRefIdent;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::TableId;
@@ -59,7 +64,9 @@ use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDe
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use futures::TryStreamExt;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -330,6 +337,32 @@ pub async fn construct_drop_table_txn_operations(
         };
         let ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), ownership_object);
         txn.if_then.push(txn_op_del(&ownership_key));
+    }
+
+    // Clean up tag references for this table.
+    // Since UNDROP TABLE will not restore tags, we remove the bindings atomically
+    // with the drop operation. Using txn_op_del is safe here because:
+    // 1. Deleting non-existent keys is idempotent
+    // 2. The table_meta.seq condition protects against concurrent modifications
+    let taggable_object = TaggableObject::Table { table_id };
+    let obj_tag_prefix =
+        ObjectTagIdRefIdent::new_generic(tenant.clone(), ObjectTagIdRef::new(taggable_object.clone(), 0));
+    let obj_tag_dir = DirName::new(obj_tag_prefix);
+    let tag_entries: Vec<_> = kv_api.list_pb(&obj_tag_dir).await?.try_collect().await?;
+    for entry in tag_entries {
+        let tag_id = entry.key.name().tag_id;
+        // Delete object -> tag reference
+        let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+            tenant.clone(),
+            ObjectTagIdRef::new(taggable_object.clone(), tag_id),
+        );
+        // Delete tag -> object reference
+        let tag_ref_key = TagIdObjectRefIdent::new_generic(
+            tenant.clone(),
+            TagIdObjectRef::new(tag_id, taggable_object.clone()),
+        );
+        txn.if_then.push(txn_op_del(&obj_ref_key));
+        txn.if_then.push(txn_op_del(&tag_ref_key));
     }
 
     Ok((tb_id_seq, table_id))
