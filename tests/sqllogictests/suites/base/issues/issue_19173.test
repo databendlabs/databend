@@ -1,0 +1,105 @@
+# https://github.com/datafuselabs/databend/issues/19173
+
+statement ok
+create or replace database issue_19173;
+
+statement ok
+use issue_19173;
+
+statement ok
+create or replace table target (c int);
+
+statement ok
+create or replace table empty like target;
+
+# mutations in autocommit mode
+
+statement ok
+merge into target using (select c from empty) s on s.c = target.c when matched then update * when not matched then insert *;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+delete from target where c = 1;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+update target set c =2 where c = 1;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+insert into target select * from empty;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+# mutations inside explicit transactions
+
+statement ok
+begin transaction;
+
+statement ok
+merge into target using (select c from empty) s on s.c = target.c when matched then update * when not matched then insert *;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+begin transaction;
+
+statement ok
+delete from target where c = 1;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+begin transaction;
+
+statement ok
+update target set c =2 where c = 1;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
+
+statement ok
+begin transaction;
+
+statement ok
+insert into target select * from empty;
+
+statement ok
+commit;
+
+query I
+select count() from fuse_snapshot('issue_19173', 'target');
+----
+0
