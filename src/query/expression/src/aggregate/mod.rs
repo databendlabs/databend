@@ -100,6 +100,7 @@ impl HashTableConfig {
             (cache_per_active_thread / size_per_entry).next_power_of_two()
         };
 
+        // not support payload growth when `enable_experiment_aggregate` = 1
         HashTableConfig {
             current_max_radix_bits: Arc::new(AtomicU64::new(radix_bits)),
             initial_radix_bits: radix_bits,
