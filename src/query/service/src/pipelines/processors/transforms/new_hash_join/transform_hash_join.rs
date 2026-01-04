@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::Result;
@@ -161,6 +162,7 @@ impl Processor for TransformHashJoin {
                 Ok(())
             }
             Stage::Probe(state) => {
+                let instant = Instant::now();
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
@@ -173,6 +175,8 @@ impl Processor for TransformHashJoin {
                         state.stream = Some(stream);
                     }
                 }
+
+                state.cpu_time += instant.elapsed().as_nanos() as u64;
 
                 Ok(())
             }
@@ -247,13 +251,15 @@ impl Processor for TransformHashJoin {
                 self.instant = Instant::now();
                 Stage::Probe(ProbeState::new())
             }
-            Stage::Probe(_) => {
+            Stage::Probe(state) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
-                    "HashJoin({}) probe stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    "HashJoin({}) probe stage, sync work elapsed: {:?}, wait elapsed: {:?}, cpu time: {:?}, probe rows: {}",
                     self.plan_id,
                     elapsed,
-                    wait_elapsed
+                    wait_elapsed,
+                    Duration::from_nanos(state.cpu_time),
+                    state.probe_rows
                 );
 
                 self.instant = Instant::now();
@@ -353,8 +359,10 @@ impl BuildFinalState {
 }
 
 struct ProbeState {
+    probe_rows: usize,
     input_data: Option<DataBlock>,
     stream: Option<Box<dyn JoinStream>>,
+    cpu_time: u64,
 }
 
 impl Debug for ProbeState {
@@ -366,8 +374,10 @@ impl Debug for ProbeState {
 impl ProbeState {
     pub fn new() -> ProbeState {
         ProbeState {
+            probe_rows: 0,
             input_data: None,
             stream: None,
+            cpu_time: 0,
         }
     }
 
@@ -377,7 +387,9 @@ impl ProbeState {
         }
 
         if input.has_data() {
-            self.input_data = Some(input.pull_data().unwrap()?);
+            let data_block = input.pull_data().unwrap()?;
+            self.probe_rows += data_block.num_rows();
+            self.input_data = Some(data_block);
             return Ok(Event::Sync);
         }
 
