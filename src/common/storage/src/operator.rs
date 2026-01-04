@@ -416,8 +416,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 
-    // If allow_credential_chain is not set, default to false for security.
-    let allow_credential_chain = cfg.allow_credential_chain.unwrap_or(false);
+    // When a role is configured we must allow the credential chain so AWS can assume it,
+    // otherwise we should disable the credential chain for security.
+    let allow_credential_chain = cfg
+        .allow_credential_chain
+        .unwrap_or(!cfg.role_arn.is_empty());
 
     // Disallowing the credential chain forces unsigned or fully explicit access.
     if !allow_credential_chain {
