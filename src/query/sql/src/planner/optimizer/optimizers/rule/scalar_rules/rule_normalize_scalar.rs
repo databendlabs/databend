@@ -215,6 +215,9 @@ impl RewritePredicates {
                 arguments.push(arg);
             }
         }
+        if arguments.len() == 1 {
+            return Ok(arguments.pop());
+        }
         Ok(None)
     }
 }
@@ -368,6 +371,7 @@ mod tests {
         run_test(file, "a = 3 or a = 4 or a = 5", columns)?;
         run_test(file, "a = 3 or true or a = 5", columns)?;
         run_test(file, "a = 3 or false or a = 5", columns)?;
+        run_test(file, "a = 3 or false", columns)?;
 
         run_test(
             file,
