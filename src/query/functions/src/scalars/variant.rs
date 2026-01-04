@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Domain;
@@ -61,8 +62,11 @@ use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::vectorize_1_arg;
@@ -71,6 +75,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
+use jiff::Timestamp;
 use jiff::Unit;
 use jiff::civil::date;
 use jiff::tz::TimeZone;
@@ -849,6 +854,26 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_timestamp_tz",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).is_timestamp_tz() {
+                Ok(res) => output.push(res),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
+            }
+        }),
+    );
+
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "as_timestamp",
         |_, _| FunctionDomain::MayThrow,
@@ -862,6 +887,32 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match RawJsonb::new(v).as_timestamp() {
                     Ok(Some(res)) => output.push(res.value),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, TimestampTzType, _, _>(
+        "as_timestamp_tz",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
+            |v, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match RawJsonb::new(v).as_timestamp_tz() {
+                    Ok(Some(res)) => {
+                        let offset_seconds = i32::from(res.offset) * 3_600;
+                        output.push(timestamp_tz::new(res.value, offset_seconds));
+                    }
                     Ok(None) => output.push_null(),
                     Err(err) => {
                         ctx.set_error(output.len(), err.to_string());
@@ -1384,6 +1435,48 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match cast_to_timestamp(val, &ctx.func_ctx.tz) {
+                    Ok(Some(ts)) => output.push(ts),
+                    _ => output.push_null(),
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, TimestampTzType, _, _>(
+        "to_timestamp_tz",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
+                    Ok(Some(ts)) => output.push(ts),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), format!("{}", err));
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, TimestampTzType, _, _>(
+        "try_to_timestamp_tz",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
                     Ok(Some(ts)) => output.push(ts),
                     _ => output.push_null(),
                 }
@@ -3373,6 +3466,36 @@ fn cast_to_timestamp(val: &[u8], tz: &TimeZone) -> Result<Option<i64>, jsonb::Er
                 ))
             })
             .map(|ts| Some(ts.timestamp().as_microsecond())),
+        _ => Err(jsonb::Error::InvalidJsonType),
+    }
+}
+
+fn cast_to_timestamp_tz(val: &[u8], tz: &TimeZone) -> Result<Option<timestamp_tz>, jsonb::Error> {
+    let value = jsonb::from_slice(val)?;
+    match value {
+        JsonbValue::Null => Ok(None),
+        JsonbValue::TimestampTz(ts) => {
+            let offset_seconds = i32::from(ts.offset) * 3_600;
+            Ok(Some(timestamp_tz::new(ts.value, offset_seconds)))
+        }
+        JsonbValue::Timestamp(ts) => {
+            let timestamp = Timestamp::from_microsecond(ts.value).map_err(|err| {
+                jsonb::Error::Message(format!("unable to cast to type `TIMESTAMP_TZ` {}.", err))
+            })?;
+            let offset = tz.to_offset(timestamp);
+            Ok(Some(timestamp_tz::new(
+                ts.value - (offset.seconds() as i64 * MICROS_PER_SEC),
+                offset.seconds(),
+            )))
+        }
+        JsonbValue::String(s) => string_to_timestamp_tz(s.as_bytes(), || tz)
+            .map_err(|e| {
+                jsonb::Error::Message(format!(
+                    "unable to cast to type `TIMESTAMP_TZ` {}.",
+                    e.message()
+                ))
+            })
+            .map(Some),
         _ => Err(jsonb::Error::InvalidJsonType),
     }
 }
