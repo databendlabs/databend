@@ -16,16 +16,15 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TaggableObject;
-use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_sql::plans::DropConnectionPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -61,8 +60,12 @@ impl Interpreter for DropConnectionInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
-        // we should do `drop ownership` after actually drop object, and object maybe not exists.
-        // drop the ownership
+        // 1. Drop the connection first
+        user_mgr
+            .drop_connection(&tenant, &plan.name, plan.if_exists)
+            .await?;
+
+        // 2. Revoke ownership (after drop succeeds to prevent permission leak)
         if self
             .ctx
             .get_settings()
@@ -76,57 +79,11 @@ impl Interpreter for DropConnectionInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
-        user_mgr
-            .drop_connection(&tenant, &plan.name, plan.if_exists)
-            .await?;
-
-        // Clean up tag references for this connection.
-        // Since Connection does not support UNDROP, we must remove tag bindings
-        // to prevent orphaned references.
-        //
-        // # Concurrency Safety
-        //
-        // The order "drop object first, then cleanup tags" is critical for concurrency safety.
-        // Together with the object existence check in `set_object_tags`, this prevents orphans:
-        //
-        // ```text
-        // Timeline: ──────────────────────────────────────────────>
-        // SET TAG:  [read tag_meta]              [txn commit: write tag ref]
-        // DROP:              [delete object]  [get_tags] [unset tags]
-        // ```
-        //
-        // - If SET TAG commits after DROP deletes the object, the txn fails
-        //   (object existence check: seq >= 1 not met).
-        // - If SET TAG commits before DROP, DROP's get_tags will see it and clean it up.
-        //
-        // Both mechanisms are required:
-        // - `set_object_tags` check → prevents writing tag refs after object is dropped
-        // - This cleanup → ensures existing tag refs are removed after drop
-        //
-        // # Other Design Notes
-        //
-        // - This runs regardless of whether the connection existed, so repeated
-        //   `DROP CONNECTION IF EXISTS` can clean up any leftover tag references
-        //   from a previous failed attempt.
-        // - Tag associations are indexed by connection name (not a unique ID), so:
-        //   - Only this connection's tags are affected; other connections are safe.
-        //   - If a new connection with the same name is created before cleanup,
-        //     it may "inherit" orphaned tag associations. Users can fix this
-        //     via `ALTER CONNECTION UNSET TAG` or `DROP CONNECTION IF EXISTS`.
+        // 3. Clean up tag references (must be after drop for concurrency safety)
         let taggable_object = TaggableObject::Connection {
             name: plan.name.clone(),
         };
-        let meta_api = user_mgr.get_meta_store_client();
-        let tag_values = meta_api.get_object_tags(&tenant, &taggable_object).await?;
-        if !tag_values.is_empty() {
-            let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
-            let req = UnsetObjectTagsReq {
-                tenant: tenant.clone(),
-                taggable_object,
-                tags: tag_ids,
-            };
-            meta_api.unset_object_tags(req).await?;
-        }
+        cleanup_object_tags(&tenant, taggable_object).await?;
 
         Ok(PipelineBuildResult::create())
     }

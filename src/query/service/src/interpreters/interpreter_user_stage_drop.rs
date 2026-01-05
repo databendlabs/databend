@@ -16,11 +16,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TaggableObject;
-use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
@@ -29,6 +27,7 @@ use log::debug;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -64,70 +63,32 @@ impl Interpreter for DropUserStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
+        // Get stage info first for cleanup operations
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
+
+        // 1. Drop the stage first
         user_mgr
             .drop_stage(&tenant, &plan.name, plan.if_exists)
             .await?;
 
-        // Clean up tag references for this stage.
-        // Since Stage does not support UNDROP, we must remove tag bindings
-        // to prevent orphaned references.
-        //
-        // # Concurrency Safety
-        //
-        // The order "drop object first, then cleanup tags" is critical for concurrency safety.
-        // Together with the object existence check in `set_object_tags`, this prevents orphans:
-        //
-        // ```text
-        // Timeline: ──────────────────────────────────────────────>
-        // SET TAG:  [read tag_meta]              [txn commit: write tag ref]
-        // DROP:              [delete object]  [get_tags] [unset tags]
-        // ```
-        //
-        // - If SET TAG commits after DROP deletes the object, the txn fails
-        //   (object existence check: seq >= 1 not met).
-        // - If SET TAG commits before DROP, DROP's get_tags will see it and clean it up.
-        //
-        // Both mechanisms are required:
-        // - `set_object_tags` check → prevents writing tag refs after object is dropped
-        // - This cleanup → ensures existing tag refs are removed after drop
-        //
-        // # Other Design Notes
-        //
-        // - This runs regardless of whether the stage existed, so repeated
-        //   `DROP STAGE IF EXISTS` can clean up any leftover tag references
-        //   from a previous failed attempt.
-        // - Tag associations are indexed by stage name (not a unique ID), so:
-        //   - Only this stage's tags are affected; other stages are safe.
-        //   - If a new stage with the same name is created before cleanup,
-        //     it may "inherit" orphaned tag associations. Users can fix this
-        //     via `ALTER STAGE UNSET TAG` or `DROP STAGE IF EXISTS`.
+        // 2. Revoke ownership (after drop succeeds to prevent permission leak)
+        if let Ok(ref stage) = stage {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Stage {
+                name: stage.stage_name.clone(),
+            };
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        // 3. Clean up tag references (must be after drop for concurrency safety)
         let taggable_object = TaggableObject::Stage {
             name: plan.name.clone(),
         };
-        let meta_api = user_mgr.get_meta_store_client();
-        let tag_values = meta_api.get_object_tags(&tenant, &taggable_object).await?;
-        if !tag_values.is_empty() {
-            let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
-            let req = UnsetObjectTagsReq {
-                tenant: tenant.clone(),
-                taggable_object,
-                tags: tag_ids,
-            };
-            meta_api.unset_object_tags(req).await?;
-        }
+        cleanup_object_tags(&tenant, taggable_object).await?;
 
+        // 4. Remove stage files for internal stages
         if let Ok(stage) = stage {
-            // we should do `drop ownership` after actually drop stage,
-            // drop the ownership
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::Stage {
-                name: self.plan.name.clone(),
-            };
-
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-
             if !matches!(&stage.stage_type, StageType::External) {
                 let op = StageTable::get_op(&stage)?;
                 op.remove_all("/").await?;
@@ -136,7 +97,7 @@ impl Interpreter for DropUserStageInterpreter {
                     stage.stage_name
                 );
             }
-        };
+        }
 
         Ok(PipelineBuildResult::create())
     }
