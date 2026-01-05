@@ -38,6 +38,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::scatter_partitioned_payload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
 
@@ -55,6 +56,7 @@ impl Default for HashTable {
 
 pub struct Spiller {
     inner: NewAggregateSpiller<SharedPartitionStream>,
+    bucket_num: usize,
 }
 
 impl Spiller {
@@ -65,17 +67,36 @@ impl Spiller {
     ) -> Result<Self> {
         let spiller =
             NewAggregateSpiller::try_create(ctx.clone(), bucket_num, partition_streams, true)?;
-        Ok(Self { inner: spiller })
+        Ok(Self {
+            inner: spiller,
+            bucket_num,
+        })
     }
 
-    pub fn spill(&mut self, partition: PartitionedPayload) -> Result<()> {
-        for (bucket, payload) in partition.payloads.into_iter().enumerate() {
-            if payload.len() == 0 {
-                continue;
-            }
+    pub fn spill(&mut self, partition: PartitionedPayload, is_row_shuffle: bool) -> Result<()> {
+        if is_row_shuffle {
+            for (bucket, p) in scatter_partitioned_payload(partition, self.bucket_num)?
+                .into_iter()
+                .enumerate()
+            {
+                for payload in p.payloads.into_iter() {
+                    if payload.len() == 0 {
+                        continue;
+                    }
 
-            let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
-            self.inner.spill(bucket, data_block)?;
+                    let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+                    self.inner.spill(bucket, data_block)?;
+                }
+            }
+        } else {
+            for (bucket, payload) in partition.payloads.into_iter().enumerate() {
+                if payload.len() == 0 {
+                    continue;
+                }
+
+                let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+                self.inner.spill(bucket, data_block)?;
+            }
         }
         Ok(())
     }
@@ -106,7 +127,7 @@ pub struct NewTransformPartialAggregate {
     statistics: AggregationStatistics,
     settings: MemorySettings,
     spillers: Spiller,
-    _is_row_shuffle: bool,
+    is_row_shuffle: bool,
 }
 
 impl NewTransformPartialAggregate {
@@ -118,7 +139,7 @@ impl NewTransformPartialAggregate {
         config: HashTableConfig,
         partition_stream: SharedPartitionStream,
         bucket_num: usize,
-        _is_row_shuffle: bool,
+        is_row_shuffle: bool,
     ) -> Result<Box<dyn Processor>> {
         let spillers = Spiller::create(ctx.clone(), partition_stream, bucket_num)?;
 
@@ -141,7 +162,7 @@ impl NewTransformPartialAggregate {
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("NewPartialAggregate"),
                 spillers,
-                _is_row_shuffle,
+                is_row_shuffle,
             },
         ))
     }
@@ -224,7 +245,7 @@ impl NewTransformPartialAggregate {
             let aggrs = v.payload.aggrs.clone();
             let config = v.config.clone();
 
-            self.spillers.spill(v.payload)?;
+            self.spillers.spill(v.payload, self.is_row_shuffle)?;
 
             let arena = Arc::new(Bump::new());
             self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
