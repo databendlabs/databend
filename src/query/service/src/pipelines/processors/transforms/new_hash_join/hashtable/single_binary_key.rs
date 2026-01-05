@@ -133,13 +133,13 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<true>::create(
+                true => Ok(EarlyFilteringProbeStream::<true, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &[],
                 )),
-                false => Ok(BinaryKeyProbeStream::<true>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<true, UNIQUE>::create(hashes, keys)),
             },
         }
     }
@@ -181,13 +181,13 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<false>::create(
+                true => Ok(EarlyFilteringProbeStream::<false, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(BinaryKeyProbeStream::<false>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<false, UNIQUE>::create(hashes, keys)),
             },
         }
     }
