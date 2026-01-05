@@ -74,6 +74,13 @@ impl TableRefHandler for RealTableRefHandler {
         }
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        if fuse_table.is_transient() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' is transient, can't create {}",
+                plan.database, plan.table, plan.ref_type
+            )));
+        }
+
         let snapshot_loc = match &plan.navigation {
             Some(navigation) => {
                 fuse_table
