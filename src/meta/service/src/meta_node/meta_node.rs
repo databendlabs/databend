@@ -26,7 +26,6 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::watch;
-use databend_common_base::base::tokio::sync::watch::error::RecvError;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::base::tokio::time::sleep;
@@ -41,6 +40,8 @@ use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
 use databend_common_meta_raft_store::utils::seq_marked_to_seqv;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
+use databend_common_meta_sled_store::openraft::async_runtime::RecvError;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver as WatchReceiverTrait;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
@@ -67,6 +68,7 @@ use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::TypeConfig;
+use databend_common_meta_types::raft_types::WatchReceiver;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::snapshot_db::DBStat;
 use fastrace::func_name;
@@ -327,7 +329,7 @@ impl MetaNode {
             if r.is_err() {
                 break;
             }
-            info!("waiting for raft to shutdown, metrics: {:?}", rx.borrow());
+            info!("waiting for raft to shutdown, metrics: {:?}", rx.borrow_watched());
         }
         info!("shutdown raft");
 
@@ -351,7 +353,7 @@ impl MetaNode {
     }
 
     /// Spawn a monitor to watch raft state changes and report metrics changes.
-    pub async fn subscribe_metrics(mn: Arc<Self>, metrics_rx: watch::Receiver<RaftMetrics>) {
+    pub async fn subscribe_metrics(mn: Arc<Self>, metrics_rx: WatchReceiver<RaftMetrics>) {
         info!("Start a task subscribing raft metrics and forward to metrics API");
 
         let fut = Self::report_metrics_loop(mn.clone(), metrics_rx);
@@ -369,7 +371,7 @@ impl MetaNode {
     /// Report metrics changes periodically.
     async fn report_metrics_loop(
         meta_node: Arc<Self>,
-        mut metrics_rx: watch::Receiver<RaftMetrics>,
+        mut metrics_rx: WatchReceiver<RaftMetrics>,
     ) -> Result<(), AnyError> {
         const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
         let mut last_leader: Option<u64> = None;
@@ -388,7 +390,7 @@ impl MetaNode {
                 break;
             }
 
-            let mm = metrics_rx.borrow().clone();
+            let mm = metrics_rx.borrow_watched().clone();
 
             // Report metrics about server state and role.
             server_metrics::set_node_is_health(
@@ -403,7 +405,7 @@ impl MetaNode {
             // metrics about raft log and state machine.
             server_metrics::set_current_term(mm.current_term);
             server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
-            server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
+            server_metrics::set_proposals_applied(mm.last_applied.map(|id| id.index).unwrap_or(0));
             server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
             {
@@ -1193,7 +1195,7 @@ impl MetaNode {
         let snapshot_key_count = self.get_snapshot_key_count().await;
         let snapshot_key_space_stat = self.get_snapshot_key_space_stat().await;
 
-        let metrics = self.raft.metrics().borrow().clone();
+        let metrics = self.raft.metrics().borrow_watched().clone();
 
         let leader = if let Some(leader_id) = metrics.current_leader {
             self.get_node(&leader_id).await
@@ -1455,7 +1457,7 @@ impl MetaNode {
         let mut expire_at: Option<Instant> = None;
 
         loop {
-            if let Some(l) = rx.borrow().current_leader {
+            if let Some(l) = rx.borrow_watched().current_leader {
                 return Ok(Some(l));
             }
 

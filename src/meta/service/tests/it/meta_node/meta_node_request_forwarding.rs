@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -39,7 +40,7 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     let (mut _nlog, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
     let all = test_context_nodes(&tcs);
 
-    let leader_id = all[0].raft.metrics().borrow().current_leader.unwrap();
+    let leader_id = all[0].raft.metrics().borrow_watched().current_leader.unwrap();
 
     // test writing to leader and non-leader
     let key = "t-non-leader-write";
