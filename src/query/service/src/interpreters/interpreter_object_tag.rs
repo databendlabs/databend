@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UnsetObjectTagsReq;
+use log::info;
 use databend_common_sql::plans::SetObjectTagsPlan;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_sql::plans::UnsetObjectTagsPlan;
@@ -69,7 +70,14 @@ impl Interpreter for SetObjectTagsInterpreter {
             resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
         {
             let tag_pairs = resolve_tag_assignments(&self.plan.tenant, &self.plan.tags).await?;
-            set_tags(&self.plan.tenant, object, tag_pairs).await?;
+            set_tags(&self.plan.tenant, object.clone(), tag_pairs).await?;
+            let tag_assignments: Vec<_> = self
+                .plan
+                .tags
+                .iter()
+                .map(|t| format!("{}='{}'", t.name, t.value))
+                .collect();
+            info!("set tags on {}: {}", object, tag_assignments.join(", "));
         }
         Ok(PipelineBuildResult::create())
     }
@@ -91,7 +99,8 @@ impl Interpreter for UnsetObjectTagsInterpreter {
             resolve_taggable_object(&self.ctx, &self.plan.tenant, &self.plan.object).await?
         {
             let tag_ids = resolve_tag_ids(&self.plan.tenant, &self.plan.tags).await?;
-            unset_tags(&self.plan.tenant, object, tag_ids).await?;
+            unset_tags(&self.plan.tenant, object.clone(), tag_ids).await?;
+            info!("unset tags from {}: {}", object, self.plan.tags.join(", "));
         }
         Ok(PipelineBuildResult::create())
     }

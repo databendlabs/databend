@@ -25,19 +25,32 @@ pub enum TagError {
     TagNotFound { tag_name: String },
 
     #[error(
-        "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
+        "TAG `{tag_name}` is still referenced by {reference_count} object(s): {references_display}. Remove the references before dropping it."
     )]
     TagHasReferences {
         tag_name: String,
         reference_count: usize,
+        references_display: String,
     },
 }
 
 impl TagError {
-    pub fn tag_has_references(tag_name: String, reference_count: usize) -> Self {
+    pub fn tag_has_references(tag_name: String, references: Vec<String>) -> Self {
+        let reference_count = references.len();
+        // Show up to 5 references to avoid overly long error messages
+        let references_display = if references.len() <= 5 {
+            references.join(", ")
+        } else {
+            format!(
+                "{}, ... and {} more",
+                references[..5].join(", "),
+                references.len() - 5
+            )
+        };
         Self::TagHasReferences {
             tag_name,
             reference_count,
+            references_display,
         }
     }
 }
