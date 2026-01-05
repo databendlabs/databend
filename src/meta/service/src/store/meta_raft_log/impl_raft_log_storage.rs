@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::io;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
@@ -31,7 +32,6 @@ use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::IOFlushed;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::Membership;
-use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::raft_types::Vote;
 use deepsize::DeepSizeOf;
@@ -49,7 +49,7 @@ impl RaftLogReader<TypeConfig> for MetaRaftLog {
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
         &mut self,
         range: RB,
-    ) -> Result<Vec<Entry>, StorageError> {
+    ) -> Result<Vec<Entry>, io::Error> {
         let (start, end) = range_boundary(range);
 
         let mut io = IODesc::read_logs(format!(
@@ -65,8 +65,7 @@ impl RaftLogReader<TypeConfig> for MetaRaftLog {
                 log_id: log_id.0,
                 payload: payload.0,
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| io.err_submit(e))?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         io.set_done_time();
         info!("{}", io.ok_done());
@@ -74,7 +73,7 @@ impl RaftLogReader<TypeConfig> for MetaRaftLog {
     }
 
     #[fastrace::trace]
-    async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
+    async fn read_vote(&mut self) -> Result<Option<Vote>, io::Error> {
         let log = self.read().await;
         let vote = log.log_state().vote().map(Cw::to_inner);
 
@@ -86,7 +85,7 @@ impl RaftLogReader<TypeConfig> for MetaRaftLog {
         &mut self,
         mut start: u64,
         end: u64,
-    ) -> Result<Vec<Entry>, StorageError> {
+    ) -> Result<Vec<Entry>, io::Error> {
         let chunk_size = 8;
         let max_size = 2 * 1024 * 1024;
 
@@ -136,7 +135,7 @@ impl RaftLogReader<TypeConfig> for MetaRaftLog {
 impl RaftLogStorage<TypeConfig> for MetaRaftLog {
     type LogReader = MetaRaftLog;
 
-    async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
+    async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, io::Error> {
         let log = self.read().await;
         let state = log.log_state();
 
@@ -154,7 +153,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
     }
 
     #[fastrace::trace]
-    async fn save_vote(&mut self, vote: &Vote) -> Result<(), StorageError> {
+    async fn save_vote(&mut self, vote: &Vote) -> Result<(), io::Error> {
         let io = IODesc::save_vote(format!("RaftStore(id={})::save_vote({})", self.id, vote));
 
         let (tx, rx) = oneshot::channel();
@@ -162,20 +161,17 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
         {
             let mut log = self.write().await;
 
-            log.save_vote(Cw(*vote)).map_err(|e| io.err_submit(e))?;
-            log.flush(raft_log_v004::Callback::new_oneshot(tx, io.clone()))
-                .map_err(|e| io.err_submit_flush(e))?;
+            log.save_vote(Cw(*vote))?;
+            log.flush(raft_log_v004::Callback::new_oneshot(tx, io.clone()))?;
         }
 
-        rx.await
-            .map_err(|e| io.err_await_flush(e))?
-            .map_err(|e| io.err_recv_flush_cb(e))?;
+        rx.await.map_err(io::Error::other)??;
 
         info!("{}: done", io.ok_done());
         Ok(())
     }
 
-    async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), StorageError> {
+    async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), io::Error> {
         let io = IODesc::save_committed(format!(
             "RaftStore(id={})::save_committed({})",
             self.id,
@@ -189,7 +185,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
 
         {
             let mut log = self.write().await;
-            log.commit(Cw(committed)).map_err(|e| io.err_submit(e))?;
+            log.commit(Cw(committed))?;
         }
 
         info!(
@@ -199,7 +195,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
         Ok(())
     }
 
-    async fn read_committed(&mut self) -> Result<Option<LogId>, StorageError> {
+    async fn read_committed(&mut self) -> Result<Option<LogId>, io::Error> {
         let log = self.read().await;
         let committed = log.log_state().committed().map(Cw::to_inner);
 
@@ -207,7 +203,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
     }
 
     #[fastrace::trace]
-    async fn append<I>(&mut self, entries: I, callback: IOFlushed) -> Result<(), StorageError>
+    async fn append<I>(&mut self, entries: I, callback: IOFlushed) -> Result<(), io::Error>
     where
         I: IntoIterator<Item = Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
@@ -227,15 +223,14 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
 
         let mut log = self.write().await;
 
-        log.append(entries).map_err(|e| io.err_submit(e))?;
+        log.append(entries)?;
 
         debug!("{}", io.ok_submit());
 
         log.flush(raft_log_v004::Callback::new_io_flushed(
             callback,
             io.clone(),
-        ))
-        .map_err(|e| io.err_submit_flush(e))?;
+        ))?;
 
         info!("{}", io.ok_submit_flush());
 
@@ -243,27 +238,32 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
     }
 
     #[fastrace::trace]
-    async fn truncate(&mut self, log_id: LogId) -> Result<(), StorageError> {
+    async fn truncate_after(&mut self, last_log_id: Option<LogId>) -> Result<(), io::Error> {
+        // truncate_after(None) means delete all entries (keep nothing)
+        // truncate_after(Some(log_id)) means keep entries up to and including log_id
+        let truncate_at = last_log_id.next_index();
+
         let io = IODesc::truncate(format!(
-            "RaftStore(id={})::truncate(since={})",
-            self.id, log_id
+            "RaftStore(id={})::truncate_after({:?})",
+            self.id, last_log_id
         ));
 
         let mut log = self.write().await;
 
         {
             let curr_last = log.log_state().last().map(Cw::to_inner);
-            if log_id.index >= curr_last.next_index() {
+            if truncate_at >= curr_last.next_index() {
                 warn!(
-                    "{}: after curr_last({}), skip truncate",
+                    "{}: truncate_at({}) >= curr_last.next_index({}), skip truncate",
                     io,
-                    curr_last.display()
+                    truncate_at,
+                    curr_last.next_index()
                 );
                 return Ok(());
             }
         }
 
-        log.truncate(log_id.index).map_err(|e| io.err_submit(e))?;
+        log.truncate(truncate_at)?;
 
         // No need to flush a truncate operation.
         info!("{}; No need to flush", io.ok_submit());
@@ -271,7 +271,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
     }
 
     #[fastrace::trace]
-    async fn purge(&mut self, log_id: LogId) -> Result<(), StorageError> {
+    async fn purge(&mut self, log_id: LogId) -> Result<(), io::Error> {
         let io = IODesc::purge(format!("RaftStore(id={})::purge(upto={})", self.id, log_id));
 
         let mut log = self.write().await;
@@ -288,7 +288,7 @@ impl RaftLogStorage<TypeConfig> for MetaRaftLog {
             }
         }
 
-        log.purge(Cw(log_id)).map_err(|e| io.err_submit(e))?;
+        log.purge(Cw(log_id))?;
 
         info!("{}; No need to flush", io.ok_submit());
         Ok(())
