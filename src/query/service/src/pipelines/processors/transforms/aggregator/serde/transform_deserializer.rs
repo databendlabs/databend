@@ -299,25 +299,6 @@ impl AccumulatingTransform for TransformDeserializer {
 
                 return self.transform_exchange_meta(meta);
             }
-
-            if let Some(agg_meta) = AggregateMeta::downcast_ref_from(block_meta_ref) {
-                if matches!(agg_meta, AggregateMeta::NewSpilled(_)) {
-                    let block_meta = data_block.take_meta().unwrap();
-                    if let Some(AggregateMeta::NewSpilled(payloads)) =
-                        AggregateMeta::downcast_from(block_meta)
-                    {
-                        let mut blocks = Vec::with_capacity(payloads.len());
-                        for payload in payloads {
-                            let meta = AggregateMeta::create_new_bucket_spilled(payload);
-                            blocks.push(DataBlock::empty_with_meta(meta));
-                        }
-                        return Ok(blocks);
-                    }
-                }
-            }
-
-            let block_meta = data_block.take_meta().unwrap();
-            return Ok(vec![data_block.add_meta(Some(block_meta))?]);
         }
 
         Ok(vec![data_block])

@@ -24,7 +24,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
-use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
 use crate::clusters::ClusterHelper;
@@ -107,7 +106,6 @@ fn build_partition_bucket_experimental(
 
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
-    let finish_barrier = Arc::new(Barrier::new(final_parallelism));
     for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
@@ -119,7 +117,6 @@ fn build_partition_bucket_experimental(
             ctx.clone(),
             tx.clone(),
             rx.clone(),
-            finish_barrier.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }

@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -32,19 +31,13 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_pipeline_transforms::AccumulatingTransform;
-use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
-use log::info;
-use tokio::select;
-use tokio::sync::Barrier;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
@@ -59,16 +52,22 @@ enum Stage {
     Channel,
 }
 
+pub struct FinalAggregateTask {
+    spilled_depth: usize,
+    spilled_payload: Vec<NewSpilledPayload>,
+    tx: Sender<FinalAggregateTask>,
+}
+
 pub struct NewTransformFinalAggregate {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     input_data: Option<AggregateMeta>,
+    channel_data: Option<FinalAggregateTask>,
     should_finish: bool,
-    tx: Option<Sender<AggregateMeta>>,
-    rx: Receiver<AggregateMeta>,
+    tx: Option<Sender<FinalAggregateTask>>,
+    rx: Receiver<FinalAggregateTask>,
     stage: Stage,
     spilled_occurred: bool,
-    finish_barrier: Arc<Barrier>,
 
     hashtable: HashTable,
     params: Arc<AggregatorParams>,
@@ -77,6 +76,7 @@ pub struct NewTransformFinalAggregate {
     _id: usize,
     spiller: NewAggregateSpiller<LocalPartitionStream>,
     settings: MemorySettings,
+    max_aggregate_spill_level: usize,
 }
 
 impl NewTransformFinalAggregate {
@@ -86,9 +86,8 @@ impl NewTransformFinalAggregate {
         params: Arc<AggregatorParams>,
         _id: usize,
         ctx: Arc<QueryContext>,
-        tx: Sender<AggregateMeta>,
-        rx: Receiver<AggregateMeta>,
-        finish_barrier: Arc<Barrier>,
+        tx: Sender<FinalAggregateTask>,
+        rx: Receiver<FinalAggregateTask>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
         let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()?;
@@ -117,11 +116,11 @@ impl NewTransformFinalAggregate {
             input,
             output,
             input_data: None,
+            channel_data: None,
             should_finish: false,
             tx: Some(tx),
             rx,
             stage: Stage::Input,
-            finish_barrier,
             spilled_occurred: false,
             hashtable: HashTable::AggregateHashTable(hashtable),
             params,
@@ -130,6 +129,7 @@ impl NewTransformFinalAggregate {
             _id,
             spiller,
             settings: MemorySettings::from_aggregate_settings(&ctx)?,
+            max_aggregate_spill_level: max_aggregate_spill_level as usize,
         }))
     }
 }
@@ -183,7 +183,7 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn handle_meta(&mut self, meta: AggregateMeta) -> Result<()> {
+    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
         match meta {
             AggregateMeta::Serialized(payload) => {
                 self.handle_serialized(payload)?;
@@ -199,7 +199,7 @@ impl NewTransformFinalAggregate {
             }
             AggregateMeta::Partitioned { bucket: _, data } => {
                 for meta in data {
-                    self.handle_meta(meta)?;
+                    self.handle_meta(meta, need_check_spill)?;
                 }
             }
             _ => {
@@ -207,7 +207,7 @@ impl NewTransformFinalAggregate {
             }
         }
 
-        if self.settings.check_spill() {
+        if need_check_spill && self.settings.check_spill() {
             self.spill_out()?;
         }
 
@@ -215,6 +215,7 @@ impl NewTransformFinalAggregate {
     }
 
     fn spill_out(&mut self) -> Result<()> {
+        self.spilled_occurred = true;
         if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
             let group_types = v.payload.group_types.clone();
             let aggrs = v.payload.aggrs.clone();
@@ -242,14 +243,19 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<()> {
+    fn finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
         if self.spilled_occurred {
+            self.spill_finish(spilled_depth, tx)?;
+
             self.spilled_occurred = false;
-            self.spill_finish()?;
             return Ok(());
         }
 
         if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
+            let group_types = ht.payload.group_types.clone();
+            let aggrs = ht.payload.aggrs.clone();
+            let config = ht.config.clone();
+
             self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
             self.flush_state.clear();
@@ -272,43 +278,40 @@ impl NewTransformFinalAggregate {
                     self.output.push_data(Ok(concat));
                 }
             }
+            self.hashtable = HashTable::AggregateHashTable(AggregateHashTable::new(
+                group_types,
+                aggrs,
+                config,
+                Arc::new(Bump::new()),
+            ));
         }
 
         Ok(())
     }
 
-    fn spill_finish(&mut self) -> Result<()> {
-        if let Some(tx) = &self.tx {
-            let spilled_payload = self.spiller.spill_finish()?;
-            let mut chunks = (0..SPILL_BUCKET_NUM).map(|_| vec![]).collect::<Vec<_>>();
-            let spilled_payload = spilled_payload
-                .into_iter()
-                .map(AggregateMeta::NewBucketSpilled)
-                .collect::<Vec<_>>();
-            for meta in spilled_payload.into_iter() {
-                let AggregateMeta::NewBucketSpilled(ref payload) = meta else {
-                    unreachable!("unexpected aggregate meta, found type: {:?}", meta)
-                };
-                chunks[payload.bucket as usize % SPILL_BUCKET_NUM].push(meta);
-            }
+    fn spill_finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
+        self.spill_out()?;
 
-            for chunk in chunks.into_iter() {
-                let partitioned_meta = AggregateMeta::Partitioned {
-                    bucket: None,
-                    data: chunk,
-                };
-                tx.try_send(partitioned_meta).map_err(|e| {
-                    ErrorCode::Internal(format!(
-                        "Failed to send final aggregate meta to spiller: {}",
-                        e
-                    ))
-                })?;
-            }
-        } else {
-            unreachable!(
-                "[FINAL-AGG] Tx channel is missing when trying to send final aggregate meta."
-            );
+        let spilled_payload = self.spiller.spill_finish()?;
+        let mut chunks = (0..SPILL_BUCKET_NUM).map(|_| vec![]).collect::<Vec<_>>();
+        for payload in spilled_payload.into_iter() {
+            chunks[payload.bucket as usize].push(payload);
         }
+
+        for chunk in chunks.into_iter() {
+            let spilled = FinalAggregateTask {
+                spilled_depth: spilled_depth + 1,
+                spilled_payload: chunk,
+                tx: tx.clone(),
+            };
+            tx.try_send(spilled).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "Failed to send final aggregate meta to spiller: {}",
+                    e
+                ))
+            })?;
+        }
+
         Ok(())
     }
 
@@ -324,6 +327,10 @@ impl NewTransformFinalAggregate {
         }
 
         if self.input_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if self.channel_data.is_some() {
             return Ok(Event::Sync);
         }
 
@@ -370,19 +377,28 @@ impl Processor for NewTransformFinalAggregate {
 
     fn event(&mut self) -> Result<Event> {
         let event = self.debug_event()?;
-        dbg!(self._id, &event);
         Ok(event)
     }
 
     fn process(&mut self) -> Result<()> {
         let input_data = self.input_data.take();
         if let Some(meta) = input_data {
-            self.handle_meta(meta)?;
-            if matches!(self.stage, Stage::Channel) {
-                self.finish()?;
+            self.handle_meta(meta, true)?;
+            return Ok(());
+        } else if let Some(mut task) = self.channel_data.take() {
+            let meta = AggregateMeta::NewSpilled(mem::take(&mut task.spilled_payload));
+            if task.spilled_depth >= self.max_aggregate_spill_level {
+                self.handle_meta(meta, false)?;
+            } else {
+                self.handle_meta(meta, true)?;
             }
+            self.finish(task.spilled_depth, task.tx)?;
+
+            return Ok(());
         } else {
-            self.finish()?;
+            let sender = mem::take(&mut self.tx)
+                .expect("logic error: called finished for input data more than once");
+            self.finish(0, sender)?;
         }
 
         Ok(())
@@ -390,18 +406,11 @@ impl Processor for NewTransformFinalAggregate {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        select! {
-            meta = self.rx.recv() => {
-                match meta {
-                    Ok(meta) => {
-                        self.input_data = Some(meta);
-                    }
-                    Err(_) => {
-                        self.should_finish = true;
-                    }
-                }
+        match self.rx.recv().await {
+            Ok(meta) => {
+                self.channel_data = Some(meta);
             }
-            _ = self.finish_barrier.wait() => {
+            Err(_) => {
                 self.should_finish = true;
             }
         }
