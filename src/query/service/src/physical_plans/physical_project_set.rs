@@ -50,7 +50,6 @@ pub struct ProjectSet {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ProjectSet {
     fn as_any(&self) -> &dyn Any {
         self

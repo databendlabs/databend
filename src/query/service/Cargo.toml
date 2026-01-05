@@ -200,6 +200,7 @@ wiremock = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }
+walkdir = { workspace = true }
 
 [lints]
 workspace = true

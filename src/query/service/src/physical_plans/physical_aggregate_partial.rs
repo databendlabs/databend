@@ -67,7 +67,6 @@ pub struct AggregatePartial {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for AggregatePartial {
     fn as_any(&self) -> &dyn Any {
         self

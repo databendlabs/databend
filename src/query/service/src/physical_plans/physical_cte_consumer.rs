@@ -42,7 +42,6 @@ pub struct MaterializeCTERef {
     pub meta: PhysicalPlanMeta,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for MaterializeCTERef {
     fn as_any(&self) -> &dyn Any {
         self

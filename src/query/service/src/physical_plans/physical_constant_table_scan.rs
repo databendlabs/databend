@@ -38,7 +38,6 @@ pub struct ConstantTableScan {
     pub output_schema: DataSchemaRef,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ConstantTableScan {
     fn as_any(&self) -> &dyn Any {
         self
