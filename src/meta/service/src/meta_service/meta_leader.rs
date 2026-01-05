@@ -21,6 +21,7 @@ use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
@@ -178,7 +179,7 @@ impl<'a> MetaLeader<'a> {
         let role = req.role();
         let node_id = req.node_id;
         let endpoint = req.endpoint;
-        let metrics = self.raft.metrics().borrow().clone();
+        let metrics = self.raft.metrics().borrow_watched().clone();
         let membership = metrics.membership_config.membership();
 
         let voters = membership.voter_ids().collect::<BTreeSet<_>>();
