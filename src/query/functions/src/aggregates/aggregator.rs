@@ -74,7 +74,6 @@ impl Aggregators {
         factory.register("sum_zero", AggregateSumZeroFunction::desc());
         factory.register("avg", aggregate_avg_function_desc());
         factory.register("uniq", aggregate_uniq_desc());
-        factory.register("count_distinct", aggregate_count_distinct_desc());
 
         factory.register("min", aggregate_min_function_desc());
         factory.register("max", aggregate_max_function_desc());
