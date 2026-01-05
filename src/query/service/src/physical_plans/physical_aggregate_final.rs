@@ -285,7 +285,8 @@ impl PhysicalPlanBuilder {
                     group_by_shuffle_mode = "before_merge".to_string();
                 }
 
-                let shuffle_mode = determine_shuffle_mode(self.ctx.clone())?;
+                let is_cluster_aggregate = Exchange::check_physical_plan(&input);
+                let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // ignore `_grouping_id`.
@@ -519,11 +520,19 @@ impl AggregateShuffleMode {
 // TODO: ROW_SHUFFLE_ENABLE_THRESHOLD need to find
 const ROW_SHUFFLE_ENABLE_THRESHOLD: u64 = 256;
 
-fn determine_shuffle_mode(ctx: Arc<dyn TableContext>) -> Result<AggregateShuffleMode> {
+fn determine_shuffle_mode(
+    ctx: Arc<dyn TableContext>,
+    is_cluster_aggregate: bool,
+) -> Result<AggregateShuffleMode> {
     let settings = ctx.get_settings();
     let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
     let thread_nums = settings.get_max_threads()?;
-    let parallelism = (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two();
+
+    let parallelism = if is_cluster_aggregate {
+        (thread_nums as u64 * thread_nums).next_power_of_two()
+    } else {
+        thread_nums.next_power_of_two()
+    };
 
     let use_bucket = match force_shuffle_mode.as_str() {
         "row" => false,
