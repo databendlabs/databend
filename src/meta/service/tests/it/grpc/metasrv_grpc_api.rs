@@ -15,6 +15,8 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
+
 use databend_common_base::base::Stoppable;
 use databend_common_base::base::tokio;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -290,7 +292,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let old_term = meta_handle
             .handle_raft_metrics()
             .await?
-            .borrow()
+            .borrow_watched()
             .current_term;
 
         let mut srv = tc0.grpc_srv.take().unwrap();

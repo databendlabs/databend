@@ -45,12 +45,12 @@ use databend_common_meta_types::raft_types::Fatal;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::Wait;
+use databend_common_meta_types::raft_types::WatchReceiver;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures::stream::BoxStream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::sync::watch;
 use tonic::Status;
 
 use crate::analysis::count_prefix::count_prefix;
@@ -332,7 +332,7 @@ impl MetaHandle {
 
     pub async fn handle_raft_metrics(
         &self,
-    ) -> Result<watch::Receiver<RaftMetrics>, MetaNodeStopped> {
+    ) -> Result<WatchReceiver<RaftMetrics>, MetaNodeStopped> {
         self.request(move |meta_node| {
             let fu = async move { meta_node.raft.metrics() };
 
