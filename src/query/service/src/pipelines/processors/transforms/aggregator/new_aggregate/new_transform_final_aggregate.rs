@@ -317,6 +317,7 @@ impl NewTransformFinalAggregate {
 
     fn debug_event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
+            let _ = self.tx.take();
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -377,6 +378,8 @@ impl Processor for NewTransformFinalAggregate {
 
     fn event(&mut self) -> Result<Event> {
         let event = self.debug_event()?;
+        let ff = format!("{} {:?}", self._id, event);
+        dbg!(ff);
         Ok(event)
     }
 
@@ -396,6 +399,7 @@ impl Processor for NewTransformFinalAggregate {
 
             return Ok(());
         } else {
+            dbg!(self._id, "take sender");
             let sender = mem::take(&mut self.tx)
                 .expect("logic error: called finished for input data more than once");
             self.finish(0, sender)?;
