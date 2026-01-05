@@ -195,11 +195,16 @@ where
             }
 
             // Transaction failed. Check if it's due to references or concurrent modification.
-            let reference_count = self.list_pb_vec(&refs_dir).await?.len();
-            if reference_count > 0 {
+            let refs: Vec<String> = self
+                .list_pb(&refs_dir)
+                .await?
+                .map_ok(|entry| entry.key.name().object.to_string())
+                .try_collect()
+                .await?;
+            if !refs.is_empty() {
                 return Ok(Err(TagError::tag_has_references(
                     name_ident.tag_name().to_string(),
-                    reference_count,
+                    refs,
                 )));
             }
             // No references, must be concurrent modification. Retry.
@@ -294,11 +299,10 @@ where
         }
 
         // Build the object existence check key and name for error messages.
-        // This key is used in the transaction condition to ensure the object exists.
         let (object_key, object_name) = get_object_key_and_name(&req.tenant, &req.taggable_object);
         let object_type = req.taggable_object.type_str();
 
-        // Batch fetch all tag metadata to validate allowed_values
+        // Build tag meta keys for batch fetching
         let tag_meta_keys: Vec<TagIdIdent> = req
             .tags
             .iter()
@@ -310,27 +314,16 @@ where
         loop {
             trials.next().unwrap()?.await;
 
-            // Check if the object exists before proceeding.
-            // We fetch the object's seq to verify existence and include it in the transaction condition.
-            let object_seqv = self.get_kv(&object_key).await?;
-            if object_seqv.seq() == 0 {
-                return Ok(Err(TagMetaError::object_not_found(
-                    object_type,
-                    &object_name,
-                )));
-            }
-
-            // Each retry must refetch tag meta because the txn conditions compare the latest seq.
-            // If another session updated tag meta (e.g. allowed_values), our previous snapshot is stale.
+            // Fetch tag metadata to validate allowed_values
             let tag_metas = self
                 .get_pb_values_vec::<TagIdIdent, _>(tag_meta_keys.clone())
                 .await?;
 
             // +1 for the object existence condition
-            let mut txn_conditions = Vec::with_capacity(req.tags.len() + 1);
+            let mut txn_conditions = Vec::with_capacity(1 + req.tags.len());
             let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
 
-            // Add condition: object must exist (seq >= 1).
+            // Condition: object must exist (seq >= 1).
             // This ensures that if the object is dropped concurrently, the transaction fails.
             txn_conditions.push(TxnCondition::match_seq(
                 object_key.clone(),
@@ -344,13 +337,11 @@ where
                 .zip(tag_metas.into_iter())
                 .zip(tag_meta_keys.iter())
             {
-                // Verify tag exists
+                // Verify tag exists and validate allowed_values
                 let Some(meta_seqv) = meta_opt else {
                     return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
                 };
                 if let Some(allowed_values) = meta_seqv.data.allowed_values.as_ref() {
-                    // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
-                    // for O(1) membership checks when validating bindings.
                     let allowed_lookup: HashSet<&str> =
                         allowed_values.iter().map(|value| value.as_str()).collect();
                     if !allowed_lookup.contains(tag_value.as_str()) {
@@ -361,8 +352,8 @@ where
                         )));
                     }
                 }
-                // Add condition to ensure tag meta hasn't been modified
-                // object set value must be occurs in allowed_values if it's not none.
+
+                // Condition: tag meta hasn't been modified (allowed_values unchanged)
                 txn_conditions.push(txn_cond_eq_seq(tag_meta_key, meta_seqv.seq));
 
                 let obj_ref_key = ObjectTagIdRefIdent::new_generic(
@@ -387,13 +378,20 @@ where
             let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;
             if succ {
                 return Ok(Ok(()));
-            } else {
-                // Transaction failed, could be:
-                // 1. Object was dropped concurrently (seq became 0)
-                // 2. Tag meta was modified concurrently
-                // Re-loop to check and retry.
-                debug!(req :? =(&req), tag_ids :? = Vec::from_iter(req.tags.iter().map(|(tag_id, _)| *tag_id)); "set_object_tags retry due to concurrent modification");
             }
+
+            // Transaction failed. Check why and decide whether to retry or return error.
+            // 1. Object was dropped → return ObjectNotFound
+            // 2. Tag was modified/deleted → retry will re-fetch and re-validate
+            let object_seqv = self.get_kv(&object_key).await?;
+            if object_seqv.seq() == 0 {
+                return Ok(Err(TagMetaError::object_not_found(
+                    object_type,
+                    &object_name,
+                )));
+            }
+
+            debug!(req :? =(&req); "set_object_tags retry due to concurrent modification");
         }
     }
 

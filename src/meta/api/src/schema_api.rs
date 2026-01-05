@@ -340,10 +340,16 @@ pub async fn construct_drop_table_txn_operations(
     }
 
     // Clean up tag references for this table.
-    // Since UNDROP TABLE will not restore tags, we remove the bindings atomically
-    // with the drop operation. Using txn_op_del is safe here because:
-    // 1. Deleting non-existent keys is idempotent
-    // 2. The table_meta.seq condition protects against concurrent modifications
+    // Since UNDROP TABLE will not restore tags, we remove the bindings here.
+    //
+    // Note: There is a potential race condition where a concurrent `SET TAG` may
+    // succeed between `list_pb` and the transaction commit. In that case, the newly
+    // added tag reference will not be deleted here and become orphaned. This is
+    // acceptable because:
+    // 1. The race window is small and unlikely in practice
+    // 2. VACUUM will clean up any orphaned tag references as a fallback
+    //
+    // Using txn_op_del is safe here because deleting non-existent keys is idempotent.
     let taggable_object = TaggableObject::Table { table_id };
     let obj_tag_prefix =
         ObjectTagIdRefIdent::new_generic(tenant.clone(), ObjectTagIdRef::new(taggable_object.clone(), 0));
