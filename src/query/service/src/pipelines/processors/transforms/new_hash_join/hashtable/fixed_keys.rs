@@ -33,14 +33,12 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::E
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 
-impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
-    FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>
-{
+impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTable<T, UNIQUE> {
     pub fn new(
-        hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
+        hash_table: HashJoinHashMap<T, UNIQUE>,
         hash_method: HashMethodFixedKeys<T>,
     ) -> Self {
-        FixedKeyHashJoinHashTable::<T, SKIP_DUPLICATES> {
+        FixedKeyHashJoinHashTable::<T, UNIQUE> {
             hash_table,
             hash_method,
         }

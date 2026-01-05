@@ -33,11 +33,11 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::BinaryKeyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::EarlyFilteringProbeStream;
 
-impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
+impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
+        hash_table: BinaryHashJoinHashMap<UNIQUE>,
         hash_method: HashMethodSingleBinary,
-    ) -> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
+    ) -> SingleBinaryHashJoinHashTable<UNIQUE> {
         SingleBinaryHashJoinHashTable {
             hash_table,
             hash_method,
