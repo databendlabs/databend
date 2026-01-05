@@ -34,11 +34,11 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::E
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 
-impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
+impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
+        hash_table: BinaryHashJoinHashMap<UNIQUE>,
         hash_method: HashMethodSerializer,
-    ) -> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
+    ) -> SerializerHashJoinHashTable<UNIQUE> {
         SerializerHashJoinHashTable {
             hash_table,
             hash_method,
@@ -134,13 +134,13 @@ impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<true>::create(
+                true => Ok(EarlyFilteringProbeStream::<true, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &[],
                 )),
-                false => Ok(BinaryKeyProbeStream::<true>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<true, UNIQUE>::create(hashes, keys)),
             },
         }
     }
@@ -182,19 +182,19 @@ impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<false>::create(
+                true => Ok(EarlyFilteringProbeStream::<false, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(BinaryKeyProbeStream::<false>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<false, UNIQUE>::create(hashes, keys)),
             },
         }
     }
 }
 
-pub struct BinaryKeyProbeStream<const MATCHED: bool> {
+pub struct BinaryKeyProbeStream<const MATCHED: bool, const MATCH_FIRST: bool> {
     key_idx: usize,
     pointers: Vec<u64>,
     keys: Box<dyn KeyAccessor<Key = [u8]>>,
@@ -202,12 +202,12 @@ pub struct BinaryKeyProbeStream<const MATCHED: bool> {
     matched_num_rows: usize,
 }
 
-impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
+impl<const MATCHED: bool, const MATCH_FIRST: bool> BinaryKeyProbeStream<MATCHED, MATCH_FIRST> {
     pub fn create(
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = [u8]>>,
     ) -> Box<dyn ProbeStream> {
-        Box::new(BinaryKeyProbeStream::<MATCHED> {
+        Box::new(BinaryKeyProbeStream::<MATCHED, MATCH_FIRST> {
             keys,
             pointers,
             key_idx: 0,
@@ -217,7 +217,9 @@ impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
     }
 }
 
-impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
+impl<const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
+    for BinaryKeyProbeStream<MATCHED, MATCH_FIRST>
+{
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.keys.len() {
             assume(res.unmatched.len() < res.unmatched.capacity());
@@ -266,7 +268,10 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                             self.matched_num_rows += 1;
 
                             if res.matched_probe.len() == max_rows {
-                                self.probe_entry_ptr = raw_entry.next;
+                                self.probe_entry_ptr = match MATCH_FIRST {
+                                    true => 0,
+                                    false => raw_entry.next,
+                                };
 
                                 if self.probe_entry_ptr == 0 {
                                     self.key_idx += 1;
@@ -274,6 +279,11 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                                 }
 
                                 return Ok(());
+                            }
+
+                            if MATCH_FIRST {
+                                self.probe_entry_ptr = 0;
+                                break;
                             }
                         }
                     }
@@ -294,7 +304,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
     }
 }
 
-pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
+pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool, const MATCH_FIRST: bool> {
     idx: usize,
     pointers: Vec<u64>,
     keys: Box<dyn KeyAccessor<Key = [u8]>>,
@@ -305,14 +315,16 @@ pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
     returned_unmatched: bool,
 }
 
-impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
+impl<'a, const MATCHED: bool, const MATCH_FIRST: bool>
+    EarlyFilteringProbeStream<'a, MATCHED, MATCH_FIRST>
+{
     pub fn create(
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = [u8]>>,
         selections: &'a [u32],
         unmatched_selection: &'a [u32],
     ) -> Box<dyn ProbeStream + 'a> {
-        Box::new(EarlyFilteringProbeStream::<'a, MATCHED> {
+        Box::new(EarlyFilteringProbeStream::<'a, MATCHED, MATCH_FIRST> {
             keys,
             pointers,
             selections,
@@ -325,7 +337,9 @@ impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
     }
 }
 
-impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATCHED> {
+impl<'a, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
+    for EarlyFilteringProbeStream<'a, MATCHED, MATCH_FIRST>
+{
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if !MATCHED && !self.returned_unmatched {
             self.returned_unmatched = true;
@@ -382,7 +396,10 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                             self.matched_num_rows += 1;
 
                             if res.matched_probe.len() == max_rows {
-                                self.probe_entry_ptr = raw_entry.next;
+                                self.probe_entry_ptr = match MATCH_FIRST {
+                                    true => 0,
+                                    false => raw_entry.next,
+                                };
 
                                 if self.probe_entry_ptr == 0 {
                                     self.idx += 1;
@@ -390,6 +407,11 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                                 }
 
                                 return Ok(());
+                            }
+
+                            if MATCH_FIRST {
+                                self.probe_entry_ptr = 0;
+                                break;
                             }
                         }
                     }
