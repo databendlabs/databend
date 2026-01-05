@@ -182,14 +182,14 @@ impl BasicHashJoin {
         if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             return;
         }
-        let skip_duplicates = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
+        let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
         if matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             let build_num_rows = *self.state.build_rows.deref();
-            *self.state.hash_table.as_mut() = match (self.method.clone(), skip_duplicates) {
+            *self.state.hash_table.as_mut() = match (self.method.clone(), unique_entry) {
                 (HashMethodKind::Serializer(_), false) => {
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
                         BinaryHashJoinHashMap::with_build_row_num(build_num_rows),

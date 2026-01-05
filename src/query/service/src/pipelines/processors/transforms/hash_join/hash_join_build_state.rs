@@ -256,7 +256,7 @@ impl HashJoinBuildState {
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
             }
-            let skip_duplicates = matches!(
+            let unique_entry = matches!(
                 self.hash_join_state.hash_join_desc.join_type,
                 JoinType::InnerAny | JoinType::LeftAny
             );
@@ -265,7 +265,7 @@ impl HashJoinBuildState {
             self.generate_finalize_task()?;
 
             // Create a fixed size hash table.
-            let (hash_join_hash_table, entry_size) = match (self.method.clone(), skip_duplicates) {
+            let (hash_join_hash_table, entry_size) = match (self.method.clone(), unique_entry) {
                 (HashMethodKind::Serializer(_), false) => (
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
                         BinaryHashJoinHashMap::with_build_row_num(build_num_rows),

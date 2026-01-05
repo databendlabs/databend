@@ -100,7 +100,7 @@ pub fn hash_bits() -> u32 {
     }
 }
 
-pub struct HashJoinHashTable<K: Keyable, const SKIP_DUPLICATES: bool = false> {
+pub struct HashJoinHashTable<K: Keyable, const UNIQUE: bool = false> {
     pub(crate) pointers: Box<[u64]>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,

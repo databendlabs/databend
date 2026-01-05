@@ -113,8 +113,8 @@ pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K, const UNIQUE: bool = false> =
     hashjoin_hashtable::HashJoinHashTable<K, UNIQUE>;
-pub type BinaryHashJoinHashMap<const SKIP_DUPLICATES: bool = false> =
-    hashjoin_string_hashtable::HashJoinStringHashTable<SKIP_DUPLICATES>;
+pub type BinaryHashJoinHashMap<const UNIQUE: bool = false> =
+    hashjoin_string_hashtable::HashJoinStringHashTable<UNIQUE>;
 pub use traits::HashJoinHashtableLike;
 pub use utils::Interval;
 pub use utils::MergeIntoBlockInfoIndex;
