@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +47,16 @@ impl TableRefHandler for RealTableRefHandler {
             .get_table(&tenant, &plan.database, &plan.table)
             .await?;
         let table_info = table.get_table_info();
+        let seq = table_info.ident.seq;
+        let table_id = table_info.ident.table_id;
+
+        let refs = &table_info.meta.refs;
+        if refs.contains_key(&plan.ref_name) {
+            return Err(ErrorCode::ReferenceAlreadyExists(format!(
+                "The table '{}.{}' already has a reference named '{}'",
+                plan.database, plan.table, plan.ref_name
+            )));
+        }
         if table.is_temp() {
             return Err(ErrorCode::IllegalReference(format!(
                 "The table '{}.{}' is temporary, can't create {}",
@@ -63,31 +72,15 @@ impl TableRefHandler for RealTableRefHandler {
                 plan.ref_type
             )));
         }
-        let refs = &table_info.meta.refs;
-        if refs.contains_key(&plan.ref_name) {
-            return Err(ErrorCode::ReferenceAlreadyExists(format!(
-                "The table '{}.{}' already has a reference named '{}'",
-                plan.database, plan.table, plan.ref_name
-            )));
-        }
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        if fuse_table.is_transient() {
-            return Err(ErrorCode::IllegalReference(format!(
-                "The table '{}.{}' is transient, can't create {}",
-                plan.database, plan.table, plan.ref_type
-            )));
-        }
-        let seq = table_info.ident.seq;
-        let table_id = table_info.ident.table_id;
-        let base_loc = fuse_table.snapshot_loc();
         let snapshot_loc = match &plan.navigation {
             Some(navigation) => {
                 fuse_table
                     .navigate_to_location(ctx.clone(), navigation)
                     .await?
             }
-            None => base_loc,
+            None => fuse_table.snapshot_loc(),
         };
 
         let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
@@ -122,21 +115,6 @@ impl TableRefHandler for RealTableRefHandler {
             (new_snapshot, None)
         };
 
-        // check least visible time
-        let mut lvt_check = None;
-        if plan
-            .navigation
-            .as_ref()
-            .is_some_and(|v| !matches!(v, NavigationPoint::TableRef { .. }))
-        {
-            if let Some(time) = prev_ts {
-                lvt_check = Some(TableLvtCheck {
-                    tenant: tenant.clone(),
-                    time,
-                });
-            }
-        }
-
         // write down new snapshot
         let new_snapshot_location = fuse_table
             .meta_location_generator()
@@ -161,14 +139,15 @@ impl TableRefHandler for RealTableRefHandler {
                 typ: plan.ref_type.clone(),
                 loc: new_snapshot_location,
             });
+
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
-            lvt_check,
+            // check least visible time
+            lvt_check: prev_ts.map(|time| TableLvtCheck { tenant, time }),
         };
-
         // If update fails, cleanup the ref directory
         if let Err(e) = catalog.update_single_table_meta(req, table_info).await {
             clearup_ref_dir(fuse_table, seq).await;
@@ -184,12 +163,11 @@ impl TableRefHandler for RealTableRefHandler {
         ctx: Arc<dyn TableContext>,
         plan: &DropTableRefPlan,
     ) -> Result<()> {
-        let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-
         let table = catalog
-            .get_table(&tenant, &plan.database, &plan.table)
+            .get_table(&ctx.get_tenant(), &plan.database, &plan.table)
             .await?;
+
         let table_info = table.get_table_info();
         let refs = &table_info.meta.refs;
         let Some(table_ref) = refs.get(&plan.ref_name) else {
