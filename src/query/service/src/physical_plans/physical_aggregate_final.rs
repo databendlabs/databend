@@ -529,7 +529,7 @@ fn determine_shuffle_mode(
     let thread_nums = settings.get_max_threads()?;
 
     let parallelism = if is_cluster_aggregate {
-        (thread_nums as u64 * thread_nums).next_power_of_two()
+        (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two()
     } else {
         thread_nums.next_power_of_two()
     };
