@@ -31,3 +31,6 @@ out          : and_filters<Boolean, Boolean, Boolean>(eq<UInt64, UInt64>(a (#0),
 in           : not(not(b))
 out          : b (#1)
 
+in           : is_not_null(c < 3 and c < 4)
+out          : is_not_null<T0=Boolean><T0 NULL>(and<Boolean NULL, Boolean NULL>(lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(3_u8 AS UInt64 NULL)), lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(4_u8 AS UInt64 NULL))))
+

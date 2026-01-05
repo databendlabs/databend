@@ -29,7 +29,6 @@ use crate::plans::FunctionCall;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-use crate::plans::walk_expr_mut;
 
 pub struct RuleNormalizeScalarFilter {
     matchers: Vec<Matcher>,
@@ -148,6 +147,7 @@ impl RewritePredicates {
     ) -> Result<Option<ScalarExpr>> {
         let func_arguments = std::mem::take(arguments);
         for mut arg in func_arguments {
+            self.visit(&mut arg)?;
             let inner_arguments = if let ScalarExpr::FunctionCall(call) = &mut arg
                 && &call.func_name == "and_filters"
             {
@@ -197,6 +197,7 @@ impl RewritePredicates {
     fn rewrite_or(&mut self, arguments: &mut Vec<ScalarExpr>) -> Result<Option<ScalarExpr>> {
         let func_arguments = std::mem::take(arguments);
         for mut arg in func_arguments {
+            self.visit(&mut arg)?;
             let inner_arguments = if let ScalarExpr::FunctionCall(call) = &mut arg
                 && &call.func_name == "or_filters"
             {
@@ -224,8 +225,6 @@ impl RewritePredicates {
 
 impl<'a> VisitorMut<'a> for RewritePredicates {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        walk_expr_mut(self, expr)?;
-
         let new_expr = match expr {
             ScalarExpr::FunctionCall(FunctionCall {
                 span,
@@ -358,6 +357,7 @@ mod tests {
         let columns = &[
             ("a", UInt64Type::data_type()),
             ("b", BooleanType::data_type()),
+            ("c", UInt64Type::data_type().wrap_nullable()),
         ];
 
         run_test(file, "a = 5", columns)?;
@@ -380,6 +380,8 @@ mod tests {
         )?;
 
         run_test(file, "not(not(b))", columns)?;
+
+        run_test(file, "is_not_null(c < 3 and c < 4)", columns)?;
 
         Ok(())
     }
