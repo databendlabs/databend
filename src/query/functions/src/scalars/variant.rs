@@ -3479,12 +3479,14 @@ fn cast_to_timestamp_tz(val: &[u8], tz: &TimeZone) -> Result<Option<timestamp_tz
             Ok(Some(timestamp_tz::new(ts.value, offset_seconds)))
         }
         JsonbValue::Timestamp(ts) => {
-            let timestamp = Timestamp::from_microsecond(ts.value).map_err(|err| {
+            let mut value = ts.value;
+            clamp_timestamp(&mut value);
+            let timestamp = Timestamp::from_microsecond(value).map_err(|err| {
                 jsonb::Error::Message(format!("unable to cast to type `TIMESTAMP_TZ` {}.", err))
             })?;
             let offset = tz.to_offset(timestamp);
             Ok(Some(timestamp_tz::new(
-                ts.value - (offset.seconds() as i64 * MICROS_PER_SEC),
+                value - (offset.seconds() as i64 * MICROS_PER_SEC),
                 offset.seconds(),
             )))
         }
