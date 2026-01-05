@@ -144,17 +144,8 @@ pub(crate) async fn drop_database_meta(
         txn.if_then.push(txn_op_del(&ownership_key));
     }
 
-    // Clean up tag references for this database.
-    // Since UNDROP DATABASE will not restore tags, we remove the bindings here.
-    //
-    // Note: There is a potential race condition where a concurrent `SET TAG` may
-    // succeed between `list_pb` and the transaction commit. In that case, the newly
-    // added tag reference will not be deleted here and become orphaned. This is
-    // acceptable because:
-    // 1. The race window is small and unlikely in practice
-    // 2. VACUUM will clean up any orphaned tag references as a fallback
-    //
-    // Using txn_op_del is safe here because deleting non-existent keys is idempotent.
+    // Clean up tag references (UNDROP won't restore them; small race window is acceptable,
+    // VACUUM handles orphans). See `set_object_tags` in tag_api.rs for concurrency design.
     let db_id = *seq_db_id.data;
     let taggable_object = TaggableObject::Database { db_id };
     let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(

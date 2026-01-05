@@ -71,28 +71,18 @@ use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_op_del;
 use crate::txn_op_builder_util::txn_op_put_pb;
 
-/// Returns the meta-service key for a taggable object and its display name.
+/// Returns the meta-service key for a taggable object.
 ///
 /// The key is used to check if the object exists (seq >= 1) before setting tags.
 /// This prevents orphaned tag references when the object is dropped concurrently.
-fn get_object_key_and_name(tenant: &Tenant, object: &TaggableObject) -> (String, String) {
+fn get_object_key(tenant: &Tenant, object: &TaggableObject) -> String {
     match object {
         TaggableObject::Connection { name } => {
-            let key = ConnectionIdent::new(tenant.clone(), name);
-            (key.to_string_key(), name.clone())
+            ConnectionIdent::new(tenant.clone(), name).to_string_key()
         }
-        TaggableObject::Stage { name } => {
-            let key = StageIdent::new(tenant.clone(), name);
-            (key.to_string_key(), name.clone())
-        }
-        TaggableObject::Database { db_id } => {
-            let key = DatabaseId::new(*db_id);
-            (key.to_string_key(), db_id.to_string())
-        }
-        TaggableObject::Table { table_id } => {
-            let key = TableId::new(*table_id);
-            (key.to_string_key(), table_id.to_string())
-        }
+        TaggableObject::Stage { name } => StageIdent::new(tenant.clone(), name).to_string_key(),
+        TaggableObject::Database { db_id } => DatabaseId::new(*db_id).to_string_key(),
+        TaggableObject::Table { table_id } => TableId::new(*table_id).to_string_key(),
     }
 }
 
@@ -298,9 +288,8 @@ where
             return Ok(Ok(()));
         }
 
-        // Build the object existence check key and name for error messages.
-        let (object_key, object_name) = get_object_key_and_name(&req.tenant, &req.taggable_object);
-        let object_type = req.taggable_object.type_str();
+        // Build the object existence check key.
+        let object_key = get_object_key(&req.tenant, &req.taggable_object);
 
         // Build tag meta keys for batch fetching
         let tag_meta_keys: Vec<TagIdIdent> = req
@@ -386,8 +375,7 @@ where
             let object_seqv = self.get_kv(&object_key).await?;
             if object_seqv.seq() == 0 {
                 return Ok(Err(TagMetaError::object_not_found(
-                    object_type,
-                    &object_name,
+                    req.taggable_object.clone(),
                 )));
             }
 

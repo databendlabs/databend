@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 
 use crate::schema::tag::TagId;
+use crate::schema::tag::TaggableObject;
 use crate::schema::tag::id_ident::Resource as TagIdResource;
 use crate::tenant::Tenant;
 use crate::tenant_key::errors::UnknownError;
@@ -67,11 +68,8 @@ pub enum TagMetaError {
         allowed_values_display: String,
     },
 
-    #[error("{object_type} '{object_name}' does not exist.")]
-    ObjectNotFound {
-        object_type: String,
-        object_name: String,
-    },
+    #[error("{} does not exist.", .0)]
+    ObjectNotFound(TaggableObject),
 }
 
 impl TagMetaError {
@@ -105,11 +103,8 @@ impl TagMetaError {
         }
     }
 
-    pub fn object_not_found(object_type: impl Into<String>, object_name: impl Into<String>) -> Self {
-        Self::ObjectNotFound {
-            object_type: object_type.into(),
-            object_name: object_name.into(),
-        }
+    pub fn object_not_found(object: TaggableObject) -> Self {
+        Self::ObjectNotFound(object)
     }
 }
 
@@ -129,12 +124,11 @@ impl From<TagMetaError> for ErrorCode {
         match err {
             TagMetaError::UnknownTagId(err) => ErrorCode::from(err),
             TagMetaError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
-            TagMetaError::ObjectNotFound { object_type, .. } => match object_type.as_str() {
-                "connection" => ErrorCode::UnknownConnection(s),
-                "stage" => ErrorCode::UnknownStage(s),
-                "database" => ErrorCode::UnknownDatabase(s),
-                "table" => ErrorCode::UnknownTable(s),
-                _ => ErrorCode::Internal(s),
+            TagMetaError::ObjectNotFound(ref obj) => match obj {
+                TaggableObject::Connection { .. } => ErrorCode::UnknownConnection(s),
+                TaggableObject::Stage { .. } => ErrorCode::UnknownStage(s),
+                TaggableObject::Database { .. } => ErrorCode::UnknownDatabase(s),
+                TaggableObject::Table { .. } => ErrorCode::UnknownTable(s),
             },
         }
     }

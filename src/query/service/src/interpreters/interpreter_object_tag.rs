@@ -255,3 +255,55 @@ async fn unset_tags(
     meta_client.unset_object_tags(req).await?;
     Ok(())
 }
+
+/// Clean up all tag references for a dropped object.
+///
+/// Since Stage/Connection do not support UNDROP, we must remove tag bindings
+/// to prevent orphaned references.
+///
+/// # Concurrency Safety
+///
+/// The order "drop object first, then cleanup tags" is critical for concurrency safety.
+/// Together with the object existence check in `set_object_tags`, this prevents orphans:
+///
+/// ```text
+/// Timeline: ──────────────────────────────────────────────>
+/// SET TAG:  [read tag_meta]              [txn commit: write tag ref]
+/// DROP:              [delete object]  [get_tags] [unset tags]
+/// ```
+///
+/// - If SET TAG commits after DROP deletes the object, the txn fails
+///   (object existence check: seq >= 1 not met).
+/// - If SET TAG commits before DROP, DROP's get_tags will see it and clean it up.
+///
+/// Both mechanisms are required:
+/// - `set_object_tags` check → prevents writing tag refs after object is dropped
+/// - This cleanup → ensures existing tag refs are removed after drop
+///
+/// # Other Design Notes
+///
+/// - This runs regardless of whether the object existed, so repeated
+///   `DROP ... IF EXISTS` can clean up any leftover tag references
+///   from a previous failed attempt.
+/// - Tag associations for Stage/Connection are indexed by name (not a unique ID), so:
+///   - Only this object's tags are affected; other objects are safe.
+///   - If a new object with the same name is created before cleanup,
+///     it may "inherit" orphaned tag associations. Users can fix this
+///     via `ALTER ... UNSET TAG` or `DROP ... IF EXISTS`.
+pub async fn cleanup_object_tags(
+    tenant: &databend_common_meta_app::tenant::Tenant,
+    object: TaggableObject,
+) -> Result<()> {
+    let meta_api = UserApiProvider::instance().get_meta_store_client();
+    let tag_values = meta_api.get_object_tags(tenant, &object).await?;
+    if !tag_values.is_empty() {
+        let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
+        let req = UnsetObjectTagsReq {
+            tenant: tenant.clone(),
+            taggable_object: object,
+            tags: tag_ids,
+        };
+        meta_api.unset_object_tags(req).await?;
+    }
+    Ok(())
+}

@@ -275,6 +275,7 @@ pub use interpreter_tag_create::CreateTagInterpreter;
 pub use interpreter_tag_drop::DropTagInterpreter;
 pub use interpreter_object_tag::SetObjectTagsInterpreter;
 pub use interpreter_object_tag::UnsetObjectTagsInterpreter;
+pub use interpreter_object_tag::cleanup_object_tags;
 pub use interpreter_unset::UnSetInterpreter;
 pub use interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
