@@ -1279,6 +1279,11 @@ SELECT to_decimal(123.4567, 10, 4);
 123.4567
 
 query I
+SELECT to_decimal(-123.4567, 10, 4);
+----
+-123.4567
+
+query I
 SELECT to_decimal(true, 5, 2), to_decimal(false, 5, 2);
 ----
 1.00 0.00
@@ -1289,6 +1294,54 @@ SELECT to_decimal(number, 10, 2) FROM numbers(3);
 0.00
 1.00
 2.00
+
+query I
+SELECT to_decimal(-5, 10, 2);
+----
+-5.00
+
+query I
+SELECT to_decimal(CAST(123.45 AS FLOAT32), 10, 2);
+----
+123.45
+
+query I
+SELECT to_decimal(to_float32(number) / 10, 8, 3) FROM numbers(3);
+----
+0.000
+0.100
+0.200
+
+query I
+SELECT to_decimal(to_float32(number) - 3, 8, 2) FROM numbers(3);
+----
+-3.00
+-2.00
+-1.00
+
+query I
+SELECT to_decimal(CAST(123.456 AS DECIMAL(9, 3)), 12, 4);
+----
+123.4560
+
+query I
+SELECT to_decimal(CAST(-123.456 AS DECIMAL(9, 3)), 12, 4);
+----
+-123.4560
+
+query I
+SELECT to_decimal(c, 15, 3) FROM (SELECT CAST(number * 100 + 5 AS DECIMAL(10, 2)) AS c FROM numbers(3)) t;
+----
+5.000
+105.000
+205.000
+
+query I
+SELECT to_decimal(c, 15, 3) FROM (SELECT CAST(number * 100 - 5 AS DECIMAL(10, 2)) AS c FROM numbers(3)) t;
+----
+-5.000
+95.000
+195.000
 
 query I
 SELECT try_to_decimal(123456, 6, 0);
