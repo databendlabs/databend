@@ -273,12 +273,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, (catalog, database, table), table_alias, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
+                catalog,
+                database,
                 table,
+                table_alias,
                 selection: opt_selection.map(|(_, selection)| selection),
                 with,
             })
@@ -4646,28 +4649,73 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    rule!(
-        #alter_table_cluster_key
-        | #drop_table_cluster_key
-        | #drop_constraint
-        | #rename_table
-        | #swap_with
-        | #rename_column
-        | #modify_table_comment
-        | #add_column
-        | #drop_column
-        | #modify_column
-        | #recluster_table
-        | #revert_table
-        | #set_table_options
-        | #unset_table_options
-        | #refresh_cache
-        | #modify_table_connection
-        | #drop_all_row_access_polices
-        | #drop_row_access_policy
-        | #add_row_access_policy
-        | #add_constraint
-    )
+    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
+    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
+    // available for SELECT or other query statements, so keep the parsing rule scoped
+    // here to avoid implying broader support.
+    let create_snapshot_ref = map(
+        rule! {
+            CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?
+        },
+        |(_, token, ref_name, opt_travel_point, retain)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, reatin)| reatin),
+            }
+        },
+    );
+
+    let drop_snapshot_ref = map(
+        rule! {
+            DROP ~ ( BRANCH | TAG ) ~ #ident
+        },
+        |(_, token, ref_name)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::DropTableRef { ref_type, ref_name }
+        },
+    );
+
+    alt((
+        rule!(
+            #create_snapshot_ref
+            | #drop_snapshot_ref
+        ),
+        rule!(
+            #alter_table_cluster_key
+            | #drop_table_cluster_key
+            | #drop_constraint
+            | #rename_table
+            | #swap_with
+            | #rename_column
+            | #modify_table_comment
+            | #add_column
+            | #drop_column
+            | #modify_column
+            | #recluster_table
+            | #revert_table
+            | #set_table_options
+            | #unset_table_options
+            | #refresh_cache
+            | #modify_table_connection
+            | #drop_all_row_access_polices
+            | #drop_row_access_policy
+            | #add_row_access_policy
+            | #add_constraint
+        ),
+    ))
     .parse(i)
 }
 
@@ -5453,31 +5501,6 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))
-    .parse(i)
-}
-
-pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #dot_separated_idents_1_to_3 ~ #alias_name?
-        }),
-        |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
-            alias: alias.map(|v| TableAlias {
-                name: v,
-                columns: vec![],
-                keep_database_name: false,
-            }),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )
     .parse(i)
 }
 

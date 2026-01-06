@@ -30,6 +30,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -301,16 +302,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _, _) = (
-            ctx,
-            instant,
-            num_snapshot_limit,
-            keep_last_snapshot,
-            dry_run,
-        );
+        let (_, _, _, _) = (ctx, instant, num_snapshot_limit, dry_run);
 
         Ok(None)
     }
@@ -359,6 +353,15 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
+        let _ = branch_name;
+        Err(ErrorCode::Unimplemented(format!(
+            "Table branch is not supported for the table '{}', which uses the '{}' engine.",
             self.name(),
             self.get_table_info().engine(),
         )))
@@ -560,6 +563,7 @@ pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
     StreamInfo(TableInfo),
+    TableRef { typ: SnapshotRefType, name: String },
 }
 
 #[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]

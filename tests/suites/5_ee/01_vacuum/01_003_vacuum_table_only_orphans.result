@@ -11,8 +11,6 @@ before purge
 4
 4
 >>>> truncate table test_vacuum_table_only_orphans.a
->>>> truncate table test_vacuum_table_only_orphans.a
->>>> truncate table test_vacuum_table_only_orphans.a
 >>>> set data_retention_time_in_days=0; optimize table test_vacuum_table_only_orphans.a purge
 after purge
 1
@@ -23,6 +21,12 @@ after add pure orphan files
 4
 4
 after vacuum
+4
+4
+4
+>>>> insert into test_vacuum_table_only_orphans.a values (1)
 1
-1
+after vacuum
+2
+2
 1

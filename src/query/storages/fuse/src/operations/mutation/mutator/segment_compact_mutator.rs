@@ -147,7 +147,6 @@ impl SegmentCompactMutator {
                 &self.compaction.segments_locations,
                 statistics,
                 self.table_meta_timestamps,
-                None,
             )
             .await
     }

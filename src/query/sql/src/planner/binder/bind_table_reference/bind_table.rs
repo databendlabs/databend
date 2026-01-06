@@ -45,16 +45,19 @@ impl Binder {
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
+        ref_name: &Option<Identifier>,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
         with_options: &Option<WithOptions>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
-        let (catalog, database, table_name, table_name_alias) = (
+        let table_identifier =
+            TableIdentifier::new(self, catalog, database, table, ref_name, alias);
+        let (catalog, database, table_name, table_ref_name, table_name_alias) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
+            table_identifier.table_ref_name(),
             table_identifier.table_name_alias(),
         );
 
@@ -130,6 +133,7 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
+                table_ref_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
             ) {
@@ -173,6 +177,7 @@ impl Binder {
                     catalog,
                     database.clone(),
                     table_meta.clone(),
+                    table_ref_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
@@ -259,6 +264,7 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta,
+                        table_ref_name,
                         table_name_alias,
                         false,
                         false,
@@ -292,6 +298,7 @@ impl Binder {
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
+                    table_ref_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
