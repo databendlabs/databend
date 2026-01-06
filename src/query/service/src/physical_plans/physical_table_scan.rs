@@ -522,7 +522,10 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
+    pub async fn build_dummy_table_scan(
+        &mut self,
+        dummy_scan: &databend_common_sql::plans::DummyTableScan,
+    ) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state()?)?
@@ -531,6 +534,38 @@ impl PhysicalPlanBuilder {
 
         if !table.result_can_be_cached() {
             self.ctx.set_cacheable(false);
+        }
+
+        // Add partition SHAs for source tables (for cache invalidation).
+        // When DummyTableScan is created by optimizations like count(*) folding,
+        // we need to track which tables the result depends on for proper cache invalidation.
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_query_result_cache()? && !dummy_scan.source_table_indexes.is_empty()
+        {
+            // Collect table references first, then release the lock before await
+            let source_tables: Vec<_> = {
+                let metadata = self.metadata.read();
+                dummy_scan
+                    .source_table_indexes
+                    .iter()
+                    .map(|&idx| metadata.table(idx).table())
+                    .collect()
+            };
+            for source_table in source_tables {
+                let table_id = source_table.get_id();
+                // Try to get cached SHA first to avoid redundant read_partitions calls.
+                // The SHA is cached by table_read_plan when building the original TableScan.
+                let sha = if let Some(cached_sha) = self.ctx.get_table_partition_sha(table_id) {
+                    cached_sha
+                } else {
+                    // Fallback: Read partitions to compute SHA for cache invalidation
+                    let (_, parts) = source_table
+                        .read_partitions(self.ctx.clone(), None, self.dry_run)
+                        .await?;
+                    parts.compute_sha256()?
+                };
+                self.ctx.add_partitions_sha(sha);
+            }
         }
 
         let source = table

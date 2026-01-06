@@ -505,6 +505,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_table_partition_sha(&self, _table_id: u64, _sha: String) {
+        todo!()
+    }
+
+    fn get_table_partition_sha(&self, _table_id: u64) -> Option<String> {
+        todo!()
+    }
+
     fn get_cacheable(&self) -> bool {
         todo!()
     }

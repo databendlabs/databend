@@ -141,6 +141,8 @@ pub struct QueryContextShared {
     pub(super) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(super) partitions_shas: Arc<RwLock<Vec<String>>>,
+    /// Cache of table_id -> partition SHA, to avoid redundant read_partitions calls.
+    pub(super) table_partition_sha_cache: Arc<RwLock<HashMap<u64, String>>>,
     pub(super) cacheable: Arc<AtomicBool>,
     pub(super) can_scan_from_agg_index: Arc<AtomicBool>,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
@@ -236,6 +238,7 @@ impl QueryContextShared {
             copy_status: Default::default(),
             mutation_status: Default::default(),
             partitions_shas: Arc::new(RwLock::new(vec![])),
+            table_partition_sha_cache: Arc::new(RwLock::new(HashMap::new())),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             num_fragmented_block_hint: Default::default(),

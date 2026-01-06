@@ -98,7 +98,10 @@ impl ToReadDataSourcePlan for dyn Table {
         let settings = ctx.get_settings();
         if settings.get_enable_query_result_cache()? {
             let sha = parts.compute_sha256()?;
-            ctx.add_partitions_sha(sha);
+            ctx.add_partitions_sha(sha.clone());
+            // Cache the SHA by table_id so DummyTableScan can reuse it
+            // without calling read_partitions again.
+            ctx.set_table_partition_sha(self.get_id(), sha);
         }
 
         let source_info = self.get_data_source_info();

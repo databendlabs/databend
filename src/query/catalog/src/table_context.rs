@@ -177,6 +177,10 @@ pub trait TableContext: Send + Sync {
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    /// Cache partition SHA for a table to avoid redundant read_partitions calls.
+    /// Used by DummyTableScan to reuse SHA computed by the original TableScan.
+    fn set_table_partition_sha(&self, table_id: u64, sha: String);
+    fn get_table_partition_sha(&self, table_id: u64) -> Option<String>;
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
