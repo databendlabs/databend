@@ -125,6 +125,14 @@ async fn resolve_database_object(
     target: &databend_common_sql::plans::DatabaseTagSetTarget,
 ) -> Result<Option<TaggableObject>> {
     let catalog = ctx.get_catalog(&target.catalog).await?;
+
+    // External catalog (e.g., Iceberg) does not support tags
+    if catalog.is_external() {
+        return Err(ErrorCode::Unimplemented(
+            "Tags are not supported for external catalog databases",
+        ));
+    }
+
     match catalog.get_database(tenant, &target.database).await {
         Ok(db) => Ok(Some(TaggableObject::Database {
             db_id: db.get_db_info().database_id.db_id,
@@ -140,13 +148,29 @@ async fn resolve_table_object(
     target: &databend_common_sql::plans::TableTagSetTarget,
 ) -> Result<Option<TaggableObject>> {
     let catalog = ctx.get_catalog(&target.catalog).await?;
+
+    // External catalog (e.g., Iceberg) does not support tags
+    if catalog.is_external() {
+        return Err(ErrorCode::Unimplemented(
+            "Tags are not supported for external catalog tables",
+        ));
+    }
+
     match catalog
         .get_table(tenant, &target.database, &target.table)
         .await
     {
-        Ok(table) => Ok(Some(TaggableObject::Table {
-            table_id: table.get_table_info().ident.table_id,
-        })),
+        Ok(table) => {
+            // Temporary tables do not support tags
+            if table.is_temp() {
+                return Err(ErrorCode::Unimplemented(
+                    "Tags are not supported for temporary tables",
+                ));
+            }
+            Ok(Some(TaggableObject::Table {
+                table_id: table.get_table_info().ident.table_id,
+            }))
+        }
         Err(e) if e.code() == ErrorCode::UNKNOWN_TABLE && target.if_exists => Ok(None),
         Err(e) => Err(e),
     }
