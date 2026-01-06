@@ -45,7 +45,6 @@ use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UpdateDatabaseOptionsReply;
 use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_kvapi::kvapi;
