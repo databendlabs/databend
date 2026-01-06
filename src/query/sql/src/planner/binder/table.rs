@@ -151,6 +151,7 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.clone(),
+            None,
             table_alias_name,
             false,
             false,
@@ -580,6 +581,7 @@ impl Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        branch: Option<&str>,
         navigation: Option<&TimeNavigation>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
@@ -590,7 +592,13 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
+                .get_table_with_batch(
+                    catalog_name,
+                    database_name,
+                    table_name,
+                    branch,
+                    max_batch_size,
+                )
                 .await?;
 
             if let Some(desc) = navigation {
@@ -714,6 +722,13 @@ impl Binder {
                 database,
                 name,
             } => self.resolve_stream_data_travel_point(catalog, database, name),
+            TimeTravelPoint::TableRef { typ, name } => {
+                let name = self.normalize_identifier(name).name;
+                Ok(NavigationPoint::TableRef {
+                    typ: typ.into(),
+                    name,
+                })
+            }
         }
     }
 

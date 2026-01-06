@@ -835,7 +835,7 @@ pub fn get_simple_cast_function(
     {
         // parse JSON string to variant instead of cast
         "parse_json".to_owned()
-    } else if dest_type.is_timestamp_tz() {
+    } else if dest_type.remove_nullable().is_timestamp_tz() {
         "to_timestamp_tz".to_owned()
     } else {
         format!("to_{}", dest_type.to_string().to_lowercase())

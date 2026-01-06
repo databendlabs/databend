@@ -42,6 +42,7 @@ databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
+databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-query = { workspace = true }
@@ -56,13 +57,10 @@ opendal = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 typetag = { workspace = true }
-uuid = { workspace = true }
 
 [dev-dependencies]
-databend-common-functions = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 jsonb = { workspace = true }
-tantivy = { workspace = true }
 walkdir = { workspace = true }
 
 [package.metadata.cargo-machete]

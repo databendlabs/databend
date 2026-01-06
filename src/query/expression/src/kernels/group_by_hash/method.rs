@@ -112,10 +112,10 @@ macro_rules! with_join_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleBinary, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256, SkipDuplicatesSerializer,
-            SkipDuplicatesSingleBinary, SkipDuplicatesKeysU8, SkipDuplicatesKeysU16,
-            SkipDuplicatesKeysU32, SkipDuplicatesKeysU64, SkipDuplicatesKeysU128,
-            SkipDuplicatesKeysU256],
+            KeysU32, KeysU64, KeysU128, KeysU256, UniqueSerializer,
+            UniqueSingleBinary, UniqueKeysU8, UniqueKeysU16,
+            UniqueKeysU32, UniqueKeysU64, UniqueKeysU128,
+            UniqueKeysU256],
             $($tail)*
         }
     }

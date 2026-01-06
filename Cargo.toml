@@ -107,6 +107,7 @@ databend-enterprise-resources-management = { path = "src/query/ee_features/resou
 databend-enterprise-row-access-policy-feature = { path = "src/query/ee_features/row_access_policy" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
+databend-enterprise-table-ref-handler = { path = "src/query/ee_features/table_ref_handler" }
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars/arithmetic" }
@@ -571,7 +572,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.11" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

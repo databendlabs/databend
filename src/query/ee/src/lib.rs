@@ -29,5 +29,6 @@ pub mod row_access_policy;
 pub mod storage_encryption;
 pub mod storages;
 pub mod stream;
+pub mod table_ref;
 pub mod test_kits;
 pub mod virtual_column;

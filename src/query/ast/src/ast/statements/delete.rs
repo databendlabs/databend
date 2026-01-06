@@ -20,13 +20,18 @@ use derive_visitor::DriveMut;
 
 use crate::ast::Expr;
 use crate::ast::Hint;
-use crate::ast::TableReference;
+use crate::ast::Identifier;
+use crate::ast::TableAlias;
 use crate::ast::With;
+use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DeleteStmt {
     pub hints: Option<Hint>,
-    pub table: TableReference,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub table_alias: Option<TableAlias>,
     pub selection: Option<Expr>,
     // With clause, common table expression
     pub with: Option<With>,
@@ -41,7 +46,17 @@ impl Display for DeleteStmt {
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
         }
-        write!(f, "FROM {}", self.table)?;
+        write!(f, "FROM ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(alias) = &self.table_alias {
+            write!(f, " AS {}", alias)?;
+        }
         if let Some(conditions) = &self.selection {
             write!(f, " WHERE {conditions}")?;
         }

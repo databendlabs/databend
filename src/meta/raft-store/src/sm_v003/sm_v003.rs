@@ -20,15 +20,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use databend_common_meta_types::AppliedState;
-use databend_common_meta_types::raft_types::Entry;
-use databend_common_meta_types::raft_types::StorageError;
+use databend_common_meta_types::raft_types::EntryResponder;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
+use futures::Stream;
+use futures::StreamExt;
 use log::debug;
 use log::info;
 use map_api::mvcc::ScopedGet;
-use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
@@ -243,29 +242,20 @@ impl SMV003 {
         WriterAcquirer::new(self.write_semaphore.clone())
     }
 
-    pub async fn apply_entries(
-        &self,
-        entries: impl IntoIterator<Item = Entry>,
-    ) -> Result<Vec<AppliedState>, StorageError> {
+    pub async fn apply_entries<S>(&self, mut entries: S) -> Result<(), io::Error>
+    where S: Stream<Item = Result<EntryResponder, io::Error>> + Unpin {
         let mut applier = self.new_applier().await;
 
-        let mut res = vec![];
-
-        for ent in entries.into_iter() {
-            let log_id = ent.log_id();
-            let r = applier
-                .apply(&ent)
-                .await
-                .map_err(|e| StorageError::apply(log_id, &e))?;
-            res.push(r);
+        while let Some(result) = entries.next().await {
+            let (entry, responder) = result?;
+            let applied = applier.apply(&entry).await?;
+            if let Some(responder) = responder {
+                responder.send(applied);
+            }
         }
 
-        applier
-            .commit()
-            .await
-            .map_err(|e| StorageError::write(&e))?;
-
-        Ok(res)
+        applier.commit().await?;
+        Ok(())
     }
 
     pub fn sys_data(&self) -> SysData {

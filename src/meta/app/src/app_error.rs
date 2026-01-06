@@ -584,6 +584,22 @@ impl UnknownTableId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("TableSnapshotExpired: {table_id} while {context}")]
+pub struct TableSnapshotExpired {
+    table_id: u64,
+    context: String,
+}
+
+impl TableSnapshotExpired {
+    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+        Self {
+            table_id,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error(
     "VirtualColumnIdOutBound: the virtual column id `{column_id}` is outside the range `{lower}` to `{upper}`"
@@ -1081,6 +1097,9 @@ pub enum AppError {
     UnknownTableId(#[from] UnknownTableId),
 
     #[error(transparent)]
+    TableSnapshotExpired(#[from] TableSnapshotExpired),
+
+    #[error(transparent)]
     TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
 
     // share api errors
@@ -1292,6 +1311,8 @@ impl AppErrorMessage for UnknownTable {
 }
 
 impl AppErrorMessage for UnknownTableId {}
+
+impl AppErrorMessage for TableSnapshotExpired {}
 
 impl AppErrorMessage for UnknownDatabaseId {}
 
@@ -1623,6 +1644,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.message()),
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
+            AppError::TableSnapshotExpired(err) => ErrorCode::TableSnapshotExpired(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
             AppError::UnknownCatalog(err) => ErrorCode::UnknownCatalog(err.message()),
             AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),

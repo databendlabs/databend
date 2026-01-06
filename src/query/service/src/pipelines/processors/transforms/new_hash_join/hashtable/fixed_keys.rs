@@ -33,14 +33,12 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::E
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 
-impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
-    FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>
-{
+impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTable<T, UNIQUE> {
     pub fn new(
-        hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
+        hash_table: HashJoinHashMap<T, UNIQUE>,
         hash_method: HashMethodFixedKeys<T>,
     ) -> Self {
-        FixedKeyHashJoinHashTable::<T, SKIP_DUPLICATES> {
+        FixedKeyHashJoinHashTable::<T, UNIQUE> {
             hash_table,
             hash_method,
         }
@@ -114,13 +112,13 @@ impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<_, true>::create(
+                true => Ok(EarlyFilteringProbeStream::<_, true, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &[],
                 )),
-                false => Ok(FixedKeyProbeStream::<_, true>::create(hashes, keys)),
+                false => Ok(FixedKeyProbeStream::<_, true, UNIQUE>::create(hashes, keys)),
             },
         }
     }
@@ -162,19 +160,25 @@ impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<_, false>::create(
+                true => Ok(EarlyFilteringProbeStream::<_, false, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(FixedKeyProbeStream::<_, false>::create(hashes, keys)),
+                false => Ok(FixedKeyProbeStream::<_, false, UNIQUE>::create(
+                    hashes, keys,
+                )),
             },
         }
     }
 }
 
-struct FixedKeyProbeStream<Key: FixedKey + HashtableKeyable, const MATCHED: bool> {
+struct FixedKeyProbeStream<
+    Key: FixedKey + HashtableKeyable,
+    const MATCHED: bool,
+    const MATCH_FIRST: bool,
+> {
     key_idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
@@ -182,12 +186,14 @@ struct FixedKeyProbeStream<Key: FixedKey + HashtableKeyable, const MATCHED: bool
     matched_num_rows: usize,
 }
 
-impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> FixedKeyProbeStream<Key, MATCHED> {
+impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool>
+    FixedKeyProbeStream<Key, MATCHED, MATCH_FIRST>
+{
     pub fn create(
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = Key>>,
     ) -> Box<dyn ProbeStream> {
-        Box::new(FixedKeyProbeStream::<Key, MATCHED> {
+        Box::new(FixedKeyProbeStream::<Key, MATCHED, MATCH_FIRST> {
             keys,
             pointers,
             key_idx: 0,
@@ -197,8 +203,8 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> FixedKeyProbeStream<
     }
 }
 
-impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
-    for FixedKeyProbeStream<Key, MATCHED>
+impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
+    for FixedKeyProbeStream<Key, MATCHED, MATCH_FIRST>
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.keys.len() {
@@ -237,7 +243,10 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                     self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
-                        self.probe_entry_ptr = raw_entry.next;
+                        self.probe_entry_ptr = match MATCH_FIRST {
+                            true => 0,
+                            false => raw_entry.next,
+                        };
 
                         if self.probe_entry_ptr == 0 {
                             self.key_idx += 1;
@@ -245,6 +254,11 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                         }
 
                         return Ok(());
+                    }
+
+                    if MATCH_FIRST {
+                        self.probe_entry_ptr = 0;
+                        break;
                     }
                 }
 
@@ -263,7 +277,12 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
     }
 }
 
-struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> {
+struct EarlyFilteringProbeStream<
+    'a,
+    Key: FixedKey + HashtableKeyable,
+    const MATCHED: bool,
+    const MATCH_FIRST: bool,
+> {
     idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
@@ -274,8 +293,8 @@ struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MAT
     returned_unmatched: bool,
 }
 
-impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
-    EarlyFilteringProbeStream<'a, Key, MATCHED>
+impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool>
+    EarlyFilteringProbeStream<'a, Key, MATCHED, MATCH_FIRST>
 {
     pub fn create(
         pointers: Vec<u64>,
@@ -283,7 +302,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
         selections: &'a [u32],
         unmatched_selection: &'a [u32],
     ) -> Box<dyn ProbeStream + 'a> {
-        Box::new(EarlyFilteringProbeStream::<Key, MATCHED> {
+        Box::new(EarlyFilteringProbeStream::<Key, MATCHED, MATCH_FIRST> {
             keys,
             pointers,
             selections,
@@ -296,8 +315,8 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
     }
 }
 
-impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
-    for EarlyFilteringProbeStream<'a, Key, MATCHED>
+impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
+    for EarlyFilteringProbeStream<'a, Key, MATCHED, MATCH_FIRST>
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if !MATCHED && !self.returned_unmatched {
@@ -341,7 +360,10 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                     self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
-                        self.probe_entry_ptr = raw_entry.next;
+                        self.probe_entry_ptr = match MATCH_FIRST {
+                            true => 0,
+                            false => raw_entry.next,
+                        };
 
                         if self.probe_entry_ptr == 0 {
                             self.idx += 1;
@@ -349,6 +371,11 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                         }
 
                         return Ok(());
+                    }
+
+                    if MATCH_FIRST {
+                        self.probe_entry_ptr = 0;
+                        break;
                     }
                 }
 
