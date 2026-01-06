@@ -26,7 +26,8 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::optimizer::optimizers::rule::constant::is_falsy;
+use crate::optimizer::optimizers::rule::is_falsy;
+use crate::optimizer::optimizers::rule::is_true;
 use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;
@@ -128,7 +129,7 @@ impl Rule for RuleEliminateFilter {
                         true
                     }
                 }
-                _ => true,
+                predicate => !is_true(predicate),
             })
             .collect::<Vec<ScalarExpr>>();
 

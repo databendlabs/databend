@@ -636,9 +636,7 @@ impl<'a> Visitor<'a> for SelectivityVisitor<'_> {
     }
 
     fn visit_bound_column_ref(&mut self, _: &'a BoundColumnRef) -> Result<()> {
-        // If a column ref is on top of a predicate, e.g.
-        // `SELECT * FROM t WHERE c1`, the selectivity is 1.
-        self.selectivity = Selectivity::N(1.0);
+        self.selectivity = Selectivity::LowerBound;
         Ok(())
     }
 

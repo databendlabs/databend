@@ -185,12 +185,6 @@ impl RewritePredicates {
         if arguments.len() == 1 {
             return Ok(arguments.pop());
         }
-        arguments.sort_by_cached_key(|v| match v {
-            ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => 1_u8,
-            ScalarExpr::FunctionCall(call) if call.func_name == "or_filters" => 4,
-            ScalarExpr::FunctionCall(_) => 3,
-            _ => 2,
-        });
         Ok(None)
     }
 
