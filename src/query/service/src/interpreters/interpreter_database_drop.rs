@@ -17,11 +17,13 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropDatabasePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -52,24 +54,27 @@ impl Interpreter for DropDatabaseInterpreter {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        // unset the ownership of the database, the database may not exists.
-        let db = catalog.get_database(&tenant, &self.plan.database).await;
-        if let Ok(db) = db {
-            // iceberg db do not need to generate ownership.
-            if !catalog.is_external() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                let owner_object = OwnershipObject::Database {
-                    catalog_name: self.plan.catalog.clone(),
-                    db_id: db.get_db_info().database_id.db_id,
-                };
+        // actual drop database
+        let rep = catalog.drop_database(self.plan.clone().into()).await?;
 
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+        let db_id = rep.db_id;
+        // Cleanup after successful drop
+        // iceberg db do not need to generate ownership and tag.
+        if !catalog.is_external() {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Database {
+                catalog_name: self.plan.catalog.clone(),
+                db_id,
+            };
+
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+
+            // Clean up tag references (must be after drop for concurrency safety)
+            let taggable_object = TaggableObject::Database { db_id };
+            cleanup_object_tags(&tenant, taggable_object).await?;
         }
 
-        // actual drop database
-        let _ = catalog.drop_database(self.plan.clone().into()).await?;
 
         Ok(PipelineBuildResult::create())
     }
