@@ -270,7 +270,16 @@ impl IPhysicalPlan for HashJoin {
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
         if desc.single_to_inner.is_none()
-            && (self.join_type == JoinType::Inner || self.join_type == JoinType::Left)
+            && matches!(
+                self.join_type,
+                JoinType::Inner
+                    | JoinType::Left
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::Right
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti
+            )
             && experimental_new_join
             && !enable_optimization
         {

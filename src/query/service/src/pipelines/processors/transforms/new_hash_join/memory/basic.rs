@@ -90,6 +90,30 @@ impl BasicHashJoin {
         Ok(())
     }
 
+    pub(crate) fn add_outer_scan_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
+        let mut squashed_block = match data.take() {
+            None => self.squash_block.finalize()?,
+            Some(data_block) => self.squash_block.add_block(data_block)?,
+        };
+
+        if let Some(squashed_block) = squashed_block.take() {
+            let locked = self.state.mutex.lock();
+            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+            let num_rows = squashed_block.num_rows();
+            let visited_map = vec![0; num_rows];
+
+            *self.state.build_rows.as_mut() += num_rows;
+            let chunk_index = self.state.chunks.len();
+            self.state.chunks.as_mut().push(squashed_block);
+            self.state.build_queue.as_mut().push_back(chunk_index);
+            self.state.scan_map.as_mut().push(visited_map);
+            self.state.scan_queue.as_mut().push_back(chunk_index);
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn final_build(&mut self) -> Result<Option<ProgressValues>> {
         self.init_memory_hash_table();
 
@@ -182,7 +206,11 @@ impl BasicHashJoin {
         if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             return;
         }
-        let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
+        let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny)
+            || (matches!(
+                self.desc.join_type,
+                JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti
+            ) && self.desc.other_predicate.is_none());
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);

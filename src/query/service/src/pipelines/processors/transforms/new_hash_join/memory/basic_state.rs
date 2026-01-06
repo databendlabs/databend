@@ -37,6 +37,9 @@ pub struct BasicHashJoinState {
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
+    pub scan_map: CStyleCell<Vec<Vec<u8>>>,
+    pub scan_queue: CStyleCell<VecDeque<usize>>,
+
     level: usize,
     factory: Arc<HashJoinFactory>,
 }
@@ -55,6 +58,8 @@ impl BasicHashJoinState {
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
             packets: CStyleCell::new(Vec::new()),
+            scan_map: CStyleCell::new(Vec::new()),
+            scan_queue: CStyleCell::new(VecDeque::new()),
         }
     }
 }

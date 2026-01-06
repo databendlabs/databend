@@ -110,7 +110,7 @@ impl Join for OuterLeftHashJoin {
                 .map(|x| x.data_type().clone())
                 .collect::<Vec<_>>();
 
-            let build_block = null_build_block(&types, data.num_rows());
+            let build_block = null_block(&types, data.num_rows());
             let probe_block = Some(data.project(&self.desc.probe_projections));
             let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
             return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
@@ -210,7 +210,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 };
 
                 let types = &self.join_state.column_types;
-                let build_block = null_build_block(types, unmatched_row_id.len());
+                let build_block = null_block(types, unmatched_row_id.len());
 
                 return Ok(Some(final_result_block(
                     &self.desc,
@@ -316,7 +316,7 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
     }
 }
 
-fn final_result_block(
+pub fn final_result_block(
     desc: &HashJoinDesc,
     probe_block: Option<DataBlock>,
     build_block: Option<DataBlock>,
@@ -357,7 +357,7 @@ fn final_result_block(
     result_block
 }
 
-fn null_build_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
+pub fn null_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
     match types.is_empty() {
         true => None,
         false => {
