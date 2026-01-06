@@ -154,3 +154,4 @@ mod v159_grant_object_masking_policy;
 mod v160_udf_update_on;
 mod v161_grant_object_row_access_policy;
 mod v162_tag;
+mod v163_snapshot_ref;

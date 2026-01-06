@@ -10,7 +10,6 @@ edition = { workspace = true }
 dev = ["snap"]
 
 [dependencies]
-
 arrow = { workspace = true }
 bincode_v1 = { workspace = true }
 bytes = { workspace = true }

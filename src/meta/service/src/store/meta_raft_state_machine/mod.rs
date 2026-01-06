@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::io;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -30,7 +31,6 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
-use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_metrics::count::Count;
 use futures::FutureExt;
@@ -133,7 +133,7 @@ impl MetaRaftStateMachine {
     }
 
     #[fastrace::trace]
-    pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, StorageError> {
+    pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, io::Error> {
         // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
 
         info!(id = self.id; "do_build_snapshot start");
@@ -156,10 +156,7 @@ impl MetaRaftStateMachine {
 
         info!("do_build_snapshot compactor created");
 
-        let (mut sys_data, mut strm) = compactor
-            .compact_into_stream()
-            .await
-            .map_err(|e| StorageError::read_snapshot(None, &e))?;
+        let (mut sys_data, mut strm) = compactor.compact_into_stream().await?;
 
         let last_applied = *sys_data.last_applied_ref();
         let last_membership = sys_data.last_membership_ref().clone();
@@ -169,12 +166,8 @@ impl MetaRaftStateMachine {
             last_log_id: last_applied,
             last_membership,
         };
-        let signature = snapshot_meta.signature();
-
         let ss_store = self.snapshot_store();
-        let writer = ss_store
-            .new_writer()
-            .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
+        let writer = ss_store.new_writer()?;
 
         let context = format!("build snapshot: {:?}", last_applied);
         let (tx, th) = writer.spawn_writer_thread(context);
@@ -186,11 +179,7 @@ impl MetaRaftStateMachine {
             // Count the user keys and expiration keys.
             let mut key_counts = BTreeMap::<String, u64>::new();
 
-            while let Some(ent) = strm
-                .try_next()
-                .await
-                .map_err(|e| StorageError::read_snapshot(None, &e))?
-            {
+            while let Some(ent) = strm.try_next().await? {
                 // The first 4 chars are key space, such as: "kv--/" or "exp-/"
                 // Get the first 4 chars as key space.
                 let prefix = &ent.0.as_str()[..4];
@@ -202,7 +191,7 @@ impl MetaRaftStateMachine {
 
                 tx.send(WriteEntry::Data(ent))
                     .await
-                    .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
+                    .map_err(io::Error::other)?;
 
                 raft_metrics::storage::incr_snapshot_written_entries();
             }
@@ -214,20 +203,14 @@ impl MetaRaftStateMachine {
 
             tx.send(WriteEntry::Finish((snapshot_id.clone(), sys_data)))
                 .await
-                .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
+                .map_err(io::Error::other)?;
         }
 
         // Get snapshot write result
-        let db = th
-            .await
-            .map_err(|e| {
-                error!(error :% = e; "snapshot writer thread error");
-                StorageError::write_snapshot(Some(signature.clone()), &e)
-            })?
-            .map_err(|e| {
-                error!(error :% = e; "snapshot writer thread error");
-                StorageError::write_snapshot(Some(signature.clone()), &e)
-            })?;
+        let db = th.await.map_err(|e| {
+            error!(error :% = e; "snapshot writer thread error");
+            io::Error::other(e)
+        })??;
 
         info!(
             snapshot_id :% = snapshot_id.to_string(),
