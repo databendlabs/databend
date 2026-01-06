@@ -114,7 +114,7 @@ impl Binder {
         }
         let bind_context = BindContext::with_parent(bind_context.clone())?;
         Ok((
-            SExpr::create_leaf(Arc::new(DummyTableScan.into())),
+            SExpr::create_leaf(Arc::new(DummyTableScan::new().into())),
             bind_context,
         ))
     }

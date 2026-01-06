@@ -108,7 +108,9 @@ impl Rule for RuleFoldCountAggregate {
                 }
             }
             let eval_scalar = EvalScalar { items: scalars };
-            let dummy_table_scan = DummyTableScan;
+            // Collect source table indexes from the original plan for cache invalidation
+            let source_table_indexes = DummyTableScan::collect_source_tables(s_expr);
+            let dummy_table_scan = DummyTableScan::with_source_tables(source_table_indexes);
             state.add_result(SExpr::create_unary(
                 Arc::new(eval_scalar.into()),
                 Arc::new(SExpr::create_leaf(Arc::new(dummy_table_scan.into()))),

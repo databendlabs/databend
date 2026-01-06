@@ -87,6 +87,16 @@ impl AsyncMpscSink for WriteResultCacheSink {
             return Ok(());
         }
 
+        // Skip cache writing if there are no partition SHAs.
+        // Without partition SHAs, we cannot detect data changes and the cache
+        // may return stale results. This can happen when queries are pure constants
+        // (like SELECT 1) that don't depend on any table data.
+        // Note: Queries with DummyTableScan that depend on table statistics should
+        // have partition SHAs added via DummyTableScan.source_table_indexes.
+        if self.partitions_shas.is_empty() {
+            return Ok(());
+        }
+
         // 1. Write the result cache to the storage, blocks must be !empty.
         let location = self.cache_writer.write_to_storage().await?;
 
