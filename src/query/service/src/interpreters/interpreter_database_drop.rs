@@ -75,7 +75,6 @@ impl Interpreter for DropDatabaseInterpreter {
             cleanup_object_tags(&tenant, taggable_object).await?;
         }
 
-
         Ok(PipelineBuildResult::create())
     }
 }

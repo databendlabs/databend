@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::database::is_builtin_database;
+use databend_common_catalog::database::is_system_database;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
@@ -21,11 +23,11 @@ use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UnsetObjectTagsReq;
-use log::info;
 use databend_common_sql::plans::SetObjectTagsPlan;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_sql::plans::UnsetObjectTagsPlan;
 use databend_common_users::UserApiProvider;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -133,6 +135,14 @@ async fn resolve_database_object(
         ));
     }
 
+    // Built-in databases do not support tags
+    if is_builtin_database(&target.database) {
+        return Err(ErrorCode::Unimplemented(format!(
+            "Tags are not supported for built-in database '{}'",
+            target.database
+        )));
+    }
+
     match catalog.get_database(tenant, &target.database).await {
         Ok(db) => Ok(Some(TaggableObject::Database {
             db_id: db.get_db_info().database_id.db_id,
@@ -154,6 +164,14 @@ async fn resolve_table_object(
         return Err(ErrorCode::Unimplemented(
             "Tags are not supported for external catalog tables",
         ));
+    }
+
+    // Tables in system databases do not support tags
+    if is_system_database(&target.database) {
+        return Err(ErrorCode::Unimplemented(format!(
+            "Tags are not supported for tables in system database '{}'",
+            target.database
+        )));
     }
 
     match catalog

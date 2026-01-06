@@ -29,10 +29,10 @@ use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
-use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagInfo;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagReferenceInfo;
@@ -50,7 +50,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
-use seq_marked::SeqValue;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -59,6 +58,7 @@ use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
+use seq_marked::SeqValue;
 
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
@@ -170,8 +170,7 @@ where
 
             // Hard delete: remove all keys
             let mut txn = TxnRequest::default();
-            txn.condition
-                .push(txn_cond_eq_seq(name_ident, id_seqv.seq));
+            txn.condition.push(txn_cond_eq_seq(name_ident, id_seqv.seq));
             // Ensure no references exist before deletion
             txn.condition
                 .push(txn_cond_eq_keys_with_prefix(&refs_dir, 0));

@@ -21,7 +21,6 @@ use derive_visitor::DriveMut;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
-use crate::ast::TableReference;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -135,7 +134,9 @@ pub enum AlterObjectTagTarget {
     },
     Table {
         if_exists: bool,
-        table: TableReference,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
     },
     Stage {
         if_exists: bool,
@@ -161,12 +162,20 @@ impl Display for AlterObjectTagTarget {
                 }
                 write_dot_separated_list(f, catalog.iter().chain(Some(database)))?;
             }
-            AlterObjectTagTarget::Table { if_exists, table } => {
+            AlterObjectTagTarget::Table {
+                if_exists,
+                catalog,
+                database,
+                table,
+            } => {
                 write!(f, "TABLE ")?;
                 if *if_exists {
                     write!(f, "IF EXISTS ")?;
                 }
-                write!(f, "{table}")?;
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(table)),
+                )?;
             }
             AlterObjectTagTarget::Stage {
                 if_exists,
