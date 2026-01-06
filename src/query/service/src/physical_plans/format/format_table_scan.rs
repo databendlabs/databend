@@ -139,7 +139,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         if let Some(agg_index) = agg_index {
             let (_, agg_index_sql, _) = ctx
                 .metadata
-                .get_agg_indexes(&table_name)
+                .get_agg_indices(&table_name)
                 .unwrap()
                 .iter()
                 .find(|(index, _, _)| *index == agg_index.index_id)

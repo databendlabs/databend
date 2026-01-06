@@ -140,7 +140,10 @@ fn flatten_and(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
 }
 
 // Merge predicates to AND scalar
-fn make_and_expr(scalars: Vec<ScalarExpr>) -> ScalarExpr {
+fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
+    if scalars.len() == 1 {
+        return scalars.pop().unwrap();
+    }
     FunctionCall {
         span: None,
         func_name: "and_filters".to_string(),
@@ -151,7 +154,10 @@ fn make_and_expr(scalars: Vec<ScalarExpr>) -> ScalarExpr {
 }
 
 // Merge predicates to OR scalar
-fn make_or_expr(scalars: Vec<ScalarExpr>) -> ScalarExpr {
+fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
+    if scalars.len() == 1 {
+        return scalars.pop().unwrap();
+    }
     FunctionCall {
         span: None,
         func_name: "or_filters".to_string(),

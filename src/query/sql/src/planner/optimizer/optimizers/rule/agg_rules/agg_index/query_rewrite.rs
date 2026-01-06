@@ -835,6 +835,7 @@ impl RangeClasses {
     }
 }
 
+#[derive(Debug)]
 struct ResidualClasses {
     residual_preds: BTreeMap<String, ScalarExpr>,
 }

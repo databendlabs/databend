@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -73,7 +74,7 @@ pub struct Metadata {
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, IndexType>,
-    agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
+    agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
 
     /// Scan id of each scan operator.
@@ -318,19 +319,29 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indexes(&mut self, table: String, agg_indexes: Vec<(u64, String, SExpr)>) {
-        self.agg_indexes
-            .entry(table)
-            .and_modify(|indexes| indexes.extend_from_slice(&agg_indexes))
-            .or_insert(agg_indexes);
+    pub fn add_agg_indices(&mut self, table: String, agg_indices: Vec<(u64, String, SExpr)>) {
+        match self.agg_indices.entry(table) {
+            Entry::Occupied(occupied) => occupied.into_mut().extend(agg_indices),
+            Entry::Vacant(vacant) => {
+                vacant.insert(agg_indices);
+            }
+        }
     }
 
-    pub fn get_agg_indexes(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
-        self.agg_indexes.get(table).map(|v| v.as_slice())
+    pub fn agg_indices(&self) -> &HashMap<String, Vec<(u64, String, SExpr)>> {
+        &self.agg_indices
     }
 
-    pub fn has_agg_indexes(&self) -> bool {
-        !self.agg_indexes.is_empty()
+    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>) {
+        self.agg_indices = agg_indices
+    }
+
+    pub fn get_agg_indices(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
+        self.agg_indices.get(table).map(|v| v.as_slice())
+    }
+
+    pub fn has_agg_indices(&self) -> bool {
+        !self.agg_indices.is_empty()
     }
 
     fn remove_cte_suffix(mut table_name: String, cte_suffix_name: Option<String>) -> String {

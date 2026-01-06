@@ -11,10 +11,7 @@ statement ok
 USE test_index_db
 
 statement ok
-DROP TABLE IF EXISTS t1
-
-statement ok
-CREATE TABLE t1(a int not null,b int not null) Engine = Fuse
+CREATE OR REPLACE TABLE t1(a int not null,b int not null) Engine = Fuse
 
 statement ok
 DROP AGGREGATING INDEX IF EXISTS idx1
