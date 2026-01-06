@@ -15679,6 +15679,44 @@ AlterDatabase(
 
 
 ---------- Input ----------
+ALTER DATABASE c set tag tag1='a';
+---------- Output ---------
+ALTER DATABASE c SET TAG tag1 = 'a'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Database {
+            if_exists: false,
+            catalog: None,
+            database: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "c",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            25..29,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "a",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE ctl.c RENAME TO a

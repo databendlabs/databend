@@ -2081,9 +2081,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let alter_object_tags = map(
         rule! {
-            #alter_object_tag_target ~ #alter_object_tag_action
+            ALTER ~ #alter_object_tag_target ~ #alter_object_tag_action
         },
-        |(object, action)| Statement::AlterObjectTag(AlterObjectTagStmt { object, action }),
+        |(_, object, action)| Statement::AlterObjectTag(AlterObjectTagStmt { object, action }),
     );
 
     let call = map(
@@ -2934,9 +2934,9 @@ AS
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
@@ -4403,11 +4403,13 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
-                TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only
+                TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
             },
-            |(_, opt_if_exists, table_reference)| AlterObjectTagTarget::Table {
+            |(_, opt_if_exists, (catalog, database, table))| AlterObjectTagTarget::Table {
                 if_exists: opt_if_exists.is_some(),
-                table: table_reference,
+                catalog,
+                database,
+                table,
             },
         ),
         map(

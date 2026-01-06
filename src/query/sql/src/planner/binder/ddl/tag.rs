@@ -21,7 +21,6 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTagsStmt;
-use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TagSetItem;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -186,27 +185,20 @@ impl Binder {
                     database,
                 }))
             }
-            AlterObjectTagTarget::Table { if_exists, table } => {
-                if let TableReference::Table {
+            AlterObjectTagTarget::Table {
+                if_exists,
+                catalog,
+                database,
+                table,
+            } => {
+                let (catalog, database, table) =
+                    self.normalize_object_identifier_triple(catalog, database, table);
+                Ok(TagSetObject::Table(TableTagSetTarget {
+                    if_exists: *if_exists,
                     catalog,
                     database,
                     table,
-                    ..
-                } = table
-                {
-                    let (catalog, database, table) =
-                        self.normalize_object_identifier_triple(catalog, database, table);
-                    Ok(TagSetObject::Table(TableTagSetTarget {
-                        if_exists: *if_exists,
-                        catalog,
-                        database,
-                        table,
-                    }))
-                } else {
-                    Err(ErrorCode::Internal(
-                        "only base tables are supported when altering tags",
-                    ))
-                }
+                }))
             }
             AlterObjectTagTarget::Stage {
                 if_exists,
