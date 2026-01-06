@@ -37,7 +37,6 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantTableScan;
-use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
 use crate::plans::Filter;
@@ -809,7 +808,7 @@ impl SubqueryDecorrelatorOptimizer {
 
     fn clone_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
         let op = match plan {
-            RelOperator::DummyTableScan(_) => DummyTableScan.into(),
+            RelOperator::DummyTableScan(scan) => scan.clone().into(),
             RelOperator::ConstantTableScan(scan) => self.clone_outer_constant_table_scan(scan)?,
             RelOperator::Scan(scan) => self.clone_outer_scan(scan),
             RelOperator::EvalScalar(eval) => self.clone_outer_eval_scalar(eval)?,
