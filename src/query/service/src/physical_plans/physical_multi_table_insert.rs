@@ -408,58 +408,64 @@ struct ChunkFillPlan {
     computed_builder: Option<DynTransformBuilder>,
 }
 
-#[derive(Clone, Copy)]
-enum ChunkFillStage {
-    AsyncDefault,
-    CastAfterAsync,
-    Resort,
-    Computed,
-}
-
 impl ChunkFillPlan {
-    fn has_builder(&self, stage: ChunkFillStage) -> bool {
-        match stage {
-            ChunkFillStage::AsyncDefault => self.async_builder.is_some(),
-            ChunkFillStage::CastAfterAsync => self.cast_builder.is_some(),
-            ChunkFillStage::Resort => self.resort_builder.is_some(),
-            ChunkFillStage::Computed => self.computed_builder.is_some(),
-        }
-    }
-
-    fn take_builder(&mut self, stage: ChunkFillStage) -> Option<DynTransformBuilder> {
-        match stage {
-            ChunkFillStage::AsyncDefault => self.async_builder.take(),
-            ChunkFillStage::CastAfterAsync => self.cast_builder.take(),
-            ChunkFillStage::Resort => self.resort_builder.take(),
-            ChunkFillStage::Computed => self.computed_builder.take(),
-        }
-    }
-
-    /// Materialize a specific stage for all plans into the pipeline.
-    /// If no plan participates in this stage, it is skipped entirely.
-    fn add_stage_to_pipeline(
-        plans: &mut [ChunkFillPlan],
-        stage: ChunkFillStage,
+    fn materialize_stage(
+        plans: &mut [Self],
         builder: &mut PipelineBuilder,
+        exists: fn(&Self) -> bool,
+        take: fn(&mut Self) -> Option<DynTransformBuilder>,
     ) -> Result<()> {
-        if !plans.iter().any(|plan| plan.has_builder(stage)) {
+        // Skip the stage entirely if no plan participates.
+        if !plans.iter().any(exists) {
             return Ok(());
         }
 
-        let mut stage_builders = Vec::with_capacity(plans.len());
-
+        let mut builders = Vec::with_capacity(plans.len());
         for plan in plans.iter_mut() {
-            if let Some(builder_fn) = plan.take_builder(stage) {
-                stage_builders.push(builder_fn);
-            } else {
-                // Keep chunk alignment.
-                stage_builders.push(Box::new(builder.dummy_transform_builder()?));
-            }
+            builders.push(
+                take(plan).unwrap_or_else(|| Box::new(builder.dummy_transform_builder().unwrap())),
+            );
         }
+        builder.main_pipeline.add_transforms_by_chunk(builders)
+    }
 
-        builder
-            .main_pipeline
-            .add_transforms_by_chunk(stage_builders)
+    fn materialize_chunk_fill_plans(
+        plans: &mut [Self],
+        builder: &mut PipelineBuilder,
+    ) -> Result<()> {
+        // 1. Async default expressions (AUTO_INCREMENT, async defaults).
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.async_builder.is_some(),
+            |p| p.async_builder.take(),
+        )?;
+
+        // 2. Cast after async defaults.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.cast_builder.is_some(),
+            |p| p.cast_builder.take(),
+        )?;
+
+        // 3. Reorder / fill missing columns.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.resort_builder.is_some(),
+            |p| p.resort_builder.take(),
+        )?;
+
+        // 4. Computed columns.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.computed_builder.is_some(),
+            |p| p.computed_builder.take(),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -603,16 +609,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
             }
         }
 
-        for stage in [
-            ChunkFillStage::AsyncDefault,
-            ChunkFillStage::CastAfterAsync,
-            ChunkFillStage::Resort,
-            ChunkFillStage::Computed,
-        ] {
-            ChunkFillPlan::add_stage_to_pipeline(&mut plans, stage, builder)?;
-        }
-
-        Ok(())
+        ChunkFillPlan::materialize_chunk_fill_plans(&mut plans, builder)
     }
 }
 

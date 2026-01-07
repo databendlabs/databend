@@ -38,21 +38,21 @@ insert into s values('b', 1),('c',3),('d',5);
 3
 
 query II
-INSERT FIRST when b>4 then into t(a) values(a) when b<3 then into t1(a) values(a) else into t(a) values(a) select * from s;
+INSERT FIRST when b>4 then into t(a) values(a) when b<3 then into t1(a) values(a) else into t1(a) values(a) select * from s;
 ----
-2 1
+1 2
 
 query TIT
 select * from t order by b;
 ----
 a 0 a-0
-c 1 c-1
-d 2 d-2
+d 1 d-1
 
 query T
-select * from t1;
+select * from t1 order by a;
 ----
 b
+c
 
 statement ok
 drop database issue_19203;
