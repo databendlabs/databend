@@ -247,7 +247,7 @@ impl IPhysicalPlan for ChunkFilter {
                     projection.clone(),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
 
@@ -313,7 +313,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
                     Some(eval_scalar.projection.clone()),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
 
@@ -387,7 +387,7 @@ impl IPhysicalPlan for ChunkCastSchema {
                     cast_schema.target_schema.clone(),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
         builder.main_pipeline.add_transforms_by_chunk(f)
@@ -422,9 +422,8 @@ impl ChunkFillPlan {
 
         let mut builders = Vec::with_capacity(plans.len());
         for plan in plans.iter_mut() {
-            builders.push(
-                take(plan).unwrap_or_else(|| Box::new(builder.dummy_transform_builder().unwrap())),
-            );
+            builders
+                .push(take(plan).unwrap_or_else(|| Box::new(builder.dummy_transform_builder())));
         }
         builder.main_pipeline.add_transforms_by_chunk(builders)
     }
@@ -710,7 +709,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 }));
                 eval_cluster_key_num += 1;
             } else {
-                eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()?));
+                eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             let cluster_keys = &cluster_stats_gen.cluster_key_index;
             if !cluster_keys.is_empty() {
@@ -735,7 +734,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 ));
                 sort_num += 1;
             } else {
-                sort_builders.push(Box::new(builder.dummy_transform_builder()?));
+                sort_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             serialize_block_builders.push(Box::new(
                 builder.with_tid_serialize_block_transform_builder(

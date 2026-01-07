@@ -86,8 +86,8 @@ impl PipelineBuilder {
 
     pub(crate) fn dummy_transform_builder(
         &self,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
-        Ok(|input, output| Ok(TransformDummy::create(input, output)))
+    ) -> impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<> {
+        |input, output| Ok(TransformDummy::create(input, output))
     }
 
     pub(crate) fn block_compact_task_builder(
