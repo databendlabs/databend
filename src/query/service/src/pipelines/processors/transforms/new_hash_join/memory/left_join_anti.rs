@@ -147,7 +147,7 @@ impl Join for AntiLeftHashJoin {
 }
 
 struct LeftAntiHashJoinStream<'a> {
-    probe_data_block: DataBlock,
+    probe_data_block: Option<DataBlock>,
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
 }
@@ -163,7 +163,7 @@ impl<'a> LeftAntiHashJoinStream<'a> {
     ) -> Box<dyn JoinStream + 'a> {
         Box::new(LeftAntiHashJoinStream {
             probed_rows,
-            probe_data_block,
+            probe_data_block: Some(probe_data_block),
             probe_keys_stream,
         })
     }
@@ -171,7 +171,11 @@ impl<'a> LeftAntiHashJoinStream<'a> {
 
 impl<'a> JoinStream for LeftAntiHashJoinStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
-        let num_rows = self.probe_data_block.num_rows();
+        let Some(probe_data_block) = self.probe_data_block.take() else {
+            return Ok(None);
+        };
+
+        let num_rows = probe_data_block.num_rows();
         let mut selected = vec![false; num_rows];
 
         loop {
@@ -181,9 +185,7 @@ impl<'a> JoinStream for LeftAntiHashJoinStream<'a> {
 
             if self.probed_rows.is_empty() {
                 let bitmap = Bitmap::from_trusted_len_iter(selected.into_iter());
-                return Ok(Some(
-                    self.probe_data_block.clone().filter_with_bitmap(&bitmap)?,
-                ));
+                return Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?));
             }
 
             for idx in &self.probed_rows.unmatched {
@@ -316,7 +318,7 @@ impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
                 }
             } else if selected_rows != 0 {
                 let selection = self.filter_executor.true_selection();
-                for idx in selection {
+                for idx in selection[..selected_rows].iter() {
                     assume((*idx as usize) < self.probed_rows.matched_probe.len());
                     let idx = self.probed_rows.matched_probe[*idx as usize];
                     assume((idx as usize) < selected.len());

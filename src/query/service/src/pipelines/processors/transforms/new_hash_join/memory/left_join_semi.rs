@@ -307,7 +307,7 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
                 }
             } else if selected_rows != 0 {
                 let selection = self.filter_executor.true_selection();
-                for idx in selection {
+                for idx in selection[..selected_rows].iter() {
                     assume((*idx as usize) < self.probed_rows.matched_probe.len());
                     let idx = self.probed_rows.matched_probe[*idx as usize];
                     assume((idx as usize) < selected.len());
