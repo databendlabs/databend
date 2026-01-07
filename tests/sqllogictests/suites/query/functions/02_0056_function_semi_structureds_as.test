@@ -76,12 +76,22 @@ select to_timestamp('2025-01-01 10:00:00')::variant, to_timestamp(to_timestamp('
 query TTTT
 select to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant, to_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant), to_timestamp_tz(parse_json('"2025-01-01 10:00:00 +0800"')), as_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant)
 ----
-"2025-01-01 10:00:00.000000" 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800
+"2025-01-01 10:00:00.000000 +0800" 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800
+
+query TTTT
+select to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant, to_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant), to_timestamp_tz(parse_json('"2025-01-01 10:00:00 +0830"')), as_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant)
+----
+"2025-01-01 10:00:00.000000 +0830" 2025-01-01 10:00:00.000000 +0830 2025-01-01 10:00:00.000000 +0830 2025-01-01 10:00:00.000000 +0830
 
 query TTTT
 select to_interval('10 months 2 days')::variant, to_interval(to_interval('10 months 2 days')::variant), to_interval(parse_json('"10 months 2 days"')), as_interval(to_interval('10 months 2 days')::variant)
 ----
 "10 months 2 days" 10 months 2 days 10 months 2 days 10 months 2 days
+
+query TTTT
+select to_interval('-10 months -2 days')::variant, to_interval(to_interval('-10 months -2 days')::variant), to_interval(parse_json('"-10 months -2 days"')), as_interval(to_interval('-10 months -2 days')::variant)
+----
+"-10 months -2 days" -10 months -2 days -10 months -2 days -10 months -2 days
 
 query TTTT
 select to_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14')), as_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14'), 10, 2)
