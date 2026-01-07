@@ -88,11 +88,11 @@ impl SemiRightHashJoin {
 
 impl Join for SemiRightHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.basic_hash_join.add_outer_scan_block(data)
+        self.basic_hash_join.add_block(data)
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<true>()
     }
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
@@ -349,10 +349,7 @@ impl<'a> SemiRightHashJoinFinalStream<'a> {
         max_rows: usize,
         join_state: Arc<BasicHashJoinState>,
     ) -> Box<dyn JoinStream + 'a> {
-        let scan_progress = {
-            let _guard = join_state.mutex.lock();
-            join_state.scan_queue.as_mut().pop_front().map(|x| (x, 0))
-        };
+        let scan_progress = join_state.steal_scan_chunk_index();
 
         Box::new(SemiRightHashJoinFinalStream::<'a> {
             max_rows,

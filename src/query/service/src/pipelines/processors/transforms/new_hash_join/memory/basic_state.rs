@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::PoisonError;
 
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -61,6 +62,12 @@ impl BasicHashJoinState {
             scan_map: CStyleCell::new(Vec::new()),
             scan_queue: CStyleCell::new(VecDeque::new()),
         }
+    }
+
+    pub fn steal_scan_chunk_index(&self) -> Option<(usize, usize)> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.scan_queue.as_mut().pop_front().map(|x| (x, 0))
     }
 }
 

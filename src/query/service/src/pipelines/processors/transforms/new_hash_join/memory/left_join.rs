@@ -91,7 +91,7 @@ impl Join for OuterLeftHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<false>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

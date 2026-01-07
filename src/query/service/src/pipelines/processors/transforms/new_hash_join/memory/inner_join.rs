@@ -88,7 +88,7 @@ impl Join for InnerHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<false>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {

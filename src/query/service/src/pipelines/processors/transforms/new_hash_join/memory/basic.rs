@@ -85,36 +85,14 @@ impl BasicHashJoin {
             let chunk_index = self.state.chunks.len();
             self.state.chunks.as_mut().push(squashed_block);
             self.state.build_queue.as_mut().push_back(chunk_index);
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn add_outer_scan_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
-        let mut squashed_block = match data.take() {
-            None => self.squash_block.finalize()?,
-            Some(data_block) => self.squash_block.add_block(data_block)?,
-        };
-
-        if let Some(squashed_block) = squashed_block.take() {
-            let locked = self.state.mutex.lock();
-            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-            let num_rows = squashed_block.num_rows();
-            let visited_map = vec![0; num_rows];
-
-            *self.state.build_rows.as_mut() += num_rows;
-            let chunk_index = self.state.chunks.len();
-            self.state.chunks.as_mut().push(squashed_block);
-            self.state.build_queue.as_mut().push_back(chunk_index);
-            self.state.scan_map.as_mut().push(visited_map);
+            self.state.scan_map.as_mut().push(vec![]);
             self.state.scan_queue.as_mut().push_back(chunk_index);
         }
 
         Ok(())
     }
 
-    pub(crate) fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+    pub(crate) fn final_build<const SCAN_MAP: bool>(&mut self) -> Result<Option<ProgressValues>> {
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
@@ -149,6 +127,13 @@ impl BasicHashJoin {
         // restore storage block
         {
             let chunks = self.state.chunks.as_mut();
+
+            if SCAN_MAP {
+                let mut scan_map = vec![0; chunk_block.num_rows()];
+                let scan_maps = self.state.scan_map.as_mut();
+                std::mem::swap(&mut scan_maps[chunk_index], &mut scan_map);
+            }
+
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 

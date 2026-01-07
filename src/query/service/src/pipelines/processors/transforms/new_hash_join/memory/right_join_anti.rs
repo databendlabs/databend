@@ -85,11 +85,11 @@ impl AntiRightHashJoin {
 
 impl Join for AntiRightHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.basic_hash_join.add_outer_scan_block(data)
+        self.basic_hash_join.add_block(data)
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<true>()
     }
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
@@ -190,14 +190,7 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
 
             let new_row_idx = row_idx + remain_rows;
             self.scan_progress = match new_row_idx >= scan_map.len() {
-                true => {
-                    let _guard = self.join_state.mutex.lock();
-                    self.join_state
-                        .scan_queue
-                        .as_mut()
-                        .pop_front()
-                        .map(|x| (x, 0))
-                }
+                true => self.join_state.steal_scan_chunk_index(),
                 false => Some((chunk_idx, new_row_idx)),
             };
 
@@ -233,10 +226,7 @@ impl<'a> AntiRightHashJoinFinalStream<'a> {
         max_rows: usize,
         join_state: Arc<BasicHashJoinState>,
     ) -> Box<dyn JoinStream + 'a> {
-        let scan_progress = {
-            let _guard = join_state.mutex.lock();
-            join_state.scan_queue.as_mut().pop_front().map(|x| (x, 0))
-        };
+        let scan_progress = join_state.steal_scan_chunk_index();
 
         Box::new(AntiRightHashJoinFinalStream::<'a> {
             max_rows,
