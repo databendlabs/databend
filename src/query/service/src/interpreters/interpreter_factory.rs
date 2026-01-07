@@ -94,6 +94,8 @@ use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
+use crate::interpreters::interpreter_table_ref_create::CreateTableRefInterpreter;
+use crate::interpreters::interpreter_table_ref_drop::DropTableRefInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
@@ -439,6 +441,14 @@ impl InterpreterFactory {
             Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
                 DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::CreateTableRef(p) => Ok(Arc::new(CreateTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropTableRef(p) => Ok(Arc::new(DropTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(

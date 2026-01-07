@@ -3552,12 +3552,10 @@ dependencies = [
  "databend-common-storage",
  "databend-common-tracing",
  "log",
- "pretty_assertions",
  "serde",
  "serde_ignored",
  "serde_with",
  "serfig",
- "tempfile",
  "toml 0.8.22",
 ]
 
@@ -3615,7 +3613,6 @@ dependencies = [
  "arrow-data 56.2.0",
  "arrow-flight",
  "arrow-ipc 56.2.0",
- "arrow-ord 56.2.0",
  "arrow-schema 56.2.0",
  "arrow-select 56.2.0",
  "async-backtrace",
@@ -3729,7 +3726,6 @@ dependencies = [
  "bstr",
  "bumpalo",
  "comfy-table",
- "crc32fast",
  "ctor",
  "databend-common-ast",
  "databend-common-base",
@@ -3749,11 +3745,9 @@ dependencies = [
  "databend-functions-scalar-numeric-basic-arithmetic",
  "divan",
  "geo",
- "geohash",
  "geozero",
  "glob",
  "goldenfile",
- "h3o",
  "hex",
  "itertools 0.13.0",
  "jaq-core",
@@ -3762,15 +3756,12 @@ dependencies = [
  "jaq-std",
  "jiff",
  "jsonb",
- "lexical-core",
  "libm",
  "log",
  "match-template",
  "md-5",
  "naive-cityhash",
  "num-traits",
- "once_cell",
- "proj4rs",
  "proptest",
  "rand 0.8.5",
  "regex",
@@ -3781,7 +3772,6 @@ dependencies = [
  "simdutf8",
  "simple_hll",
  "siphasher 0.3.11",
- "strength_reduce",
  "stringslice",
  "twox-hash 1.6.3",
  "unicase",
@@ -3993,7 +3983,6 @@ dependencies = [
 name = "databend-common-meta-app-types"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "num-derive",
  "prost",
  "serde",
@@ -4003,14 +3992,12 @@ dependencies = [
 name = "databend-common-meta-cache"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "databend-common-base",
  "databend-common-meta-client",
  "databend-common-meta-types",
  "futures",
  "log",
- "pretty_assertions",
  "sub-cache",
  "tonic 0.13.1",
 ]
@@ -4025,7 +4012,6 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-kvapi",
@@ -4042,7 +4028,6 @@ dependencies = [
  "logcall",
  "once_cell",
  "parking_lot 0.12.3",
- "pretty_assertions",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -4502,7 +4487,6 @@ dependencies = [
  "num-traits",
  "opendal",
  "parking_lot 0.12.3",
- "pretty_assertions",
  "prqlc",
  "recursive",
  "regex",
@@ -4699,7 +4683,6 @@ dependencies = [
  "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
- "tempfile",
  "thrift",
  "typetag",
  "uuid",
@@ -4982,7 +4965,6 @@ name = "databend-common-timezone"
 version = "0.1.0"
 dependencies = [
  "jiff",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -5144,7 +5126,6 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-license",
  "databend-common-management",
@@ -5170,6 +5151,7 @@ dependencies = [
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-query",
@@ -5183,10 +5165,8 @@ dependencies = [
  "log",
  "opendal",
  "serde",
- "tantivy",
  "tempfile",
  "typetag",
- "uuid",
  "walkdir",
 ]
 
@@ -5233,6 +5213,18 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-common-sql",
+]
+
+[[package]]
+name = "databend-enterprise-table-ref-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
  "databend-common-sql",
 ]
 
@@ -5490,7 +5482,6 @@ dependencies = [
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-cache",
  "databend-common-catalog",
  "databend-common-cloud-control",
@@ -5544,6 +5535,7 @@ dependencies = [
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",
@@ -9802,8 +9794,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a901f06163d352fbe41c3c2ff5e08b75330a003cc941e988fb501022f5421e6"
+source = "git+https://github.com/databendlabs/jsonb?rev=1868abf#1868abfa1698a4c67fc17428da0cff5f33a2f4ad"
 dependencies = [
  "byteorder",
  "ethnum",
@@ -9814,9 +9805,9 @@ dependencies = [
  "num-traits",
  "ordered-float 5.1.0",
  "rand 0.9.2",
- "ryu",
  "serde",
  "serde_json",
+ "zmij",
 ]
 
 [[package]]
@@ -11346,7 +11337,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.11#6847fd3e341da8b8cf1a2bbacd593554081ad363"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.13#8d3592cc2e44e12dbdeeb74ae367d042e98af606"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -11356,10 +11347,11 @@ dependencies = [
  "futures",
  "maplit",
  "openraft-macros",
+ "openraft-rt",
+ "openraft-rt-tokio",
  "rand 0.9.2",
  "serde",
  "thiserror 1.0.69",
- "tokio",
  "tracing",
  "tracing-futures",
  "validit",
@@ -11368,13 +11360,34 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.11#6847fd3e341da8b8cf1a2bbacd593554081ad363"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.13#8d3592cc2e44e12dbdeeb74ae367d042e98af606"
 dependencies = [
  "chrono",
  "proc-macro2",
  "quote",
  "semver",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "openraft-rt"
+version = "0.10.0"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.13#8d3592cc2e44e12dbdeeb74ae367d042e98af606"
+dependencies = [
+ "futures",
+ "openraft-macros",
+ "rand 0.9.2",
+]
+
+[[package]]
+name = "openraft-rt-tokio"
+version = "0.10.0"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.13#8d3592cc2e44e12dbdeeb74ae367d042e98af606"
+dependencies = [
+ "futures",
+ "openraft-rt",
+ "rand 0.9.2",
+ "tokio",
 ]
 
 [[package]]
@@ -16682,9 +16695,9 @@ dependencies = [
 
 [[package]]
 name = "validit"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1fad49f3eae9c160c06b4d49700a99e75817f127cf856e494b56d5e23170020"
+checksum = "4efba0434d5a0a62d4f22070b44ce055dc18cb64d4fa98276aa523dadfaba0e7"
 dependencies = [
  "anyerror",
 ]
@@ -18343,6 +18356,12 @@ name = "zlib-rs"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "868b928d7949e09af2f6086dfc1e01936064cc7a819253bce650d4e2a2d63ba8"
+
+[[package]]
+name = "zmij"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc5a66a20078bf1251bde995aa2fdcc4b800c70b5d92dd2c62abc5c60f679f8"
 
 [[package]]
 name = "zopfli"

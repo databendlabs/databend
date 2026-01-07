@@ -94,6 +94,14 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                 ],
                 false,
             ),
+            (3, false, false) => (
+                vec![
+                    from_type.clone(),
+                    DataType::Number(NumberDataType::Int64),
+                    DataType::Number(NumberDataType::Int64),
+                ],
+                false,
+            ),
             (4, true, true) => (
                 vec![
                     DataType::String,
