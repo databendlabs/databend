@@ -25,6 +25,9 @@ out          : or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 3_u64), e
 in           : a = 3 or false
 out          : eq<UInt64, UInt64>(a (#0), 3_u64)
 
+in           : false or false
+out          : false
+
 in           : (a = 9 or a = 8) and (a = 7 or a = 5) and a = 3
 out          : and_filters<Boolean, Boolean, Boolean>(or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 9_u64), eq<UInt64, UInt64>(a (#0), 8_u64)), or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 7_u64), eq<UInt64, UInt64>(a (#0), 5_u64)), eq<UInt64, UInt64>(a (#0), 3_u64))
 

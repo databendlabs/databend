@@ -188,7 +188,11 @@ impl RewritePredicates {
         Ok(None)
     }
 
-    fn rewrite_or(&mut self, arguments: &mut Vec<ScalarExpr>) -> Result<Option<ScalarExpr>> {
+    fn rewrite_or(
+        &mut self,
+        span: Span,
+        arguments: &mut Vec<ScalarExpr>,
+    ) -> Result<Option<ScalarExpr>> {
         let func_arguments = std::mem::take(arguments);
         for mut arg in func_arguments {
             self.visit(&mut arg)?;
@@ -209,6 +213,15 @@ impl RewritePredicates {
                 }
                 arguments.push(arg);
             }
+        }
+        if arguments.is_empty() {
+            return Ok(Some(
+                ConstantExpr {
+                    span,
+                    value: Scalar::Boolean(false),
+                }
+                .into(),
+            ));
         }
         if arguments.len() == 1 {
             return Ok(arguments.pop());
@@ -236,7 +249,7 @@ impl<'a> VisitorMut<'a> for RewritePredicates {
                     if func_name == "or" {
                         *func_name = "or_filters".to_string()
                     }
-                    self.rewrite_or(arguments)?
+                    self.rewrite_or(*span, arguments)?
                 }
                 "not" => {
                     if let ScalarExpr::FunctionCall(inner) = &mut arguments[0]
@@ -366,6 +379,8 @@ mod tests {
         run_test(file, "a = 3 or true or a = 5", columns)?;
         run_test(file, "a = 3 or false or a = 5", columns)?;
         run_test(file, "a = 3 or false", columns)?;
+
+        run_test(file, "false or false", columns)?;
 
         run_test(
             file,
