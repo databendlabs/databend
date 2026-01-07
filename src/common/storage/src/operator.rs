@@ -676,13 +676,101 @@ impl OperatorRegistry for DataOperator {
     }
 }
 
-impl OperatorRegistry for iceberg::io::FileIO {
-    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
-        let file_io = self
-            .new_input(location)
-            .map_err(|err| std::io::Error::new(ErrorKind::Unsupported, err.message()))?;
+pub struct IcebergFileIO {
+    scheme: String,
+    props: std::collections::HashMap<String, String>,
+}
 
-        let pos = file_io.relative_path_pos();
-        Ok((file_io.get_operator().clone(), &location[pos..]))
+impl IcebergFileIO {
+    pub fn new(file_io: iceberg::io::FileIO) -> Self {
+        let (scheme, props, _extensions) = file_io.into_builder().into_parts();
+        Self { scheme, props }
+    }
+
+    fn build_operator(&self, location: &str) -> Result<(Operator, usize)> {
+        let url = url::Url::parse(location)
+            .map_err(|e| Error::new(ErrorKind::InvalidInput, e.to_string()))?;
+
+        let scheme = url.scheme();
+        let bucket = url
+            .host_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing bucket in URL"))?;
+
+        let prefix = format!("{}://{}/", scheme, bucket);
+        let relative_path_pos = if location.starts_with(&prefix) {
+            prefix.len()
+        } else {
+            url.scheme().len() + 3 + bucket.len() + 1
+        };
+
+        let mut opendal_config: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        opendal_config.insert("bucket".to_string(), bucket.to_string());
+
+        for (key, value) in &self.props {
+            let opendal_key = match key.as_str() {
+                "s3.endpoint" => Some("endpoint"),
+                "s3.access-key-id" => Some("access_key_id"),
+                "s3.secret-access-key" => Some("secret_access_key"),
+                "s3.region" | "client.region" => Some("region"),
+                "s3.session-token" => Some("session_token"),
+                "s3.path-style-access" => {
+                    let enable_virtual_host_style =
+                        !["true", "t", "1", "on"].contains(&value.to_lowercase().as_str());
+                    opendal_config.insert(
+                        "enable_virtual_host_style".to_string(),
+                        enable_virtual_host_style.to_string(),
+                    );
+                    None
+                }
+                "s3.allow-anonymous" => {
+                    if ["true", "t", "1", "on"].contains(&value.to_lowercase().as_str()) {
+                        opendal_config.insert("allow_anonymous".to_string(), "true".to_string());
+                    }
+                    None
+                }
+                "gcs.credentials" => Some("credential"),
+                "gcs.project-id" => Some("default_storage_class"),
+                "adls.account-name" | "azure.account-name" => Some("account_name"),
+                "adls.account-key" | "azure.account-key" => Some("account_key"),
+                "adls.sas-token" | "azure.sas-token" => Some("sas_token"),
+                _ => {
+                    opendal_config.insert(key.clone(), value.clone());
+                    None
+                }
+            };
+
+            if let Some(opendal_key) = opendal_key {
+                opendal_config.insert(opendal_key.to_string(), value.clone());
+            }
+        }
+
+        let opendal_scheme = match self.scheme.as_str() {
+            "s3" | "s3a" => opendal::Scheme::S3,
+            "gs" | "gcs" => opendal::Scheme::Gcs,
+            "oss" => opendal::Scheme::Oss,
+            "abfs" | "abfss" | "wasb" | "wasbs" => opendal::Scheme::Azdls,
+            "file" | "" => opendal::Scheme::Fs,
+            "memory" => opendal::Scheme::Memory,
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::Unsupported,
+                    format!("unsupported iceberg scheme: {}", self.scheme),
+                ));
+            }
+        };
+
+        let op = Operator::via_iter(opendal_scheme, opendal_config)
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+
+        Ok((op, relative_path_pos))
+    }
+}
+
+impl OperatorRegistry for IcebergFileIO {
+    fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
+        let (op, pos) = self.build_operator(location)?;
+        Ok((op, &location[pos..]))
     }
 }

@@ -64,12 +64,12 @@ select id, item['name'], item['age'] from t_nested;
 
 
 query ITI rowsort
-select item, item['name'] from t_nested;
+select 't_nested', item, item['name'] from t_nested;
 ----
-('Alice',30) Alice
-('Bob',25) Bob
-('Charlie',35) Charlie
-NULL NULL
+t_nested ("Alice",30) Alice
+t_nested ("Bob",25) Bob
+t_nested ("Charlie",35) Charlie
+t_nested NULL NULL
 
 query ITII rowsort
 select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from t_nested;

@@ -51,6 +51,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
 use databend_common_storages_parquet::ParquetReaderBuilder;
@@ -154,7 +155,8 @@ impl IcebergTable {
         table: &iceberg::table::Table,
         statistics: &statistics::IcebergStatistics,
     ) -> Result<BTreeMap<String, String>> {
-        let (file_io_scheme, file_io_props) = table.file_io().clone().into_builder().into_parts();
+        let (file_io_scheme, file_io_props, _) =
+            table.file_io().clone().into_builder().into_parts();
         let file_io_props = serde_json::to_string(&file_io_props)?;
         let metadata_location = table
             .metadata_location()
@@ -307,7 +309,7 @@ impl IcebergTable {
         let table_schema = self.info.schema();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let op = self.table.file_io();
+        let op: Arc<IcebergFileIO> = Arc::new(IcebergFileIO::new(self.table.file_io().clone()));
         if let Some(true) = self
             .table
             .metadata()
@@ -325,7 +327,7 @@ impl IcebergTable {
                     ORCSource::try_create_with_schema(
                         output,
                         ctx.clone(),
-                        Arc::new(op.clone()),
+                        op.clone(),
                         arrow_schema.clone(),
                         None,
                         projection.clone(),
@@ -352,7 +354,6 @@ impl IcebergTable {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
-            let op = Arc::new(op.clone());
             let mut builder = ParquetReaderBuilder::create(
                 ctx.clone(),
                 op.clone(),
@@ -420,8 +421,7 @@ impl IcebergTable {
             }
         }
 
-        let tasks: Vec<_> = scan
-            .with_delete_file_processing_enabled(true)
+        let tasks: Vec<iceberg::scan::FileScanTask> = scan
             .build()
             .map_err(|err| ErrorCode::Internal(format!("iceberg table scan build: {err:?}")))?
             .plan_files()
