@@ -109,7 +109,6 @@ impl NewTransformFinalAggregate {
                 params.max_block_bytes,
                 SPILL_BUCKET_NUM,
             ),
-            true,
         )?;
 
         Ok(Box::new(NewTransformFinalAggregate {
@@ -314,8 +313,19 @@ impl NewTransformFinalAggregate {
 
         Ok(())
     }
+}
 
-    fn debug_event(&mut self) -> Result<Event> {
+#[async_trait::async_trait]
+impl Processor for NewTransformFinalAggregate {
+    fn name(&self) -> String {
+        "NewTransformFinalAggregate".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             let _ = self.tx.take();
             self.input.finish();
@@ -364,24 +374,6 @@ impl NewTransformFinalAggregate {
         self.input.set_need_data();
         Ok(Event::NeedData)
     }
-}
-
-#[async_trait::async_trait]
-impl Processor for NewTransformFinalAggregate {
-    fn name(&self) -> String {
-        "NewTransformFinalAggregate".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        let event = self.debug_event()?;
-        let ff = format!("{} {:?}", self._id, event);
-        dbg!(ff);
-        Ok(event)
-    }
 
     fn process(&mut self) -> Result<()> {
         let input_data = self.input_data.take();
@@ -399,7 +391,6 @@ impl Processor for NewTransformFinalAggregate {
 
             return Ok(());
         } else {
-            dbg!(self._id, "take sender");
             let sender = mem::take(&mut self.tx)
                 .expect("logic error: called finished for input data more than once");
             self.finish(0, sender)?;

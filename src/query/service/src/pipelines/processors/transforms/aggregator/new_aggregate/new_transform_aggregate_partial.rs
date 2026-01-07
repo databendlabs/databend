@@ -65,8 +65,7 @@ impl Spiller {
         partition_streams: SharedPartitionStream,
         bucket_num: usize,
     ) -> Result<Self> {
-        let spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), bucket_num, partition_streams, true)?;
+        let spiller = NewAggregateSpiller::try_create(ctx.clone(), bucket_num, partition_streams)?;
         Ok(Self {
             inner: spiller,
             bucket_num,

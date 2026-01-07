@@ -112,23 +112,16 @@ struct AggregatePayloadWriters {
     writers: Vec<Option<PayloadWriter>>,
     write_stats: WriteStats,
     ctx: Arc<QueryContext>,
-    is_local: bool,
 }
 
 impl AggregatePayloadWriters {
-    pub fn create(
-        prefix: &str,
-        partition_count: usize,
-        ctx: Arc<QueryContext>,
-        is_local: bool,
-    ) -> Self {
+    pub fn create(prefix: &str, partition_count: usize, ctx: Arc<QueryContext>) -> Self {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
             writers: Self::empty_writers(partition_count),
             write_stats: WriteStats::default(),
             ctx,
-            is_local,
         }
     }
 
@@ -184,8 +177,7 @@ impl AggregatePayloadWriters {
 
             if written_size != 0 {
                 info!(
-                    "Write aggregate spill finished({}): (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
-                    if self.is_local { "local" } else { "exchange" },
+                    "Write aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
                     partition_id,
                     path,
                     written_size,
@@ -219,7 +211,7 @@ impl AggregatePayloadWriters {
         }
 
         let stats = self.write_stats.take();
-        flush_write_profile(&self.ctx, stats, self.is_local);
+        flush_write_profile(&self.ctx, stats);
 
         Ok(spilled_payloads)
     }
@@ -336,15 +328,13 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         ctx: Arc<QueryContext>,
         partition_count: usize,
         partition_stream: P,
-        is_local: bool,
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
 
-        let payload_writers =
-            AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx, is_local);
+        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx);
 
         Ok(Self {
             memory_settings,
@@ -442,7 +432,7 @@ fn restore_payload(
     }
 }
 
-fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats, _is_local: bool) {
+fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
     if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
         return;
     }
@@ -479,7 +469,7 @@ mod tests {
         let partition_count = 4;
         let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
         let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream, true)?;
+            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 
@@ -508,7 +498,7 @@ mod tests {
         let partition_count = 4;
         let partition_stream = LocalPartitionStream::new(1024, 1024 * 1024, partition_count);
         let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream, true)?;
+            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 
