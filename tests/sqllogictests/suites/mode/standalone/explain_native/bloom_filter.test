@@ -175,7 +175,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
-└── estimated rows: 1.60
+└── estimated rows: 0.40
 
 query T
 explain select * from bloom_test_nullable_t2 where (not (not c0))
@@ -190,4 +190,4 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(bloom_test_nullable_t2.c0 (#0))], limit: NONE]
-└── estimated rows: 2.00
+└── estimated rows: 1.00
