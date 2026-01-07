@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -67,6 +68,7 @@ pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
+    lvt_check: HashMap<u64, Option<TableLvtCheck>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
@@ -106,6 +108,8 @@ impl TxnBuffer {
             self.base_snapshot_location
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
+
+            self.lvt_check.entry(table_id).or_insert(req.lvt_check);
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -314,6 +318,7 @@ impl TxnManager {
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
+                            lvt_check: self.txn_buffer.lvt_check.get(id).cloned().flatten(),
                         },
                         info.clone(),
                     )

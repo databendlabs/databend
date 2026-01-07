@@ -160,21 +160,6 @@ impl TableSnapshot {
         })
     }
 
-    /// used in ut
-    #[cfg(test)]
-    pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
-        Self::try_new(
-            prev_table_seq,
-            None,
-            schema,
-            Statistics::default(),
-            vec![],
-            None,
-            Default::default(),
-        )
-        .unwrap()
-    }
-
     pub fn try_from_previous(
         previous: Arc<TableSnapshot>,
         prev_table_seq: Option<u64>,

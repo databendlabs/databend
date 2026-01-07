@@ -632,6 +632,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             // TODO
             database: table.db_name.clone(),
             table: table.name.clone(),
+            ref_name: None,
             // TODO
             alias: None,
             // TODO

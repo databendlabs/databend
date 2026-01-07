@@ -266,6 +266,7 @@ fn test_decode_v129_table_meta() -> anyhow::Result<()> {
             options: btreemap! {s("type") => s("hnsw")},
         }},
         constraints: btreemap! {},
+        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v129.as_slice(), 129, want())?;
