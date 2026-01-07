@@ -16,6 +16,9 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
+
     - name: Iceberg Setup for (ubuntu-latest only)
       shell: bash
       run: |
