@@ -35,10 +35,8 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateCountFunction;
 use super::AggregateFunction;
-use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionCreator;
 use super::AggregateFunctionDescription;
-use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::CombinatorDescription;
 use super::StateAddr;
@@ -49,30 +47,17 @@ use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateDistinctTimestampState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_null_result::AggregateNullResultFunction;
 use super::assert_variadic_arguments;
+use crate::aggregates::AggregateFunctionFeatures;
 
+#[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
     name: String,
 
     nested_name: String,
     arguments: Vec<DataType>,
-    skip_null: bool,
     nested: Arc<dyn AggregateFunction>,
     _s: PhantomData<fn(State)>,
-}
-
-impl<State> Clone for AggregateDistinctCombinator<State> {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            nested_name: self.nested_name.clone(),
-            arguments: self.arguments.clone(),
-            skip_null: self.skip_null,
-            nested: self.nested.clone(),
-            _s: PhantomData,
-        }
-    }
 }
 
 impl<State> AggregateDistinctCombinator<State>
@@ -122,12 +107,12 @@ where State: DistinctStateFunc
         input_rows: usize,
     ) -> Result<()> {
         let state = Self::get_state(place);
-        state.batch_add(columns, validity, input_rows, self.skip_null)
+        state.batch_add(columns, validity, input_rows)
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
-        state.add(columns, row, self.skip_null)
+        state.add(columns, row)
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
@@ -234,41 +219,6 @@ pub fn aggregate_uniq_desc() -> AggregateFunctionDescription {
     )
 }
 
-pub fn aggregate_count_distinct_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator_with_features(
-        Box::new(|_, params, arguments, _| {
-            let count_creator = Box::new(AggregateCountFunction::try_create) as _;
-            match *arguments {
-                [DataType::Nullable(_)] => {
-                    let new_arguments =
-                        AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-                    let nested = try_create(
-                        "count",
-                        params.clone(),
-                        new_arguments,
-                        vec![],
-                        &count_creator,
-                    )?;
-                    AggregateFunctionCombinatorNull::try_create(params, arguments, nested, true)
-                }
-                ref arguments
-                    if !arguments.is_empty() && arguments.iter().all(DataType::is_null) =>
-                {
-                    AggregateNullResultFunction::try_create(DataType::Number(
-                        NumberDataType::UInt64,
-                    ))
-                }
-                _ => try_create("count", params, arguments, vec![], &count_creator),
-            }
-        }),
-        AggregateFunctionFeatures {
-            returns_default_when_only_null: true,
-            keep_nullable: true,
-            ..Default::default()
-        },
-    )
-}
-
 fn try_create(
     nested_name: &str,
     params: Vec<Scalar>,
@@ -293,7 +243,6 @@ fn try_create(
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
-                    skip_null: false,
                     nested,
                     name,
                     _s: PhantomData,
@@ -305,7 +254,6 @@ fn try_create(
         > {
             nested_name: nested_name.to_owned(),
             arguments,
-            skip_null: false,
             nested,
             name,
             _s: PhantomData,
@@ -315,7 +263,6 @@ fn try_create(
         > {
             nested_name: nested_name.to_owned(),
             arguments,
-            skip_null: false,
             nested,
             name,
             _s: PhantomData,
@@ -326,7 +273,6 @@ fn try_create(
             > {
                 name,
                 arguments,
-                skip_null: false,
                 nested,
                 nested_name: nested_name.to_owned(),
                 _s: PhantomData,
@@ -337,7 +283,6 @@ fn try_create(
         > {
             nested_name: nested_name.to_owned(),
             arguments,
-            skip_null: false,
             nested,
             name,
             _s: PhantomData,
@@ -346,9 +291,6 @@ fn try_create(
             AggregateDistinctState,
         > {
             nested_name: nested_name.to_owned(),
-            skip_null: nested_name == "count"
-                && arguments.len() > 1
-                && arguments.iter().any(DataType::is_nullable_or_null),
             arguments,
             nested,
             name,

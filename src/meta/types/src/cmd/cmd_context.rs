@@ -23,6 +23,7 @@ use crate::Time;
 use crate::cmd::io_timing::IoTimer;
 use crate::cmd::io_timing::IoTiming;
 use crate::raft_types::LogId;
+use crate::raft_types::new_log_id;
 
 /// A context used when executing a [`Cmd`], to provide additional environment information.
 ///
@@ -65,7 +66,7 @@ impl CmdContext {
     pub fn new(time: Time) -> Self {
         CmdContext {
             time,
-            log_id: LogId::default(),
+            log_id: new_log_id(0, 0, 0),
             io_timing: Arc::new(Mutex::new(IoTiming::new())),
         }
     }

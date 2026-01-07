@@ -23,7 +23,6 @@ use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime;
 use databend_common_base::runtime::spawn_named;
@@ -31,9 +30,7 @@ use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCo
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
-use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
-use databend_common_meta_sled_store::openraft::error::Unreachable;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::network::v2::RaftNetworkV2;
 use databend_common_meta_types::Endpoint;
@@ -43,7 +40,6 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::InstallEntryV004;
 use databend_common_meta_types::protobuf::RaftReply;
-use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::raft_types::AppendEntriesRequest;
 use databend_common_meta_types::raft_types::AppendEntriesResponse;
@@ -58,6 +54,7 @@ use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::StreamingError;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::raft_types::TypeConfig;
+use databend_common_meta_types::raft_types::Unreachable;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::raft_types::VoteResponse;
@@ -278,54 +275,31 @@ impl Network {
         RPCError::Unreachable(Unreachable::new(&e))
     }
 
-    /// Create a new RaftRequest for AppendEntriesRequest,
-    /// if it is too large, return `PayloadTooLarge` error
-    /// to tell Openraft to split it in to smaller chunks.
-    fn new_append_entries_raft_req<E>(
-        &self,
-        rpc: &AppendEntriesRequest,
-    ) -> Result<RaftRequest, RPCError<E>>
-    where
-        E: std::error::Error,
-    {
-        let start = Instant::now();
-        let raft_req = GrpcHelper::encode_raft_request(rpc).map_err(|e| Unreachable::new(&e))?;
-        debug!(
-            "Raft NetworkConnection: new_append_entries_raft_req() encode_raft_request: target={}, elapsed={:?}",
-            self.target,
-            start.elapsed()
+    /// Build a partial AppendEntriesRequest with only the first `n` entries.
+    fn build_partial_append_request(
+        original: &AppendEntriesRequest,
+        n: usize,
+    ) -> AppendEntriesRequest {
+        AppendEntriesRequest {
+            vote: original.vote,
+            prev_log_id: original.prev_log_id,
+            leader_commit: original.leader_commit,
+            entries: original.entries[..n].to_vec(),
+        }
+    }
+
+    /// Reduce entry count by half. Returns `None` if already at minimum.
+    fn try_reduce_entries(&self, current: usize, reason: &str) -> Option<usize> {
+        if current <= 1 {
+            return None;
+        }
+
+        let new_count = current / 2;
+        warn!(
+            "append_entries: target={}, {}, reducing entries {} -> {}",
+            self.target, reason, current, new_count
         );
-
-        if raft_req.data.len() <= GrpcConfig::advisory_encoding_size() {
-            return Ok(raft_req);
-        }
-
-        // data.len() is too large
-
-        let l = rpc.entries.len();
-        if l == 0 {
-            // impossible.
-            Ok(raft_req)
-        } else if l == 1 {
-            warn!(
-                "append_entries req too large: target={}, len={}, can not split",
-                self.target,
-                raft_req.data.len()
-            );
-            // can not split, just try to send this big request
-            Ok(raft_req)
-        } else {
-            // l > 1
-            let n = std::cmp::max(1, l / 2);
-            warn!(
-                "append_entries req too large: target={}, len={}, reduce NO entries from {} to {}",
-                self.target,
-                raft_req.data.len(),
-                l,
-                n
-            );
-            Err(PayloadTooLarge::new_entries_hint(n as u64).into())
-        }
+        Some(new_count)
     }
 
     pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> + use<> {
@@ -400,9 +374,9 @@ impl Network {
             chunk_size
         );
 
-        let mut bf = db
-            .open_file()
-            .map_err(|e| StorageError::read_snapshot(Some(snapshot_meta.signature()), &e))?;
+        let mut bf = db.open_file().map_err(|e| {
+            StorageError::read_snapshot(Some(snapshot_meta.signature()), (&e).into())
+        })?;
 
         let mut c = std::pin::pin!(cancel);
 
@@ -424,7 +398,7 @@ impl Network {
             let mut offset = 0;
             while offset < buf.len() {
                 let n_read = bf.read(&mut buf[offset..]).map_err(|e| {
-                    StorageError::read_snapshot(Some(snapshot_meta.signature()), &e)
+                    StorageError::read_snapshot(Some(snapshot_meta.signature()), (&e).into())
                 })?;
 
                 debug!("offset: {}, n_read: {}", offset, n_read);
@@ -514,11 +488,9 @@ impl Network {
 
         let mut kv_count = 0u64;
 
-        while let Some(chunk) = strm
-            .try_next()
-            .await
-            .map_err(|err| StorageError::read_snapshot(Some(snapshot_meta.signature()), &err.1))?
-        {
+        while let Some(chunk) = strm.try_next().await.map_err(|err| {
+            StorageError::read_snapshot(Some(snapshot_meta.signature()), (&err.1).into())
+        })? {
             // Check for cancellation
             if let Some(err) = c.as_mut().now_or_never() {
                 return Err(err.into());
@@ -555,8 +527,9 @@ impl Network {
         info!("V004 snapshot streaming: completed {} KV entries", kv_count);
 
         // Send commit entry
-        let sys_data_json = serde_json::to_string(db.sys_data())
-            .map_err(|e| StorageError::read_snapshot(Some(snapshot_meta.signature()), &e))?;
+        let sys_data_json = serde_json::to_string(db.sys_data()).map_err(|e| {
+            StorageError::read_snapshot(Some(snapshot_meta.signature()), (&e).into())
+        })?;
 
         // Convert Vote to protobuf Vote using existing conversion
         let pb_vote = pb::Vote::from(vote);
@@ -744,6 +717,10 @@ impl Network {
 }
 
 impl RaftNetworkV2<TypeConfig> for Network {
+    /// Send AppendEntries RPC with automatic payload size management.
+    ///
+    /// If the payload exceeds gRPC size limit, reduces entry count and retries.
+    /// Returns error if a single entry exceeds the limit.
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
     async fn append_entries(
@@ -758,36 +735,79 @@ impl RaftNetworkV2<TypeConfig> for Network {
             "send_append_entries",
         );
 
-        let raft_req = self.new_append_entries_raft_req(&rpc)?;
-        let req = GrpcHelper::traced_req(raft_req);
+        let total = rpc.entries.len();
+        let mut entries_to_send = rpc.entries.len();
 
-        let bytes = req.get_ref().data.len() as u64;
-        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
+        loop {
+            let partial_rpc = Self::build_partial_append_request(&rpc, entries_to_send);
+            let raft_req =
+                GrpcHelper::encode_raft_request(&partial_rpc).map_err(|e| Unreachable::new(&e))?;
+            let payload_size = raft_req.data.len();
 
-        let mut client = self
-            .take_client()
-            .log_elapsed_debug("Raft NetworkConnection append_entries take_client()")
-            .await?;
-
-        let grpc_res = client
-            .append_entries(req)
-            .with_timing(observe_append_send_spent(self.target))
-            .await;
-        debug!(
-            "append_entries resp from: target={}: {:?}",
-            self.target, grpc_res
-        );
-
-        match &grpc_res {
-            Ok(_) => {
-                self.client.lock().await.replace(client);
+            // Check size before sending
+            if payload_size > GrpcConfig::advisory_encoding_size() {
+                let reason = format!("payload too large: {} bytes", payload_size);
+                match self.try_reduce_entries(entries_to_send, &reason) {
+                    Some(n) => {
+                        entries_to_send = n;
+                        continue;
+                    }
+                    None => {
+                        let err = AnyError::error(reason);
+                        return Err(RPCError::Unreachable(Unreachable::new(&err)));
+                    }
+                }
             }
-            Err(e) => {
-                warn!(target = self.target, rpc = rpc.summary(); "append_entries failed: {}", e);
+
+            // Send the request
+            let req = GrpcHelper::traced_req(raft_req);
+            raft_metrics::network::incr_sendto_bytes(&self.target, req.get_ref().data.len() as u64);
+
+            let mut client = self
+                .take_client()
+                .log_elapsed_debug("Raft NetworkConnection append_entries take_client()")
+                .await?;
+
+            let grpc_res = client
+                .append_entries(req)
+                .with_timing(observe_append_send_spent(self.target))
+                .await;
+
+            debug!(
+                "append_entries resp from: target={}: {:?}",
+                self.target, grpc_res
+            );
+
+            match &grpc_res {
+                Ok(_) => {
+                    self.client.lock().await.replace(client);
+
+                    // If we sent partial entries, return PartialSuccess
+                    if entries_to_send < total {
+                        let last_log_id = partial_rpc.entries.last().map(|e| e.log_id);
+                        return Ok(AppendEntriesResponse::PartialSuccess(last_log_id));
+                    }
+
+                    return self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res);
+                }
+                Err(status) if status.code() == tonic::Code::ResourceExhausted => {
+                    match self.try_reduce_entries(entries_to_send, "ResourceExhausted") {
+                        Some(n) => {
+                            entries_to_send = n;
+                            continue;
+                        }
+                        None => {
+                            let err = AnyError::error("ResourceExhausted: single entry too large");
+                            return Err(RPCError::Unreachable(Unreachable::new(&err)));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!(target = self.target, rpc = partial_rpc.summary(); "append_entries failed: {}", e);
+                    return self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res);
+                }
             }
         }
-
-        self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
     }
 
     /// Send snapshot to target node. Currently uses V004 streaming protocol.

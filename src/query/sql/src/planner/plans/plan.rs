@@ -69,6 +69,7 @@ use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
 use crate::plans::CreateTagPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -109,6 +110,7 @@ use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
@@ -296,6 +298,8 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
+    CreateTableRef(Box<CreateTableRefPlan>),
+    DropTableRef(Box<DropTableRefPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

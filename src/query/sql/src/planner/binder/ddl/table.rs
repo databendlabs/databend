@@ -132,12 +132,14 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
@@ -1030,9 +1032,11 @@ impl Binder {
             catalog,
             database,
             table,
+            ref_name,
             ..
         } = table_reference
         {
+            debug_assert!(ref_name.is_none());
             self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             return Err(ErrorCode::Internal(
@@ -1410,6 +1414,40 @@ impl Binder {
                         table,
                     },
                 )))
+            }
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableRef { ref_type, ref_name } => {
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                })))
             }
         }
     }

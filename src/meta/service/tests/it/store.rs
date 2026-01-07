@@ -37,6 +37,7 @@ use databend_meta::meta_node::meta_node::LogStore;
 use databend_meta::meta_node::meta_node::SMStore;
 use databend_meta::store::RaftStore;
 use futures::TryStreamExt;
+use futures::stream;
 use log::debug;
 use log::info;
 use maplit::btreeset;
@@ -167,7 +168,10 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
         sto.state_machine()
             .clone()
-            .apply([Entry::new_blank(log_id(1, 2, 2))])
+            .apply(stream::iter([Ok((
+                Entry::new_blank(log_id(1, 2, 2)),
+                None,
+            ))]))
             .await?;
     }
 
@@ -208,7 +212,8 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.log().clone().blocking_append(logs.clone()).await?;
-    sto.get_sm_v003().apply_entries(logs).await?;
+    let entry_stream = stream::iter(logs.into_iter().map(|e| Ok((e, None))));
+    sto.get_sm_v003().apply_entries(entry_stream).await?;
 
     let curr_snap = sto.state_machine().clone().build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -258,7 +263,8 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     sto.log().clone().blocking_append(logs.clone()).await?;
     {
         let sm = sto.get_sm_v003();
-        sm.apply_entries(logs).await?;
+        let entry_stream = stream::iter(logs.into_iter().map(|e| Ok((e, None))));
+        sm.apply_entries(entry_stream).await?;
     }
 
     sto.state_machine().clone().build_snapshot().await?;
@@ -306,7 +312,8 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.log().clone().blocking_append(logs.clone()).await?;
-        sto.get_sm_v003().apply_entries(logs).await?;
+        let entry_stream = stream::iter(logs.into_iter().map(|e| Ok((e, None))));
+        sto.get_sm_v003().apply_entries(entry_stream).await?;
 
         snap = sto.state_machine().clone().build_snapshot().await?;
     }

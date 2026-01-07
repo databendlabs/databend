@@ -391,6 +391,7 @@ impl<'a> Evaluator<'a> {
                 | DataType::Nullable(box DataType::Binary)
                 | DataType::Nullable(box DataType::Date)
                 | DataType::Nullable(box DataType::Timestamp)
+                | DataType::Nullable(box DataType::TimestampTz)
                 | DataType::Nullable(box DataType::Interval),
             ) => {
                 // allow cast variant to nullable types.
@@ -427,6 +428,7 @@ impl<'a> Evaluator<'a> {
                 | DataType::Binary
                 | DataType::Date
                 | DataType::Timestamp
+                | DataType::TimestampTz
                 | DataType::Interval,
             ) => {
                 // allow cast variant to not null types.

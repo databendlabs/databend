@@ -42,7 +42,10 @@ impl RaftTypeConfig for TypeConfig {
     type Entry = openraft::entry::Entry<TypeConfig>;
     type SnapshotData = DB;
     type AsyncRuntime = TokioRuntime;
-    type ResponderBuilder = OneshotResponder<TypeConfig>;
+    type Responder<T>
+        = OneshotResponder<Self, T>
+    where T: openraft::OptionalSend + 'static;
+    type ErrorSource = anyerror::AnyError;
 }
 
 pub type IOFlushed = openraft::storage::IOFlushed<TypeConfig>;
@@ -60,6 +63,7 @@ pub type SnapshotMeta = openraft::SnapshotMeta<TypeConfig>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
 
 pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
+pub type WatchReceiver<T> = openraft::type_config::alias::WatchReceiverOf<TypeConfig, T>;
 pub type Wait = openraft::metrics::Wait<TypeConfig>;
 
 pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
@@ -68,7 +72,7 @@ pub type ErrorVerb = openraft::ErrorVerb;
 pub type RPCError<E = Infallible> = openraft::error::RPCError<TypeConfig, E>;
 pub type RemoteError<E> = openraft::error::RemoteError<TypeConfig, E>;
 pub type RaftError<E = Infallible> = openraft::error::RaftError<TypeConfig, E>;
-pub type NetworkError = openraft::error::NetworkError;
+pub type NetworkError = openraft::error::NetworkError<TypeConfig>;
 
 pub type StorageError = openraft::StorageError<TypeConfig>;
 pub type ForwardToLeader = openraft::error::ForwardToLeader<TypeConfig>;
@@ -77,6 +81,7 @@ pub type ChangeMembershipError = openraft::error::ChangeMembershipError<TypeConf
 pub type ClientWriteError = openraft::error::ClientWriteError<TypeConfig>;
 pub type InitializeError = openraft::error::InitializeError<TypeConfig>;
 pub type StreamingError = openraft::error::StreamingError<TypeConfig>;
+pub type Unreachable = openraft::error::Unreachable<TypeConfig>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<TypeConfig>;
@@ -88,6 +93,7 @@ pub type SnapshotMismatch = openraft::error::SnapshotMismatch;
 pub type VoteRequest = openraft::raft::VoteRequest<TypeConfig>;
 pub type VoteResponse = openraft::raft::VoteResponse<TypeConfig>;
 pub type TransferLeaderRequest = openraft::raft::TransferLeaderRequest<TypeConfig>;
+pub type EntryResponder = openraft::storage::EntryResponder<TypeConfig>;
 
 pub fn new_log_id(term: u64, node_id: NodeId, index: u64) -> LogId {
     LogId::new(CommittedLeaderId::new(term, node_id), index)

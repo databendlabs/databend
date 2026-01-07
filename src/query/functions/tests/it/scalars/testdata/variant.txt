@@ -1226,6 +1226,15 @@ output domain  : {1746093600000000..=1746093600000000}
 output         : '2025-05-01 10:00:00.000000'
 
 
+ast            : as_timestamp_tz(to_timestamp_tz('2025-05-01 10:00:00 +0800')::variant)
+raw expr       : as_timestamp_tz(CAST(to_timestamp_tz('2025-05-01 10:00:00 +0800') AS Variant))
+checked expr   : as_timestamp_tz<Variant>(CAST<TimestampTz>(CAST<String>("2025-05-01 10:00:00 +0800" AS TimestampTz) AS Variant))
+optimized expr : timestamp_tz(531266231068899886540800)
+output type    : TimestampTz NULL
+output domain  : {2025-05-01 10:00:00.000000 +0800..=2025-05-01 10:00:00.000000 +0800}
+output         : '2025-05-01 10:00:00.000000 +0800'
+
+
 ast            : as_interval(to_interval('1 year 2 month')::variant)
 raw expr       : as_interval(CAST(to_interval('1 year 2 month') AS Variant))
 checked expr   : as_interval<Variant>(CAST<Interval>(CAST<String>("1 year 2 month" AS Interval) AS Variant))
@@ -1556,6 +1565,15 @@ output         : true
 ast            : is_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)
 raw expr       : is_timestamp(CAST(to_timestamp('2025-05-01 10:00:00') AS Variant))
 checked expr   : is_timestamp<Variant>(CAST<Timestamp>(CAST<String>("2025-05-01 10:00:00" AS Timestamp) AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_timestamp_tz(to_timestamp_tz('2025-05-01 10:00:00 +0800')::variant)
+raw expr       : is_timestamp_tz(CAST(to_timestamp_tz('2025-05-01 10:00:00 +0800') AS Variant))
+checked expr   : is_timestamp_tz<Variant>(CAST<TimestampTz>(CAST<String>("2025-05-01 10:00:00 +0800" AS TimestampTz) AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1916,6 +1934,41 @@ error:
 
 
 
+ast            : to_timestamp_tz(parse_json('null'))
+raw expr       : to_timestamp_tz(parse_json('null'))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS TimestampTz NULL)
+optimized expr : NULL
+output type    : TimestampTz NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
+raw expr       : to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
+checked expr   : CAST<Variant>(CAST<String>("\"2023-01-01 00:00:00 +0000\"" AS Variant) AS TimestampTz NULL)
+optimized expr : timestamp_tz(1672531200000000)
+output type    : TimestampTz NULL
+output domain  : {2023-01-01 00:00:00.000000 +0000..=2023-01-01 00:00:00.000000 +0000}
+output         : '2023-01-01 00:00:00.000000 +0000'
+
+
+ast            : to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
+raw expr       : to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
+checked expr   : CAST<Variant>(CAST<String>("\"2023-01-01 08:00:00 +0800\"" AS Variant) AS TimestampTz NULL)
+optimized expr : timestamp_tz(531266230995366286540800)
+output type    : TimestampTz NULL
+output domain  : {2023-01-01 08:00:00.000000 +0800..=2023-01-01 08:00:00.000000 +0800}
+output         : '2023-01-01 08:00:00.000000 +0800'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_timestamp_tz(parse_json('"abc"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP_TZ` strptime parsing failed: %Y failed: failed to parse year: invalid number, no digits found. while evaluating function `to_timestamp_tz('"abc"')` in expr `CAST(CAST('"abc"' AS Variant) AS TimestampTz NULL)`
+
+
+
 ast            : to_string(parse_json('null'))
 raw expr       : to_string(parse_json('null'))
 checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS String NULL)
@@ -2206,6 +2259,28 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : to_timestamp_tz(parse_json(s))
+raw expr       : to_timestamp_tz(parse_json(s::String NULL))
+checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS TimestampTz NULL)
+evaluation:
++--------+------------------------------------------------------------------------------+------------------------------------+
+|        | s                                                                            | Output                             |
++--------+------------------------------------------------------------------------------+------------------------------------+
+| Type   | String NULL                                                                  | TimestampTz NULL                   |
+| Domain | {"\"2020-01-01 00:00:00 +0000\""..="\"2023-10-01 10:11:12 +0800\""} ∪ {NULL} | Unknown                            |
+| Row 0  | '"2020-01-01 00:00:00 +0000"'                                                | '2020-01-01 00:00:00.000000 +0000' |
+| Row 1  | NULL                                                                         | NULL                               |
+| Row 2  | '"2023-10-01 10:11:12 +0800"'                                                | '2023-10-01 10:11:12.000000 +0800' |
++--------+------------------------------------------------------------------------------+------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                      |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn["2020-01-01 00:00:00 +0000", , "2023-10-01 10:11:12 +0800"], validity: [0b_____101] })                       |
+| Output | NullableColumn { column: TimestampTz([timestamp_tz(1577836800000000), timestamp_tz(0), timestamp_tz(531266231018961358540800)]), validity: [0b_____101] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : to_string(parse_json(s))
 raw expr       : to_string(parse_json(s::String NULL))
 checked expr   : CAST<Variant NULL>(CAST<String NULL>(s AS Variant NULL) AS String NULL)
@@ -2399,6 +2474,42 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_timestamp_tz(parse_json('null'))
+raw expr       : try_to_timestamp_tz(parse_json('null'))
+checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("null" AS Variant))
+optimized expr : NULL
+output type    : TimestampTz NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
+raw expr       : try_to_timestamp_tz(parse_json('"2023-01-01 00:00:00 +0000"'))
+checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"2023-01-01 00:00:00 +0000\"" AS Variant))
+optimized expr : timestamp_tz(1672531200000000)
+output type    : TimestampTz NULL
+output domain  : {2023-01-01 00:00:00.000000 +0000..=2023-01-01 00:00:00.000000 +0000}
+output         : '2023-01-01 00:00:00.000000 +0000'
+
+
+ast            : try_to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
+raw expr       : try_to_timestamp_tz(parse_json('"2023-01-01 08:00:00 +0800"'))
+checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"2023-01-01 08:00:00 +0800\"" AS Variant))
+optimized expr : timestamp_tz(531266230995366286540800)
+output type    : TimestampTz NULL
+output domain  : {2023-01-01 08:00:00.000000 +0800..=2023-01-01 08:00:00.000000 +0800}
+output         : '2023-01-01 08:00:00.000000 +0800'
+
+
+ast            : try_to_timestamp_tz(parse_json('"abc"'))
+raw expr       : try_to_timestamp_tz(parse_json('"abc"'))
+checked expr   : try_to_timestamp_tz<Variant>(CAST<String>("\"abc\"" AS Variant))
+optimized expr : NULL
+output type    : TimestampTz NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_string(parse_json('null'))
 raw expr       : try_to_string(parse_json('null'))
 checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS String NULL)
@@ -2586,6 +2697,33 @@ evaluation (internal):
 | s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] }) |
 | Output | NullableColumn { column: Timestamp([0, 0, 0, 0, 0, 1577836800000000, 1609531200000000, 0]), validity: [0b01100000] }                          |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_timestamp_tz(parse_json(s))
+raw expr       : try_to_timestamp_tz(parse_json(s::String NULL))
+checked expr   : try_to_timestamp_tz<Variant NULL>(CAST<String NULL>(s AS Variant NULL))
+evaluation:
++--------+--------------------------------------+------------------------------------+
+|        | s                                    | Output                             |
++--------+--------------------------------------+------------------------------------+
+| Type   | String NULL                          | TimestampTz NULL                   |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown                            |
+| Row 0  | 'true'                               | NULL                               |
+| Row 1  | '123'                                | NULL                               |
+| Row 2  | '-100'                               | NULL                               |
+| Row 3  | '12.34'                              | NULL                               |
+| Row 4  | NULL                                 | NULL                               |
+| Row 5  | '"2020-01-01"'                       | '2020-01-01 00:00:00.000000 +0000' |
+| Row 6  | '"2021-01-01 20:00:00"'              | '2021-01-01 20:00:00.000000 +0000' |
+| Row 7  | '"abc"'                              | NULL                               |
++--------+--------------------------------------+------------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] })                                                                                          |
+| Output | NullableColumn { column: TimestampTz([timestamp_tz(0), timestamp_tz(0), timestamp_tz(0), timestamp_tz(0), timestamp_tz(0), timestamp_tz(1577836800000000), timestamp_tz(1609531200000000), timestamp_tz(0)]), validity: [0b01100000] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : try_to_string(parse_json(s))
