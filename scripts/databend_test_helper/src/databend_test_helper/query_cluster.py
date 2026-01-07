@@ -141,8 +141,7 @@ class QueryCluster:
                             "mysql_port": mysql_port,
                         }
                     )
-                except Exception:
-                    # Skip nodes that can't be parsed
-                    continue
+                except Exception as e:
+                    ProgressReporter.print_error_info(f"node {i + 1}", str(e))
 
         return connections
