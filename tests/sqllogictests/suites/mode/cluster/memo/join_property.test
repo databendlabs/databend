@@ -25,13 +25,13 @@ select * from t_10, t_100, t_1000 where t_10.a = t_1000.a and t_100.a = t_1000.a
 ----
 Memo
 ├── root group: #5
-├── estimated memory: 8.31 KiB
+├── estimated memory: 7.72 KiB
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: []
-│   │   └── { dist: Hash(t_1000.a (#2)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_1000.a (#2)::Int32 NULL, t_1000.a (#2)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 Scan []
-│   └── #1 Exchange: (Hash(t_1000.a (#2)::Int32 NULL)) [#0]
+│   └── #1 Exchange: (Hash(t_1000.a (#2)::Int32 NULL,t_1000.a (#2)::Int32 NULL)) [#0]
 ├── Group #1
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: []
@@ -50,12 +50,10 @@ Memo
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
 │   │   ├── { dist: Broadcast }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   ├── { dist: Hash(t_10.a (#0)::Int32 NULL) }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#1)::Int32 NULL) }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_100.a (#1)::Int32 NULL) }, { dist: Hash(t_10.a (#0)::Int32 NULL) }]
+│   │   └── { dist: Hash(t_10.a (#0)::Int32 NULL, t_100.a (#1)::Int32 NULL) }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 Join [#1, #2]
 │   ├── #1 Exchange: (Broadcast) [#3]
-│   ├── #2 Exchange: (Hash(t_10.a (#0)::Int32 NULL)) [#3]
-│   └── #3 Exchange: (Hash(t_100.a (#1)::Int32 NULL)) [#3]
+│   └── #2 Exchange: (Hash(t_10.a (#0)::Int32 NULL,t_100.a (#1)::Int32 NULL)) [#3]
 ├── Group #4
 │   ├── Best properties
 │   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
