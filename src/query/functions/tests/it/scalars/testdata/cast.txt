@@ -1077,6 +1077,186 @@ output domain  : {0..=0}
 output         : 0
 
 
+ast            : to_decimal(10, 3)(123.456)
+raw expr       : to_decimal(10, 3)(123.456)
+checked expr   : to_decimal<Decimal(6, 3)>(10, 3)(123.456_d64(6,3))
+optimized expr : 123.456_d64(10,3)
+output type    : Decimal(10, 3)
+output domain  : {123.456..=123.456}
+output         : 123.456
+
+
+ast            : to_decimal(10, 3)(-123.456)
+raw expr       : to_decimal(10, 3)(-123.456)
+checked expr   : to_decimal<Decimal(6, 3)>(10, 3)(-123.456_d64(6,3))
+optimized expr : -123.456_d64(10,3)
+output type    : Decimal(10, 3)
+output domain  : {-123.456..=-123.456}
+output         : -123.456
+
+
+ast            : to_decimal(12, 1)(-9876.5)
+raw expr       : to_decimal(12, 1)(-9876.5)
+checked expr   : to_decimal<Decimal(5, 1)>(12, 1)(-9876.5_d64(5,1))
+optimized expr : -9876.5_d64(12,1)
+output type    : Decimal(12, 1)
+output domain  : {-9876.5..=-9876.5}
+output         : -9876.5
+
+
+ast            : to_decimal(6, 2)(5)
+raw expr       : to_decimal(6, 2)(5)
+checked expr   : to_decimal<UInt8>(6, 2)(5_u8)
+optimized expr : 5.00_d64(6,2)
+output type    : Decimal(6, 2)
+output domain  : {5.00..=5.00}
+output         : 5.00
+
+
+ast            : to_decimal(6, 2)(-5)
+raw expr       : to_decimal(6, 2)(-5)
+checked expr   : to_decimal<Int8>(6, 2)(-5_i8)
+optimized expr : -5.00_d64(6,2)
+output type    : Decimal(6, 2)
+output domain  : {-5.00..=-5.00}
+output         : -5.00
+
+
+ast            : to_decimal(6, 2)(true)
+raw expr       : to_decimal(6, 2)(true)
+checked expr   : to_decimal<Boolean>(6, 2)(true)
+optimized expr : 1.00_d64(6,2)
+output type    : Decimal(6, 2)
+output domain  : {1.00..=1.00}
+output         : 1.00
+
+
+ast            : to_decimal(10, 2)(123.45::FLOAT32)
+raw expr       : to_decimal(10, 2)(CAST(123.45 AS Float32))
+checked expr   : to_decimal<Float32>(10, 2)(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32))
+optimized expr : 123.44_d64(10,2)
+output type    : Decimal(10, 2)
+output domain  : {123.44..=123.44}
+output         : 123.44
+
+
+ast            : to_decimal(10, 2)(-123.45::FLOAT32)
+raw expr       : to_decimal(10, 2)(minus(CAST(123.45 AS Float32)))
+checked expr   : to_decimal<Float32>(10, 2)(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)))
+optimized expr : -123.44_d64(10,2)
+output type    : Decimal(10, 2)
+output domain  : {-123.44..=-123.44}
+output         : -123.44
+
+
+ast            : to_decimal(12, 4)(123.456::DECIMAL(9,3))
+raw expr       : to_decimal(12, 4)(CAST(123.456 AS Decimal(9, 3)))
+checked expr   : to_decimal<Decimal(9, 3)>(12, 4)(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)))
+optimized expr : 123.4560_d64(12,4)
+output type    : Decimal(12, 4)
+output domain  : {123.4560..=123.4560}
+output         : 123.4560
+
+
+ast            : to_decimal(12, 4)(-123.456::DECIMAL(9,3))
+raw expr       : to_decimal(12, 4)(minus(CAST(123.456 AS Decimal(9, 3))))
+checked expr   : to_decimal<Decimal(9, 3)>(12, 4)(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))))
+optimized expr : -123.4560_d64(12,4)
+output type    : Decimal(12, 4)
+output domain  : {-123.4560..=-123.4560}
+output         : -123.4560
+
+
+ast            : to_decimal(12, 4)(a)
+raw expr       : to_decimal(12, 4)(a::Float64)
+checked expr   : to_decimal<Float64>(12, 4)(a)
+evaluation:
++--------+----------------------+----------------------+
+|        | a                    | Output               |
++--------+----------------------+----------------------+
+| Type   | Float64              | Decimal(12, 4)       |
+| Domain | {-2.3456..=987.6543} | {-2.3456..=987.6543} |
+| Row 0  | 0.1                  | 0.1000               |
+| Row 1  | -2.3456              | -2.3456              |
+| Row 2  | 987.6543             | 987.6543             |
++--------+----------------------+----------------------+
+evaluation (internal):
++--------+-------------------------------------------+
+| Column | Data                                      |
++--------+-------------------------------------------+
+| a      | Column(Float64([0.1, -2.3456, 987.6543])) |
+| Output | Decimal64([0.1000, -2.3456, 987.6543])    |
++--------+-------------------------------------------+
+
+
+ast            : to_decimal(8, 0)(b)
+raw expr       : to_decimal(8, 0)(b::Int32)
+checked expr   : to_decimal<Int32>(8, 0)(b)
+evaluation:
++--------+---------------+---------------+
+|        | b             | Output        |
++--------+---------------+---------------+
+| Type   | Int32         | Decimal(8, 0) |
+| Domain | {-2..=123456} | {-2..=123456} |
+| Row 0  | 0             | 0             |
+| Row 1  | 1             | 1             |
+| Row 2  | -2            | -2            |
+| Row 3  | 123456        | 123456        |
++--------+---------------+---------------+
+evaluation (internal):
++--------+-----------------------------------+
+| Column | Data                              |
++--------+-----------------------------------+
+| b      | Column(Int32([0, 1, -2, 123456])) |
+| Output | Decimal64([0, 1, -2, 123456])     |
++--------+-----------------------------------+
+
+
+ast            : to_decimal(9, 3)(c)
+raw expr       : to_decimal(9, 3)(c::Float32)
+checked expr   : to_decimal<Float32>(9, 3)(c)
+evaluation:
++--------+------------------+--------------------+
+|        | c                | Output             |
++--------+------------------+--------------------+
+| Type   | Float32          | Decimal(9, 3)      |
+| Domain | {-1.125..=123.5} | {-1.125..=123.500} |
+| Row 0  | 0.25             | 0.250              |
+| Row 1  | -1.125           | -1.125             |
+| Row 2  | 123.5            | 123.500            |
++--------+------------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------+
+| Column | Data                                   |
++--------+----------------------------------------+
+| c      | Column(Float32([0.25, -1.125, 123.5])) |
+| Output | Decimal64([0.250, -1.125, 123.500])    |
++--------+----------------------------------------+
+
+
+ast            : to_decimal(15, 3)(d)
+raw expr       : to_decimal(15, 3)(d::Decimal(10, 2))
+checked expr   : to_decimal<Decimal(10, 2)>(15, 3)(d)
+evaluation:
++--------+----------------------+------------------------+
+|        | d                    | Output                 |
++--------+----------------------+------------------------+
+| Type   | Decimal(10, 2)       | Decimal(15, 3)         |
+| Domain | {-765.43..=10000.00} | {-765.430..=10000.000} |
+| Row 0  | 1234.50              | 1234.500               |
+| Row 1  | -99.99               | -99.990                |
+| Row 2  | 10000.00             | 10000.000              |
+| Row 3  | -765.43              | -765.430               |
++--------+----------------------+------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------+
+| Column | Data                                                     |
++--------+----------------------------------------------------------+
+| d      | Column(Decimal128([1234.50, -99.99, 10000.00, -765.43])) |
+| Output | Decimal64([1234.500, -99.990, 10000.000, -765.430])      |
++--------+----------------------------------------------------------+
+
+
 ast            : CAST(0 AS BOOLEAN)
 raw expr       : CAST(0 AS Boolean)
 checked expr   : CAST<UInt8>(0_u8 AS Boolean)
@@ -3293,6 +3473,186 @@ optimized expr : 0_d64(11,0)
 output type    : Decimal(11, 0) NULL
 output domain  : {0..=0}
 output         : 0
+
+
+ast            : try_to_decimal(10, 3)(123.456)
+raw expr       : try_to_decimal(10, 3)(123.456)
+checked expr   : try_to_decimal<Decimal(6, 3)>(10, 3)(123.456_d64(6,3))
+optimized expr : 123.456_d64(10,3)
+output type    : Decimal(10, 3) NULL
+output domain  : {123.456..=123.456}
+output         : 123.456
+
+
+ast            : try_to_decimal(10, 3)(-123.456)
+raw expr       : try_to_decimal(10, 3)(-123.456)
+checked expr   : try_to_decimal<Decimal(6, 3)>(10, 3)(-123.456_d64(6,3))
+optimized expr : -123.456_d64(10,3)
+output type    : Decimal(10, 3) NULL
+output domain  : {-123.456..=-123.456}
+output         : -123.456
+
+
+ast            : try_to_decimal(12, 1)(-9876.5)
+raw expr       : try_to_decimal(12, 1)(-9876.5)
+checked expr   : try_to_decimal<Decimal(5, 1)>(12, 1)(-9876.5_d64(5,1))
+optimized expr : -9876.5_d64(12,1)
+output type    : Decimal(12, 1) NULL
+output domain  : {-9876.5..=-9876.5}
+output         : -9876.5
+
+
+ast            : try_to_decimal(6, 2)(5)
+raw expr       : try_to_decimal(6, 2)(5)
+checked expr   : try_to_decimal<UInt8>(6, 2)(5_u8)
+optimized expr : 5.00_d64(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {5.00..=5.00}
+output         : 5.00
+
+
+ast            : try_to_decimal(6, 2)(-5)
+raw expr       : try_to_decimal(6, 2)(-5)
+checked expr   : try_to_decimal<Int8>(6, 2)(-5_i8)
+optimized expr : -5.00_d64(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {-5.00..=-5.00}
+output         : -5.00
+
+
+ast            : try_to_decimal(6, 2)(true)
+raw expr       : try_to_decimal(6, 2)(true)
+checked expr   : try_to_decimal<Boolean>(6, 2)(true)
+optimized expr : 1.00_d64(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {1.00..=1.00}
+output         : 1.00
+
+
+ast            : try_to_decimal(10, 2)(123.45::FLOAT32)
+raw expr       : try_to_decimal(10, 2)(CAST(123.45 AS Float32))
+checked expr   : try_to_decimal<Float32>(10, 2)(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32))
+optimized expr : 123.44_d64(10,2)
+output type    : Decimal(10, 2) NULL
+output domain  : {123.44..=123.44}
+output         : 123.44
+
+
+ast            : try_to_decimal(10, 2)(-123.45::FLOAT32)
+raw expr       : try_to_decimal(10, 2)(minus(CAST(123.45 AS Float32)))
+checked expr   : try_to_decimal<Float32>(10, 2)(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)))
+optimized expr : -123.44_d64(10,2)
+output type    : Decimal(10, 2) NULL
+output domain  : {-123.44..=-123.44}
+output         : -123.44
+
+
+ast            : try_to_decimal(12, 4)(123.456::DECIMAL(9,3))
+raw expr       : try_to_decimal(12, 4)(CAST(123.456 AS Decimal(9, 3)))
+checked expr   : try_to_decimal<Decimal(9, 3)>(12, 4)(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)))
+optimized expr : 123.4560_d64(12,4)
+output type    : Decimal(12, 4) NULL
+output domain  : {123.4560..=123.4560}
+output         : 123.4560
+
+
+ast            : try_to_decimal(12, 4)(-123.456::DECIMAL(9,3))
+raw expr       : try_to_decimal(12, 4)(minus(CAST(123.456 AS Decimal(9, 3))))
+checked expr   : try_to_decimal<Decimal(9, 3)>(12, 4)(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))))
+optimized expr : -123.4560_d64(12,4)
+output type    : Decimal(12, 4) NULL
+output domain  : {-123.4560..=-123.4560}
+output         : -123.4560
+
+
+ast            : try_to_decimal(12, 4)(a)
+raw expr       : try_to_decimal(12, 4)(a::Float64)
+checked expr   : try_to_decimal<Float64>(12, 4)(a)
+evaluation:
++--------+----------------------+----------------------+
+|        | a                    | Output               |
++--------+----------------------+----------------------+
+| Type   | Float64              | Decimal(12, 4) NULL  |
+| Domain | {-2.3456..=987.6543} | {-2.3456..=987.6543} |
+| Row 0  | 0.1                  | 0.1000               |
+| Row 1  | -2.3456              | -2.3456              |
+| Row 2  | 987.6543             | 987.6543             |
++--------+----------------------+----------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------+
+| Column | Data                                                                                      |
++--------+-------------------------------------------------------------------------------------------+
+| a      | Column(Float64([0.1, -2.3456, 987.6543]))                                                 |
+| Output | NullableColumn { column: Decimal64([0.1000, -2.3456, 987.6543]), validity: [0b_____111] } |
++--------+-------------------------------------------------------------------------------------------+
+
+
+ast            : try_to_decimal(8, 0)(b)
+raw expr       : try_to_decimal(8, 0)(b::Int32)
+checked expr   : try_to_decimal<Int32>(8, 0)(b)
+evaluation:
++--------+---------------+--------------------+
+|        | b             | Output             |
++--------+---------------+--------------------+
+| Type   | Int32         | Decimal(8, 0) NULL |
+| Domain | {-2..=123456} | {-2..=123456}      |
+| Row 0  | 0             | 0                  |
+| Row 1  | 1             | 1                  |
+| Row 2  | -2            | -2                 |
+| Row 3  | 123456        | 123456             |
++--------+---------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------+
+| Column | Data                                                                             |
++--------+----------------------------------------------------------------------------------+
+| b      | Column(Int32([0, 1, -2, 123456]))                                                |
+| Output | NullableColumn { column: Decimal64([0, 1, -2, 123456]), validity: [0b____1111] } |
++--------+----------------------------------------------------------------------------------+
+
+
+ast            : try_to_decimal(9, 3)(c)
+raw expr       : try_to_decimal(9, 3)(c::Float32)
+checked expr   : try_to_decimal<Float32>(9, 3)(c)
+evaluation:
++--------+------------------+--------------------+
+|        | c                | Output             |
++--------+------------------+--------------------+
+| Type   | Float32          | Decimal(9, 3) NULL |
+| Domain | {-1.125..=123.5} | {-1.125..=123.500} |
+| Row 0  | 0.25             | 0.250              |
+| Row 1  | -1.125           | -1.125             |
+| Row 2  | 123.5            | 123.500            |
++--------+------------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------+
+| Column | Data                                                                                   |
++--------+----------------------------------------------------------------------------------------+
+| c      | Column(Float32([0.25, -1.125, 123.5]))                                                 |
+| Output | NullableColumn { column: Decimal64([0.250, -1.125, 123.500]), validity: [0b_____111] } |
++--------+----------------------------------------------------------------------------------------+
+
+
+ast            : try_to_decimal(15, 3)(d)
+raw expr       : try_to_decimal(15, 3)(d::Decimal(10, 2))
+checked expr   : try_to_decimal<Decimal(10, 2)>(15, 3)(d)
+evaluation:
++--------+----------------------+------------------------+
+|        | d                    | Output                 |
++--------+----------------------+------------------------+
+| Type   | Decimal(10, 2)       | Decimal(15, 3) NULL    |
+| Domain | {-765.43..=10000.00} | {-765.430..=10000.000} |
+| Row 0  | 1234.50              | 1234.500               |
+| Row 1  | -99.99               | -99.990                |
+| Row 2  | 10000.00             | 10000.000              |
+| Row 3  | -765.43              | -765.430               |
++--------+----------------------+------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| d      | Column(Decimal128([1234.50, -99.99, 10000.00, -765.43]))                                               |
+| Output | NullableColumn { column: Decimal64([1234.500, -99.990, 10000.000, -765.430]), validity: [0b____1111] } |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(0 AS BOOLEAN)
