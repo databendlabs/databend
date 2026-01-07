@@ -692,21 +692,38 @@ impl IcebergFileIO {
             .map_err(|e| Error::new(ErrorKind::InvalidInput, e.to_string()))?;
 
         let scheme = url.scheme();
-        let bucket = url
-            .host_str()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing bucket in URL"))?;
 
-        let prefix = format!("{}://{}/", scheme, bucket);
-        let relative_path_pos = if location.starts_with(&prefix) {
-            prefix.len()
+        // Handle file:// and memory:// URIs which don't have a host/bucket
+        let is_local_scheme = matches!(scheme, "file" | "memory" | "");
+        let (bucket, relative_path_pos) = if is_local_scheme {
+            // For file:// URIs, the path starts after "file://"
+            let prefix_len = if location.starts_with("file://") {
+                7 // "file://".len()
+            } else if location.starts_with("memory://") {
+                9 // "memory://".len()
+            } else {
+                0
+            };
+            (None, prefix_len)
         } else {
-            url.scheme().len() + 3 + bucket.len() + 1
+            let bucket = url
+                .host_str()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing bucket in URL"))?;
+            let prefix = format!("{}://{}/", scheme, bucket);
+            let relative_path_pos = if location.starts_with(&prefix) {
+                prefix.len()
+            } else {
+                url.scheme().len() + 3 + bucket.len() + 1
+            };
+            (Some(bucket), relative_path_pos)
         };
 
         let mut opendal_config: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
 
-        opendal_config.insert("bucket".to_string(), bucket.to_string());
+        if let Some(bucket) = bucket {
+            opendal_config.insert("bucket".to_string(), bucket.to_string());
+        }
 
         for (key, value) in &self.props {
             let opendal_key = match key.as_str() {
@@ -731,7 +748,7 @@ impl IcebergFileIO {
                     None
                 }
                 "gcs.credentials" => Some("credential"),
-                "gcs.project-id" => Some("default_storage_class"),
+                "gcs.project-id" => Some("project_id"),
                 "adls.account-name" | "azure.account-name" => Some("account_name"),
                 "adls.account-key" | "azure.account-key" => Some("account_key"),
                 "adls.sas-token" | "azure.sas-token" => Some("sas_token"),
@@ -762,7 +779,7 @@ impl IcebergFileIO {
         };
 
         let op = Operator::via_iter(opendal_scheme, opendal_config)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| Error::other(e.to_string()))?;
 
         Ok((op, relative_path_pos))
     }
