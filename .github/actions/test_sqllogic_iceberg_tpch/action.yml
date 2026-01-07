@@ -32,7 +32,7 @@ runs:
         fi
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
-        uv sync
+        uv sync --package scripts
         echo "Running prepare_iceberg_tpch_data.py..."
         uv run python tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
