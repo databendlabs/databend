@@ -341,6 +341,8 @@ pub enum TokenKind {
     ALL,
     #[token("ALLOWED_IP_LIST", ignore(ascii_case))]
     ALLOWED_IP_LIST,
+    #[token("ALLOWED_VALUES", ignore(ascii_case))]
+    ALLOWED_VALUES,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("AFTER", ignore(ascii_case))]
@@ -419,6 +421,8 @@ pub enum TokenKind {
     BOOLEAN,
     #[token("BOTH", ignore(ascii_case))]
     BOTH,
+    #[token("BRANCH", ignore(ascii_case))]
+    BRANCH,
     #[token("BY", ignore(ascii_case))]
     BY,
     #[token("BROTLI", ignore(ascii_case))]
@@ -1224,6 +1228,10 @@ pub enum TokenKind {
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TAG", ignore(ascii_case))]
+    TAG,
+    #[token("TAGS", ignore(ascii_case))]
+    TAGS,
     #[token("TARGET_LAG", ignore(ascii_case))]
     TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]

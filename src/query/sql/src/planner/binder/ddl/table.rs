@@ -132,12 +132,14 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
@@ -675,20 +677,18 @@ impl Binder {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
-                let fields = bind_context
-                    .columns
-                    .iter()
-                    .map(|column_binding| {
-                        Ok(TableField::new(
-                            &column_binding.column_name,
-                            create_as_select_infer_schema_type(
-                                &column_binding.data_type,
-                                self.is_column_not_null(),
-                            )?,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let schema = TableSchemaRefExt::create(fields);
+                let mut schema = bind_context.output_table_schema(self.metadata.clone())?;
+                let mut fields = schema.fields().clone();
+                for field in fields.iter_mut() {
+                    if field.data_type == TableDataType::Null {
+                        field.data_type = TableDataType::String.wrap_nullable();
+                    } else if !field.data_type().is_nullable_or_null() && !self.is_column_not_null()
+                    {
+                        field.data_type = field.data_type().clone().wrap_nullable();
+                    }
+                }
+                schema = TableSchemaRefExt::create(fields);
+
                 Self::validate_create_table_schema(&schema)?;
                 (
                     AnalyzeCreateTableResult {
@@ -1032,9 +1032,11 @@ impl Binder {
             catalog,
             database,
             table,
+            ref_name,
             ..
         } = table_reference
         {
+            debug_assert!(ref_name.is_none());
             self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             return Err(ErrorCode::Internal(
@@ -1412,6 +1414,40 @@ impl Binder {
                         table,
                     },
                 )))
+            }
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableRef { ref_type, ref_name } => {
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                })))
             }
         }
     }
@@ -2296,18 +2332,4 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         .spawn(verification_task)
         .await
         .expect("join must succeed")
-}
-
-fn create_as_select_infer_schema_type(
-    data_type: &DataType,
-    not_null: bool,
-) -> Result<TableDataType> {
-    use DataType::*;
-
-    match (data_type, not_null) {
-        (Null, _) => Ok(TableDataType::Nullable(Box::new(TableDataType::String))),
-        (dt, true) => infer_schema_type(dt),
-        (Nullable(_), false) => infer_schema_type(data_type),
-        (dt, false) => infer_schema_type(&Nullable(Box::new(dt.clone()))),
-    }
 }

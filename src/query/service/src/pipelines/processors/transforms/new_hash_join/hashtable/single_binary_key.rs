@@ -33,11 +33,11 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::BinaryKeyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::EarlyFilteringProbeStream;
 
-impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
+impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
+        hash_table: BinaryHashJoinHashMap<UNIQUE>,
         hash_method: HashMethodSingleBinary,
-    ) -> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
+    ) -> SingleBinaryHashJoinHashTable<UNIQUE> {
         SingleBinaryHashJoinHashTable {
             hash_table,
             hash_method,
@@ -133,13 +133,13 @@ impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES>
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<true>::create(
+                true => Ok(EarlyFilteringProbeStream::<true, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &[],
                 )),
-                false => Ok(BinaryKeyProbeStream::<true>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<true, UNIQUE>::create(hashes, keys)),
             },
         }
     }
@@ -181,13 +181,13 @@ impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES>
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<false>::create(
+                true => Ok(EarlyFilteringProbeStream::<false, UNIQUE>::create(
                     hashes,
                     keys,
                     &ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(BinaryKeyProbeStream::<false>::create(hashes, keys)),
+                false => Ok(BinaryKeyProbeStream::<false, UNIQUE>::create(hashes, keys)),
             },
         }
     }

@@ -134,6 +134,7 @@ pub enum RuleID {
     FoldCountAggregate,
     PushDownPrewhere,
     TryApplyAggIndex,
+    EliminateSelfJoin,
     CommuteJoin,
 
     // Exploration rules
@@ -184,6 +185,7 @@ impl Display for RuleID {
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
+            RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),

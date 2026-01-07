@@ -1223,6 +1223,16 @@ impl AccessChecker for PrivilegeAccess {
                             )))
                         };
                     }
+                    Some(RewriteKind::ShowTags) => {
+                        self.validate_access(
+                            &GrantObject::Global,
+                            UserPrivilegeType::Super,
+                            false,
+                            false,
+                        )
+                        .await?;
+                        return Ok(());
+                    }
                     Some(RewriteKind::ShowSequences) => {
                         // will check privilege in show_sequences_table
                     }
@@ -1506,7 +1516,13 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableClusterKey(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, false, false).await?
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::CreateTableRef(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableRef(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::RefreshTableCache(_) | Plan::RefreshDatabaseCache(_) => {
                 // Only Iceberg support this plan
@@ -1808,6 +1824,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)
+            | Plan::CreateTag(_)
+            | Plan::DropTag(_)
             | Plan::CreateNetworkPolicy(_)
             | Plan::AlterNetworkPolicy(_)
             | Plan::DropNetworkPolicy(_)

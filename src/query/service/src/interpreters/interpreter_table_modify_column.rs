@@ -679,6 +679,7 @@ impl ModifyTableColumnInterpreter {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            lvt_check: None,
         };
 
         let _resp = catalog.update_single_table_meta(req, table_info).await?;

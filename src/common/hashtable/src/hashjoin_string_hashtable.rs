@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::hints::assume;
-use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
@@ -39,41 +36,23 @@ pub struct StringRawEntry {
     pub next: u64,
 }
 
-pub struct HashJoinStringHashTable<
-    const SKIP_DUPLICATES: bool = false,
-    A: Allocator + Clone = DefaultAllocator,
-> {
-    pub(crate) pointers: Box<[u64], A>,
+pub struct HashJoinStringHashTable<const UNIQUE: bool = false> {
+    pub(crate) pointers: Box<[u64]>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
-    pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
-    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
-{
-}
+unsafe impl<const UNIQUE: bool> Send for HashJoinStringHashTable<UNIQUE> {}
 
-unsafe impl<A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
-    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
-{
-}
+unsafe impl<const UNIQUE: bool> Sync for HashJoinStringHashTable<UNIQUE> {}
 
-impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
-    HashJoinStringHashTable<SKIP_DUPLICATES, A>
-{
+impl<const UNIQUE: bool> HashJoinStringHashTable<UNIQUE> {
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
-            pointers: unsafe {
-                Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
-            },
+            pointers: unsafe { Box::new_zeroed_slice(capacity).assume_init() },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
-            count: match SKIP_DUPLICATES {
-                true => Default::default(),
-                false => AtomicUsize::new(row_num),
-            },
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -89,12 +68,8 @@ impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if SKIP_DUPLICATES
-                && early_filtering(old_header, hash)
-                && self.next_contains(key, remove_header_tag(old_header))
-            {
-                return;
-            }
+            // TODO: compact concurrent link list if unique
+
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
@@ -109,18 +84,11 @@ impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
             };
         }
 
-        if SKIP_DUPLICATES {
-            self.count.fetch_add(1, Ordering::Relaxed);
-        }
-
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
 
-impl<A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
-    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
-where A: Allocator + Clone + 'static
-{
+impl<const UNIQUE: bool> HashJoinHashtableLike for HashJoinStringHashTable<UNIQUE> {
     type Key = [u8];
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
@@ -331,6 +299,11 @@ where A: Allocator + Clone + 'static
                         )
                     };
                     occupied += 1;
+
+                    if UNIQUE {
+                        ptr = 0;
+                        break;
+                    }
                 }
             }
             ptr = raw_entry.next;
@@ -369,9 +342,5 @@ where A: Allocator + Clone + 'static
             ptr = raw_entry.next;
         }
         0
-    }
-
-    fn len(&self) -> usize {
-        self.count.load(Ordering::Relaxed)
     }
 }

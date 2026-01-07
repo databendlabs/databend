@@ -16,7 +16,6 @@ use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::TableReference;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::BindContext;
@@ -35,7 +34,10 @@ impl Binder {
         stamt: &DeleteStmt,
     ) -> Result<Plan> {
         let DeleteStmt {
+            catalog,
+            database,
             table,
+            table_alias,
             selection,
             with,
             ..
@@ -43,20 +45,21 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let target_table_identifier = if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            alias,
-            ..
-        } = table
-        {
-            TableIdentifier::new(self, catalog, database, table, alias)
-        } else {
-            // We do not support USING clause yet.
-            return Err(ErrorCode::Internal(
-                "should not happen, parser should have report error already",
-            ));
+        let target_table_identifier =
+            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
+
+        let target_table_reference = TableReference::Table {
+            span: None,
+            catalog: catalog.clone(),
+            database: database.clone(),
+            table: table.clone(),
+            ref_name: None,
+            alias: table_alias.clone(),
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
         };
 
         let matched_clause = MatchedClause {
@@ -67,7 +70,7 @@ impl Binder {
         let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Delete {
-                target: table.clone(),
+                target: target_table_reference,
                 from: None,
                 filter: selection.clone(),
             },

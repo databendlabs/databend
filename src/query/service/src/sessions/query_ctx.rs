@@ -76,7 +76,6 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -322,14 +321,14 @@ impl QueryContext {
         self.shared.attach_table(catalog, database, name, table)
     }
 
-    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         self.shared.broadcast_source_receiver(broadcast_id)
     }
 
     /// Get a sender to broadcast data
     ///
     /// Note: The channel must be closed by calling close() after data transmission is completed
-    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         self.shared.broadcast_source_sender(broadcast_id)
     }
 
@@ -337,11 +336,11 @@ impl QueryContext {
     ///
     /// Note: receive() can be called repeatedly until an Error is returned, indicating
     /// that the upstream channel has been closed
-    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
         self.shared.broadcast_sink_receiver(broadcast_id)
     }
 
-    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<BlockMetaInfoPtr> {
+    pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
         self.shared.broadcast_sink_sender(broadcast_id)
     }
 
@@ -510,6 +509,7 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let table = self
@@ -532,6 +532,12 @@ impl QueryContext {
                 DeltaTable::try_create(info.to_owned())?.into()
             }
             _ => table,
+        };
+
+        let table = if let Some(branch) = branch {
+            table.with_branch(branch)?
+        } else {
+            table
         };
         Ok(table)
     }
@@ -1441,7 +1447,7 @@ impl TableContext for QueryContext {
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, batch_size)
+        self.get_table_from_shared(catalog, database, table, None, batch_size)
             .await
     }
 
@@ -1455,6 +1461,7 @@ impl TableContext for QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let final_batch_size = match max_batch_size {
@@ -1473,8 +1480,9 @@ impl TableContext for QueryContext {
         };
 
         let table = self
-            .get_table_from_shared(catalog, database, table, final_batch_size)
+            .get_table_from_shared(catalog, database, table, branch, final_batch_size)
             .await?;
+
         if table.is_stream() {
             let stream = StreamTable::try_from_table(table.as_ref())?;
             let actual_batch_limit = stream.max_batch_size();

@@ -45,6 +45,7 @@ pub mod security_api;
 mod sequence_api;
 pub mod serialization_util;
 pub mod table_api;
+pub mod tag_api;
 pub(crate) mod testing;
 pub mod txn_backoff;
 pub mod txn_condition_util;
@@ -72,6 +73,7 @@ pub use data_mask_api::DatamaskApi;
 pub use data_retention_util::get_retention_boundary;
 pub use data_retention_util::is_drop_time_retainable;
 pub use database_api::DatabaseApi;
+pub use databend_common_meta_app::schema::TagError;
 pub use dictionary_api::DictionaryApi;
 // Re-export from new error_util module for backward compatibility
 pub use error_util::assert_table_exist;
@@ -102,6 +104,7 @@ pub use serialization_util::{
     deserialize_struct, deserialize_u64, serialize_struct, serialize_u64,
 };
 pub use table_api::TableApi;
+pub use tag_api::TagApi;
 // Re-export from new txn_condition_util module for backward compatibility
 pub use txn_condition_util::txn_cond_eq_seq;
 pub use txn_condition_util::txn_cond_seq;

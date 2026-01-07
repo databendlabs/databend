@@ -42,6 +42,7 @@ use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
+use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::interpreters::access::Accessor;
@@ -93,6 +94,8 @@ use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
+use crate::interpreters::interpreter_table_ref_create::CreateTableRefInterpreter;
+use crate::interpreters::interpreter_table_ref_drop::DropTableRefInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
@@ -438,6 +441,14 @@ impl InterpreterFactory {
             Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
                 DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::CreateTableRef(p) => Ok(Arc::new(CreateTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropTableRef(p) => Ok(Arc::new(DropTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
@@ -571,6 +582,14 @@ impl InterpreterFactory {
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
             Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
+            Plan::CreateTag(plan) => Ok(Arc::new(CreateTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::DropTag(plan) => Ok(Arc::new(DropTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(

@@ -273,12 +273,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, (catalog, database, table), table_alias, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
+                catalog,
+                database,
                 table,
+                table_alias,
                 selection: opt_selection.map(|(_, selection)| selection),
                 with,
             })
@@ -755,6 +758,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, name, _, quotas)| {
             Statement::UnsetWorkloadQuotasGroup(UnsetWorkloadGroupQuotasStmt { name, quotas })
+        },
+    );
+
+    let show_tags = map(
+        rule! {
+            SHOW ~ TAGS ~ #show_options?
+        },
+        |(_, _, opt_options)| {
+            let (filter, limit) = opt_options
+                .map(|opts| (opts.show_limit, opts.limit))
+                .unwrap_or((None, None));
+            Statement::ShowTags(ShowTagsStmt { filter, limit })
         },
     );
 
@@ -1870,6 +1885,71 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    #[derive(Clone)]
+    enum CreateTagOption {
+        AllowedValues(Vec<Literal>),
+        Comment(String),
+    }
+
+    let tag_allowed_values = map(
+        rule! {
+            ALLOWED_VALUES ~ ^"=" ~ ^"(" ~ #comma_separated_list1(literal) ~ ^")"
+        },
+        |(_, _, _, values, _)| CreateTagOption::AllowedValues(values),
+    );
+
+    let tag_comment = map(
+        rule! {
+            COMMENT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, comment)| CreateTagOption::Comment(comment),
+    );
+
+    let tag_options = map(rule! { ( #tag_allowed_values | #tag_comment )* }, |opts| {
+        opts
+    });
+
+    let create_tag = map_res(
+        rule! {
+            CREATE ~ TAG ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ #tag_options
+        },
+        |(_, _, opt_if_not_exists, name, options)| {
+            let create_option = parse_create_option(false, opt_if_not_exists.is_some())?;
+            let mut allowed_values = None;
+            let mut comment = None;
+            for opt in options {
+                match opt {
+                    CreateTagOption::AllowedValues(values) => {
+                        allowed_values = Some(values);
+                    }
+                    CreateTagOption::Comment(text) => {
+                        comment = Some(text);
+                    }
+                }
+            }
+            Ok(Statement::CreateTag(CreateTagStmt {
+                create_option,
+                name,
+                allowed_values,
+                comment,
+            }))
+        },
+    );
+
+    let drop_tag = map(
+        rule! {
+            DROP ~ TAG ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropTag(DropTagStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
+    );
+
     // stages
     let create_stage = map_res(
         rule! {
@@ -2602,6 +2682,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 #show_tasks : "`SHOW TASKS [<show_limit>]`"
                 | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
                 | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
+                | #show_tags : "`SHOW TAGS [<show_limit>]`"
                 | #show_stages : "`SHOW STAGES`"
                 | #show_process_list : "`SHOW PROCESSLIST`"
                 | #show_metrics : "`SHOW METRICS`"
@@ -2772,6 +2853,7 @@ AS
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
+                | #create_tag: "`CREATE TAG [IF NOT EXISTS] <tag_name> [ALLOWED_VALUES = ('v1', ...)] [COMMENT = '<comment>']`"
                 | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
                 | #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
   [ AUTO_INGEST = [ TRUE | FALSE ] ]
@@ -2815,6 +2897,7 @@ AS
             )
             | (
                 #drop_stage: "`DROP STAGE <stage_name>`"
+                | #drop_tag: "`DROP TAG [IF EXISTS] <tag_name>`"
                 | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
                 | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
                 | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
@@ -4566,28 +4649,73 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    rule!(
-        #alter_table_cluster_key
-        | #drop_table_cluster_key
-        | #drop_constraint
-        | #rename_table
-        | #swap_with
-        | #rename_column
-        | #modify_table_comment
-        | #add_column
-        | #drop_column
-        | #modify_column
-        | #recluster_table
-        | #revert_table
-        | #set_table_options
-        | #unset_table_options
-        | #refresh_cache
-        | #modify_table_connection
-        | #drop_all_row_access_polices
-        | #drop_row_access_policy
-        | #add_row_access_policy
-        | #add_constraint
-    )
+    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
+    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
+    // available for SELECT or other query statements, so keep the parsing rule scoped
+    // here to avoid implying broader support.
+    let create_snapshot_ref = map(
+        rule! {
+            CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?
+        },
+        |(_, token, ref_name, opt_travel_point, retain)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, reatin)| reatin),
+            }
+        },
+    );
+
+    let drop_snapshot_ref = map(
+        rule! {
+            DROP ~ ( BRANCH | TAG ) ~ #ident
+        },
+        |(_, token, ref_name)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::DropTableRef { ref_type, ref_name }
+        },
+    );
+
+    alt((
+        rule!(
+            #create_snapshot_ref
+            | #drop_snapshot_ref
+        ),
+        rule!(
+            #alter_table_cluster_key
+            | #drop_table_cluster_key
+            | #drop_constraint
+            | #rename_table
+            | #swap_with
+            | #rename_column
+            | #modify_table_comment
+            | #add_column
+            | #drop_column
+            | #modify_column
+            | #recluster_table
+            | #revert_table
+            | #set_table_options
+            | #unset_table_options
+            | #refresh_cache
+            | #modify_table_connection
+            | #drop_all_row_access_polices
+            | #drop_row_access_policy
+            | #add_row_access_policy
+            | #add_constraint
+        ),
+    ))
     .parse(i)
 }
 
@@ -5373,31 +5501,6 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))
-    .parse(i)
-}
-
-pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #dot_separated_idents_1_to_3 ~ #alias_name?
-        }),
-        |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
-            alias: alias.map(|v| TableAlias {
-                name: v,
-                columns: vec![],
-                keep_database_name: false,
-            }),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )
     .parse(i)
 }
 

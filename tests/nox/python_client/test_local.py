@@ -1,5 +1,5 @@
 from databend_driver import BlockingDatabendClient
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from .utils import DATABEND_DSL
 
@@ -31,9 +31,9 @@ def test_insert():
     rows = conn.query_iter("SELECT * FROM test")
     ret = [row.values() for row in rows]
     expected = [
-        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20)),
-        (-2, 2, 2.0, '"', "", date(2012, 5, 31), datetime(2012, 5, 31, 11, 20)),
-        (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30)),
+        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20, tzinfo=timezone.utc)),
+        (-2, 2, 2.0, '"', "", date(2012, 5, 31), datetime(2012, 5, 31, 11, 20, tzinfo=timezone.utc)),
+        (-3, 3, 3.0, '\\', "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30, tzinfo=timezone.utc))
     ]
     assert ret == expected, f"ret: {ret}"
 
@@ -66,9 +66,9 @@ def test_stream_load():
     rows = conn.query_iter("SELECT * FROM test")
     ret = [row.values() for row in rows]
     expected = [
-        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20)),
-        (-2, 2, 2.0, '"', None, date(2012, 5, 31), datetime(2012, 5, 31, 11, 20)),
-        (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30)),
+        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20, tzinfo=timezone.utc)),
+        (-2, 2, 2.0, '"', None, date(2012, 5, 31), datetime(2012, 5, 31, 11, 20, tzinfo=timezone.utc)),
+        (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30, tzinfo=timezone.utc)),
     ]
     assert ret == expected, f"ret: {ret}"
 
@@ -111,8 +111,8 @@ def run_load_file(load_method):
     rows = conn.query_iter("SELECT * FROM test")
     ret = [row.values() for row in rows]
     expected = [
-        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20)),
-        (-2, 2, 2.0, '"', None, date(2012, 5, 31), datetime(2012, 5, 31, 11, 20)),
-        (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30)),
+        (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20, tzinfo=timezone.utc)),
+        (-2, 2, 2.0, '"', None, date(2012, 5, 31), datetime(2012, 5, 31, 11, 20, tzinfo=timezone.utc)),
+        (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30, tzinfo=timezone.utc)),
     ]
     assert ret == expected, f"{load_method} ret: {ret}"

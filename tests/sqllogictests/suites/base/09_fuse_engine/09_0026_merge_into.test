@@ -718,8 +718,8 @@ merge into tt2 using(select true as x) as t on (x and tt2.a) when matched and tt
 query TTT
 select a, b, c from tt2 order by b;
 ----
-0 20 {'k2':'v2'}
-1 30 {'k1':'v1'}
+0 20 {"k2":"v2"}
+1 30 {"k1":"v1"}
 
 ## add test: source is table
 statement ok

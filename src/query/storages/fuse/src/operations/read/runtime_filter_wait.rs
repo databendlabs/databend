@@ -101,10 +101,6 @@ impl Processor for TransformRuntimeFilterWait {
         }
 
         if self.runtime_filter_ready.is_empty() {
-            log::info!(
-                "RUNTIME-FILTER: scan_id={} no runtime filters found, skipping wait",
-                self.scan_id
-            );
             self.wait_finished = true;
             return Ok(());
         }

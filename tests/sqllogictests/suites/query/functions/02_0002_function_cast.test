@@ -469,6 +469,11 @@ SELECT parse_json('"2022-01-01 01:01:01"')::datetime
 ----
 2022-01-01 01:01:01.000000
 
+query T
+SELECT parse_json('"2022-01-01 01:01:01 +0800"')::timestamp_tz
+----
+2022-01-01 01:01:01.000000 +0800
+
 
 statement error 1006
 SELECT parse_json('"test"')::date
@@ -477,9 +482,17 @@ SELECT parse_json('"test"')::date
 statement error 1006
 SELECT parse_json('"test"')::datetime
 
+statement error 1006
+SELECT parse_json('"test"')::timestamp_tz
+
 
 query T
 SELECT parse_json('null')::datetime
+----
+NULL
+
+query T
+SELECT parse_json('null')::timestamp_tz
 ----
 NULL
 
@@ -549,17 +562,17 @@ select cast(position as String), cast(trim as String), cast(substring as String)
 query TTT
 select '[1,2,"3"]'::Variant a, a::Array(Variant) b, b::Variant = a;
 ----
-[1,2,"3"] ['1','2','"3"'] 1
+[1,2,"3"] [1,2,"3"] 1
 
 query TTT
 select '{"k1":"v1","k2":"v2"}'::Variant a, a::Map(String, String) b, b::Variant = a;
 ----
-{"k1":"v1","k2":"v2"} {'k1':'v1','k2':'v2'} 1
+{"k1":"v1","k2":"v2"} {"k1":"v1","k2":"v2"} 1
 
 query TTT
 select '{"a":1,"b":2}'::Variant a, a::Map(String, Int) b, b::Variant = a;
 ----
-{"a":1,"b":2} {'a':1,'b':2} 1
+{"a":1,"b":2} {"a":1,"b":2} 1
 
 query TTT
 select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));

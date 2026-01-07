@@ -61,6 +61,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -157,6 +158,7 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+    pub(crate) table_branch: Option<SnapshotRef>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -192,6 +194,10 @@ impl FuseTable {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
+                        // Special handling for history tables.
+                        // Since history tables storage params are fully generated from config,
+                        // we can safely allow credential chain.
+                        let sp = allow_system_history_credential_chain(&table_info, sp);
                         let operator = init_operator(&sp)?;
 
                         let table_meta_options = &table_info.meta.options;
@@ -282,6 +288,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            table_branch: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
@@ -432,6 +439,10 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
+        if let Some(snapshot_ref) = self.table_branch.as_ref() {
+            return Some(snapshot_ref.loc.clone());
+        }
+
         let options = self.table_info.options();
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -446,6 +457,10 @@ impl FuseTable {
 
     pub fn get_operator_ref(&self) -> &Operator {
         &self.operator
+    }
+
+    pub fn get_branch_id(&self) -> Option<u64> {
+        self.table_branch.as_ref().map(|v| v.id)
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
@@ -528,39 +543,34 @@ impl FuseTable {
 
     /// Returns the data retention policy for this table.
     /// Policy is determined in the following priority order:
-    ///   1. Number of snapshots to keep (from table option or setting)
-    ///   2. Time-based retention period (if snapshot count is not specified)
+    ///   1. Table options (number of snapshots first, then time period)
+    ///   2. Settings (number of snapshots first, then time period)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        let policy = if self.is_transient() {
-            RetentionPolicy::ByNumOfSnapshotsToKeep(1)
-        } else {
-            // Try to get number of snapshots to keep
-            if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
-                RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
-            } else {
-                // Fall back to time-based retention policy
-                let duration = self.get_data_retention_period(ctx)?;
-                RetentionPolicy::ByTimePeriod(duration)
-            }
-        };
+        if self.is_transient() {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(1));
+        }
 
-        Ok(policy)
+        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
+        }
+
+        if let Some(duration) = self.try_get_table_option_retention_period()? {
+            return Ok(RetentionPolicy::ByTimePeriod(duration));
+        }
+
+        if let Some(num_snapshots) = self.try_get_setting_num_snapshots_to_keep(ctx)? {
+            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            ));
+        }
+
+        let duration = self.get_data_retention_period_from_settings(ctx)?;
+        Ok(RetentionPolicy::ByTimePeriod(duration))
     }
 
-    /// Tries to retrieve the number of snapshots to keep for the retention policy.
-    /// Priority order:
-    ///   1. Table option (if set to a positive value)
-    ///   2. Global setting (if set to a positive value and table option is not applicable)
-    ///
-    /// Returns Some(value) if a valid positive value is found, None otherwise.
-    fn try_get_policy_by_num_snapshots_to_keep(
-        &self,
-        ctx: &dyn TableContext,
-    ) -> Result<Option<u64>> {
-        // Check table option first (highest priority).
-        //
-        // A positive value means we use this many snapshots for retention.
-        // If value of this table option is not set or is Some(0), we'll check the corresponding setting instead.
+    fn try_get_table_option_num_snapshots_to_keep(&self) -> Result<Option<u64>> {
         if let Some(tbl_opt) = self
             .table_info
             .meta
@@ -572,33 +582,44 @@ impl FuseTable {
                 return Ok(Some(num_snapshots));
             }
         }
+        Ok(None)
+    }
 
-        // Check if there is a valid setting of num snapshots to keep:
-        // Only positive value of setting counts.
+    fn try_get_setting_num_snapshots_to_keep(&self, ctx: &dyn TableContext) -> Result<Option<u64>> {
         let settings_value = ctx
             .get_settings()
             .get_data_retention_num_snapshots_to_keep()?;
         if settings_value > 0 {
             return Ok(Some(settings_value));
         }
-
-        // No valid num_snapshots_to_keep found
         Ok(None)
     }
 
-    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
-        let retention_period = if let Some(v) = self
+    fn try_get_table_option_retention_period(&self) -> Result<Option<Duration>> {
+        if let Some(v) = self
             .table_info
             .meta
             .options
             .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
         {
             let retention_period = v.parse::<u64>()?;
-            Duration::hours(retention_period as i64)
+            return Ok(Some(Duration::hours(retention_period as i64)));
+        }
+        Ok(None)
+    }
+
+    fn get_data_retention_period_from_settings(&self, ctx: &dyn TableContext) -> Result<Duration> {
+        Ok(Duration::days(
+            ctx.get_settings().get_data_retention_time_in_days()? as i64,
+        ))
+    }
+
+    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
+        if let Some(retention_period) = self.try_get_table_option_retention_period()? {
+            Ok(retention_period)
         } else {
-            Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64)
-        };
-        Ok(retention_period)
+            self.get_data_retention_period_from_settings(ctx)
+        }
     }
 
     pub fn get_storage_format(&self) -> FuseStorageFormat {
@@ -943,13 +964,12 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -1001,19 +1021,39 @@ impl Table for FuseTable {
                 }
             }
             _ => {
-                let s = &self.table_info.meta.statistics;
-                TableStatistics {
-                    num_rows: Some(s.number_of_rows),
-                    data_size: Some(s.data_bytes),
-                    data_size_compressed: Some(s.compressed_data_bytes),
-                    index_size: Some(s.index_data_bytes),
-                    bloom_index_size: s.bloom_index_size,
-                    ngram_index_size: s.ngram_index_size,
-                    inverted_index_size: s.inverted_index_size,
-                    vector_index_size: s.vector_index_size,
-                    virtual_column_size: s.virtual_column_size,
-                    number_of_blocks: s.number_of_blocks,
-                    number_of_segments: s.number_of_segments,
+                if self.table_branch.is_some() {
+                    let Some(ss) = self.read_table_snapshot().await? else {
+                        return Ok(None);
+                    };
+                    let stats = &ss.summary;
+                    TableStatistics {
+                        num_rows: Some(stats.row_count),
+                        data_size: Some(stats.uncompressed_byte_size),
+                        data_size_compressed: Some(stats.compressed_byte_size),
+                        index_size: Some(stats.index_size),
+                        bloom_index_size: stats.bloom_index_size,
+                        ngram_index_size: stats.ngram_index_size,
+                        inverted_index_size: stats.inverted_index_size,
+                        vector_index_size: stats.vector_index_size,
+                        virtual_column_size: stats.virtual_column_size,
+                        number_of_blocks: Some(stats.block_count),
+                        number_of_segments: Some(ss.segments.len() as u64),
+                    }
+                } else {
+                    let s = &self.table_info.meta.statistics;
+                    TableStatistics {
+                        num_rows: Some(s.number_of_rows),
+                        data_size: Some(s.data_bytes),
+                        data_size_compressed: Some(s.compressed_data_bytes),
+                        index_size: Some(s.index_data_bytes),
+                        bloom_index_size: s.bloom_index_size,
+                        ngram_index_size: s.ngram_index_size,
+                        inverted_index_size: s.inverted_index_size,
+                        vector_index_size: s.vector_index_size,
+                        virtual_column_size: s.virtual_column_size,
+                        number_of_blocks: s.number_of_blocks,
+                        number_of_segments: s.number_of_segments,
+                    }
                 }
             }
         };
@@ -1171,6 +1211,13 @@ impl Table for FuseTable {
                 Ok(Arc::new(end_point))
             }
         }
+    }
+
+    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
+        let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
+        let mut new_table = self.clone();
+        new_table.table_branch = Some(snapshot_ref.clone());
+        Ok(Arc::new(new_table))
     }
 
     #[async_backtrace::framed]
@@ -1366,4 +1413,23 @@ fn apply_storage_class(
 pub enum RetentionPolicy {
     ByTimePeriod(TimeDelta),
     ByNumOfSnapshotsToKeep(usize),
+}
+
+fn allow_system_history_credential_chain(
+    table_info: &TableInfo,
+    storage_params: StorageParams,
+) -> StorageParams {
+    let mut sp = storage_params;
+    let Ok(db_name) = table_info.database_name() else {
+        return sp;
+    };
+    if !db_name.eq_ignore_ascii_case("system_history") {
+        return sp;
+    }
+    if let StorageParams::S3(cfg) = &mut sp {
+        if cfg.allow_credential_chain.is_none() {
+            cfg.allow_credential_chain = Some(true);
+        }
+    }
+    sp
 }

@@ -12,4 +12,5 @@ members = [
     "benchmark",
     "tests/udf",
     "tests/cloud_control_server",
+    "tests/sqllogictests/scripts",
 ]
