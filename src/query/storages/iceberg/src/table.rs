@@ -114,7 +114,18 @@ impl IcebergTable {
             .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
             .await
             .map_err(|err| {
-                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+                let err_str = format!("{err:?}");
+                if err_str.contains("does not exist")
+                    || err_str.contains("NoSuchTableError")
+                    || err_str.contains("TableNotFound")
+                    || err_str.contains("not found")
+                {
+                    ErrorCode::UnknownTable(format!(
+                        "Iceberg table '{database}.{table_name}' not found: {err_str}"
+                    ))
+                } else {
+                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
+                }
             })?;
         Ok(table)
     }
