@@ -394,9 +394,8 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
-
-        Ok(table)
+        let table = IcebergTable::try_create(table_info.clone())?;
+        Ok(table.into())
     }
 
     #[async_backtrace::framed]
