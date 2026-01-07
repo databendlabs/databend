@@ -910,8 +910,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match RawJsonb::new(v).as_timestamp_tz() {
                     Ok(Some(res)) => {
-                        let offset_seconds = i32::from(res.offset) * 3_600;
-                        output.push(timestamp_tz::new(res.value, offset_seconds));
+                        output.push(timestamp_tz::new(res.value, res.offset));
                     }
                     Ok(None) => output.push_null(),
                     Err(err) => {
@@ -3474,10 +3473,7 @@ fn cast_to_timestamp_tz(val: &[u8], tz: &TimeZone) -> Result<Option<timestamp_tz
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
-        JsonbValue::TimestampTz(ts) => {
-            let offset_seconds = i32::from(ts.offset) * 3_600;
-            Ok(Some(timestamp_tz::new(ts.value, offset_seconds)))
-        }
+        JsonbValue::TimestampTz(ts) => Ok(Some(timestamp_tz::new(ts.value, ts.offset))),
         JsonbValue::Timestamp(ts) => {
             let mut value = ts.value;
             clamp_timestamp(&mut value);
