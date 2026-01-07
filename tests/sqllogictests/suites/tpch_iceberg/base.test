@@ -107,3 +107,64 @@ select dt from test_merge_on_read_deletes;
 2023-03-10
 2023-03-12
 2023-03-30
+
+# ========================================
+# Iceberg Table Write Tests
+# ========================================
+
+statement ok
+drop table if exists t_write_basic;
+
+statement ok
+create table t_write_basic(id int, name string, score double) engine=ICEBERG;
+
+query TTTTT
+desc t_write_basic;
+----
+id INT YES NULL (empty)
+name VARCHAR YES NULL (empty)
+score DOUBLE YES NULL (empty)
+
+statement error 1002
+insert into t_write_basic values (1, 'alice', 85.5);
+
+statement ok
+drop table if exists t_write_types;
+
+statement ok
+create table t_write_types(
+    c_int int,
+    c_bigint bigint,
+    c_double double,
+    c_string string,
+    c_date date,
+    c_bool boolean
+) engine=ICEBERG;
+
+statement error 1002
+insert into t_write_types values (1, 100, 2.5, 'hello', '2024-01-01', true);
+
+statement ok
+drop table if exists t_write_partitioned;
+
+statement ok
+create table t_write_partitioned(id int, category string, amount double) engine=ICEBERG partition by (category);
+
+query TTTTT
+desc t_write_partitioned;
+----
+id INT YES NULL (empty)
+category VARCHAR YES NULL (empty)
+amount DOUBLE YES NULL (empty)
+
+statement error 1002
+insert into t_write_partitioned values (1, 'A', 100.5);
+
+statement ok
+drop table t_write_basic;
+
+statement ok
+drop table t_write_types;
+
+statement ok
+drop table t_write_partitioned;
