@@ -32,12 +32,12 @@ runs:
         fi
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
-        cd tests/sqllogictests/scripts/
-        uv sync
+        cwd=$(pwd)
+        cd tests/sqllogictests/scripts/ && uv sync && cd $cwd
         echo "Running prepare_iceberg_tpch_data.py..."
-        uv run prepare_iceberg_tpch_data.py
+        uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
-        uv run prepare_iceberg_test_data.py
+        uv run tests/sqllogictests/scripts/prepare_iceberg_test_data.py
 
 
     - name: Run sqllogic Tests with Standalone lib
