@@ -34,10 +34,15 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ObjectTagIdRef;
+use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::TagIdObjectRef;
+use databend_common_meta_app::schema::TagIdObjectRefIdent;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -552,6 +557,33 @@ async fn gc_dropped_db_by_id(
         .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
     txn.if_then.push(txn_op_del(&id_to_name));
 
+    // Clean up tag references for the dropped database (handles orphan data from
+    // databases dropped before tag cleanup was added to drop_database_meta)
+    {
+        let taggable_object = TaggableObject::Database { db_id };
+        let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(
+            tenant.clone(),
+            ObjectTagIdRef::new(taggable_object.clone(), 0),
+        );
+        let obj_tag_dir = DirName::new(obj_tag_prefix);
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        while let Some(entry) = tag_stream.try_next().await? {
+            let tag_id = entry.key.name().tag_id;
+            // Delete object -> tag reference
+            let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+                tenant.clone(),
+                ObjectTagIdRef::new(taggable_object.clone(), tag_id),
+            );
+            // Delete tag -> object reference
+            let tag_ref_key = TagIdObjectRefIdent::new_generic(
+                tenant.clone(),
+                TagIdObjectRef::new(tag_id, taggable_object.clone()),
+            );
+            txn.if_then.push(txn_op_del(&obj_ref_key));
+            txn.if_then.push(txn_op_del(&tag_ref_key));
+        }
+    }
+
     // Count removed keys (approximate for DeleteByPrefix operations)
     for op in &txn.if_then {
         if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
@@ -761,6 +793,34 @@ async fn remove_data_for_dropped_table(
         };
 
         txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+    }
+
+    // Clean up tag references for the dropped table
+    {
+        let taggable_object = TaggableObject::Table {
+            table_id: table_id.table_id,
+        };
+        let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(
+            tenant.clone(),
+            ObjectTagIdRef::new(taggable_object.clone(), 0),
+        );
+        let obj_tag_dir = DirName::new(obj_tag_prefix);
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        while let Some(entry) = tag_stream.try_next().await? {
+            let tag_id = entry.key.name().tag_id;
+            // Delete object -> tag reference
+            let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+                tenant.clone(),
+                ObjectTagIdRef::new(taggable_object.clone(), tag_id),
+            );
+            // Delete tag -> object reference
+            let tag_ref_key = TagIdObjectRefIdent::new_generic(
+                tenant.clone(),
+                TagIdObjectRef::new(tag_id, taggable_object.clone()),
+            );
+            txn.if_then.push(txn_op_del(&obj_ref_key));
+            txn.if_then.push(txn_op_del(&tag_ref_key));
+        }
     }
 
     Ok(Ok(()))

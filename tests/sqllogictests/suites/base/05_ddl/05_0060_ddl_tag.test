@@ -326,3 +326,139 @@ DROP STAGE IF EXISTS test_tag_stage
 
 statement ok
 DROP CONNECTION IF EXISTS test_tag_conn
+
+## ============================================
+## CREATE OR REPLACE should cleanup tag references
+## ============================================
+
+## --- Test CREATE OR REPLACE DATABASE ---
+statement ok
+DROP TAG IF EXISTS db_replace_tag
+
+statement ok
+DROP DATABASE IF EXISTS db_replace_test
+
+statement ok
+CREATE TAG db_replace_tag
+
+statement ok
+CREATE DATABASE db_replace_test
+
+statement ok
+ALTER DATABASE db_replace_test SET TAG db_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG db_replace_tag
+
+## CREATE OR REPLACE should cleanup old tag references
+statement ok
+CREATE OR REPLACE DATABASE db_replace_test
+
+## Now DROP TAG should succeed (old db_id's tag ref was cleaned up)
+statement ok
+DROP TAG db_replace_tag
+
+statement ok
+DROP DATABASE IF EXISTS db_replace_test
+
+## --- Test CREATE OR REPLACE TABLE ---
+statement ok
+DROP TAG IF EXISTS table_replace_tag
+
+statement ok
+DROP TABLE IF EXISTS default.table_replace_test
+
+statement ok
+CREATE TAG table_replace_tag
+
+statement ok
+CREATE TABLE default.table_replace_test (id INT)
+
+statement ok
+ALTER TABLE default.table_replace_test SET TAG table_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG table_replace_tag
+
+## CREATE OR REPLACE should cleanup old tag references
+statement ok
+CREATE OR REPLACE TABLE default.table_replace_test (id INT, name VARCHAR)
+
+## Now DROP TAG should succeed (old table_id's tag ref was cleaned up)
+statement ok
+DROP TAG table_replace_tag
+
+statement ok
+DROP TABLE IF EXISTS default.table_replace_test
+
+## --- Test CREATE OR REPLACE STAGE ---
+statement ok
+DROP TAG IF EXISTS stage_replace_tag
+
+statement ok
+DROP STAGE IF EXISTS stage_replace_test
+
+statement ok
+CREATE TAG stage_replace_tag
+
+statement ok
+CREATE STAGE stage_replace_test
+
+statement ok
+ALTER STAGE stage_replace_test SET TAG stage_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG stage_replace_tag
+
+## CREATE OR REPLACE STAGE - tag ref uses name, so it persists
+statement ok
+CREATE OR REPLACE STAGE stage_replace_test
+
+## Tag still has reference (name-based), DROP should still fail
+statement error 2753
+DROP TAG stage_replace_tag
+
+## Must explicitly drop stage to remove tag reference
+statement ok
+DROP STAGE stage_replace_test
+
+statement ok
+DROP TAG stage_replace_tag
+
+## --- Test CREATE OR REPLACE CONNECTION ---
+statement ok
+DROP TAG IF EXISTS conn_replace_tag
+
+statement ok
+DROP CONNECTION IF EXISTS conn_replace_test
+
+statement ok
+CREATE TAG conn_replace_tag
+
+statement ok
+CREATE CONNECTION conn_replace_test STORAGE_TYPE='s3'
+
+statement ok
+ALTER CONNECTION conn_replace_test SET TAG conn_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG conn_replace_tag
+
+## CREATE OR REPLACE CONNECTION - tag ref uses name, so it persists
+statement ok
+CREATE OR REPLACE CONNECTION conn_replace_test STORAGE_TYPE='s3'
+
+## Tag still has reference (name-based), DROP should still fail
+statement error 2753
+DROP TAG conn_replace_tag
+
+## Must explicitly drop connection to remove tag reference
+statement ok
+DROP CONNECTION conn_replace_test
+
+statement ok
+DROP TAG conn_replace_tag

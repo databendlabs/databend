@@ -21,6 +21,7 @@ use databend_common_meta_app::principal::user_stage_ident::StageIdent;
 use databend_common_meta_app::schema::CreateTagReply;
 use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::GetTagReply;
 use databend_common_meta_app::schema::ObjectTagIdRef;
@@ -29,6 +30,7 @@ use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
@@ -58,6 +60,7 @@ use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
+use log::warn;
 use seq_marked::SeqValue;
 
 use crate::fetch_id;
@@ -250,31 +253,19 @@ where
     ///
     /// # Concurrency Safety with DROP
     ///
-    /// The transaction includes a condition that the target object must exist (seq >= 1).
-    /// This is **critical** to prevent orphaned tag references when DROP runs concurrently.
+    /// Two mechanisms prevent orphaned tag references when DROP runs concurrently:
     ///
-    /// Consider this race condition without the object existence check:
-    /// ```text
-    /// Timeline: ──────────────────────────────────────────────>
-    /// SET TAG:  [read tag_meta]              [txn commit: write tag ref]
-    /// DROP:              [delete object]  [get_tags] [unset tags]
-    /// ```
+    /// 1. **Transaction condition**: The txn includes `seq >= 1` for the object key.
+    ///    - For Stage/Connection: hard delete sets seq=0, failing the condition.
     ///
-    /// 1. SET TAG reads tag_meta
-    /// 2. DROP deletes object ✓
-    /// 3. SET TAG commits, writes tag ref ✓ (no object check, succeeds!)
-    /// 4. DROP executes get_tags (SET TAG not yet visible, misses new tag)
-    /// 5. DROP cleans up old tag refs
-    /// Result: The newly written tag ref becomes orphaned! ❌
+    /// 2. **Soft-delete check**: For Database/Table which use soft delete (drop_on field):
+    ///    - When txn fails, we check if `drop_on` is set in the object's meta.
+    ///    - If soft-deleted, we reject the SET TAG operation with ObjectNotFound.
+    ///    - This prevents writing tag refs to objects that are logically deleted.
     ///
-    /// With the object existence check (`seq >= 1` in txn condition):
-    /// - Step 3 fails because object was deleted (seq = 0), condition `seq >= 1` not met.
-    ///
-    /// Together with the interpreter's "drop first, cleanup after" pattern:
-    /// - `set_object_tags` check → prevents writing tag refs after object is dropped
-    /// - Interpreter cleanup → ensures existing tag refs are removed after drop
-    ///
-    /// Both are required for complete concurrency safety.
+    /// The meta-api layer handles tag cleanup during DROP operations (in `drop_database_meta`
+    /// and `construct_drop_table_txn_operations`), ensuring existing tag refs are removed
+    /// atomically with the drop operation.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn set_object_tags(
@@ -369,13 +360,50 @@ where
             }
 
             // Transaction failed. Check why and decide whether to retry or return error.
-            // 1. Object was dropped → return ObjectNotFound
+            // 1. Object was dropped (hard delete: seq=0, or soft delete: drop_on is Some) → return ObjectNotFound
             // 2. Tag was modified/deleted → retry will re-fetch and re-validate
             let object_seqv = self.get_kv(&object_key).await?;
             if object_seqv.seq() == 0 {
                 return Ok(Err(TagMetaError::object_not_found(
                     req.taggable_object.clone(),
                 )));
+            }
+
+            // For Database and Table, also check if soft-deleted (drop_on is Some).
+            // This prevents orphaned tag references when DROP runs concurrently.
+            match &req.taggable_object {
+                TaggableObject::Database { db_id } => {
+                    let db_id_key = DatabaseId::new(*db_id);
+                    if let Some(db_meta_seqv) = self.get_pb(&db_id_key).await? {
+                        let db_meta: DatabaseMeta = db_meta_seqv.data;
+                        if db_meta.drop_on.is_some() {
+                            warn!(
+                                "set_object_tags: database {} is soft-deleted, rejecting tag operation",
+                                db_id
+                            );
+                            return Ok(Err(TagMetaError::object_not_found(
+                                req.taggable_object.clone(),
+                            )));
+                        }
+                    }
+                }
+                TaggableObject::Table { table_id } => {
+                    let table_id_key = TableId::new(*table_id);
+                    if let Some(table_meta_seqv) = self.get_pb(&table_id_key).await? {
+                        let table_meta: TableMeta = table_meta_seqv.data;
+                        if table_meta.drop_on.is_some() {
+                            warn!(
+                                "set_object_tags: table {} is soft-deleted, rejecting tag operation",
+                                table_id
+                            );
+                            return Ok(Err(TagMetaError::object_not_found(
+                                req.taggable_object.clone(),
+                            )));
+                        }
+                    }
+                }
+                // Stage and Connection use name-based keys, no soft delete concept
+                TaggableObject::Stage { .. } | TaggableObject::Connection { .. } => {}
             }
 
             debug!(req :? =(&req); "set_object_tags retry due to concurrent modification");
