@@ -39,7 +39,7 @@ use parquet::schema::types::ColumnPath;
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
 const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.9;
-const DELTA_RANGE_TOLERANCE: f64 = 1.02;
+const DELTA_RANGE_TOLERANCE: f64 = 1.05;
 const DELTA_MIN_NDV: u64 = 1024;
 
 /// Serialize data blocks to parquet format.
