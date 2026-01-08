@@ -110,7 +110,7 @@ auto_sync_interval = 60
 [storage]
 # fs | s3 | azblob | obs | oss
 type = "fs"
-# allow_insecure = true
+allow_insecure = true
 
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.

@@ -351,18 +351,18 @@ impl Binder {
 
         // Check for duplicate options
         let mut seen_options = std::collections::HashSet::new();
-        for property in options {
-            if !seen_options.insert(&property.name) {
+        for option in options {
+            if !seen_options.insert(&option.name) {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Duplicate database option '{}' is not allowed",
-                    property.name
+                    option.name
                 )));
             }
 
-            if !VALID_DATABASE_OPTIONS.contains(&property.name.as_str()) {
+            if !VALID_DATABASE_OPTIONS.contains(&option.name.to_uppercase().as_str()) {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Invalid database option '{}'. Valid options are: {}",
-                    property.name,
+                    option.name,
                     VALID_DATABASE_OPTIONS.join(", ")
                 )));
             }
