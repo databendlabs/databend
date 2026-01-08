@@ -66,6 +66,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::sessions::QueryContext;
 
 // Type aliases to simplify complex return types
 type JoinConditionsResult = (
@@ -430,7 +431,10 @@ impl HashJoin {
             }
         }
 
+        let mut sub_query_ctx = QueryContext::create_from(&builder.ctx);
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
         self.build.build_pipeline(builder)?;
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
         let mut build_sinks = builder.main_pipeline.take_sinks();
 
         self.probe.build_pipeline(builder)?;

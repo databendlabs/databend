@@ -328,6 +328,9 @@ impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
         }
 
         let bitmap = Bitmap::from_trusted_len_iter(selected.into_iter());
-        Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?))
+        match bitmap.true_count() {
+            0 => Ok(None),
+            _ => Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?)),
+        }
     }
 }

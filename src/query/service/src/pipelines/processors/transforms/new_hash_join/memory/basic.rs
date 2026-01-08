@@ -192,10 +192,8 @@ impl BasicHashJoin {
             return;
         }
         let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny)
-            || (matches!(
-                self.desc.join_type,
-                JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightSemi | JoinType::RightAnti
-            ) && self.desc.other_predicate.is_none());
+            || (matches!(self.desc.join_type, JoinType::LeftSemi | JoinType::LeftAnti)
+                && self.desc.other_predicate.is_none());
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
