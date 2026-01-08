@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_api::AutoIncrementApiTestSuite;
-use databend_common_meta_api::SchemaApiTestSuite;
+use databend_common_meta_schema_api_test_suite::SchemaApiTestSuite;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
