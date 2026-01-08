@@ -150,6 +150,8 @@ impl Join for OuterRightHashJoin {
     }
 
     fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
+        self.basic_hash_join.finalize_chunks();
+
         if self.finished {
             return Ok(None);
         }
