@@ -68,7 +68,7 @@ select * from si order by b
 \N 1
 \N 2
 NULL 3
-NULL 4
+(empty) 4
 null 5
 null 6
 

@@ -141,3 +141,40 @@ def test_null_display_empty(
             exp = ""
 
     assert res.values()[0] == exp
+
+
+test_column_not_match_data = [
+    ("1,2,3", True, 1),
+    ("2,2,3,", True, 1),
+    ('3,2,3,""', True, 0),
+    ('4,2,3, ', True, 0),
+    ("5,2", True, 0),
+    ("6,2", False, 1),
+    ("7,2,3,4", False, 1),
+]
+
+@pytest.mark.parametrize("data,check,exp", test_column_not_match_data)
+def test_column_not_match(data, check, exp):
+    client = databend_driver.BlockingDatabendClient(DATABEND_DSL)
+    conn = client.get_conn()
+    name = f"test_column_not_match"
+    conn.exec(f"create or replace table {name} (a string, b string, c string)")
+    conn.exec(f"create or replace stage {name}")
+
+    # gen data
+    res = conn.query_row(f"copy into @{name} from (select '{data}') file_format=(type=tsv)")
+    assert res.values()[0] == 1
+
+    copy_sql = f"copy into {name} from @{name} file_format=(type=csv error_on_column_count_mismatch={check}) on_error=continue"
+    select_sql = f"select count($1) from {name}"
+
+    res = conn.query_row(copy_sql)
+    print(res.values())
+    # row loaded
+    assert res.values()[1] == exp
+
+    if not exp:
+        assert "Number of columns" in res.values()[3]
+
+    res = conn.query_row(select_sql)
+    assert res.values()[0] == exp
