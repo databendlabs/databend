@@ -32,16 +32,16 @@ pin_project! {
     #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct TimedFuture<'a, Fu, F>
     where
-        F: Fn(&Fu::Output, Duration, Duration),
+        F: FnOnce(&Fu::Output, Duration, Duration),
         F: 'a,
         Fu: Future,
     {
         #[pin]
         inner: Fu,
 
-        start: Option<Instant>,
         busy: Duration,
-        callback: F,
+        // Start time and callback, consumed together when the future completes.
+        on_ready: Option<(Instant, F)>,
         _p : PhantomData<&'a ()>,
 
     }
@@ -49,16 +49,15 @@ pin_project! {
 
 impl<'a, Fu, F> TimedFuture<'a, Fu, F>
 where
-    F: Fn(&Fu::Output, Duration, Duration),
+    F: FnOnce(&Fu::Output, Duration, Duration),
     F: 'a,
     Fu: Future,
 {
     pub fn new(inner: Fu, callback: F) -> Self {
         Self {
             inner,
-            start: None,
             busy: Duration::default(),
-            callback,
+            on_ready: Some((Instant::now(), callback)),
             _p: Default::default(),
         }
     }
@@ -66,7 +65,7 @@ where
 
 impl<'a, Fu, F> Future for TimedFuture<'a, Fu, F>
 where
-    F: Fn(&Fu::Output, Duration, Duration),
+    F: FnOnce(&Fu::Output, Duration, Duration),
     F: 'a,
     Fu: Future,
 {
@@ -75,20 +74,16 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        if this.start.is_none() {
-            *this.start = Some(Instant::now());
-        }
-
         let t0 = Instant::now();
-
         let res = this.inner.poll(cx);
-
         *this.busy += t0.elapsed();
 
         match &res {
             Poll::Ready(output) => {
-                let total = this.start.unwrap().elapsed();
-                (this.callback)(output, total, *this.busy);
+                if let Some((start, callback)) = this.on_ready.take() {
+                    let total = start.elapsed();
+                    (callback)(output, total, *this.busy);
+                }
             }
             Poll::Pending => {}
         }
@@ -104,7 +99,7 @@ where Self: Future
     /// Wrap the future with a timing future.
     fn with_timing<'a, F>(self, f: F) -> TimedFuture<'a, Self, F>
     where
-        F: Fn(&Self::Output, Duration, Duration) + 'a,
+        F: FnOnce(&Self::Output, Duration, Duration) + 'a,
         Self: Future + Sized;
 
     /// Wrap the future with a timing future,
@@ -113,9 +108,9 @@ where Self: Future
         self,
         threshold: Duration,
         f: F,
-    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl FnOnce(&Self::Output, Duration, Duration)>
     where
-        F: Fn(&Self::Output, Duration, Duration) + 'a,
+        F: FnOnce(&Self::Output, Duration, Duration) + 'a,
         Self: Future + Sized,
     {
         self.with_timing::<'a>(move |output, total, busy| {
@@ -130,7 +125,7 @@ where Self: Future
     fn log_elapsed_debug<'a>(
         self,
         ctx: impl fmt::Display + 'a,
-    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl FnOnce(&Self::Output, Duration, Duration)>
     where
         Self: Future + Sized,
     {
@@ -158,7 +153,7 @@ where Self: Future
     fn log_elapsed_info<'a>(
         self,
         ctx: impl fmt::Display + 'a,
-    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl FnOnce(&Self::Output, Duration, Duration)>
     where
         Self: Future + Sized,
     {
@@ -187,7 +182,7 @@ where T: Future + Sized
 {
     fn with_timing<'a, F>(self, f: F) -> TimedFuture<'a, Self, F>
     where
-        F: Fn(&Self::Output, Duration, Duration),
+        F: FnOnce(&Self::Output, Duration, Duration),
         F: 'a,
     {
         TimedFuture::new(self, f)
