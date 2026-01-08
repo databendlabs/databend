@@ -27,6 +27,7 @@ use crate::ColumnBuilder;
 use crate::ColumnVec;
 use crate::ColumnViewVec;
 use crate::DataBlock;
+use crate::RepeatIndex;
 use crate::Scalar;
 use crate::Value;
 use crate::kernels::take::BIT_MASK;
@@ -181,20 +182,14 @@ impl DataBlock {
         build_columns: &[ColumnVec],
         build_columns_data_type: &[DataType],
         indices: &[RowPtr],
-        result_size: usize,
     ) -> Self {
+        let result_size = indices.len();
         let result_entries =
             build_columns
                 .iter()
                 .zip(build_columns_data_type)
                 .map(|(columns, data_type)| {
-                    Column::take_column_vec_indices(
-                        columns,
-                        data_type.clone(),
-                        indices,
-                        result_size,
-                    )
-                    .into()
+                    Column::take_column_vec_indices(columns, data_type.clone(), indices).into()
                 });
         DataBlock::from_iter(result_entries, result_size)
     }
@@ -797,8 +792,8 @@ impl Column {
         columns: &ColumnVec,
         data_type: DataType,
         indices: &[RowPtr],
-        result_size: usize,
     ) -> Column {
+        let result_size = indices.len();
         match &columns {
             ColumnVec::Null => Column::Null { len: result_size },
             ColumnVec::EmptyArray => Column::EmptyArray { len: result_size },
@@ -887,15 +882,10 @@ impl Column {
                     &columns.column,
                     *inner_data_type.clone(),
                     indices,
-                    result_size,
                 );
 
-                let inner_bitmap = Self::take_column_vec_indices(
-                    &columns.validity,
-                    DataType::Boolean,
-                    indices,
-                    result_size,
-                );
+                let inner_bitmap =
+                    Self::take_column_vec_indices(&columns.validity, DataType::Boolean, indices);
 
                 NullableColumn::new_column(
                     inner_column,
@@ -908,12 +898,7 @@ impl Column {
                     .iter()
                     .enumerate()
                     .map(|(idx, ty)| {
-                        Self::take_column_vec_indices(
-                            &columns[idx],
-                            ty.clone(),
-                            indices,
-                            result_size,
-                        )
+                        Self::take_column_vec_indices(&columns[idx], ty.clone(), indices)
                     })
                     .collect();
 
@@ -953,7 +938,7 @@ impl Column {
                 with_opaque_mapped_type!(|T| match columns {
                     OpaqueColumnVec::T(columns) => {
                         let builder = Self::take_block_vec_primitive_types(columns, indices);
-                        OpaqueType::<T>::upcast_column_with_type(builder.into(), &data_type)
+                        OpaqueType::<T>::upcast_column(builder.into())
                     }
                 })
             }
@@ -1154,12 +1139,16 @@ impl ChunkIndex {
         self.total += 1;
         match self.chunks.last_mut() {
             Some(ChunkIndexItem::Repeat { block, count })
-                if *block == block_idx && Some(&row_idx) == self.rows.last() =>
+                if *block == block_idx && self.rows.last().is_some_and(|row| *row == row_idx) =>
             {
                 *count += 1;
             }
             Some(ChunkIndexItem::Range { block, len })
-                if *block == block_idx && row_idx == *self.rows.last().unwrap() + 1 =>
+                if *block == block_idx
+                    && self
+                        .rows
+                        .last()
+                        .is_some_and(|start| row_idx == *start + *len) =>
             {
                 *len += 1;
             }
@@ -1192,20 +1181,130 @@ impl ChunkIndex {
             }
         }
     }
+
+    pub fn iter(&self) -> ChunkIndexIter<'_> {
+        ChunkIndexIter {
+            rows: &self.rows,
+            row_pos: 0,
+            chunks: &self.chunks,
+            chunk_pos: 0,
+        }
+    }
 }
 
 pub enum Chunk<'a> {
     Single { block: u32, rows: &'a [u32] },
-    Repeat { block: u32, row: u32, count: u32 },
+    Repeat { block: u32, rows: RepeatIndex },
     Range { block: u32, row: u32, len: u32 },
 }
 
-struct ChunkIndexIter {}
+impl Chunk<'_> {
+    pub fn block(&self) -> u32 {
+        match *self {
+            Chunk::Single { block, .. } => block,
+            Chunk::Repeat { block, .. } => block,
+            Chunk::Range { block, .. } => block,
+        }
+    }
+}
 
-impl<'a> Iterator for ChunkIndexIter {
+pub struct ChunkIndexIter<'a> {
+    rows: &'a [u32],
+    row_pos: usize,
+    chunks: &'a [ChunkIndexItem],
+    chunk_pos: usize,
+}
+
+impl<'a> Iterator for ChunkIndexIter<'a> {
     type Item = Chunk<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        let item = self.chunks.get(self.chunk_pos)?;
+        self.chunk_pos += 1;
+
+        match item {
+            ChunkIndexItem::Single { block, n } => {
+                let start = self.row_pos;
+                let end = start + (*n as usize);
+                self.row_pos = end;
+                Some(Chunk::Single {
+                    block: *block,
+                    rows: &self.rows[start..end],
+                })
+            }
+            ChunkIndexItem::Repeat { block, count } => {
+                let row = self.rows[self.row_pos];
+                self.row_pos += 1;
+                Some(Chunk::Repeat {
+                    block: *block,
+                    rows: RepeatIndex { row, count: *count },
+                })
+            }
+            ChunkIndexItem::Range { block, len } => {
+                let row = self.rows[self.row_pos];
+                self.row_pos += 1;
+                Some(Chunk::Range {
+                    block: *block,
+                    row,
+                    len: *len,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flatten_index(index: &ChunkIndex) -> Vec<(u32, u32)> {
+        let mut flattened = Vec::with_capacity(index.total);
+        for chunk in index.iter() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    flattened.extend(rows.iter().map(|row| (block, *row)));
+                }
+                Chunk::Repeat {
+                    block,
+                    rows: RepeatIndex { row, count },
+                } => {
+                    flattened.extend(std::iter::repeat_n((block, row), count as _));
+                }
+                Chunk::Range { block, row, len } => {
+                    flattened.extend((0..len).map(|delta| (block, row + delta)));
+                }
+            }
+        }
+        flattened
+    }
+
+    #[test]
+    fn test_chunk_index() {
+        let mut index = ChunkIndex::default();
+
+        let input = vec![
+            (0, 0),
+            (0, 1),
+            (0, 1),
+            (0, 2),
+            (1, 10),
+            (1, 11),
+            (1, 12),
+            (1, 12),
+            (2, 20),
+            (3, 30),
+            (3, 30),
+            (3, 30),
+            (4, 100),
+            (4, 102),
+        ];
+
+        for &(block, row) in &input {
+            index.push_merge(block, row);
+        }
+
+        assert_eq!(index.total, input.len());
+        let flattened = flatten_index(&index);
+        assert_eq!(flattened, input);
     }
 }

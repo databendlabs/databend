@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::RepeatIndex;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::NumberScalar;
@@ -80,10 +81,10 @@ impl RangeJoinState {
                     unsafe { left_idx_col.index_unchecked(i) }
                 {
                     left_result_block = left_table[left_idx].take_compacted_indices(
-                        &[(
-                            ((left - 1) as usize - left_offset) as u32,
-                            (right_len - j) as u32,
-                        )],
+                        &[RepeatIndex {
+                            row: ((left - 1) as usize - left_offset) as u32,
+                            count: (right_len - j) as u32,
+                        }],
                         right_len - j,
                     )?;
                 }
