@@ -240,19 +240,21 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
                 self.probed_rows.matched_build.len(),
             );
 
-            let result_count = filter_executor.select(&result_block)?;
+            if !result_block.is_empty() {
+                let result_count = filter_executor.select(&result_block)?;
 
-            if result_count == 0 {
-                continue;
-            }
+                if result_count == 0 {
+                    continue;
+                }
 
-            let true_sel = filter_executor.true_selection();
+                let true_sel = filter_executor.true_selection();
 
-            for idx in true_sel.iter().take(result_count) {
-                let row_ptr = self.probed_rows.matched_build[*idx as usize];
-                let row_idx = row_ptr.row_index as usize;
-                let chunk_idx = row_ptr.chunk_index as usize;
-                self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                for idx in true_sel.iter().take(result_count) {
+                    let row_ptr = self.probed_rows.matched_build[*idx as usize];
+                    let row_idx = row_ptr.row_index as usize;
+                    let chunk_idx = row_ptr.chunk_index as usize;
+                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                }
             }
         }
     }

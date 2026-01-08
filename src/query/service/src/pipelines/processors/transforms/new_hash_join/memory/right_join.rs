@@ -219,7 +219,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                 }
             };
 
-            let result_block = final_result_block(
+            let data_block = final_result_block(
                 &self.desc,
                 probe_block,
                 build_block,
@@ -233,7 +233,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                     self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
                 }
 
-                return Ok(Some(result_block));
+                return Ok(Some(data_block));
             }
 
             let Some(filter_executor) = self.filter_executor.as_mut() else {
@@ -243,30 +243,28 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                     self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
                 }
 
-                return Ok(Some(result_block));
+                return Ok(Some(data_block));
             };
 
-            let result_count = filter_executor.select(&result_block)?;
+            if !data_block.is_empty() {
+                let res_rows = filter_executor.select(&data_block)?;
 
-            if result_count == 0 {
-                continue;
+                if res_rows == 0 {
+                    continue;
+                }
+
+                let true_sel = filter_executor.true_selection();
+
+                for idx in true_sel.iter().take(res_rows) {
+                    let row_ptr = self.probed_rows.matched_build[*idx as usize];
+                    let row_idx = row_ptr.row_index as usize;
+                    let chunk_idx = row_ptr.chunk_index as usize;
+                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                }
+
+                let num_rows = data_block.num_rows();
+                return Ok(Some(filter_executor.take(data_block, num_rows, res_rows)?));
             }
-
-            let true_sel = filter_executor.true_selection();
-
-            for idx in true_sel.iter().take(result_count) {
-                let row_ptr = self.probed_rows.matched_build[*idx as usize];
-                let row_idx = row_ptr.row_index as usize;
-                let chunk_idx = row_ptr.chunk_index as usize;
-                self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
-            }
-
-            let origin_rows = result_block.num_rows();
-            return Ok(Some(filter_executor.take(
-                result_block,
-                origin_rows,
-                result_count,
-            )?));
         }
     }
 }
