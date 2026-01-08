@@ -26,6 +26,9 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::optimizer::ir::SExpr;
+use log::info;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -165,23 +168,49 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        let predicates = secure_filter
+            .predicates
+            .iter()
+            .map(|scalar| {
+                let expr = scalar
+                    .type_check(input_schema.as_ref())?
+                    .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
+                let expr = cast_expr_to_non_null_boolean(expr)?;
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                Ok(expr.as_remote_expr())
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        if !predicates.is_empty() {
+            // Use Serde serialization for stable cache key (sql_display may lose structural info)
+            let mut serialized: Vec<String> = predicates
+                .iter()
+                .map(|p| serde_json::to_string(p).unwrap_or_default())
+                .collect();
+            // Sort to ensure order-independent cache key
+            serialized.sort();
+            let combined = serialized.join("|");
+            let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
+
+            // Log human-readable predicates for debugging
+            let readable: Vec<String> = predicates
+                .iter()
+                .map(|p| p.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .collect();
+            info!(
+                "SecureFilter cache key extra: predicates=[{}], hash={}",
+                readable.join(", "),
+                hash
+            );
+
+            self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+        }
+
         Ok(PhysicalPlan::new(SecureFilter {
             meta: PhysicalPlanMeta::new("SecureFilter"),
             projections,
             input,
-            predicates: secure_filter
-                .predicates
-                .iter()
-                .map(|scalar| {
-                    let expr = scalar
-                        .type_check(input_schema.as_ref())?
-                        .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                    let expr = cast_expr_to_non_null_boolean(expr)?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    Ok(expr.as_remote_expr())
-                })
-                .collect::<Result<_>>()?,
-
+            predicates,
             stat_info: Some(stat_info),
         }))
     }
