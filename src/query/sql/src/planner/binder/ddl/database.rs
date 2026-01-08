@@ -348,10 +348,17 @@ impl Binder {
     ) -> Result<()> {
         // Validate database options - only allow specific connection-related options
         const VALID_DATABASE_OPTIONS: &[&str] = &[DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH];
+        let options = options
+            .iter()
+            .map(|opt| SQLProperty {
+                name: opt.name.to_uppercase(),
+                value: opt.value.clone(),
+            })
+            .collect::<Vec<_>>();
 
         // Check for duplicate options
         let mut seen_options = std::collections::HashSet::new();
-        for option in options {
+        for option in options.iter() {
             if !seen_options.insert(&option.name) {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Duplicate database option '{}' is not allowed",
@@ -359,7 +366,7 @@ impl Binder {
                 )));
             }
 
-            if !VALID_DATABASE_OPTIONS.contains(&option.name.to_uppercase().as_str()) {
+            if !VALID_DATABASE_OPTIONS.contains(&option.name.as_str()) {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Invalid database option '{}'. Valid options are: {}",
                     option.name,
