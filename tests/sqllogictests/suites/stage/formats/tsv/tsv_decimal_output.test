@@ -1,0 +1,30 @@
+statement ok
+drop table if exists decimal_test
+
+statement ok
+create table decimal_test(a decimal(10, 4) not null, b decimal(20, 6) not null)
+
+statement ok
+insert into decimal_test values (1.2300, 100.000000), (2.0000, 50.123000), (3.1415, 0.000001)
+
+statement ok
+drop stage if exists tsv_decimal_stage
+
+statement ok
+create stage tsv_decimal_stage file_format = (type = 'tsv')
+
+statement ok
+copy into @tsv_decimal_stage from decimal_test
+
+query T
+select $1, $2 from @tsv_decimal_stage order by $1
+----
+1.23 100
+2 50.123
+3.1415 0.000001
+
+statement ok
+drop table if exists decimal_test
+
+statement ok
+drop stage if exists tsv_decimal_stage
