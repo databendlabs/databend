@@ -83,13 +83,11 @@ fn execute_subquery_for_scalar(
             .await
     })?;
 
-    let mut total_rows = 0;
-    let mut result_scalar: Option<Scalar> = None;
     if data_blocks.is_empty() {
         return Ok(Scalar::Null);
     }
 
-    let blocks = DataBlock::concat(&data_blocks);
+    let block = DataBlock::concat(&data_blocks)?;
 
     if block.num_columns() != 1 {
         return Err(ErrorCode::SemanticError(
@@ -97,15 +95,19 @@ fn execute_subquery_for_scalar(
         ));
     }
 
-    if block.len() > 1 {
+    if block.num_rows() > 1 {
         return Err(ErrorCode::SemanticError(
             "Scalar subquery in table function argument returned more than one row".to_string(),
         ));
     }
 
+    if block.num_rows() == 0 {
+        return Ok(Scalar::Null);
+    }
+
     let column = &block.columns()[0];
     let col_value = column.value();
-    Ok(col_value.index(0).unwrap())
+    Ok(col_value.index(0).unwrap().to_owned())
 }
 
 /// Try to fold an expression to a constant scalar value.
