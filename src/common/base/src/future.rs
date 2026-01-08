@@ -40,8 +40,10 @@ pin_project! {
         inner: Fu,
 
         busy: Duration,
-        // Start time and callback, consumed together when the future completes.
-        on_ready: Option<(Instant, F)>,
+        // Start time, initialized on first poll.
+        start: Option<Instant>,
+        // Callback, consumed when the future completes.
+        on_ready: Option<F>,
         _p: PhantomData<&'a ()>,
     }
 }
@@ -56,7 +58,8 @@ where
         Self {
             inner,
             busy: Duration::default(),
-            on_ready: Some((Instant::now(), callback)),
+            start: None,
+            on_ready: Some(callback),
             _p: PhantomData,
         }
     }
@@ -73,14 +76,19 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
+        // Initialize start time on first poll, only if callback is present.
+        if this.start.is_none() && this.on_ready.is_some() {
+            *this.start = Some(Instant::now());
+        }
+
         let t0 = Instant::now();
         let res = this.inner.poll(cx);
         *this.busy += t0.elapsed();
 
         match &res {
             Poll::Ready(output) => {
-                if let Some((start, callback)) = this.on_ready.take() {
-                    let total = start.elapsed();
+                if let Some(callback) = this.on_ready.take() {
+                    let total = this.start.map(|s| s.elapsed()).unwrap_or_default();
                     (callback)(output, total, *this.busy);
                 }
             }
