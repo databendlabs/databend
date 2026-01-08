@@ -985,6 +985,19 @@ impl TableContext for QueryContext {
         sha
     }
 
+    fn add_cache_key_extra(&self, extra: String) {
+        let mut extras = self.shared.cache_key_extras.write();
+        if !extras.contains(&extra) {
+            extras.push(extra);
+        }
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        let mut extras = self.shared.cache_key_extras.read().clone();
+        extras.sort();
+        extras
+    }
+
     fn get_cacheable(&self) -> bool {
         self.shared.cacheable.load(Ordering::Acquire)
     }

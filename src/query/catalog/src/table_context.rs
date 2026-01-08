@@ -177,6 +177,8 @@ pub trait TableContext: Send + Sync {
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    fn add_cache_key_extra(&self, extra: String);
+    fn get_cache_key_extras(&self) -> Vec<String>;
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
