@@ -38,6 +38,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
@@ -154,6 +155,7 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::SetObjectTagsPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
@@ -174,6 +176,7 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetObjectTagsPlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UnsetWorkloadGroupQuotasPlan;
@@ -265,6 +268,7 @@ pub enum Plan {
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
+    AlterDatabase(Box<AlterDatabasePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
@@ -378,6 +382,8 @@ pub enum Plan {
     // Tags
     CreateTag(Box<CreateTagPlan>),
     DropTag(Box<DropTagPlan>),
+    SetObjectTags(Box<SetObjectTagsPlan>),
+    UnsetObjectTags(Box<UnsetObjectTagsPlan>),
 
     // Stages
     CreateStage(Box<CreateStagePlan>),

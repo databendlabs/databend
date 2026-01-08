@@ -52,24 +52,22 @@ impl Interpreter for DropDatabaseInterpreter {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        // unset the ownership of the database, the database may not exists.
-        let db = catalog.get_database(&tenant, &self.plan.database).await;
-        if let Ok(db) = db {
-            // iceberg db do not need to generate ownership.
-            if !catalog.is_external() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                let owner_object = OwnershipObject::Database {
-                    catalog_name: self.plan.catalog.clone(),
-                    db_id: db.get_db_info().database_id.db_id,
-                };
-
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
-        }
-
         // actual drop database
-        let _ = catalog.drop_database(self.plan.clone().into()).await?;
+        let rep = catalog.drop_database(self.plan.clone().into()).await?;
+
+        let db_id = rep.db_id;
+        // Cleanup after successful drop
+        // iceberg db do not need to generate ownership and tag.
+        if !catalog.is_external() {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Database {
+                catalog_name: self.plan.catalog.clone(),
+                db_id,
+            };
+
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         Ok(PipelineBuildResult::create())
     }

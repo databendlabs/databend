@@ -17,12 +17,14 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropConnectionPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -58,8 +60,12 @@ impl Interpreter for DropConnectionInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
-        // we should do `drop ownership` after actually drop object, and object maybe not exists.
-        // drop the ownership
+        // 1. Drop the connection first
+        user_mgr
+            .drop_connection(&tenant, &plan.name, plan.if_exists)
+            .await?;
+
+        // 2. Revoke ownership (after drop succeeds to prevent permission leak)
         if self
             .ctx
             .get_settings()
@@ -73,9 +79,11 @@ impl Interpreter for DropConnectionInterpreter {
             RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
-        user_mgr
-            .drop_connection(&tenant, &plan.name, plan.if_exists)
-            .await?;
+        // 3. Clean up tag references (must be after drop for concurrency safety)
+        let taggable_object = TaggableObject::Connection {
+            name: plan.name.clone(),
+        };
+        cleanup_object_tags(&tenant, taggable_object).await?;
 
         Ok(PipelineBuildResult::create())
     }
