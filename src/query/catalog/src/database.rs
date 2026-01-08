@@ -213,6 +213,18 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
+    async fn update_options(
+        &self,
+        _expected_meta_seq: u64,
+        _options: BTreeMap<String, String>,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement update_options in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _req: UpsertTableOptionReq,

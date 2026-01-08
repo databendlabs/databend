@@ -21,6 +21,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
+use databend_common_meta_app::app_error::DatabaseVersionMismatched;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
 use databend_common_meta_app::app_error::UnknownDatabase;
@@ -42,11 +43,14 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReply;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::ConditionResult::Eq;
+use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
@@ -65,6 +69,7 @@ use crate::error_util::db_has_to_not_exist;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::UpsertPB;
 use crate::serialize_struct;
 use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
@@ -492,6 +497,60 @@ where
                 return Ok(RenameDatabaseReply {});
             }
         }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_database_options(
+        &self,
+        req: UpdateDatabaseOptionsReq,
+    ) -> Result<UpdateDatabaseOptionsReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let db_id = req.db_id;
+        let expected_seq = req.expected_meta_seq;
+        let new_options = req.options.clone();
+        let db_key = DatabaseId::new(db_id);
+
+        let seq_meta = self.get_pb(&db_key).await?;
+        let Some(seq_meta) = seq_meta else {
+            return Err(KVAppError::AppError(AppError::UnknownDatabaseId(
+                UnknownDatabaseId::new(db_id, "update_database_options"),
+            )));
+        };
+
+        if seq_meta.seq != expected_seq {
+            return Err(KVAppError::AppError(AppError::DatabaseVersionMismatched(
+                DatabaseVersionMismatched::new(
+                    db_id,
+                    MatchSeq::Exact(expected_seq),
+                    Some(seq_meta.seq),
+                    "update_database_options",
+                ),
+            )));
+        }
+
+        let mut meta = seq_meta.data;
+        meta.options = new_options;
+        meta.updated_on = Utc::now();
+
+        let upsert = UpsertPB::update_exact(db_key, SeqV::new(expected_seq, meta));
+        let transition = self.upsert_pb(&upsert).await?;
+
+        if !transition.is_changed() {
+            let curr_seq = transition.prev.map(|seq_v| seq_v.seq);
+
+            return Err(KVAppError::AppError(AppError::DatabaseVersionMismatched(
+                DatabaseVersionMismatched::new(
+                    db_id,
+                    MatchSeq::Exact(expected_seq),
+                    curr_seq,
+                    "update_database_options",
+                ),
+            )));
+        }
+
+        Ok(UpdateDatabaseOptionsReply {})
     }
 
     #[logcall::logcall]
