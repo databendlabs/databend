@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::schema::TagNameIdent;
@@ -50,12 +51,23 @@ impl Interpreter for DropTagInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
-        match meta_client
+        let result = meta_client
             .drop_tag(&TagNameIdent::new(&self.plan.tenant, &self.plan.name))
-            .await?
-        {
-            Ok(_) => Ok(PipelineBuildResult::create()),
-            Err(e) => Err(e.into()),
+            .await?;
+
+        match result {
+            Ok(Some(_)) => Ok(PipelineBuildResult::create()),
+            Ok(None) => {
+                if self.plan.if_exists {
+                    Ok(PipelineBuildResult::create())
+                } else {
+                    Err(ErrorCode::UnknownTag(format!(
+                        "TAG `{}` not found.",
+                        self.plan.name
+                    )))
+                }
+            }
+            Err(e) => Err(ErrorCode::from(e)),
         }
     }
 }

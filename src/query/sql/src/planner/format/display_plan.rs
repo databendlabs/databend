@@ -160,6 +160,8 @@ impl Plan {
             // Tags
             Plan::CreateTag(_) => Ok("CreateTag".to_string()),
             Plan::DropTag(_) => Ok("DropTag".to_string()),
+            Plan::SetObjectTags(_) => Ok("SetObjectTags".to_string()),
+            Plan::UnsetObjectTags(_) => Ok("UnsetObjectTags".to_string()),
 
             // FileFormat
             Plan::CreateFileFormat(_) => Ok("CreateFileFormat".to_string()),
