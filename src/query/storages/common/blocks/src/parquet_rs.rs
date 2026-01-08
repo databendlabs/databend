@@ -370,7 +370,7 @@ mod tests {
             TableCompression::Zstd,
             false,
             false,
-            None::<&TestNdvProvider>,
+            None,
             None,
             1000,
             &schema,
