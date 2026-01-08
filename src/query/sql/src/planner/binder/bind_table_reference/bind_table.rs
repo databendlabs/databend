@@ -105,7 +105,12 @@ impl Binder {
                     .set_span(*span));
                 }
                 return if cte_info.recursive {
-                    if self.bind_recursive_cte {
+                    if self
+                        .bind_recursive_cte
+                        .as_ref()
+                        .map(|name| name == &table_name)
+                        .unwrap_or(false)
+                    {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
                     } else {
                         self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
