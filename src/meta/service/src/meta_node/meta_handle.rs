@@ -54,6 +54,7 @@ use tokio::sync::oneshot;
 use tonic::Status;
 
 use crate::analysis::count_prefix::count_prefix;
+use crate::analysis::request_histogram;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_node::errors::MetaNodeStopped;
@@ -135,12 +136,16 @@ impl MetaHandle {
         &self,
         upsert: UpsertKV,
     ) -> Result<Result<UpsertKVReply, MetaAPIError>, MetaNodeStopped> {
+        let histogram_label = request_histogram::label_for_upsert(&upsert);
         self.request(move |meta_node| {
             let fu = async move {
                 meta_node
                     .kv_api()
                     .upsert_kv(upsert.clone())
                     .log_elapsed_info(format!("UpsertKV: {:?}", upsert))
+                    .with_timing(|_output, total, _busy| {
+                        request_histogram::record(&histogram_label, total);
+                    })
                     .await
             };
 
@@ -164,11 +169,15 @@ impl MetaHandle {
     > {
         self.request(move |meta_node| {
             let req = ForwardRequest::new(1, req);
+            let histogram_label = request_histogram::label_for_read(&req.body);
 
             let fu = async move {
                 meta_node
                     .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
                     .log_elapsed_info(format!("ReadRequest: {:?}", req))
+                    .with_timing(|_output, total, _busy| {
+                        request_histogram::record(&histogram_label, total);
+                    })
                     .await
             };
 
@@ -181,6 +190,7 @@ impl MetaHandle {
         &self,
         txn: TxnRequest,
     ) -> Result<Result<(Option<Endpoint>, TxnReply), MetaAPIError>, MetaNodeStopped> {
+        let histogram_label = request_histogram::label_for_txn(&txn);
         self.request(move |meta_node| {
             let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
             let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
@@ -189,6 +199,9 @@ impl MetaHandle {
                 let res = meta_node
                     .handle_forwardable_request(forward_req)
                     .log_elapsed_info(format!("TxnRequest: {:?}", txn))
+                    .with_timing(|_output, total, _busy| {
+                        request_histogram::record(&histogram_label, total);
+                    })
                     .await;
 
                 res.map(|(ep, forward_resp)| {
@@ -211,6 +224,7 @@ impl MetaHandle {
         entry: LogEntry,
     ) -> Result<Result<AppliedState, MetaAPIError>, MetaNodeStopped> {
         let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(entry.clone()));
+        let histogram_label = request_histogram::label_for_write(&entry);
 
         let res = self
             .request(move |meta_node| {
@@ -218,6 +232,9 @@ impl MetaHandle {
                     meta_node
                         .handle_forwardable_request(forward_req)
                         .log_elapsed_info(format!("WriteRequest: {:?}", entry))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(&histogram_label, total);
+                        })
                         .await
                 };
                 Box::pin(fu)

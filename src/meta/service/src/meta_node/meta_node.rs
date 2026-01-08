@@ -99,6 +99,7 @@ use watcher::util::try_forward;
 use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
 
+use crate::analysis::request_histogram;
 use crate::api::grpc::grpc_service::try_remove_sender;
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -377,7 +378,12 @@ impl MetaNode {
         mut metrics_rx: WatchReceiver<RaftMetrics>,
     ) -> Result<(), AnyError> {
         const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
+        const HISTOGRAM_REPORT_INTERVAL: Duration = Duration::from_secs(1);
+        const HISTOGRAM_RESET_INTERVAL: Duration = Duration::from_secs(10);
+
         let mut last_leader: Option<u64> = None;
+        let mut last_histogram_report = Instant::now();
+        let mut last_histogram_reset = Instant::now();
 
         loop {
             let loop_start = Instant::now();
@@ -455,6 +461,17 @@ impl MetaNode {
             let metrics_str = crate::metrics::meta_metrics_to_prometheus_string();
             let parsed_metrics = Self::parse_metrics_to_json(&metrics_str);
             info!("metrics: {}", parsed_metrics);
+
+            if last_histogram_report.elapsed() >= HISTOGRAM_REPORT_INTERVAL {
+                let histogram_report = request_histogram::report();
+                info!("request latency: {}", histogram_report);
+                last_histogram_report = Instant::now();
+            }
+
+            if last_histogram_reset.elapsed() >= HISTOGRAM_RESET_INTERVAL {
+                request_histogram::reset();
+                last_histogram_reset = Instant::now();
+            }
 
             let elapsed = loop_start.elapsed();
             if elapsed < RATE_LIMIT_INTERVAL {
