@@ -57,11 +57,34 @@ use crate::with_vector_number_type;
 
 // Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (u32, u32, usize);
+// // Block idx, row idx
+pub type BlockIndex = (u32, u32);
 
+trait BlockIndexSource: Copy {
+    fn for_each<F: FnMut(u32, u32, usize)>(&self, f: F);
+}
+
+impl<'a> BlockIndexSource for &'a [BlockRowIndex] {
+    fn for_each<F: FnMut(u32, u32, usize)>(&self, mut f: F) {
+        for &(block_index, row, times) in *self {
+            f(block_index, row, times);
+        }
+    }
+}
+
+impl<'a> BlockIndexSource for &'a [BlockIndex] {
+    fn for_each<F: FnMut(u32, u32, usize)>(&self, mut f: F) {
+        for &(block_index, row) in *self {
+            f(block_index, row, 1);
+        }
+    }
+}
+
+// block_index, start, len
 pub type MergeSlice = (usize, usize, usize);
 
 impl DataBlock {
-    pub fn take_blocks(
+    pub fn take_blocks_repeat(
         blocks: &[DataBlock],
         indices: &[BlockRowIndex],
         result_size: usize,
@@ -104,6 +127,50 @@ impl DataBlock {
                     entries.iter().copied().map(BlockEntry::to_column).collect();
 
                 Column::take_column_indices(&full_columns, indices, result_size).into()
+            })
+            .collect();
+
+        DataBlock::new(result_columns, result_size)
+    }
+
+    pub fn take_blocks(blocks: &[DataBlock], indices: &[BlockIndex], result_size: usize) -> Self {
+        debug_assert!(!blocks.is_empty());
+
+        let num_columns = blocks[0].num_columns();
+        let result_size = if result_size > 0 {
+            result_size
+        } else {
+            indices.len()
+        };
+
+        let result_columns = (0..num_columns)
+            .map(|index| {
+                let entries = blocks
+                    .iter()
+                    .map(|block| block.get_by_offset(index))
+                    .collect_vec();
+
+                let ty = entries[0].data_type();
+                if ty.is_null() {
+                    return BlockEntry::new_const_column(ty, Scalar::Null, result_size);
+                }
+
+                if let Some((scalar, data_type, _)) = entries[0].as_const() {
+                    let all_same_scalar =
+                        entries.iter().copied().map(BlockEntry::value).all_equal();
+                    if all_same_scalar {
+                        return BlockEntry::new_const_column(
+                            data_type.clone(),
+                            scalar.clone(),
+                            result_size,
+                        );
+                    }
+                }
+
+                let full_columns: Vec<_> =
+                    entries.iter().copied().map(BlockEntry::to_column).collect();
+
+                Column::take_column_block_indices(&full_columns, indices, result_size).into()
             })
             .collect();
 
@@ -249,6 +316,19 @@ impl Column {
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Column {
+        Self::take_column_indices_impl(columns, indices, result_size)
+    }
+
+    pub fn take_column_block_indices(
+        columns: &[Column],
+        indices: &[BlockIndex],
+        result_size: usize,
+    ) -> Column {
+        Self::take_column_indices_impl(columns, indices, result_size)
+    }
+
+    fn take_column_indices_impl<I>(columns: &[Column], indices: I, result_size: usize) -> Column
+    where I: BlockIndexSource {
         let data_type = columns[0].data_type();
         match &columns[0] {
             Column::Null { .. } => Column::Null { len: result_size },
@@ -272,13 +352,13 @@ impl Column {
                         })
                         .collect_vec();
                     let mut builder = Vec::with_capacity(result_size);
-                    for &(block_index, row, times) in indices {
+                    indices.for_each(|block_index, row, times| {
                         let val =
                             unsafe { columns[block_index as usize].get_unchecked(row as usize) };
                         for _ in 0..times {
                             builder.push(*val);
                         }
-                    }
+                    });
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
@@ -362,8 +442,10 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
 
-                let inner_column = Self::take_column_indices(&inner_columns, indices, result_size);
-                let inner_bitmap = Self::take_column_indices(&inner_bitmaps, indices, result_size);
+                let inner_column =
+                    Self::take_column_indices_impl(&inner_columns, indices, result_size);
+                let inner_bitmap =
+                    Self::take_column_indices_impl(&inner_bitmaps, indices, result_size);
                 NullableColumn::new_column(
                     inner_column,
                     BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
@@ -376,7 +458,7 @@ impl Column {
                             .iter()
                             .map(|c| c.as_tuple().unwrap()[idx].clone())
                             .collect::<Vec<_>>();
-                        Self::take_column_indices(&sub_columns, indices, result_size)
+                        Self::take_column_indices_impl(&sub_columns, indices, result_size)
                     })
                     .collect();
                 Column::Tuple(fields)
@@ -403,13 +485,13 @@ impl Column {
                         .map(|col| col.as_vector().unwrap())
                         .collect_vec();
 
-                    for &(block_index, row, times) in indices {
+                    indices.for_each(|block_index, row, times| {
                         let val =
                             unsafe { columns[block_index as usize].index_unchecked(row as usize) };
                         for _ in 0..times {
                             builder.push(&val);
                         }
-                    }
+                    });
                     Column::Vector(builder.build())
                 }
             }),
@@ -972,23 +1054,26 @@ impl Column {
         T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 
-    fn take_block_value_types<T: ValueType>(
+    fn take_block_value_types<T: ValueType, I>(
         columns: &[Column],
         data_type: &DataType,
         mut builder: T::ColumnBuilder,
-        indices: &[BlockRowIndex],
-    ) -> Column {
+        indices: I,
+    ) -> Column
+    where
+        I: BlockIndexSource,
+    {
         let columns = columns
             .iter()
             .map(|col| T::try_downcast_column(col).unwrap())
             .collect_vec();
-        for &(block_index, row, times) in indices {
+        indices.for_each(|block_index, row, times| {
             let val =
                 unsafe { T::index_column_unchecked(&columns[block_index as usize], row as usize) };
             for _ in 0..times {
                 T::push_item(&mut builder, val.clone())
             }
-        }
+        });
         T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 }

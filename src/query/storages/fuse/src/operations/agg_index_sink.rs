@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use databend_common_exception::Result;
-use databend_common_expression::BlockRowIndex;
+use databend_common_expression::BlockIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::StringType;
@@ -40,7 +40,7 @@ pub struct AggIndexSink {
     sink_schema: TableSchemaRef,
     block_name_offset: usize,
     keep_block_name_col: bool,
-    location_data: HashMap<String, Vec<BlockRowIndex>>,
+    location_data: HashMap<String, Vec<BlockIndex>>,
     blocks: Vec<DataBlock>,
 }
 
@@ -78,8 +78,8 @@ impl AggIndexSink {
 
             self.location_data
                 .entry(location)
-                .and_modify(|idx_vec| idx_vec.push((block_id as u32, i as u32, 1)))
-                .or_insert(vec![(block_id as u32, i as u32, 1)]);
+                .and_modify(|idx_vec| idx_vec.push((block_id as u32, i as u32)))
+                .or_insert(vec![(block_id as u32, i as u32)]);
         }
 
         let entries = block

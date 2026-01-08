@@ -17,14 +17,14 @@ use std::collections::VecDeque;
 use rand::Rng;
 use rate_sampling::Sampling;
 
-use crate::BlockRowIndex;
+use crate::BlockIndex;
 use crate::DataBlock;
 
 pub struct FixedRateSampler<R: Rng> {
     columns: Vec<usize>,
     block_size: usize,
 
-    indices: VecDeque<Vec<BlockRowIndex>>,
+    indices: VecDeque<Vec<BlockIndex>>,
     sparse_blocks: Vec<DataBlock>,
     pub dense_blocks: Vec<DataBlock>,
 
@@ -79,10 +79,10 @@ impl<R: Rng> FixedRateSampler<R> {
             change = true;
             cur += self.s;
             match self.indices.back_mut() {
-                Some(back) if back.len() < self.block_size => back.push((block_idx, cur as u32, 1)),
+                Some(back) if back.len() < self.block_size => back.push((block_idx, cur as u32)),
                 _ => {
                     let mut v = Vec::with_capacity(self.block_size);
-                    v.push((block_idx, cur as u32, 1));
+                    v.push((block_idx, cur as u32));
                     self.indices.push_back(v)
                 }
             }
@@ -203,21 +203,13 @@ mod tests {
 
         sampler.add_indices(15, 0);
 
-        let want: Vec<BlockRowIndex> = vec![(0, 6, 1), (0, 9, 1), (0, 14, 1)];
+        let want: Vec<_> = vec![(0, 6), (0, 9), (0, 14)];
         assert_eq!(Some(&want), sampler.indices.front());
         assert_eq!(3, sampler.s);
 
         sampler.add_indices(20, 1);
 
-        let want: Vec<BlockRowIndex> = vec![
-            (0, 6, 1),
-            (0, 9, 1),
-            (0, 14, 1),
-            (1, 3, 1),
-            (1, 9, 1),
-            (1, 15, 1),
-            (1, 18, 1),
-        ];
+        let want = vec![(0, 6), (0, 9), (0, 14), (1, 3), (1, 9), (1, 15), (1, 18)];
         assert_eq!(Some(&want), sampler.indices.front());
         assert_eq!(1, sampler.s);
     }

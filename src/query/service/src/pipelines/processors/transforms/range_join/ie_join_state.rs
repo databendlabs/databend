@@ -373,16 +373,19 @@ impl RangeJoinState {
         let mut indices = Vec::with_capacity(left_buffer.len());
         let mut buffer = Vec::with_capacity(left_buffer.len());
         for res in left_buffer.iter() {
-            indices.push((0u32, *res as u32, 1usize));
+            indices.push((0u32, *res as u32));
             if !left_match.is_empty() {
                 buffer.push((*res + left_offset) as u64);
             }
         }
-        let mut left_result_block =
-            DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
+        let mut left_result_block = DataBlock::take_blocks(
+            &left_table[left_idx..left_idx + 1],
+            &indices,
+            indices.len(),
+        );
         indices.clear();
         for res in right_buffer.iter() {
-            indices.push((0u32, *res as u32, 1usize));
+            indices.push((0u32, *res as u32));
             if !right_match.is_empty() {
                 buffer.push((*res + right_offset) as u64);
             }
@@ -479,7 +482,7 @@ impl RangeJoinState {
             .take(outer_table[outer_idx].num_rows())
         {
             if !state {
-                indices.push((0u32, (i - outer_offset) as u32, 1usize));
+                indices.push((0u32, (i - outer_offset) as u32));
             }
         }
 

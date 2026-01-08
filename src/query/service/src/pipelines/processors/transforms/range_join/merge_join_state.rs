@@ -97,7 +97,7 @@ impl RangeJoinState {
                 if !left_result_block.is_empty() {
                     let mut indices = Vec::with_capacity(right_buffer.len());
                     for res in right_buffer.iter() {
-                        indices.push((0u32, *res as u32, 1usize));
+                        indices.push((0u32, *res as u32));
                     }
                     let right_result_block = DataBlock::take_blocks(
                         &right_table[right_idx..right_idx + 1],
