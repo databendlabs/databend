@@ -478,7 +478,7 @@ impl Binder {
                     .allow_insecure
             {
                 return Err(ErrorCode::StorageInsecure(
-                    "Database default storage path points to insecure storage, which is not allowed"
+                    "Database default storage path points to insecure storage, which is not allowed",
                 ));
             }
 
