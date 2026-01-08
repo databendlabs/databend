@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
@@ -70,64 +71,74 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
 
     // range pruning status.
     if info.pruning_stats.blocks_range_pruning_before > 0 {
-        blocks_pruning_description += &format!(
+        write!(
+            blocks_pruning_description,
             "range pruning: {} to {}{}",
             info.pruning_stats.blocks_range_pruning_before,
             info.pruning_stats.blocks_range_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_range_pruning_cost)
-        );
+        )
+        .unwrap();
     }
 
     // bloom pruning status.
     if info.pruning_stats.blocks_bloom_pruning_before > 0 {
         if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
+            blocks_pruning_description.push_str(", ");
         }
-        blocks_pruning_description += &format!(
+        write!(
+            blocks_pruning_description,
             "bloom pruning: {} to {}{}",
             info.pruning_stats.blocks_bloom_pruning_before,
             info.pruning_stats.blocks_bloom_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_bloom_pruning_cost)
-        );
+        )
+        .unwrap();
     }
 
     // inverted index pruning status.
     if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
         if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
+            blocks_pruning_description.push_str(", ");
         }
-        blocks_pruning_description += &format!(
+        write!(
+            blocks_pruning_description,
             "inverted pruning: {} to {}{}",
             info.pruning_stats.blocks_inverted_index_pruning_before,
             info.pruning_stats.blocks_inverted_index_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_inverted_index_pruning_cost)
-        );
+        )
+        .unwrap();
     }
 
     // topn pruning status.
     if info.pruning_stats.blocks_topn_pruning_before > 0 {
         if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
+            blocks_pruning_description.push_str(", ");
         }
-        blocks_pruning_description += &format!(
+        write!(
+            blocks_pruning_description,
             "topn pruning: {} to {}{}",
             info.pruning_stats.blocks_topn_pruning_before,
             info.pruning_stats.blocks_topn_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_topn_pruning_cost)
-        );
+        )
+        .unwrap();
     }
 
     // vector index pruning status.
     if info.pruning_stats.blocks_vector_index_pruning_before > 0 {
         if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
+            blocks_pruning_description.push_str(", ");
         }
-        blocks_pruning_description += &format!(
+        write!(
+            blocks_pruning_description,
             "vector pruning: {} to {}{}",
             info.pruning_stats.blocks_vector_index_pruning_before,
             info.pruning_stats.blocks_vector_index_pruning_after,
             format_pruning_cost_suffix(info.pruning_stats.blocks_vector_index_pruning_cost)
-        );
+        )
+        .unwrap();
     }
 
     // Combine segment pruning and blocks pruning descriptions if any
@@ -137,19 +148,26 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         let mut pruning_description = String::new();
 
         if info.pruning_stats.segments_range_pruning_before > 0 {
-            pruning_description += &format!(
+            write!(
+                pruning_description,
                 "segments: <range pruning: {} to {}{}>",
                 info.pruning_stats.segments_range_pruning_before,
                 info.pruning_stats.segments_range_pruning_after,
                 format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
-            );
+            )
+            .unwrap();
         }
 
         if !blocks_pruning_description.is_empty() {
             if !pruning_description.is_empty() {
-                pruning_description += ", ";
+                pruning_description.push_str(", ");
             }
-            pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
+            write!(
+                pruning_description,
+                "blocks: <{}>",
+                blocks_pruning_description
+            )
+            .unwrap();
         }
 
         items.push(FormatTreeNode::new(format!(
