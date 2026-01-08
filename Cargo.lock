@@ -3355,6 +3355,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "unindent",
  "url",
+ "zmij",
 ]
 
 [[package]]
@@ -3707,6 +3708,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "zmij",
 ]
 
 [[package]]

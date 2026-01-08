@@ -461,6 +461,7 @@ wkt = "0.11.1"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
 zip = "3.0.0"
+zmij = "1.0"
 zstd = "0.12.3"
 
 # AST needed

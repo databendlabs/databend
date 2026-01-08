@@ -1069,7 +1069,9 @@ impl Display for Literal {
                 } else if val.is_nan() {
                     write!(f, "'NaN'::FLOAT64")
                 } else {
-                    write!(f, "{val}")
+                    let mut buffer = zmij::Buffer::new();
+                    let s = buffer.format_finite(*val);
+                    write!(f, "{s}")
                 }
             }
             Literal::String(val) => {
