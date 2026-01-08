@@ -61,6 +61,7 @@ databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-kvapi-test-suite = { path = "src/meta/kvapi-test-suite" }
+databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }

@@ -4164,6 +4164,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-schema-api-test-suite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-api",
+ "databend-common-meta-app",
+ "databend-common-meta-kvapi",
+ "databend-common-meta-types",
+ "databend-common-proto-conv",
+ "fastrace",
+ "log",
+ "maplit",
+]
+
+[[package]]
 name = "databend-common-meta-semaphore"
 version = "0.1.0"
 dependencies = [
@@ -5367,6 +5386,7 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
+ "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
