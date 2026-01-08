@@ -33,5 +33,3 @@ ORDER BY count(DISTINCT ws_order_number)
 LIMIT 100;
 ----
 68 100592.32 -18202.90
-
-

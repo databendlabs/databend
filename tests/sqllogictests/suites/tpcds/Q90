@@ -28,5 +28,3 @@ ORDER BY am_pm_ratio
 LIMIT 100;
 ----
 0.5621890547
-
-
