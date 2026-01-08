@@ -78,3 +78,48 @@ pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;
 pub use table_functions::get_fuse_table_snapshot;
 pub use table_functions::get_fuse_table_statistics;
+
+/// Initialize custom stack management for StackSafe crate.
+///
+/// Stack size configuration:
+/// - Debug mode: Uses larger stack sizes (10x) to catch stack overflow issues early
+/// - Release mode: Uses normal stack sizes for production
+///
+/// Default StackSafe thresholds:
+/// - Red zone: 128 KiB
+/// - Stack allocation: 2 MiB
+///
+/// Our custom settings:
+/// - Debug: 2.5 MiB red zone, 20 MiB allocation (10x default)
+/// - Release: 256 KiB red zone, 2 MiB allocation (same as default)
+pub fn init_stack_management() {
+    use std::sync::atomic::AtomicUsize;
+
+    // The stack in debugging mode is 10x than in release
+    #[cfg(debug_assertions)]
+    let minimum_stack_size = AtomicUsize::new(256 * 1024 * 10); // 2.5 MiB for debug
+    #[cfg(debug_assertions)]
+    let stack_alloc_size = AtomicUsize::new(2 * 1024 * 1024 * 10); // 20 MiB for debug
+
+    #[cfg(not(debug_assertions))]
+    let minimum_stack_size = AtomicUsize::new(256 * 1024); // 256 KiB for release
+    #[cfg(not(debug_assertions))]
+    let stack_alloc_size = AtomicUsize::new(2 * 1024 * 1024); // 2 MiB for release
+
+    stacksafe::set_minimum_stack_size(minimum_stack_size);
+    stacksafe::set_stack_allocation_size(stack_alloc_size);
+
+    #[cfg(debug_assertions)]
+    log::info!(
+        "StackSafe configured for debug: minimum_stack_size={} KiB, stack_alloc_size={} MiB",
+        minimum_stack_size.load(std::sync::atomic::Ordering::Relaxed) / 1024,
+        stack_alloc_size.load(std::sync::atomic::Ordering::Relaxed) / (1024 * 1024)
+    );
+
+    #[cfg(not(debug_assertions))]
+    log::info!(
+        "StackSafe configured for release: minimum_stack_size={} KiB, stack_alloc_size={} MiB",
+        minimum_stack_size.load(std::sync::atomic::Ordering::Relaxed) / 1024,
+        stack_alloc_size.load(std::sync::atomic::Ordering::Relaxed) / (1024 * 1024)
+    );
+}

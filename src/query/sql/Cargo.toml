@@ -62,7 +62,6 @@ num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 prqlc = { workspace = true }
-stacksafe = { workspace = true }
 regex = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true }
@@ -70,6 +69,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }
+stacksafe = { workspace = true }
 tantivy-query-grammar = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }

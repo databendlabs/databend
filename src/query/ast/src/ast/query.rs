@@ -24,6 +24,65 @@ use crate::ParseError;
 use crate::Result;
 use crate::Span;
 use crate::ast::Expr;
+
+/// Wrapper around StackSafe<T> that implements Drive and DriveMut traits.
+///
+/// This allows recursive data structures to use StackSafe<T> while maintaining
+/// compatibility with Databend's visitor pattern that requires Drive/DriveMut.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct StackWrapper<T>(pub stacksafe::StackSafe<T>);
+
+impl<T> StackWrapper<T> {
+    pub fn new(value: T) -> Self {
+        Self(stacksafe::StackSafe::new(value))
+    }
+}
+
+impl<T> From<T> for StackWrapper<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T> std::ops::Deref for StackWrapper<T> {
+    type Target = stacksafe::StackSafe<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for StackWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+// Implement Drive for StackWrapper if T implements Drive
+impl<T: derive_visitor::Drive> derive_visitor::Drive for StackWrapper<T> {
+    #[stacksafe::stacksafe]
+    fn drive<V: derive_visitor::Drive + ?Sized>(&self, visitor: &mut V) {
+        visitor.visit(self, derive_visitor::Event::Enter);
+        (**self).drive(visitor);
+        visitor.visit(self, derive_visitor::Event::Exit);
+    }
+}
+
+// Implement DriveMut for StackWrapper if T implements DriveMut
+impl<T: derive_visitor::DriveMut> derive_visitor::DriveMut for StackWrapper<T> {
+    #[stacksafe::stacksafe]
+    fn drive_mut<V: derive_visitor::DriveMut + ?Sized>(&mut self, visitor: &mut V) {
+        visitor.visit_mut(self, derive_visitor::Event::Enter);
+        (**self).drive_mut(visitor);
+        visitor.visit_mut(self, derive_visitor::Event::Exit);
+    }
+}
+
+impl<T: std::fmt::Display> std::fmt::Display for StackWrapper<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (**self).fmt(f)
+    }
+}
 use crate::ast::FileLocation;
 use crate::ast::Hint;
 use crate::ast::Identifier;
@@ -117,7 +176,7 @@ pub struct CTE {
     pub alias: TableAlias,
     pub user_specified_materialized: bool,
     pub materialized: bool,
-    pub query: Box<Query>,
+    pub query: StackWrapper<Box<Query>>,
 }
 
 impl Display for CTE {
@@ -300,7 +359,7 @@ impl Display for GroupBy {
 )]
 pub enum SetExpr {
     Select(Box<SelectStmt>),
-    Query(Box<Query>),
+    Query(StackWrapper<Box<Query>>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
     // Values clause
@@ -614,7 +673,7 @@ impl Display for TimeTravelPoint {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum PivotValues {
     ColumnValues(Vec<Expr>),
-    Subquery(Box<Query>),
+    Subquery(StackWrapper<Box<Query>>),
     Any { order_by: Option<Vec<OrderByExpr>> },
 }
 
@@ -877,7 +936,7 @@ pub enum TableReference {
         span: Span,
         /// Whether the subquery is a lateral subquery
         lateral: bool,
-        subquery: Box<Query>,
+        subquery: StackWrapper<Box<Query>>,
         alias: Option<TableAlias>,
         pivot: Option<Box<Pivot>>,
         unpivot: Option<Box<Unpivot>>,

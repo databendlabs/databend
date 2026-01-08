@@ -197,7 +197,7 @@ use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 pub enum Plan {
     // `SELECT` statement
     Query {
-        s_expr: Box<SExpr>,
+        s_expr: StackWrapper<Box<SExpr>>,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,
@@ -309,7 +309,7 @@ pub enum Plan {
     OptimizePurge(Box<OptimizePurgePlan>),
     OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
     OptimizeCompactBlock {
-        s_expr: Box<SExpr>,
+        s_expr: StackWrapper<Box<SExpr>>,
         need_purge: bool,
     },
 
@@ -318,7 +318,7 @@ pub enum Plan {
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     DataMutation {
-        s_expr: Box<SExpr>,
+        s_expr: StackWrapper<Box<SExpr>>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     },

@@ -150,7 +150,6 @@ poem = { workspace = true }
 prometheus-client = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
-stacksafe = { workspace = true }
 redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
@@ -164,6 +163,7 @@ serde_urlencoded = { workspace = true }
 sha2 = { workspace = true }
 socket2 = { workspace = true }
 sqlx = { workspace = true }
+stacksafe = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }

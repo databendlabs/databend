@@ -358,7 +358,6 @@ raft-log = { version = "0.2.11" }
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
-stacksafe = "1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
@@ -411,6 +410,7 @@ socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 stacker = "0.1"
+stacksafe = "1"
 state = "0.6.0"
 state-machine-api = { version = "0.3.4" }
 stream-more = "0.1.3"

@@ -46,8 +46,10 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
-use databend_query::task::TaskService;
+use databend_query::servers::task::TaskService;
 use log::info;
+
+pub mod stack_management;
 
 use super::cmd::Cmd;
 use super::cmd::Commands;
@@ -72,15 +74,6 @@ pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), Main
     let binary_version = DATABEND_COMMIT_VERSION.clone();
     set_panic_hook(binary_version);
     set_alloc_error_hook();
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        if !std::is_x86_feature_detected!("sse4.2") {
-            println!(
-                "Current pre-built binary is typically compiled for x86_64 and leverage SSE 4.2 instruction set, you can build your own binary from source"
-            );
-            return Ok(());
-        }
     }
 
     if conf.meta.is_embedded_meta().with_context(make_error)? {

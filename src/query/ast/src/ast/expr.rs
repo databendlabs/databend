@@ -37,12 +37,61 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::span::merge_span;
 
+/// Wrapper around StackSafe<T> that implements Drive and DriveMut traits.
+///
+/// This allows recursive data structures to use StackSafe<T> while maintaining
+/// compatibility with Databend's visitor pattern that requires Drive/DriveMut.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct StackWrapper<T>(pub stacksafe::StackSafe<T>);
+
+impl<T> StackWrapper<T> {
+    pub fn new(value: T) -> Self {
+        Self(stacksafe::StackSafe::new(value))
+    }
+}
+
+impl<T> From<T> for StackWrapper<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T> std::ops::Deref for StackWrapper<T> {
+    type Target = stacksafe::StackSafe<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for StackWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+// Implement Drive for StackWrapper if T implements Drive
+impl<T: Drive> Drive for StackWrapper<T> {
+    #[stacksafe::stacksafe]
+    fn drive<V: derive_visitor::Visitor>(&self, visitor: &mut V) {
+        visitor.visit(self, derive_visitor::Event::Enter);
+        (**self).drive(visitor);
+        visitor.visit(self, derive_visitor::Event::Exit);
+    }
+}
+
+// Implement DriveMut for StackWrapper if T implements DriveMut
+impl<T: DriveMut> DriveMut for StackWrapper<T> {
+    #[stacksafe::stacksafe]
+    fn drive_mut<V: derive_visitor::VisitorMut>(&mut self, visitor: &mut V) {
+        visitor.visit_mut(self, derive_visitor::Event::Enter);
+        (**self).drive_mut(visitor);
+        visitor.visit_mut(self, derive_visitor::Event::Exit);
+    }
+}
+
 #[derive(Educe, Drive, DriveMut)]
-#[educe(
-    PartialEq(bound = false, attrs = "#[stacksafe::stacksafe]"),
-    Clone(bound = false, attrs = "#[stacksafe::stacksafe]"),
-    Debug(bound = false, attrs = "#[stacksafe::stacksafe]")
-)]
+#[educe(PartialEq(bound = false), Clone(bound = false), Debug(bound = false))]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
@@ -52,127 +101,127 @@ pub enum Expr {
     /// `IS [ NOT ] NULL` expression
     IsNull {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         not: bool,
     },
     /// `IS [NOT] DISTINCT` expression
     IsDistinctFrom {
         span: Span,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: StackWrapper<Box<Expr>>,
+        right: StackWrapper<Box<Expr>>,
         not: bool,
     },
     /// `[ NOT ] IN (expr, ...)`
     InList {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         list: Vec<Expr>,
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         span: Span,
-        expr: Box<Expr>,
-        subquery: Box<Query>,
+        expr: StackWrapper<Box<Expr>>,
+        subquery: StackWrapper<Box<Query>>,
         not: bool,
     },
     /// `LIKE (SELECT ...) [ESCAPE '<escape>']`
     LikeSubquery {
         span: Span,
-        expr: Box<Expr>,
-        subquery: Box<Query>,
+        expr: StackWrapper<Box<Expr>>,
+        subquery: StackWrapper<Box<Query>>,
         modifier: SubqueryModifier,
         escape: Option<String>,
     },
     /// `<left> LIKE ANY <right> ESCAPE '<escape>'`
     LikeAnyWithEscape {
         span: Span,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: StackWrapper<Box<Expr>>,
+        right: StackWrapper<Box<Expr>>,
         escape: String,
     },
     /// `<left> [NOT] LIKE <right> ESCAPE '<escape>'`
     LikeWithEscape {
         span: Span,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: StackWrapper<Box<Expr>>,
+        right: StackWrapper<Box<Expr>>,
         is_not: bool,
         escape: String,
     },
     /// `BETWEEN ... AND ...`
     Between {
         span: Span,
-        expr: Box<Expr>,
-        low: Box<Expr>,
-        high: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
+        low: StackWrapper<Box<Expr>>,
+        high: StackWrapper<Box<Expr>>,
         not: bool,
     },
     /// Binary operation
     BinaryOp {
         span: Span,
         op: BinaryOperator,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: StackWrapper<Box<Expr>>,
+        right: StackWrapper<Box<Expr>>,
     },
     /// JSON operation
     JsonOp {
         span: Span,
         op: JsonOperator,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: StackWrapper<Box<Expr>>,
+        right: StackWrapper<Box<Expr>>,
     },
     /// Unary operation
     UnaryOp {
         span: Span,
         op: UnaryOperator,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         target_type: TypeName,
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         target_type: TypeName,
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
         span: Span,
         kind: IntervalKind,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
     },
     /// DATE_PART(IntervalKind, <expr>)
     DatePart {
         span: Span,
         kind: IntervalKind,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
         span: Span,
-        substr_expr: Box<Expr>,
-        str_expr: Box<Expr>,
+        substr_expr: StackWrapper<Box<Expr>>,
+        str_expr: StackWrapper<Box<Expr>>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
         span: Span,
-        expr: Box<Expr>,
-        substring_from: Box<Expr>,
-        substring_for: Option<Box<Expr>>,
+        expr: StackWrapper<Box<Expr>>,
+        substring_from: StackWrapper<Box<Expr>>,
+        substring_for: Option<StackWrapper<Box<Expr>>>,
     },
     /// TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     /// Or
     /// TRIM(<expr>)
     Trim {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         // ([BOTH | LEADING | TRAILING], <expr>)
-        trim_where: Option<(TrimWhere, Box<Expr>)>,
+        trim_where: Option<(TrimWhere, StackWrapper<Box<Expr>>)>,
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
@@ -198,28 +247,28 @@ pub enum Expr {
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
         span: Span,
-        operand: Option<Box<Expr>>,
+        operand: Option<StackWrapper<Box<Expr>>>,
         conditions: Vec<Expr>,
         results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        else_result: Option<StackWrapper<Box<Expr>>>,
     },
     /// `EXISTS` expression
     Exists {
         span: Span,
         /// Indicate if this is a `NOT EXISTS`
         not: bool,
-        subquery: Box<Query>,
+        subquery: StackWrapper<Box<Query>>,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
         span: Span,
         modifier: Option<SubqueryModifier>,
-        subquery: Box<Query>,
+        subquery: StackWrapper<Box<Query>>,
     },
     /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         accessor: MapAccessor,
     },
     /// The `Array` expr
@@ -235,41 +284,41 @@ pub enum Expr {
     /// The `Interval 1 DAY` expr
     Interval {
         span: Span,
-        expr: Box<Expr>,
+        expr: StackWrapper<Box<Expr>>,
         unit: IntervalKind,
     },
     DateAdd {
         span: Span,
         unit: IntervalKind,
-        interval: Box<Expr>,
-        date: Box<Expr>,
+        interval: StackWrapper<Box<Expr>>,
+        date: StackWrapper<Box<Expr>>,
     },
     DateDiff {
         span: Span,
         unit: IntervalKind,
-        date_start: Box<Expr>,
-        date_end: Box<Expr>,
+        date_start: StackWrapper<Box<Expr>>,
+        date_end: StackWrapper<Box<Expr>>,
     },
     DateBetween {
         span: Span,
         unit: IntervalKind,
-        date_start: Box<Expr>,
-        date_end: Box<Expr>,
+        date_start: StackWrapper<Box<Expr>>,
+        date_end: StackWrapper<Box<Expr>>,
     },
     DateSub {
         span: Span,
         unit: IntervalKind,
-        interval: Box<Expr>,
-        date: Box<Expr>,
+        interval: StackWrapper<Box<Expr>>,
+        date: StackWrapper<Box<Expr>>,
     },
     DateTrunc {
         span: Span,
         unit: IntervalKind,
-        date: Box<Expr>,
+        date: StackWrapper<Box<Expr>>,
     },
     TimeSlice {
         span: Span,
-        date: Box<Expr>,
+        date: StackWrapper<Box<Expr>>,
         slice_length: u64,
         unit: IntervalKind,
         start_or_end: String,
@@ -277,17 +326,17 @@ pub enum Expr {
     LastDay {
         span: Span,
         unit: IntervalKind,
-        date: Box<Expr>,
+        date: StackWrapper<Box<Expr>>,
     },
     PreviousDay {
         span: Span,
         unit: Weekday,
-        date: Box<Expr>,
+        date: StackWrapper<Box<Expr>>,
     },
     NextDay {
         span: Span,
         unit: Weekday,
-        date: Box<Expr>,
+        date: StackWrapper<Box<Expr>>,
     },
     Hole {
         span: Span,
@@ -1165,7 +1214,7 @@ impl Display for FunctionCall {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MapAccessor {
     /// `[0][1]`
-    Bracket { key: Box<Expr> },
+    Bracket { key: StackWrapper<Box<Expr>> },
     /// `.1`
     DotNumber { key: u64 },
     /// `:a:b`
@@ -1507,15 +1556,15 @@ pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
     /// `<N> PRECEDING` or `UNBOUNDED PRECEDING`
-    Preceding(Option<Box<Expr>>),
+    Preceding(Option<StackWrapper<Box<Expr>>>),
     /// `<N> FOLLOWING` or `UNBOUNDED FOLLOWING`.
-    Following(Option<Box<Expr>>),
+    Following(Option<StackWrapper<Box<Expr>>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Lambda {
     pub params: Vec<Identifier>,
-    pub expr: Box<Expr>,
+    pub expr: StackWrapper<Box<Expr>>,
 }
 
 impl Display for Lambda {

@@ -25,13 +25,13 @@ env_logger = { workspace = true }
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
-stacksafe = { workspace = true }
 redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqllogictest = { workspace = true }
+stacksafe = { workspace = true }
 testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true }
 thiserror = { workspace = true }

@@ -76,6 +76,10 @@ impl GlobalServices {
         version: BuildInfoRef,
         ee_mode: bool,
     ) -> Result<()> {
+        // Initialize custom stack management for StackSafe crate
+        // This must be called before any recursive operations
+        crate::init_stack_management();
+
         StackTrace::pre_load_symbol();
 
         // app name format: node_id[0..7]@cluster_id
