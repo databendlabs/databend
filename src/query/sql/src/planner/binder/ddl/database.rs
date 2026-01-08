@@ -517,7 +517,7 @@ impl Binder {
 
         let options = options
             .iter()
-            .map(|property| (property.name.clone(), property.value.clone()))
+            .map(|property| (property.name.to_uppercase().clone(), property.value.clone()))
             .collect::<BTreeMap<String, String>>();
 
         let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
