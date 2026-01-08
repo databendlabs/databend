@@ -3257,6 +3257,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
+name = "databend-base"
+version = "0.1.0"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.1.0#14cbc285b79520b86b1daeba50ee6d57b7023765"
+
+[[package]]
 name = "databend-bendsave"
 version = "0.1.0"
 dependencies = [
@@ -5349,7 +5354,9 @@ dependencies = [
  "arrow-flight",
  "async-trait",
  "backon",
+ "chrono",
  "clap",
+ "databend-base",
  "databend-common-base",
  "databend-common-config",
  "databend-common-grpc",

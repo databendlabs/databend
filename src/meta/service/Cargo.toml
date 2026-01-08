@@ -22,7 +22,9 @@ arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }
+chrono = { workspace = true }
 databend-common-base = { workspace = true }
+databend-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }

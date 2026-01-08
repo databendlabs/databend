@@ -130,6 +130,7 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # Crates.io dependencies
+databend-base = "0.1"
 ahash = { version = "0.8", features = ["no-rng"] }
 aho-corasick = { version = "1.0.1" } #
 anyerror = { version = "=0.1.13" }
@@ -585,3 +586,4 @@ tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev 
 tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.1.0" }
