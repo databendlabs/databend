@@ -40,7 +40,6 @@ pub mod name_id_value_api;
 pub mod name_value_api;
 pub mod reply;
 mod schema_api;
-mod schema_api_test_suite;
 pub mod security_api;
 mod sequence_api;
 pub mod serialization_util;
@@ -96,7 +95,6 @@ pub use kv_fetch_util::mget_pb_values;
 pub use lock_api::LockApi;
 pub use row_access_policy_api::RowAccessPolicyApi;
 pub use schema_api::SchemaApi;
-pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use security_api::SecurityApi;
 pub use sequence_api::SequenceApi;
 // Re-export from new serialization_util module for backward compatibility

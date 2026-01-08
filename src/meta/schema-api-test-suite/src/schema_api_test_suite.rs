@@ -145,20 +145,21 @@ use fastrace::func_name;
 use log::debug;
 use log::info;
 
-use crate::DEFAULT_MGET_SIZE;
-use crate::DatamaskApi;
-use crate::RowAccessPolicyApi;
-use crate::SchemaApi;
-use crate::SequenceApi;
-use crate::TableApi;
-use crate::deserialize_struct;
-use crate::kv_app_error::KVAppError;
-use crate::kv_pb_api::KVPbApi;
-use crate::kv_pb_api::UpsertPB;
-use crate::serialize_struct;
+use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_api::RowAccessPolicyApi;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::SequenceApi;
+use databend_common_meta_api::TableApi;
+use databend_common_meta_api::deserialize_struct;
+use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::serialize_struct;
+use databend_common_meta_api::util::IdempotentKVTxnSender;
+use databend_common_meta_api::DEFAULT_MGET_SIZE;
+
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
-use crate::util::IdempotentKVTxnSender;
 
 /// Test suite of `SchemaApi`.
 ///
