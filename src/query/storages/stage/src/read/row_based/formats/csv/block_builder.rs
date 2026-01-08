@@ -29,6 +29,7 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::csv::CsvInputFormat;
+use crate::read::row_based::formats::csv::separator::unquote;
 use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct CsvDecoder {
@@ -53,61 +54,67 @@ impl CsvDecoder {
         builder: &mut ColumnBuilder,
         col_data: &[u8],
         column_index: usize,
+        is_quoted: bool,
     ) -> std::result::Result<(), FileParseError> {
-        let empty_field_as = &self.fmt.params.empty_field_as;
         if col_data.is_empty() {
-            if !self.load_context.is_copy {
-                builder.push_default();
+            let behavior = if is_quoted {
+                self.fmt.params.quoted_empty_field_as.clone()
             } else {
-                let field = &self.load_context.schema.fields()[column_index];
-                match empty_field_as {
-                    EmptyFieldAs::FieldDefault => {
-                        self.load_context
-                            .push_default_value(builder, column_index, true)?;
-                    }
-                    EmptyFieldAs::Null => {
-                        if !matches!(field.data_type, TableDataType::Nullable(_)) {
-                            return Err(FileParseError::ColumnEmptyError {
-                                column_index,
-                                column_name: field.name().to_owned(),
-                                column_type: field.data_type.to_string(),
-                                empty_field_as: empty_field_as.to_string(),
-                                remedy: format!(
-                                    "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
-                                    field.name()
-                                ),
-                            });
-                        }
-                        builder.push_default();
-                    }
-                    EmptyFieldAs::String => match builder {
-                        ColumnBuilder::String(b) => {
-                            b.put_and_commit("");
-                        }
-                        ColumnBuilder::Nullable(box NullableColumnBuilder {
-                            builder: ColumnBuilder::String(b),
-                            validity,
-                        }) => {
-                            b.put_and_commit("");
-                            validity.push(true);
-                        }
-                        _ => {
-                            let field = &self.load_context.schema.fields()[column_index];
-                            return Err(FileParseError::ColumnEmptyError {
-                                column_index,
-                                column_name: field.name().to_owned(),
-                                column_type: field.data_type.to_string(),
-                                empty_field_as: empty_field_as.to_string(),
-                                remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
-                            });
-                        }
-                    },
+                self.fmt.params.empty_field_as.clone()
+            };
+
+            let field = &self.load_context.schema.fields()[column_index];
+            match behavior {
+                EmptyFieldAs::FieldDefault => {
+                    self.load_context
+                        .push_default_value(builder, column_index)?;
                 }
+                EmptyFieldAs::Null => {
+                    if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                        return Err(FileParseError::ColumnEmptyError {
+                            column_index,
+                            column_name: field.name().to_owned(),
+                            column_type: field.data_type.to_string(),
+                            empty_field_as: behavior.to_string(),
+                            remedy: format!(
+                                "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
+                                field.name()
+                            ),
+                        });
+                    }
+                    builder.push_default();
+                }
+                EmptyFieldAs::String => match builder {
+                    ColumnBuilder::String(b) => {
+                        b.put_and_commit("");
+                    }
+                    ColumnBuilder::Nullable(box NullableColumnBuilder {
+                        builder: ColumnBuilder::String(b),
+                        validity,
+                    }) => {
+                        b.put_and_commit("");
+                        validity.push(true);
+                    }
+                    _ => {
+                        let field = &self.load_context.schema.fields()[column_index];
+                        return Err(FileParseError::ColumnEmptyError {
+                            column_index,
+                            column_name: field.name().to_owned(),
+                            column_type: field.data_type.to_string(),
+                            empty_field_as: behavior.to_string(),
+                            remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
+                        });
+                    }
+                },
             }
             return Ok(());
         }
         self.field_decoder
-            .read_field(builder, col_data)
+            .read_field(
+                builder,
+                col_data,
+                !is_quoted || self.fmt.params.allow_quoted_nulls,
+            )
             .map_err(|e| {
                 get_decode_error_by_pos(
                     column_index,
@@ -129,18 +136,32 @@ impl CsvDecoder {
                 if *c >= field_ends.len() {
                     columns[*c].push_default();
                 } else {
-                    let field_start = if *c == 0 { 0 } else { field_ends[c - 1] };
-                    let field_end = field_ends[*c];
+                    let field_start = if *c == 0 {
+                        0
+                    } else {
+                        unquote(field_ends[c - 1])
+                    };
+                    let mut field_end = field_ends[*c];
+                    let mut is_quoted = false;
+                    if csv_core::QUOTED_MASK & field_end != 0 {
+                        field_end -= csv_core::QUOTED_MASK;
+                        is_quoted = true;
+                    }
                     let col_data = &buf[field_start..field_end];
-                    self.read_column(&mut columns[*c], col_data, *c)?;
+                    self.read_column(&mut columns[*c], col_data, *c, is_quoted)?;
                 }
             }
         } else {
             let mut field_start = 0;
             for (c, column) in columns.iter_mut().enumerate() {
-                let field_end = field_ends[c];
+                let mut field_end = field_ends[c];
+                let mut is_quoted = false;
+                if csv_core::QUOTED_MASK & field_end != 0 {
+                    field_end -= csv_core::QUOTED_MASK;
+                    is_quoted = true;
+                }
                 let col_data = &buf[field_start..field_end];
-                self.read_column(column, col_data, c)?;
+                self.read_column(column, col_data, c, is_quoted)?;
                 field_start = field_end;
             }
         }

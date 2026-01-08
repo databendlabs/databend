@@ -196,7 +196,7 @@ cookie = "0.18.1"
 crc32fast = "1.3.2"
 cron = "0.12.0"
 crossbeam-channel = "0.5.6"
-csv-core = "0.1.11"
+csv-core = "0.1.13"
 ctor = "0.2"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
@@ -570,6 +570,7 @@ async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.gi
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
+csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "346f18c" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
