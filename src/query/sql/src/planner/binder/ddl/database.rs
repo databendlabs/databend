@@ -229,10 +229,12 @@ impl Binder {
                     )));
                 }
 
+                let options = Self::normalize_db_option_name(options);
+
                 // Validate database options only when the database exists.
                 let db_options = if db_exists {
                     // For ALTER DATABASE, allow modifying single option (the other already exists)
-                    self.validate_database_options(options, false).await?;
+                    self.validate_database_options(&options, false).await?;
 
                     options
                         .iter()
@@ -251,6 +253,17 @@ impl Binder {
                 })))
             }
         }
+    }
+
+    fn normalize_db_option_name(options: &[SQLProperty]) -> Vec<SQLProperty> {
+        let options = options
+            .iter()
+            .map(|opt| SQLProperty {
+                name: opt.name.to_uppercase(),
+                value: opt.value.clone(),
+            })
+            .collect::<Vec<_>>();
+        options
     }
 
     #[async_backtrace::framed]
@@ -319,11 +332,13 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
+        let options = Self::normalize_db_option_name(options);
+
         // Validate database options (connection, URI, storage access)
         // For CREATE DATABASE, require both options to be specified together
-        self.validate_database_options(options, true).await?;
+        self.validate_database_options(&options, true).await?;
 
-        let meta = self.database_meta(engine, options)?;
+        let meta = self.database_meta(engine, &options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: create_option.clone().into(),
@@ -348,13 +363,6 @@ impl Binder {
     ) -> Result<()> {
         // Validate database options - only allow specific connection-related options
         const VALID_DATABASE_OPTIONS: &[&str] = &[DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH];
-        let options = options
-            .iter()
-            .map(|opt| SQLProperty {
-                name: opt.name.to_uppercase(),
-                value: opt.value.clone(),
-            })
-            .collect::<Vec<_>>();
 
         // Check for duplicate options
         let mut seen_options = std::collections::HashSet::new();
@@ -524,7 +532,7 @@ impl Binder {
 
         let options = options
             .iter()
-            .map(|property| (property.name.to_uppercase().clone(), property.value.clone()))
+            .map(|property| (property.name.clone(), property.value.clone()))
             .collect::<BTreeMap<String, String>>();
 
         let database_engine = engine.as_ref().unwrap_or(&DatabaseEngine::Default);
