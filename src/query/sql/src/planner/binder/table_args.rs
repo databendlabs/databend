@@ -82,16 +82,17 @@ fn execute_subquery_for_scalar(
             .await
     })?;
 
-    if data_blocks.is_empty() {
-        return Err(ErrorCode::SemanticError(
-            "Scalar subquery in table function argument returned no rows".to_string(),
-        ));
-    }
-
     let mut total_rows = 0;
     let mut result_scalar: Option<Scalar> = None;
 
     for block in &data_blocks {
+        if block.num_columns() != 1 {
+            return Err(ErrorCode::SemanticError(
+                "Scalar subquery in table function argument must return exactly one column"
+                    .to_string(),
+            ));
+        }
+
         total_rows += block.num_rows();
         if total_rows > 1 {
             return Err(ErrorCode::SemanticError(
@@ -100,12 +101,6 @@ fn execute_subquery_for_scalar(
         }
 
         if block.num_rows() == 1 && result_scalar.is_none() {
-            if block.num_columns() != 1 {
-                return Err(ErrorCode::SemanticError(
-                    "Scalar subquery in table function argument must return exactly one column"
-                        .to_string(),
-                ));
-            }
             let column = &block.columns()[0];
             let col_value = column.value();
             let value = col_value.index(0).unwrap();
@@ -113,11 +108,7 @@ fn execute_subquery_for_scalar(
         }
     }
 
-    result_scalar.ok_or_else(|| {
-        ErrorCode::SemanticError(
-            "Scalar subquery in table function argument returned no rows".to_string(),
-        )
-    })
+    Ok(result_scalar.unwrap_or(Scalar::Null))
 }
 
 /// Try to fold an expression to a constant scalar value.
@@ -153,14 +144,6 @@ fn try_fold_to_scalar(
 }
 
 pub fn bind_table_args(
-    scalar_binder: &mut ScalarBinder<'_>,
-    params: &[Expr],
-    named_params: &[(Identifier, Expr)],
-) -> Result<TableArgs> {
-    bind_table_args_with_subquery_executor(scalar_binder, params, named_params, &None)
-}
-
-pub fn bind_table_args_with_subquery_executor(
     scalar_binder: &mut ScalarBinder<'_>,
     params: &[Expr],
     named_params: &[(Identifier, Expr)],
