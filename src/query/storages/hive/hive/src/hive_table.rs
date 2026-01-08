@@ -566,7 +566,7 @@ pub fn convert_hdfs_path(hdfs_path: &str, is_dir: bool) -> String {
     format_path
 }
 
-#[async_recursion(#[recursive::recursive])]
+#[async_recursion(#[stacksafe::stacksafe])]
 async fn list_files_from_dir(
     operator: Operator,
     location: String,

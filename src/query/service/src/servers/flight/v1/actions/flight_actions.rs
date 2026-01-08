@@ -74,8 +74,8 @@ impl FlightActions {
 
                 let deserializer = serde_stacker::Deserializer {
                     de: &mut deserializer,
-                    red_zone: recursive::get_minimum_stack_size(),
-                    stack_size: recursive::get_stack_allocation_size(),
+                    red_zone: stacksafe::get_minimum_stack_size(),
+                    stack_size: stacksafe::get_stack_allocation_size(),
                 };
 
                 let request = Req::deserialize(deserializer).map_err(|cause| {
@@ -103,8 +103,8 @@ impl FlightActions {
                             let mut serializer = serde_json::Serializer::new(&mut out);
                             let serializer = serde_stacker::Serializer {
                                 ser: &mut serializer,
-                                red_zone: recursive::get_minimum_stack_size(),
-                                stack_size: recursive::get_stack_allocation_size(),
+                                red_zone: stacksafe::get_minimum_stack_size(),
+                                stack_size: stacksafe::get_stack_allocation_size(),
                             };
 
                             v.serialize(serializer).map_err(|cause| {

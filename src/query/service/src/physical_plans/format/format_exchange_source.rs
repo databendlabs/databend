@@ -37,7 +37,7 @@ impl<'a> PhysicalFormat for ExchangeSourceFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let output_schema = self.inner.output_schema()?;
         let mut node_children = vec![FormatTreeNode::new(format!(

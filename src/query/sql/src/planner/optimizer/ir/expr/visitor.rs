@@ -120,7 +120,7 @@ pub trait SExprVisitor {
 }
 
 /// Traverse an expression tree using a synchronous visitor
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn visit_sexpr<V: SExprVisitor>(visitor: &mut V, expr: &SExpr) -> Result<Option<SExpr>> {
     // Pre-order visit
     match visitor.visit(expr)? {
@@ -185,7 +185,7 @@ pub trait AsyncSExprVisitor {
 
 /// Traverse an expression tree using an async visitor
 #[allow(clippy::multiple_bound_locations)]
-#[async_recursion::async_recursion(# [recursive::recursive])]
+#[async_recursion::async_recursion(# [stacksafe::stacksafe])]
 pub async fn visit_sexpr_async<T: AsyncSExprVisitor + Send>(
     visitor: &mut T,
     expr: &SExpr,

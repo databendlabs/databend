@@ -158,7 +158,7 @@ pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
     semicolon_terminated_list1(script_stmt).parse(i)
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
     if let Some(token) = i.tokens.first() {
         let kind = token.kind;

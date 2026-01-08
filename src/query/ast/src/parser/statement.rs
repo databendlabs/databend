@@ -4466,7 +4466,7 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 
 pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
     #[derive(Educe)]
-    #[educe(Clone(bound = false, attrs = "#[recursive::recursive]"))]
+    #[educe(Clone(bound = false, attrs = "#[stacksafe::stacksafe]"))]
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),

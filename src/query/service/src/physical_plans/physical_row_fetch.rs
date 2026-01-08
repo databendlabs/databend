@@ -67,7 +67,7 @@ impl IPhysicalPlan for RowFetch {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.input.output_schema()?.fields().clone();
         fields.extend_from_slice(&self.fetched_fields);
@@ -86,7 +86,7 @@ impl IPhysicalPlan for RowFetch {
         Ok(RowFetchFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

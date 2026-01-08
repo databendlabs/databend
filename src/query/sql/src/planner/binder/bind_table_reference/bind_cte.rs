@@ -169,7 +169,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn bind_cte_definition(
         &mut self,
         cte_name: &str,

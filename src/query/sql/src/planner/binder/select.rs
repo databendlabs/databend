@@ -110,7 +110,7 @@ impl Binder {
         Ok((new_expr, scalar))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub(super) fn bind_set_operator(
         &mut self,
         bind_context: &mut BindContext,

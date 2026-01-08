@@ -58,7 +58,7 @@ impl IPhysicalPlan for CopyIntoLocation {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![
             DataField::new("rows_unloaded", DataType::Number(NumberDataType::UInt64)),
@@ -75,7 +75,7 @@ impl IPhysicalPlan for CopyIntoLocation {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

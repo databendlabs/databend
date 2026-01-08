@@ -36,18 +36,18 @@ impl<'a> PhysicalFormat for ChunkCastSchemaFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input_formatter = self.inner.input.formatter()?;
         input_formatter.dispatch(ctx)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

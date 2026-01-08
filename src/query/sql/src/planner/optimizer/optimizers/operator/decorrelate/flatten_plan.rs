@@ -53,7 +53,7 @@ use crate::plans::UnionAll;
 use crate::plans::Window;
 
 impl SubqueryDecorrelatorOptimizer {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn flatten_plan(
         &mut self,
         outer: &SExpr,

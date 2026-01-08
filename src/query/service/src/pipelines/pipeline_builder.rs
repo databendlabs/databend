@@ -122,7 +122,7 @@ impl PipelineBuilder {
         false
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         plan.build_pipeline(self)
     }

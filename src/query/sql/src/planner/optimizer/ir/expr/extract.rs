@@ -45,7 +45,7 @@ pub enum Matcher {
 
 impl Matcher {
     /// Check if the `SExpr` can be matched by the `Matcher`.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn matches(&self, s_expr: &SExpr) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
@@ -170,7 +170,7 @@ impl PatternExtractor {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn extract_group(
         &mut self,
         memo: &Memo,
@@ -256,7 +256,7 @@ impl PatternExtractor {
     /// Expand a `Pattern` node to an arbitrary `SExpr` with `m_expr` as the root.
     /// Since we don't care about the actual content of the `Pattern` node, we will
     /// choose the first `MExpr` in each group to construct the `SExpr`.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn expand_pattern(memo: &Memo, m_expr: &MExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(m_expr.arity());
         for child in m_expr.children.iter() {

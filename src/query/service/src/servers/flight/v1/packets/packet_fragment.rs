@@ -79,7 +79,7 @@ struct SerializeQueryFragment {
 }
 
 impl serde::Serialize for QueryFragment {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut flatten_queue = vec![self.physical_plan.clone()];
         let mut flattened = VecDeque::new();
@@ -106,7 +106,7 @@ impl serde::Serialize for QueryFragment {
 }
 
 impl<'de> serde::Deserialize<'de> for QueryFragment {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut fragment = SerializeQueryFragment::deserialize(deserializer)?;
 

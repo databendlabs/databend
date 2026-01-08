@@ -27,7 +27,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::UDFCall;
 
 impl SubqueryDecorrelatorOptimizer {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub(crate) fn flatten_scalar(
         &mut self,
         scalar: &ScalarExpr,

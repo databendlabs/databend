@@ -41,7 +41,7 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         // Register runtime filters for all probe targets
         for rf in self.inner.runtime_filter.filters.iter() {
@@ -184,7 +184,7 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let build_formatter = self.inner.build.formatter()?;
         let build_child = build_formatter.format_join(ctx)?;
@@ -209,7 +209,7 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let build_child = self.inner.build.formatter()?.partial_format(ctx)?;
         let probe_child = self.inner.probe.formatter()?.partial_format(ctx)?;

@@ -88,7 +88,7 @@ impl IPhysicalPlan for BroadcastSink {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }

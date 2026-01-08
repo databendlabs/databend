@@ -95,7 +95,7 @@ pub async fn plan_hilbert_sql(
 }
 
 pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partitions: u16) -> SExpr {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn visit_expr_column(expr: &mut ScalarExpr, variables: &mut VecDeque<Scalar>) {
         if let ScalarExpr::FunctionCall(call) = expr {
             match call.func_name.as_str() {
@@ -119,7 +119,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn replace_with_constant_into_child(
         s_expr: &SExpr,
         variables: &mut VecDeque<Scalar>,

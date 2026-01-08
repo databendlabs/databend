@@ -67,7 +67,7 @@ impl CTERefCounter {
 }
 
 impl Binder {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub(crate) fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
@@ -122,7 +122,7 @@ impl Binder {
         Ok(())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn compute_cte_ref_count(
         &self,
         with: &With,
@@ -214,7 +214,7 @@ impl Binder {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn m_cte_to_temp_table(
         &mut self,
         cte: &CTE,
@@ -354,7 +354,7 @@ impl TableNameReplacer {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
         if let TableReference::Table {
             database, table, ..
@@ -366,7 +366,7 @@ impl TableNameReplacer {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn enter_expr(&mut self, expr: &mut Expr) {
         if let Expr::ColumnRef { column, .. } = expr {
             if column.database.is_none() || column.database.as_ref().unwrap().name == self.database

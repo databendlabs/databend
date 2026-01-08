@@ -53,7 +53,7 @@ impl CollectStatisticsOptimizer {
         self.collect(s_expr).await
     }
 
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(#[stacksafe::stacksafe])]
     pub async fn collect(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Scan(scan) => {

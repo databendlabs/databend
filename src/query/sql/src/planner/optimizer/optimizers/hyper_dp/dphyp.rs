@@ -371,7 +371,7 @@ impl DPhpyOptimizer {
     }
 
     /// Traverse the s_expr and get all base relations and join conditions
-    #[async_recursion::async_recursion(# [recursive::recursive])]
+    #[async_recursion::async_recursion(# [stacksafe::stacksafe])]
     async fn get_base_relations(
         &mut self,
         s_expr: &SExpr,
@@ -914,7 +914,7 @@ impl DPhpyOptimizer {
 
     /// The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
     /// Therefore, it considers the neighborhood of right.
-    #[async_recursion::async_recursion(# [recursive::recursive])]
+    #[async_recursion::async_recursion(# [stacksafe::stacksafe])]
     async fn enumerate_cmp_rec(
         &mut self,
         left: &[IndexType],
@@ -966,7 +966,7 @@ impl DPhpyOptimizer {
 
     /// EnumerateCsgRec will extend the given `nodes`.
     /// It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
-    #[async_recursion::async_recursion(# [recursive::recursive])]
+    #[async_recursion::async_recursion(# [stacksafe::stacksafe])]
     async fn enumerate_csg_rec(
         &mut self,
         nodes: &[IndexType],
@@ -1068,7 +1068,7 @@ impl DPhpyOptimizer {
 
     /// Replace the join expression in the plan tree
     #[allow(clippy::only_used_in_recursion)]
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Join(_) => {

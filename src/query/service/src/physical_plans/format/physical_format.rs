@@ -20,7 +20,7 @@ use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::format::FormatContext;
 
 pub trait PhysicalFormat {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn dispatch(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut format_node = self.format(ctx)?;
 

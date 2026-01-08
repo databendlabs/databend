@@ -36,7 +36,7 @@ impl<'a> PhysicalFormat for ChunkAppendDataFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input_formatter = self.inner.input.formatter()?;
         let input_payload = input_formatter.dispatch(ctx)?;
@@ -47,12 +47,12 @@ impl<'a> PhysicalFormat for ChunkAppendDataFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

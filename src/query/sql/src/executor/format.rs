@@ -86,7 +86,7 @@ impl PhysicalPlan {
         to_format_tree(self, &metadata, &profs, &mut context)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {
@@ -234,7 +234,7 @@ impl PhysicalPlan {
 
 // The method will only collect scan,filter and join nodes
 // It's only used to debug cardinality estimator.
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn format_partial_tree(
     plan: &PhysicalPlan,
     metadata: &MetadataRef,
@@ -380,7 +380,7 @@ struct FormatContext {
     scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &Metadata,

@@ -56,7 +56,7 @@ enum PredicateScalar {
     Other(Box<ScalarExpr>),
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     match scalar {
         ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
@@ -105,7 +105,7 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     match predicate_scalar {
         PredicateScalar::And(args) => {
@@ -140,7 +140,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 fn rewrite_predicate_ors(predicate: PredicateScalar) -> PredicateScalar {
     match predicate {
         PredicateScalar::Or(args) => {

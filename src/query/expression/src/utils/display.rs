@@ -983,7 +983,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
-        #[recursive::recursive]
+        #[stacksafe::stacksafe]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
                 Expr::Constant(Constant { scalar, .. }) => match scalar {

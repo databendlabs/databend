@@ -38,7 +38,7 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = Vec::new();
         children.push(FormatTreeNode::new(format!(
@@ -61,7 +61,7 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let children = vec![
             FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),

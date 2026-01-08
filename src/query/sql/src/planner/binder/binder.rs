@@ -154,7 +154,7 @@ impl Binder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(#[stacksafe::stacksafe])]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,

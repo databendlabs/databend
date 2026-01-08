@@ -191,8 +191,8 @@ use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 
 #[derive(Educe)]
 #[educe(
-    Clone(bound = false, attrs = "#[recursive::recursive]"),
-    Debug(bound = false, attrs = "#[recursive::recursive]")
+    Clone(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Debug(bound = false, attrs = "#[stacksafe::stacksafe]")
 )]
 pub enum Plan {
     // `SELECT` statement

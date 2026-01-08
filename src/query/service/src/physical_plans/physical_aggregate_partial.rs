@@ -80,7 +80,7 @@ impl IPhysicalPlan for AggregatePartial {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
 

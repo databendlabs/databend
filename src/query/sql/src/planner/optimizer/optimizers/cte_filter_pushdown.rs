@@ -62,7 +62,7 @@ impl CTEFilterPushdownOptimizer {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn collect_filters(&mut self, s_expr: &SExpr) -> Result<()> {
         if let RelOperator::Filter(filter) = s_expr.plan() {
             let child = s_expr.child(0)?;
@@ -116,7 +116,7 @@ impl CTEFilterPushdownOptimizer {
         Ok(())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn add_filters_to_ctes(&self, s_expr: &SExpr) -> Result<SExpr> {
         let new_children = s_expr
             .children()

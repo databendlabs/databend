@@ -91,7 +91,7 @@ impl PropertyEnforcer {
     }
 
     /// Require and enforce physical property from a physical `SExpr`
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn require_property(&self, required: &RequiredProperty, s_expr: &SExpr) -> Result<SExpr> {
         // First, we will require the child SExpr with input `RequiredProperty`.
         let children = s_expr

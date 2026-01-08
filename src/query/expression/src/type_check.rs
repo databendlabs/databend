@@ -41,7 +41,7 @@ use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::visit_expr;
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn check<Index: ColumnIndex>(
     expr: &RawExpr<Index>,
     fn_registry: &FunctionRegistry,
@@ -203,7 +203,7 @@ pub fn check_cast<Index: ColumnIndex>(
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
         DataType::Null => Err(ErrorCode::from_string_no_backtrace(
@@ -296,7 +296,7 @@ pub fn check_number<T: Number, Index: ColumnIndex>(
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,

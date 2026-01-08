@@ -174,7 +174,7 @@ impl Binder {
     }
 
     // TODO: unify this function with bind_join
-    #[async_recursion(#[recursive::recursive])]
+    #[async_recursion(#[stacksafe::stacksafe])]
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,

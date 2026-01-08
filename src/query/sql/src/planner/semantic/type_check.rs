@@ -282,7 +282,7 @@ impl<'a> TypeChecker<'a> {
         self.skip_sequence_check = skip;
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
             Expr::ColumnRef {

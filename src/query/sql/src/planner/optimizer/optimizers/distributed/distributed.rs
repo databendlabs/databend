@@ -45,7 +45,7 @@ impl DistributedOptimizer {
     }
 
     /// Optimize the given SExpr for distributed execution
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         // Step 1: Set the initial distribution requirement (Any)
         let required = RequiredProperty {

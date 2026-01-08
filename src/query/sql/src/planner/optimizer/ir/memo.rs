@@ -75,7 +75,7 @@ impl Memo {
         Ok(())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn insert(&mut self, target_group: Option<IndexType>, s_expr: SExpr) -> Result<IndexType> {
         let mut children_group = vec![];
         for child in s_expr.children() {

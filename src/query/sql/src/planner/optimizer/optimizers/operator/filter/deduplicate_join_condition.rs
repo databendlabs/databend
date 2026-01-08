@@ -103,7 +103,7 @@ impl DeduplicateJoinConditionOptimizer {
         self.deduplicate(s_expr)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             // Only optimize filtering joins that don't preserve nulls

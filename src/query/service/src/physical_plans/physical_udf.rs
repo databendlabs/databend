@@ -65,7 +65,7 @@ impl IPhysicalPlan for Udf {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
@@ -89,7 +89,7 @@ impl IPhysicalPlan for Udf {
         Ok(UdfFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

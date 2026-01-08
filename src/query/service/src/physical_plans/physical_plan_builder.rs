@@ -69,7 +69,7 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion(#[recursive::recursive])]
+    #[async_recursion::async_recursion(#[stacksafe::stacksafe])]
     pub async fn build_physical_plan(
         &mut self,
         s_expr: &SExpr,

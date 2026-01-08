@@ -50,7 +50,7 @@ impl IPhysicalPlan for ExchangeSource {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }

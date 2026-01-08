@@ -72,7 +72,7 @@ impl IPhysicalPlan for Limit {
         Ok(LimitFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

@@ -39,9 +39,9 @@ use crate::span::merge_span;
 
 #[derive(Educe, Drive, DriveMut)]
 #[educe(
-    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
-    Clone(bound = false, attrs = "#[recursive::recursive]"),
-    Debug(bound = false, attrs = "#[recursive::recursive]")
+    PartialEq(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Clone(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Debug(bound = false, attrs = "#[stacksafe::stacksafe]")
 )]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
@@ -571,7 +571,7 @@ impl Display for Expr {
             false
         }
 
-        #[recursive::recursive]
+        #[stacksafe::stacksafe]
         fn write_expr(
             expr: &Expr,
             parent: Option<Affix>,

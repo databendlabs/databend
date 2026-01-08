@@ -3341,10 +3341,10 @@ dependencies = [
  "percent-encoding",
  "pratt",
  "pretty_assertions",
- "recursive",
  "rspack-codespan-reporting",
  "serde",
  "serde_json",
+ "stacksafe",
  "strsim 0.10.0",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -3656,12 +3656,12 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "rand_distr",
- "recursive",
  "roaring",
  "rust_decimal",
  "rustls 0.23.27",
  "serde",
  "serde_json",
+ "stacksafe",
  "strength_reduce",
  "terminal_size",
  "tonic 0.13.1",
@@ -4488,7 +4488,6 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.3",
  "prqlc",
- "recursive",
  "regex",
  "roaring",
  "serde",
@@ -4496,6 +4495,7 @@ dependencies = [
  "sha2",
  "similar",
  "simsearch",
+ "stacksafe",
  "tantivy-query-grammar",
  "unicase",
  "url",
@@ -4717,8 +4717,8 @@ dependencies = [
  "log",
  "opendal",
  "parquet 56.2.0",
- "recursive",
  "serde",
+ "stacksafe",
  "typetag",
  "volo-thrift",
 ]
@@ -5588,7 +5588,6 @@ dependencies = [
  "proptest",
  "prost",
  "rand 0.8.5",
- "recursive",
  "redis",
  "regex",
  "reqwest",
@@ -5603,6 +5602,7 @@ dependencies = [
  "sha2",
  "socket2 0.5.9",
  "sqlx",
+ "stacksafe",
  "sysinfo",
  "tantivy",
  "temp-env",
@@ -5635,13 +5635,13 @@ dependencies = [
  "futures-util",
  "mysql_async",
  "rand 0.8.5",
- "recursive",
  "redis",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sqllogictest",
+ "stacksafe",
  "testcontainers",
  "testcontainers-modules",
  "thiserror 1.0.69",
@@ -13199,7 +13199,8 @@ dependencies = [
 [[package]]
 name = "recursive"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/recursive.git?rev=16e433a#16e433ab3f291512b437206f7ce7b8d078e84195"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0786a43debb760f491b1bc0269fe5e84155353c67482b9e60d0cfb596054b43e"
 dependencies = [
  "recursive-proc-macro-impl",
  "stacker",
@@ -13208,7 +13209,8 @@ dependencies = [
 [[package]]
 name = "recursive-proc-macro-impl"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/recursive.git?rev=16e433a#16e433ab3f291512b437206f7ce7b8d078e84195"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76009fbe0614077fc1a2ce255e3a1881a2e3a3527097d5dc6d8212c585e7e38b"
 dependencies = [
  "quote",
  "syn 2.0.106",
@@ -15030,6 +15032,27 @@ dependencies = [
  "libc",
  "psm",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "stacksafe"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5481855df765c006135651b88e666edd4f08e176183052d2cb8628450873acb"
+dependencies = [
+ "stacker",
+ "stacksafe-macro",
+]
+
+[[package]]
+name = "stacksafe-macro"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4825bd5b513e9bc047a10ffc1680d1203ef548bdccd633d633a15630f01d126f"
+dependencies = [
+ "proc-macro-error2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]

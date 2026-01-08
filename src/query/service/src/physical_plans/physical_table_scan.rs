@@ -110,7 +110,7 @@ impl IPhysicalPlan for TableScan {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let schema = self.source.schema();
         let mut fields = Vec::with_capacity(self.name_mapping.len());

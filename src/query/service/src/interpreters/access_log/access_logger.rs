@@ -51,7 +51,7 @@ impl AccessLogger {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn log(&mut self, plan: &Plan) {
         match plan {
             // DQL Operations

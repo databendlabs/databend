@@ -24,7 +24,7 @@ ordered-float = { workspace = true }
 percent-encoding = { workspace = true }
 pratt = { workspace = true }
 pretty_assertions = { workspace = true }
-recursive = { workspace = true }
+stacksafe = { workspace = true }
 rspack-codespan-reporting = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

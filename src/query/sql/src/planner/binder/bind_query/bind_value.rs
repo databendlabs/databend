@@ -209,7 +209,7 @@ impl Binder {
     }
 
     // Remove unused cache columns and join conditions and construct ExpressionScan's child.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn construct_expression_scan(
         &mut self,
         s_expr: &SExpr,

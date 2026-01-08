@@ -32,7 +32,7 @@ hive_metastore = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
-recursive = { workspace = true }
+stacksafe = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 volo-thrift = { workspace = true }

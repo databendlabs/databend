@@ -38,7 +38,7 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table_entry = ctx.metadata.table(self.inner.target_table_index).clone();
         let target_schema = table_entry.table().schema_with_stream();
@@ -131,12 +131,12 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

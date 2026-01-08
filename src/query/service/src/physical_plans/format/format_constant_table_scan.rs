@@ -38,7 +38,7 @@ impl<'a> PhysicalFormat for ConstantTableScanFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.num_rows == 0 {
             return Ok(FormatTreeNode::new(self.inner.name().to_string()));

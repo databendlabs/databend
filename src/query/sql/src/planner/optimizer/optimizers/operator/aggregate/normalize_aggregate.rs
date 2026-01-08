@@ -38,7 +38,7 @@ impl RuleNormalizeAggregateOptimizer {
         RuleNormalizeAggregateOptimizer {}
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {

@@ -25,7 +25,7 @@ env_logger = { workspace = true }
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
-recursive = { workspace = true }
+stacksafe = { workspace = true }
 redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }

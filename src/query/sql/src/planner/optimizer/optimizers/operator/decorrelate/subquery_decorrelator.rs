@@ -169,7 +169,7 @@ impl SubqueryDecorrelatorOptimizer {
     /// Correlated exists subquery -> Marker join
     ///
     /// More information can be found in the paper: Unnesting Arbitrary Queries
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // If there is no subquery, return directly
         if !s_expr.has_subquery() {
@@ -343,6 +343,7 @@ impl SubqueryDecorrelatorOptimizer {
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
     /// and the outer s_expr.
+    #[stacksafe::stacksafe]
     fn try_rewrite_subquery(
         &mut self,
         scalar: &ScalarExpr,

@@ -64,7 +64,7 @@ impl IPhysicalPlan for CopyIntoTable {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![]))
     }

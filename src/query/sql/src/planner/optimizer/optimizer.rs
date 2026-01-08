@@ -59,7 +59,7 @@ use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 
 #[fastrace::trace]
-#[async_recursion(# [recursive::recursive])]
+#[async_recursion(# [stacksafe::stacksafe])]
 pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {

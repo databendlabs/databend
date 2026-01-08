@@ -200,7 +200,7 @@ impl<I: ColumnIndex> From<LambdaFunctionCall<I>> for Expr<I> {
 }
 
 impl<Index: ColumnIndex> Clone for Expr<Index> {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn clone(&self) -> Self {
         match self {
             Expr::Constant(x) => x.clone().into(),
@@ -253,7 +253,7 @@ impl<Index: ColumnIndex> Clone for Expr<Index> {
 impl<Index: ColumnIndex> Eq for Expr<Index> {}
 
 impl<Index: ColumnIndex> PartialEq for Expr<Index> {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -471,7 +471,7 @@ pub trait ExprVisitor<I: ColumnIndex>: Sized {
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn visit_expr<Index: ColumnIndex, V: ExprVisitor<Index>>(
     expr: &Expr<Index>,
     visitor: &mut V,
@@ -536,7 +536,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
 
 impl<Index: ColumnIndex> RawExpr<Index> {
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
-        #[recursive::recursive]
+        #[stacksafe::stacksafe]
         fn walk<Index: ColumnIndex>(expr: &RawExpr<Index>, buf: &mut HashMap<Index, DataType>) {
             match expr {
                 RawExpr::ColumnRef { id, data_type, .. } => {
@@ -667,7 +667,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         visitor.0
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
         col_index_mapper: impl Fn(&Index) -> databend_common_exception::Result<ToIndex> + Copy,

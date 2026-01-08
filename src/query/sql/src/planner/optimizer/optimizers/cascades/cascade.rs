@@ -85,7 +85,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
         let opt_ctx = self.opt_ctx.clone();
 
@@ -261,7 +261,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn find_best_plan(
         &self,
         group_index: IndexType,

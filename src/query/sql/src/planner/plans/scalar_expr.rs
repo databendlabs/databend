@@ -77,7 +77,7 @@ pub enum ScalarExpr {
 }
 
 impl Clone for ScalarExpr {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn clone(&self) -> Self {
         match self {
             ScalarExpr::BoundColumnRef(v) => ScalarExpr::BoundColumnRef(v.clone()),
@@ -102,7 +102,7 @@ impl Clone for ScalarExpr {
 impl Eq for ScalarExpr {}
 
 impl PartialEq for ScalarExpr {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
@@ -125,7 +125,7 @@ impl PartialEq for ScalarExpr {
 }
 
 impl Hash for ScalarExpr {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             ScalarExpr::BoundColumnRef(v) => {
@@ -1386,7 +1386,7 @@ pub trait Visitor<'a>: Sized {
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
@@ -1405,7 +1405,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn walk_window<'a, V: Visitor<'a>>(visitor: &mut V, window: &'a WindowFunc) -> Result<()> {
     for expr in &window.partition_by {
         visitor.visit(expr)?;
@@ -1499,7 +1499,7 @@ pub trait VisitorMut<'a>: Sized {
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     expr: &'a mut ScalarExpr,
@@ -1521,7 +1521,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     }
 }
 
-#[recursive::recursive]
+#[stacksafe::stacksafe]
 pub fn walk_window_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     window: &'a mut WindowFunc,

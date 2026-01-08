@@ -61,7 +61,7 @@ impl IPhysicalPlan for SecureFilter {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.projections.len());
@@ -81,12 +81,12 @@ impl IPhysicalPlan for SecureFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(SecureFilterFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

@@ -38,11 +38,11 @@ use crate::plans::RelOperator;
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Educe)]
 #[educe(
-    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    PartialEq(bound = false, attrs = "#[stacksafe::stacksafe]"),
     Eq,
-    Hash(bound = false, attrs = "#[recursive::recursive]"),
-    Clone(bound = false, attrs = "#[recursive::recursive]"),
-    Debug(bound = false, attrs = "#[recursive::recursive]")
+    Hash(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Clone(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Debug(bound = false, attrs = "#[stacksafe::stacksafe]")
 )]
 pub struct SExpr {
     pub plan: Arc<RelOperator>,
@@ -251,12 +251,12 @@ impl SExpr {
     }
 
     /// Check if contain subquery
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub(crate) fn has_subquery(&self) -> bool {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn support_lazy_materialize(&self) -> bool {
         self.plan.support_lazy_materialize()
             && self
@@ -265,7 +265,7 @@ impl SExpr {
                 .all(|child| child.support_lazy_materialize())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
         let iter = self.plan.scalar_expr_iter();
@@ -284,7 +284,7 @@ impl SExpr {
         Ok(udfs)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<IndexType>> {
         let mut udf_ids = BTreeSet::new();
         if let RelOperator::Udf(udf) = self.plan.as_ref() {
@@ -350,7 +350,7 @@ impl SExpr {
     }
 
     // The method will clear the applied rules of current SExpr and its children.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn clear_applied_rules(&mut self) {
         self.applied_rules.clear();
         let children = self
@@ -364,7 +364,7 @@ impl SExpr {
         self.children = children;
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn has_merge_exchange(&self) -> bool {
         if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
             return true;

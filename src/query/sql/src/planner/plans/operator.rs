@@ -140,11 +140,11 @@ pub enum RelOp {
 /// Relational operators
 #[derive(Educe, EnumAsInner)]
 #[educe(
-    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    PartialEq(bound = false, attrs = "#[stacksafe::stacksafe]"),
     Eq,
-    Hash(bound = false, attrs = "#[recursive::recursive]"),
-    Clone(bound = false, attrs = "#[recursive::recursive]"),
-    Debug(bound = false, attrs = "#[recursive::recursive]")
+    Hash(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Clone(bound = false, attrs = "#[stacksafe::stacksafe]"),
+    Debug(bound = false, attrs = "#[stacksafe::stacksafe]")
 )]
 pub enum RelOperator {
     Scan(Scan),

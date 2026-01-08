@@ -112,7 +112,7 @@ impl IPhysicalPlan for Sort {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         match self.step {
@@ -185,7 +185,7 @@ impl IPhysicalPlan for Sort {
         Ok(SortFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

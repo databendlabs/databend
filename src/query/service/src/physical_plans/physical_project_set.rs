@@ -63,7 +63,7 @@ impl IPhysicalPlan for ProjectSet {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
@@ -93,7 +93,7 @@ impl IPhysicalPlan for ProjectSet {
         Ok(ProjectSetFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

@@ -228,7 +228,7 @@ async fn run_hybrid_client(
 }
 
 // Create new databend with client type
-#[async_recursion::async_recursion(#[recursive::recursive])]
+#[async_recursion::async_recursion(#[stacksafe::stacksafe])]
 async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();

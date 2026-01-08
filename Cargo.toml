@@ -358,7 +358,7 @@ raft-log = { version = "0.2.11" }
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
-recursive = "0.1.1"
+stacksafe = "1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
@@ -575,7 +575,7 @@ jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }
-recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
+
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }

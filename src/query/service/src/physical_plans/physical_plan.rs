@@ -90,7 +90,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     /// Adjust the plan_id of the physical plan.
     /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn adjust_plan_id(&mut self, next_id: &mut u32) {
         self.get_meta_mut().plan_id = *next_id;
         *next_id += 1;
@@ -100,7 +100,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         match self.children().next() {
             None => Ok(DataSchemaRef::default()),
@@ -116,7 +116,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         Box::new(std::iter::empty())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         let mut children = vec![];
         for child in self.children() {
@@ -127,12 +127,12 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     /// Used to find data source info in a non-aggregation and single-table query plan.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         None
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
         for child in self.children() {
             if let Some(plan) = child.try_find_mutation_source() {
@@ -143,26 +143,26 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         None
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         for child in self.children() {
             child.get_all_data_source(sources);
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         for child in self.children_mut() {
             child.set_pruning_stats(stats)
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn is_distributed_plan(&self) -> bool {
         self.children().any(|child| child.is_distributed_plan())
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn is_warehouse_distributed_plan(&self) -> bool {
         self.children()
             .any(|child| child.is_warehouse_distributed_plan())
@@ -182,7 +182,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan;
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let is_exchange_sink = self.as_any().downcast_ref::<ExchangeSink>().is_some();
         builder.is_exchange_stack.push(is_exchange_sink);
@@ -276,7 +276,7 @@ pub struct PhysicalPlan {
 dyn_clone::clone_trait_object!(IPhysicalPlan);
 
 impl Clone for PhysicalPlan {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn clone(&self) -> Self {
         PhysicalPlan {
             inner: self.inner.clone(),
@@ -285,7 +285,7 @@ impl Clone for PhysicalPlan {
 }
 
 impl Debug for PhysicalPlan {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
     }
@@ -306,14 +306,14 @@ impl DerefMut for PhysicalPlan {
 }
 
 impl serde::Serialize for PhysicalPlan {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         self.inner.serialize(serializer)
     }
 }
 
 impl<'de> serde::Deserialize<'de> for PhysicalPlan {
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         Ok(PhysicalPlan {
             inner: Box::<dyn IPhysicalPlan + 'static>::deserialize(deserializer)?,
@@ -328,7 +328,7 @@ impl PhysicalPlan {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
         let mut children = vec![];
         for child in self.children() {
@@ -341,7 +341,7 @@ impl PhysicalPlan {
         }
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
         for child in self.children() {
             child.visit(visitor)?;

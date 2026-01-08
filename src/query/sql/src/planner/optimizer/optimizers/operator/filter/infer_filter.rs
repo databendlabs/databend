@@ -169,7 +169,7 @@ impl<'a> InferFilterOptimizer<'a> {
         Ok(new_predicates)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn add_expr(
         &mut self,
         expr: &ScalarExpr,
@@ -766,7 +766,7 @@ impl<'a> InferFilterOptimizer<'a> {
         }
 
         impl VisitorMut<'_> for ReplaceScalarExpr<'_> {
-            #[recursive::recursive]
+            #[stacksafe::stacksafe]
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let Some(index) = self.expr_index.get(expr) {
                     let equal_to = &self.expr_equal_to[*index];

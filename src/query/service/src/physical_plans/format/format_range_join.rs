@@ -41,7 +41,7 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
         self.inner.get_meta()
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let range_join_conditions = self
             .inner
@@ -104,7 +104,7 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let left_child = self.inner.left.formatter()?.format_join(ctx)?;
         let right_child = self.inner.right.formatter()?.format_join(ctx)?;
@@ -126,7 +126,7 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
         ))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let left_child = self.inner.left.formatter()?.partial_format(ctx)?;
         let right_child = self.inner.right.formatter()?.partial_format(ctx)?;

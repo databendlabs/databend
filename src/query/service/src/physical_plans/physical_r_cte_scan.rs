@@ -48,7 +48,7 @@ impl IPhysicalPlan for RecursiveCteScan {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }

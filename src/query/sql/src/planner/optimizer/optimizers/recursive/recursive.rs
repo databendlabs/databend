@@ -44,12 +44,12 @@ impl RecursiveRuleOptimizer {
     }
 
     /// Run the optimizer on the given expression.
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     pub fn optimize_sync(&self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr)
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut current = s_expr.clone();
 

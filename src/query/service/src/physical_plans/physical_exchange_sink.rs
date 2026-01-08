@@ -58,7 +58,7 @@ impl IPhysicalPlan for ExchangeSink {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
@@ -75,7 +75,7 @@ impl IPhysicalPlan for ExchangeSink {
         Ok(ExchangeSinkFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

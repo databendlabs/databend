@@ -78,7 +78,7 @@ impl IPhysicalPlan for EvalScalar {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         if self.exprs.is_empty() {
             return self.input.output_schema();
@@ -115,7 +115,7 @@ impl IPhysicalPlan for EvalScalar {
         Ok(EvalScalarFormatter::create(self))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }

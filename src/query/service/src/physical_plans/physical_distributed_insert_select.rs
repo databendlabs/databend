@@ -53,7 +53,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
         &mut self.meta
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -66,7 +66,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    #[recursive::recursive]
+    #[stacksafe::stacksafe]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }
