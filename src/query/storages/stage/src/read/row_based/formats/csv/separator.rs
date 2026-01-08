@@ -151,7 +151,7 @@ impl CsvReader {
                                 // support we expect 4 fields but got row with only 2 columns : "1,2\n"
                                 // here we pretend we read "1,2,,\n"
                                 debug_assert!(self.n_end > 0);
-                                let end = self.field_ends[n_end - 1];
+                                let end = self.field_ends[n_end - 1] & !csv_core::QUOTED_MASK;
                                 for i in n_end..self.num_fields {
                                     self.field_ends[i] = end;
                                 }

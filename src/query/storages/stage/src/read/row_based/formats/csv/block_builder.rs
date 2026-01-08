@@ -135,7 +135,11 @@ impl CsvDecoder {
                 if *c >= field_ends.len() {
                     columns[*c].push_default();
                 } else {
-                    let field_start = if *c == 0 { 0 } else { field_ends[c - 1] };
+                    let field_start = if *c == 0 {
+                        0
+                    } else {
+                        field_ends[c - 1] & !csv_core::QUOTED_MASK
+                    };
                     let mut field_end = field_ends[*c];
                     let mut is_quoted = false;
                     if csv_core::QUOTED_MASK & field_end != 0 {
