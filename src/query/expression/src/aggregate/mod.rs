@@ -68,6 +68,7 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     pub max_partial_capacity: usize,
+    pub hash_index_partition_threshold: usize,
 }
 
 impl Default for HashTableConfig {
@@ -80,6 +81,7 @@ impl Default for HashTableConfig {
             block_fill_factor: 1.8,
             partial_agg: false,
             max_partial_capacity: 131072,
+            hash_index_partition_threshold: usize::MAX,
         }
     }
 }
@@ -108,6 +110,7 @@ impl HashTableConfig {
             repartition_radix_bits_incr: 0,
             partial_agg: true,
             max_partial_capacity: capacity,
+            hash_index_partition_threshold: usize::MAX,
             ..Default::default()
         }
     }
@@ -136,6 +139,7 @@ impl HashTableConfig {
         self.partial_agg = partial_agg;
         self.repartition_radix_bits_incr = 4;
         self.max_partial_capacity = 131072 * (2 << node_nums);
+        self.hash_index_partition_threshold = usize::MAX;
 
         self
     }
@@ -158,5 +162,10 @@ impl HashTableConfig {
             }
             break;
         }
+    }
+
+    pub fn with_hash_index_partition_threshold(mut self, threshold: usize) -> Self {
+        self.hash_index_partition_threshold = threshold;
+        self
     }
 }

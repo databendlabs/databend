@@ -54,7 +54,7 @@ impl AggregationStatistics {
             .unwrap_or(elapsed);
 
         log::info!(
-            "[TRANSFORM-AGGREGATOR][{}] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
+            "[TRANSFORM-AGGREGATOR][{}] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}, hash index partitions: {}",
             self.stage,
             self.processed_rows,
             hashtable.payload.len(),
@@ -64,6 +64,7 @@ impl AggregationStatistics {
             convert_byte_size(self.processed_bytes as f64 / elapsed),
             convert_byte_size(self.processed_bytes as f64),
             hashtable.hash_index_resize_count(),
+            hashtable.hash_index_partition_count(),
         );
 
         self.processed_rows = 0;

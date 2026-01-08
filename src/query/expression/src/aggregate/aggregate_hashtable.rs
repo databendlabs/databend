@@ -79,7 +79,7 @@ impl AggregateHashTable {
                 1 << config.initial_radix_bits,
                 vec![arena],
             ),
-            hash_index: HashIndex::with_capacity(capacity),
+            hash_index: HashIndex::with_capacity(capacity, config.hash_index_partition_threshold),
             config,
             hash_index_resize_count: 0,
         }
@@ -108,12 +108,7 @@ impl AggregateHashTable {
                 1 << config.initial_radix_bits,
                 vec![arena],
             ),
-            hash_index: HashIndex {
-                entries,
-                count: 0,
-                capacity,
-                capacity_mask: capacity - 1,
-            },
+            hash_index: HashIndex::with_capacity(capacity, config.hash_index_partition_threshold),
             config,
             hash_index_resize_count: 0,
         }
@@ -402,12 +397,14 @@ impl AggregateHashTable {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::with_capacity(new_capacity);
+            self.hash_index =
+                HashIndex::with_capacity(new_capacity, self.config.hash_index_partition_threshold);
             return;
         }
 
         self.hash_index_resize_count += 1;
-        let mut hash_index = HashIndex::with_capacity(new_capacity);
+        let mut hash_index =
+            HashIndex::with_capacity(new_capacity, self.config.hash_index_partition_threshold);
 
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
@@ -462,5 +459,9 @@ impl AggregateHashTable {
 
     pub fn hash_index_resize_count(&self) -> usize {
         self.hash_index_resize_count
+    }
+
+    pub fn hash_index_partition_count(&self) -> usize {
+        self.hash_index.partition_count()
     }
 }

@@ -46,6 +46,7 @@ use crate::pipelines::processors::transforms::aggregator::transform_aggregate_pa
 use crate::sessions::QueryContext;
 
 const SPILL_BUCKET_NUM: usize = 2;
+const HASH_INDEX_PARTITION_THRESHOLD: usize = 1 << 16;
 
 enum Stage {
     Input,
@@ -96,7 +97,8 @@ impl NewTransformFinalAggregate {
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
             HashTableConfig::default()
-                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64),
+                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64)
+                .with_hash_index_partition_threshold(HASH_INDEX_PARTITION_THRESHOLD),
             Arc::new(Bump::new()),
         );
         let flush_state = PayloadFlushState::default();
