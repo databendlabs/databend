@@ -85,7 +85,7 @@ impl FieldEncoderCSV {
                 common_settings: OutputCommonSettings {
                     true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                     false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                    null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                    null_bytes: params.null_display.as_bytes().to_vec(),
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
