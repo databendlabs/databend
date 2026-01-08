@@ -14,11 +14,23 @@ DROP CONNECTION IF EXISTS test_conn_05_0003
 statement ok
 CREATE CONNECTION test_conn_05_0003 STORAGE_TYPE='fs'
 
-# Test creating database with valid connection (should succeed)
+# Test creating/altering database with valid connection (should succeed)
 statement ok
 CREATE DATABASE test_db_valid_conn OPTIONS (
     DEFAULT_STORAGE_CONNECTION = 'test_conn_05_0003',
     DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/path/'
+)
+
+statement ok
+ALTER DATABASE test_db_valid_conn SET OPTIONS (
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/path2/'
+)
+
+# options should be case-insensitive
+statement ok
+ALTER DATABASE test_db_valid_conn SET OPTIONS (
+    default_storage_connection = 'test_conn_05_0003',
+    default_storage_path = 'fs:///tmp/test-bucket/path2/'
 )
 
 # Test creating database with non-existent connection (should fail)
