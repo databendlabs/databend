@@ -96,6 +96,20 @@ impl BasicHashJoin {
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
+            if SCAN_MAP {
+                if let Some(null_keys) = self.squash_block.finalize()? {
+                    let locked = self.state.mutex.lock();
+                    let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+                    let chunk_index = self.state.chunks.len();
+                    let scan_map = vec![0; null_keys.num_rows()];
+
+                    self.state.chunks.as_mut().push(null_keys);
+                    self.state.scan_map.as_mut().push(scan_map);
+                    self.state.scan_queue.as_mut().push_back(chunk_index);
+                }
+            }
+
             return Ok(None);
         };
 
@@ -112,9 +126,25 @@ impl BasicHashJoin {
 
         chunk_block = chunk_block.project(&self.desc.build_projection);
         if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
-            keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+            if bitmap.true_count() != bitmap.len() {
+                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
-            if bitmap.null_count() != bitmap.len() {
+                if SCAN_MAP {
+                    let null_keys = chunk_block.clone().filter_with_bitmap(&(!(&bitmap)))?;
+
+                    if let Some(null_keys) = self.squash_block.add_block(null_keys)? {
+                        let locked = self.state.mutex.lock();
+                        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+                        let chunk_index = self.state.chunks.len();
+                        let scan_map = vec![0; null_keys.num_rows()];
+
+                        self.state.chunks.as_mut().push(null_keys);
+                        self.state.scan_map.as_mut().push(scan_map);
+                        self.state.scan_queue.as_mut().push_back(chunk_index);
+                    }
+                }
+
                 chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
             }
         }
