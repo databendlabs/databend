@@ -204,7 +204,7 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
         }
 
         let build_block = match self.join_state.columns.is_empty() {
-            true => None,
+            true => Some(DataBlock::new(vec![], self.scan_idx.len())),
             false => {
                 let row_ptrs = self.scan_idx.as_slice();
                 Some(DataBlock::take_column_vec(

@@ -21,12 +21,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 
 use crate::pipelines::processors::HashJoinDesc;
@@ -34,6 +32,7 @@ use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
@@ -272,42 +271,12 @@ impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
                 }
             };
 
-            let mut result_block = match (probe_block, build_block) {
-                (Some(mut probe_block), Some(build_block)) => {
-                    probe_block.merge_block(build_block);
-                    probe_block
-                }
-                (Some(probe_block), None) => probe_block,
-                (None, Some(build_block)) => build_block,
-                (None, None) => DataBlock::new(vec![], self.probed_rows.matched_build.len()),
-            };
-
-            if !self.desc.probe_to_build.is_empty() {
-                for (index, (is_probe_nullable, is_build_nullable)) in
-                    self.desc.probe_to_build.iter()
-                {
-                    let entry = match (is_probe_nullable, is_build_nullable) {
-                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                        (true, false) => {
-                            result_block.get_by_offset(*index).clone().remove_nullable()
-                        }
-                        (false, true) => {
-                            let entry = result_block.get_by_offset(*index);
-                            let col = entry.to_column();
-
-                            match col.is_null() || col.is_nullable() {
-                                true => entry.clone(),
-                                false => BlockEntry::from(NullableColumn::new_column(
-                                    col,
-                                    Bitmap::new_constant(true, result_block.num_rows()),
-                                )),
-                            }
-                        }
-                    };
-
-                    result_block.add_entry(entry);
-                }
-            }
+            let result_block = final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            );
 
             let selected_rows = self.filter_executor.select(&result_block)?;
 

@@ -306,14 +306,7 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
 
             let new_row_idx = row_idx + remain_rows;
             self.scan_progress = match new_row_idx >= scan_map.len() {
-                true => {
-                    let _guard = self.join_state.mutex.lock();
-                    self.join_state
-                        .scan_queue
-                        .as_mut()
-                        .pop_front()
-                        .map(|x| (x, 0))
-                }
+                true => self.join_state.steal_scan_chunk_index(),
                 false => Some((chunk_idx, new_row_idx)),
             };
 
@@ -327,7 +320,7 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
         }
 
         let build_block = match self.join_state.columns.is_empty() {
-            true => None,
+            true => Some(DataBlock::new(vec![], self.scan_idx.len())),
             false => {
                 let row_ptrs = self.scan_idx.as_slice();
                 Some(DataBlock::take_column_vec(
