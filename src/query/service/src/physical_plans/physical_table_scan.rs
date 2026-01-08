@@ -522,15 +522,57 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
+    pub async fn build_dummy_table_scan(
+        &mut self,
+        dummy_scan: &databend_common_sql::plans::DummyTableScan,
+    ) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state()?)?
             .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 
-        if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
+        // Add partition SHAs for source tables (for cache invalidation).
+        // When DummyTableScan is created by optimizations like count(*) folding,
+        // we need to track which tables the result depends on for proper cache invalidation.
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_query_result_cache()? && !dummy_scan.source_table_indexes.is_empty()
+        {
+            // Collect table references first, then release the lock before await
+            let source_tables: Vec<_> = {
+                let metadata = self.metadata.read();
+                dummy_scan
+                    .source_table_indexes
+                    .iter()
+                    .map(|&idx| metadata.table(idx).table())
+                    .collect()
+            };
+            for source_table in source_tables {
+                // Check if the source table supports result caching.
+                // Some tables (e.g., MemoryTable) return constant partition info regardless
+                // of actual data content, making SHA-based cache invalidation unreliable.
+                // For these tables, we must disable caching to avoid stale results.
+                if !source_table.result_can_be_cached() {
+                    self.ctx.set_cacheable(false);
+                }
+
+                // Always compute SHA with None (no pushdowns) to get the full table SHA.
+                // We cannot reuse the SHA cached by TableScan because it may have been
+                // computed with pushdowns (filters), which would only reflect a subset
+                // of the table's partitions. DummyTableScan depends on the entire table's
+                // data, so we need the full table SHA for correct cache invalidation.
+                //
+                // Example: SELECT * FROM t WHERE a > 10 AND b < (SELECT MIN(b) FROM t)
+                // - Main TableScan computes SHA for partitions where a > 10
+                // - DummyTableScan (from MIN(b) subquery) needs SHA for ALL partitions
+                // - If we reuse the filtered SHA, changes to rows where a <= 10 won't
+                //   invalidate the cache, causing stale MIN(b) results.
+                let (_, parts) = source_table
+                    .read_partitions(self.ctx.clone(), None, self.dry_run)
+                    .await?;
+                let sha = parts.compute_sha256()?;
+                self.ctx.add_partitions_sha(sha);
+            }
         }
 
         let source = table

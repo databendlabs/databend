@@ -42,6 +42,9 @@ pub struct OneTable {
 
 impl SyncSystemTable for OneTable {
     const NAME: &'static str = "system.one";
+    /// system.one is a static virtual table that always returns a single row (1).
+    /// It's safe to cache query results involving this table.
+    const RESULT_CAN_BE_CACHED: bool = true;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
