@@ -378,11 +378,8 @@ impl RangeJoinState {
                 buffer.push((*res + left_offset) as u64);
             }
         }
-        let mut left_result_block = DataBlock::take_blocks(
-            &left_table[left_idx..left_idx + 1],
-            &indices,
-            indices.len(),
-        );
+        let mut left_result_block =
+            DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
         indices.clear();
         for res in right_buffer.iter() {
             indices.push((0u32, *res as u32));

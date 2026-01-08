@@ -125,18 +125,14 @@ impl Bounds {
             .take(step * n)
             .filter_map(|(i, (block, row))| {
                 if i % step == offset {
-                    Some((block as u32, row as u32, 1))
+                    Some((block as u32, row as u32))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
 
-        Some(Bounds(vec![Column::take_column_indices(
-            &self.0,
-            &indices,
-            indices.len(),
-        )]))
+        Some(Bounds(vec![Column::take_column_indices(&self.0, &indices)]))
     }
 
     #[allow(dead_code)]
@@ -173,7 +169,7 @@ impl Bounds {
                 continue;
             }
 
-            indices.push((b_idx as u32, r_idx as u32, 1));
+            indices.push((b_idx as u32, r_idx as u32));
             target += step;
             if (i as f64) > target && indices.len() < n {
                 step = (total - i) as f64 / (n - indices.len()) as f64;
@@ -182,7 +178,7 @@ impl Bounds {
             last = Some((cur_rows, r_idx));
         }
 
-        let col = Column::take_column_indices(&self.0, &indices, indices.len());
+        let col = Column::take_column_indices(&self.0, &indices);
         Bounds::new_unchecked(col)
     }
 

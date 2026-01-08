@@ -223,10 +223,7 @@ mod tests {
             DataBlock::new_from_columns(vec![Int32Type::from_data(vec![6, 7, 8, 9, 10])]),
         ];
 
-        let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
-            (1, 1, 1),
-            (1, 2, 1),
-        ]]);
+        let indices = VecDeque::from(vec![vec![(0, 1), (0, 2), (1, 0)], vec![(1, 1), (1, 2)]]);
 
         {
             let core = Sampling::new(3..=6, rng.clone());
@@ -242,7 +239,7 @@ mod tests {
 
             sampler.compact_blocks(false);
 
-            assert_eq!(Some(&vec![(0, 0, 1), (0, 1, 1)]), sampler.indices.front());
+            assert_eq!(Some(&vec![(0, 0), (0, 1)]), sampler.indices.front());
             assert_eq!(
                 &Int32Type::from_data(vec![7, 8]),
                 sampler.sparse_blocks[0].get_last_column()
@@ -283,10 +280,10 @@ mod tests {
         }
 
         {
-            let indices = VecDeque::from(vec![vec![(0, 1, 1), (0, 2, 1), (1, 0, 1)], vec![
-                (1, 1, 1),
-                (1, 2, 1),
-                (1, 3, 1),
+            let indices = VecDeque::from(vec![vec![(0, 1), (0, 2), (1, 0)], vec![
+                (1, 1),
+                (1, 2),
+                (1, 3),
             ]]);
 
             let core = Sampling::new(3..=6, rng.clone());
