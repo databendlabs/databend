@@ -95,6 +95,9 @@ impl CsvDecoder {
                         b.put_and_commit("");
                         validity.push(true);
                     }
+                    ColumnBuilder::Nullable(_) => {
+                        builder.push_default();
+                    }
                     _ => {
                         let field = &self.load_context.schema.fields()[column_index];
                         return Err(FileParseError::ColumnEmptyError {
