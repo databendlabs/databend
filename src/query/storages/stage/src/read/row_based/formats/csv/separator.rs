@@ -87,6 +87,7 @@ impl CsvReader {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
             })
+            .mark_quoted(true)
             .build();
         let projection = load_ctx.pos_projection.clone();
         let max_fields = match &projection {

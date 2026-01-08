@@ -127,14 +127,11 @@ impl LoadContext {
         &self,
         column_builder: &mut ColumnBuilder,
         column_index: usize,
-        required: bool,
     ) -> std::result::Result<(), FileParseError> {
         match &self.default_expr_evaluator {
             None => {
                 // not copy or not FieldDefault
-                if !required {
-                    column_builder.push_default()
-                }
+                column_builder.push_default()
             }
             Some(values) => {
                 values.push_default_value(column_builder, column_index)?;
