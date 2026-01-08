@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -84,31 +85,27 @@ fn execute_subquery_for_scalar(
 
     let mut total_rows = 0;
     let mut result_scalar: Option<Scalar> = None;
-
-    for block in &data_blocks {
-        if block.num_columns() != 1 {
-            return Err(ErrorCode::SemanticError(
-                "Scalar subquery in table function argument must return exactly one column"
-                    .to_string(),
-            ));
-        }
-
-        total_rows += block.num_rows();
-        if total_rows > 1 {
-            return Err(ErrorCode::SemanticError(
-                "Scalar subquery in table function argument returned more than one row".to_string(),
-            ));
-        }
-
-        if block.num_rows() == 1 && result_scalar.is_none() {
-            let column = &block.columns()[0];
-            let col_value = column.value();
-            let value = col_value.index(0).unwrap();
-            result_scalar = Some(value.to_owned());
-        }
+    if data_blocks.is_empty() {
+        return Ok(Scalar::Null);
     }
 
-    Ok(result_scalar.unwrap_or(Scalar::Null))
+    let blocks = DataBlock::concat(&data_blocks);
+
+    if block.num_columns() != 1 {
+        return Err(ErrorCode::SemanticError(
+            "Scalar subquery in table function argument must return exactly one column".to_string(),
+        ));
+    }
+
+    if block.len() > 1 {
+        return Err(ErrorCode::SemanticError(
+            "Scalar subquery in table function argument returned more than one row".to_string(),
+        ));
+    }
+
+    let column = &block.columns()[0];
+    let col_value = column.value();
+    Ok(col_value.index(0).unwrap())
 }
 
 /// Try to fold an expression to a constant scalar value.
