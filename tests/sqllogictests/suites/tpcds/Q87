@@ -32,5 +32,3 @@ FROM ((SELECT DISTINCT c_last_name,
            AND d_month_seq BETWEEN 1200 AND 1200+11)) cool_cust ;
 ----
 47298
-
-
