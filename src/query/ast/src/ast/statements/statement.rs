@@ -281,6 +281,7 @@ pub enum Statement {
     CreateTag(CreateTagStmt),
     DropTag(DropTagStmt),
     ShowTags(ShowTagsStmt),
+    AlterObjectTag(AlterObjectTagStmt),
 
     // Stages
     CreateStage(CreateStageStmt),
@@ -547,6 +548,7 @@ impl Statement {
             | Statement::CreateConnection(..)
             | Statement::CreatePipe(..)
             | Statement::AlterTable(..)
+            | Statement::AlterObjectTag(..)
             | Statement::AlterView(..)
             | Statement::AlterUser(..)
             | Statement::AlterDatabase(..)
@@ -952,6 +954,7 @@ impl Display for Statement {
             Statement::CreateTag(stmt) => write!(f, "{stmt}")?,
             Statement::DropTag(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTags(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterObjectTag(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {

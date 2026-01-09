@@ -79,7 +79,9 @@ impl PhysicalPlanBuilder {
         let stat_info = self.build_plan_stat_info(s_expr)?;
         match s_expr.plan() {
             RelOperator::Scan(scan) => self.build_table_scan(scan, required, stat_info).await,
-            RelOperator::DummyTableScan(_) => self.build_dummy_table_scan().await,
+            RelOperator::DummyTableScan(dummy_scan) => {
+                self.build_dummy_table_scan(dummy_scan).await
+            }
             RelOperator::Join(join) => self.build_join(s_expr, join, required, stat_info).await,
             RelOperator::EvalScalar(eval_scalar) => {
                 self.build_eval_scalar(s_expr, eval_scalar, required, stat_info)

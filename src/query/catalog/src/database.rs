@@ -45,6 +45,31 @@ use dyn_clone::DynClone;
 
 use crate::table::Table;
 
+/// Databases that are built-in and cannot have tags set on them directly.
+/// Includes "default" which is a special user database.
+pub const BUILTIN_DATABASES: &[&str] =
+    &["default", "system", "information_schema", "system_history"];
+
+/// System databases whose objects (tables, etc.) cannot have tags set.
+/// Does not include "default" since tables in default database can have tags.
+pub const SYSTEM_DATABASES: &[&str] = &["system", "information_schema", "system_history"];
+
+/// Check if a database name is a built-in database (case-insensitive).
+#[inline]
+pub fn is_builtin_database(name: &str) -> bool {
+    BUILTIN_DATABASES
+        .iter()
+        .any(|db| db.eq_ignore_ascii_case(name))
+}
+
+/// Check if a database name is a system database (case-insensitive).
+#[inline]
+pub fn is_system_database(name: &str) -> bool {
+    SYSTEM_DATABASES
+        .iter()
+        .any(|db| db.eq_ignore_ascii_case(name))
+}
+
 #[async_trait::async_trait]
 pub trait Database: DynClone + Sync + Send {
     /// Database name.
@@ -183,6 +208,18 @@ pub trait Database: DynClone + Sync + Send {
     async fn swap_table(&self, _req: SwapTableReq) -> Result<SwapTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement swap_table in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn update_options(
+        &self,
+        _expected_meta_seq: u64,
+        _options: BTreeMap<String, String>,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement update_options in {} Database",
             self.name()
         )))
     }

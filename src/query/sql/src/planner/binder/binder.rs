@@ -429,6 +429,7 @@ impl Binder {
             Statement::CreateTag(stmt) => self.bind_create_tag(stmt).await?,
             Statement::DropTag(stmt) => self.bind_drop_tag(stmt).await?,
             Statement::ShowTags(stmt) => self.bind_show_tags(bind_context, stmt).await?,
+            Statement::AlterObjectTag(stmt) => self.bind_alter_object_tag(stmt).await?,
 
             // Stages
             Statement::ShowStages { show_options } => {

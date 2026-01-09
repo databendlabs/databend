@@ -44,6 +44,8 @@ const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
+const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
+const OPT_QUOTED_EMPTY_FIELD_AS: &str = "quoted_empty_field_as";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
 const NULL_IF: &str = "null_if";
@@ -162,7 +164,10 @@ impl FileFormatParams {
     pub fn need_field_default(&self) -> bool {
         match self {
             FileFormatParams::Parquet(v) => v.missing_field_as == NullAs::FieldDefault,
-            FileFormatParams::Csv(v) => v.empty_field_as == EmptyFieldAs::FieldDefault,
+            FileFormatParams::Csv(v) => {
+                v.empty_field_as == EmptyFieldAs::FieldDefault
+                    || v.quoted_empty_field_as == EmptyFieldAs::FieldDefault
+            }
             FileFormatParams::NdJson(v) => {
                 v.null_field_as == NullAs::FieldDefault
                     || v.missing_field_as == NullAs::FieldDefault
@@ -257,6 +262,14 @@ impl FileFormatParams {
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
+                let allow_quoted_nulls =
+                    reader.take_bool(OPT_ALLOW_QUOTED_NULLS, default.allow_quoted_nulls)?;
+                let quoted_empty_field_as = reader
+                    .options
+                    .remove(OPT_QUOTED_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or(default.quoted_empty_field_as.clone());
                 let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
@@ -268,6 +281,8 @@ impl FileFormatParams {
                     escape,
                     quote,
                     error_on_column_count_mismatch,
+                    allow_quoted_nulls,
+                    quoted_empty_field_as,
                     empty_field_as,
                     binary_format,
                     output_header,
@@ -457,16 +472,20 @@ pub struct CsvFileFormatParams {
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
 
+    // load only options
+    pub allow_quoted_nulls: bool,
+    pub empty_field_as: EmptyFieldAs,
+    pub quoted_empty_field_as: EmptyFieldAs,
+
     // header
     pub headers: u64,
     pub output_header: bool,
 
-    // field
-    pub binary_format: BinaryFormat,
-    pub null_display: String,
+    // field encoding/decoding
     pub nan_display: String,
-    pub empty_field_as: EmptyFieldAs,
+    pub binary_format: BinaryFormat,
     pub geometry_format: GeometryDataType,
+    pub null_display: String,
 }
 
 impl Default for CsvFileFormatParams {
@@ -476,15 +495,17 @@ impl Default for CsvFileFormatParams {
             headers: 0,
             field_delimiter: ",".to_string(),
             record_delimiter: "\n".to_string(),
-            null_display: NULL_BYTES_ESCAPE.to_string(),
-            nan_display: "NaN".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            allow_quoted_nulls: false,
             empty_field_as: Default::default(),
+            quoted_empty_field_as: EmptyFieldAs::String,
             output_header: false,
             binary_format: Default::default(),
             geometry_format: GeometryDataType::default(),
+            nan_display: "NaN".to_string(),
+            null_display: NULL_BYTES_ESCAPE.to_string(),
         }
     }
 }
@@ -850,7 +871,7 @@ impl Display for FileFormatParams {
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
@@ -863,6 +884,8 @@ impl Display for FileFormatParams {
                     params.empty_field_as,
                     params.binary_format,
                     params.error_on_column_count_mismatch,
+                    params.allow_quoted_nulls,
+                    params.quoted_empty_field_as,
                 )
             }
             FileFormatParams::Tsv(params) => {

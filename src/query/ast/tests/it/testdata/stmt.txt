@@ -3782,6 +3782,76 @@ CreateDatabase(
 
 
 ---------- Input ----------
+create database test_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'my_conn', DEFAULT_STORAGE_PATH = 's3://bucket/path');
+---------- Output ---------
+CREATE DATABASE test_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'my_conn', DEFAULT_STORAGE_PATH = 's3://bucket/path')
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        create_option: Create,
+        database: DatabaseRef {
+            catalog: None,
+            database: Identifier {
+                span: Some(
+                    16..23,
+                ),
+                name: "test_db",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        engine: None,
+        options: [
+            SQLProperty {
+                name: "DEFAULT_STORAGE_CONNECTION",
+                value: "my_conn",
+            },
+            SQLProperty {
+                name: "DEFAULT_STORAGE_PATH",
+                value: "s3://bucket/path",
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+create database mydb ENGINE = DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION = 'test_conn', DEFAULT_STORAGE_PATH = 's3://test/path');
+---------- Output ---------
+CREATE DATABASE mydb ENGINE = DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION = 'test_conn', DEFAULT_STORAGE_PATH = 's3://test/path')
+---------- AST ------------
+CreateDatabase(
+    CreateDatabaseStmt {
+        create_option: Create,
+        database: DatabaseRef {
+            catalog: None,
+            database: Identifier {
+                span: Some(
+                    16..20,
+                ),
+                name: "mydb",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        engine: Some(
+            Default,
+        ),
+        options: [
+            SQLProperty {
+                name: "DEFAULT_STORAGE_CONNECTION",
+                value: "test_conn",
+            },
+            SQLProperty {
+                name: "DEFAULT_STORAGE_PATH",
+                value: "s3://test/path",
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';
 ---------- Output ---------
 CREATE TABLE `t3` (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL) bloom_index_columns = 'a,b,c' compression = 'zstd' storage_format = 'native'
@@ -4681,6 +4751,35 @@ AlterView(
             limit: [],
             offset: None,
             ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+alter database test_db SET OPTIONS (DEFAULT_STORAGE_CONNECTION = 'updated_conn');
+---------- Output ---------
+ALTER DATABASE test_db SET OPTIONS (DEFAULT_STORAGE_CONNECTION = 'updated_conn')
+---------- AST ------------
+AlterDatabase(
+    AlterDatabaseStmt {
+        if_exists: false,
+        catalog: None,
+        database: Identifier {
+            span: Some(
+                15..22,
+            ),
+            name: "test_db",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetOptions {
+            options: [
+                SQLProperty {
+                    name: "DEFAULT_STORAGE_CONNECTION",
+                    value: "updated_conn",
+                },
+            ],
         },
     },
 )
@@ -15777,6 +15876,44 @@ AlterDatabase(
                 quote: None,
                 ident_type: None,
             },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER DATABASE c set tag tag1='a';
+---------- Output ---------
+ALTER DATABASE c SET TAG tag1 = 'a'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Database {
+            if_exists: false,
+            catalog: None,
+            database: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "c",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            25..29,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "a",
+                },
+            ],
         },
     },
 )

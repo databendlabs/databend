@@ -969,14 +969,36 @@ impl TableContext for QueryContext {
 
     fn add_partitions_sha(&self, s: String) {
         let mut shas = self.shared.partitions_shas.write();
-        shas.push(s);
+        // Avoid duplicate invalidation keys when the same table is scanned multiple times.
+        // Example: `SELECT * FROM t WHERE a > (SELECT MIN(a) FROM t)`
+        // In this query, table `t` appears twice:
+        // 1. The main TableScan adds SHA via table_read_plan.rs
+        // 2. The scalar subquery is optimized to DummyTableScan, which also
+        //    adds an invalidation key for its source table `t` via build_dummy_table_scan
+        // Without deduplication, the same key would appear twice in the list.
+        if !shas.contains(&s) {
+            shas.push(s);
+        }
     }
 
     fn get_partitions_shas(&self) -> Vec<String> {
         let mut sha = self.shared.partitions_shas.read().clone();
-        // Sort to make sure the SHAs are stable for the same query.
+        // Sort to make sure the keys are stable for the same query.
         sha.sort();
         sha
+    }
+
+    fn add_cache_key_extra(&self, extra: String) {
+        let mut extras = self.shared.cache_key_extras.write();
+        if !extras.contains(&extra) {
+            extras.push(extra);
+        }
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        let mut extras = self.shared.cache_key_extras.read().clone();
+        extras.sort();
+        extras
     }
 
     fn get_cacheable(&self) -> bool {

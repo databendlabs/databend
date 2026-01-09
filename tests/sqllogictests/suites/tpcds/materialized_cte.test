@@ -5,7 +5,7 @@ statement ok
 use tpcds;
 
 # Q1
-query I
+query T
 WITH customer_total_return AS materialized
   (SELECT sr_customer_sk AS ctr_customer_sk,
           sr_store_sk AS ctr_store_sk,
@@ -131,7 +131,7 @@ AAAAAAAAACECBAAA
 AAAAAAAAACFAAAAA
 AAAAAAAAACFABAAA
 
-query I
+query TTIRRRR
 WITH results AS materialized
   (SELECT i_item_id,
           s_state,
@@ -278,7 +278,7 @@ AAAAAAAAADGCAAAA TN 0 34.0 33.89000000 0.00000000 3.72000000
 AAAAAAAAADGEAAAA TN 0 64.0 27.13000000 0.00000000 3.96500000
 AAAAAAAAADHBAAAA TN 0 29.0 119.83000000 0.00000000 65.90000000
 
-query I
+query TTIRRRR
 WITH results AS materialized
   (SELECT i_item_id,
           s_state,
@@ -441,7 +441,7 @@ AAAAAAAAABJBAAAA NULL 1 43.0 74.32000000 0.00000000 28.98000000
 AAAAAAAAABJBAAAA TN 0 43.0 74.32000000 0.00000000 28.98000000
 AAAAAAAAABJDAAAA NULL 1 64.0 13.21500000 270.54500000 11.51000000
 
-query I
+query TTRRR
 WITH ssr AS materialized
   (SELECT s_store_id,
           sum(sales_price) AS sales,
@@ -656,7 +656,7 @@ catalog channel catalog_pageAAAAAAAACDCBAAAA 71871.07 0.00 -11581.87
 catalog channel catalog_pageAAAAAAAACDIAAAAA 0.00 416.10 -231.91
 catalog channel catalog_pageAAAAAAAACDPAAAAA 0.00 1279.25 -3731.50
 
-query I
+query TTTT
 WITH year_total AS materialized
   (SELECT c_customer_id customer_id,
           c_first_name customer_first_name,
@@ -829,7 +829,7 @@ AAAAAAAAPJOIAAAA Beverly Hart Y
 AAAAAAAAPKBCBAAA Andrea White N
 AAAAAAAAPKIKAAAA Wendy Horvath N
 
-query I
+query TTR
 WITH frequent_ss_items AS materialized
   (SELECT itemdesc,
           i_item_sk item_sk,
@@ -920,7 +920,7 @@ Fowler Steven 4069.50
 Green Jesse 902.96
 Moore Chester 8764.38
 
-query I
+query TTTR
 WITH ssales AS materialized
   (SELECT c_last_name,
           c_first_name,
@@ -976,7 +976,7 @@ ORDER BY c_last_name,
 ----
 Green Barry bar 890.96
 
-query I
+query TIRRRR
 WITH ss AS materialized
   (SELECT ca_county,
           d_qoy,
@@ -1093,7 +1093,7 @@ Webster County 2000 0.604005183435 0.588561538633 3.008916135411 1.730187577260
 Wheeler County 2000 1.610547603234 0.605963509542 0.817801307950 0.788889792566
 Williamson County 2000 1.614744536845 0.443873134688 4.080301148443 3.342687494478
 
-query I
+query IR
 WITH ss AS materialized
   ( SELECT i_manufact_id,
            sum(ss_ext_sales_price) total_sales
@@ -1262,7 +1262,7 @@ LIMIT 100;
 422 13634.68
 986 13680.84
 
-query I
+query RTTII
 WITH results AS materialized
   (SELECT sum(ss_net_profit) AS ss_net_profit,
           sum(ss_ext_sales_price) AS ss_ext_sales_price,
@@ -1423,7 +1423,7 @@ LIMIT 100;
 -0.444534093806 Men sports-apparel 0 3
 -0.443115299044 Men shirts 0 4
 
-query I
+query I?RRRR
 WITH web_v1 AS materialized
   (SELECT ws_item_sk item_sk,
           d_date,
@@ -1578,7 +1578,7 @@ LIMIT 100;
 110 2000-01-16 NULL 2.66 91.38 2.66
 110 2000-01-21 NULL 80.55 91.38 80.55
 
-query I
+query III
 WITH my_customers AS materialized
   (SELECT DISTINCT c_customer_sk,
                    c_current_addr_sk
@@ -1639,7 +1639,7 @@ LIMIT 100;
 ----
 10715 1 535750
 
-query I
+query TR
 WITH ss AS materialized
   (SELECT i_item_id,
           sum(ss_ext_sales_price) total_sales
@@ -1815,7 +1815,7 @@ AAAAAAAAKMBCAAAA 977.68
 AAAAAAAAAPNBAAAA 985.01
 AAAAAAAAIKNBAAAA 1005.17
 
-query I
+query TRRRRRRR
 WITH ss_items AS materialized
   (SELECT i_item_id item_id,
           sum(ss_ext_sales_price) ss_item_rev
@@ -1893,7 +1893,7 @@ AAAAAAAAGOPDAAAA 2005.56 105.04879100 1840.35 96.39529200 1881.60 98.55591700 19
 AAAAAAAAOMOAAAAA 2749.75 95.33299700 2989.31 103.63846900 2914.03 101.02853400 2884.36333333
 AAAAAAAAPGOCAAAA 1343.90 96.28975100 1408.53 100.92045700 1434.62 102.78979200 1395.68333333
 
-query I
+query TTT
 WITH year_total AS materialized
   (SELECT c_customer_id customer_id,
           c_first_name customer_first_name,
@@ -2053,7 +2053,7 @@ AAAAAAAAPKBCBAAA Andrea White
 AAAAAAAAPKIKAAAA Wendy Horvath
 
 # Q95
-query I
+query IRR
 WITH ws_wh AS materialized
   (SELECT ws1.ws_order_number,
           ws1.ws_warehouse_sk wh1,

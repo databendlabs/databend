@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_expression::DataSchema;
@@ -150,6 +151,21 @@ pub struct RefreshDatabaseCachePlan {
 }
 
 impl RefreshDatabaseCachePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlterDatabasePlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub if_exists: bool,
+    pub options: BTreeMap<String, String>,
+}
+
+impl AlterDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
