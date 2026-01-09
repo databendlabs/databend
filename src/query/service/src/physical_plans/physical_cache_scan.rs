@@ -14,7 +14,8 @@
 
 use std::any::Any;
 
-use databend_common_exception::{ErrorCode, Result};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_sql::ColumnSet;
