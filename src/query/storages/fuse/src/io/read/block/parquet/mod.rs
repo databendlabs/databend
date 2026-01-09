@@ -34,6 +34,8 @@ use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
 mod deserialize;
 
+mod deserialize_v2;
+
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
 
@@ -42,6 +44,33 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
     pub(crate) fn deserialize_parquet_chunks(
+        &self,
+        num_rows: usize,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        block_path: &str,
+    ) -> databend_common_exception::Result<DataBlock> {
+        if self.use_experimental_parquet_reader {
+            self.deserialize_v2(
+                block_path,
+                num_rows,
+                compression,
+                column_metas,
+                column_chunks,
+            )
+        } else {
+            self.deserialize_using_arrow(
+                num_rows,
+                column_metas,
+                column_chunks,
+                compression,
+                block_path,
+            )
+        }
+    }
+
+    pub fn deserialize_using_arrow(
         &self,
         num_rows: usize,
         column_metas: &HashMap<ColumnId, ColumnMeta>,

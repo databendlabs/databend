@@ -22,6 +22,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
+databend-common-parquet-reader-experimental = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
@@ -62,6 +63,8 @@ match-template = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
+
+parquet2 = { workspace = true }
 paste = { workspace = true }
 rand = { workspace = true }
 roaring = { workspace = true }

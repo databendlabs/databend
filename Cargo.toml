@@ -71,6 +71,7 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
+databend-common-parquet-reader-experimental = { path = "src/common/experimental_parquet_reader" }
 databend-common-pipeline = { path = "src/query/pipeline" }
 databend-common-pipeline-transforms = { path = "src/query/pipeline/transforms" }
 databend-common-proto-conv = { path = "src/meta/proto-conv" }
@@ -289,6 +290,7 @@ logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main
     'fastrace',
 ] }
 lz4 = "1.24.0"
+lz4_flex = { version = "^0.9" }
 map-api = { version = "0.4.2" }
 maplit = "1.0.2"
 match-template = "0.0.1"
@@ -337,6 +339,8 @@ ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "56", features = ["async"] }
+parquet-format-safe = "0.2.0"
+parquet2 = { version = "0.17.0", default-features = false, features = ["serde_types", "async", "zstd", "snappy", "lz4"] }
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
@@ -416,6 +420,7 @@ stacker = "0.1"
 state = "0.6.0"
 state-machine-api = { version = "0.3.4" }
 stream-more = "0.1.3"
+streaming-decompression = "0.1.2"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
@@ -519,7 +524,8 @@ map_entry = "allow"
 debug = 1
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         # defaults to be 3
+#opt-level = "s"         # defaults to be 3
+opt-level = 3
 incremental = false
 codegen-units = 1       ## better performance see below comment
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.

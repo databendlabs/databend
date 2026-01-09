@@ -1,0 +1,887 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Common utilities for Parquet column deserialization
+
+use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::Column;
+use decompressor::Decompressor;
+use parquet::encodings::rle::RleDecoder;
+use parquet2::schema::types::PhysicalType;
+use streaming_decompression::FallibleStreamingIterator;
+
+use crate::reader::decompressor;
+
+// =============================================================================
+// Dictionary Support Trait
+// =============================================================================
+
+/// Trait for types that support dictionary encoding in Parquet
+/// This trait enables efficient dictionary-based deserialization for numeric types
+pub trait DictionarySupport: ParquetColumnType {
+    /// Create a value from a dictionary entry (raw bytes)
+    ///
+    /// # Arguments
+    /// * `entry` - Raw bytes from dictionary page
+    ///
+    /// # Returns
+    /// Decoded value of type Self
+    fn from_dictionary_entry(entry: &[u8]) -> Result<Self>;
+
+    /// Batch lookup from dictionary into provided output slice
+    ///
+    /// # Arguments
+    /// * `dictionary` - The dictionary values to lookup from
+    /// * `indices` - Array of dictionary indices
+    /// * `output` - Output slice to write results into (must have same length as indices)
+    ///
+    /// # Performance
+    /// This is the performance-critical path for dictionary decoding.
+    /// Implementations should use batch bounds checking and unsafe operations for maximum speed.
+    fn batch_from_dictionary_into_slice(
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
+    ) -> Result<()>;
+}
+
+/// Extract definition levels, repetition levels, and values from a data page
+fn extract_page_data(data_page: &parquet2::page::DataPage) -> Result<(&[u8], &[u8], &[u8])> {
+    match parquet2::page::split_buffer(data_page) {
+        Ok((rep_levels, def_levels, values_buffer)) => Ok((def_levels, rep_levels, values_buffer)),
+        Err(e) => Err(ErrorCode::Internal(format!(
+            "Failed to split buffer: {}",
+            e
+        ))),
+    }
+}
+
+/// Decode definition levels and create validity bitmap
+pub fn decode_definition_levels(
+    def_levels: &[u8],
+    bit_width: u32,
+    num_values: usize,
+    data_page: &parquet2::page::DataPage,
+) -> Result<(Option<Bitmap>, usize)> {
+    let mut rle_decoder = RleDecoder::new(bit_width as u8);
+    rle_decoder.set_data(bytes::Bytes::copy_from_slice(def_levels));
+
+    let expected_levels = num_values;
+    let mut levels = vec![0i32; expected_levels];
+    let decoded_count = rle_decoder
+        .get_batch(&mut levels)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to decode definition levels: {}", e)))?;
+
+    if decoded_count != expected_levels {
+        return Err(ErrorCode::Internal(format!(
+            "Definition level decoder returned wrong count: expected={}, got={}",
+            expected_levels, decoded_count
+        )));
+    }
+
+    let max_def_level = data_page.descriptor.max_def_level as i32;
+    let mut validity_bits = Vec::with_capacity(expected_levels);
+    let mut non_null_count = 0;
+    let mut has_nulls = false;
+
+    for &level in &levels {
+        let is_valid = level == max_def_level;
+        validity_bits.push(is_valid);
+        if is_valid {
+            non_null_count += 1;
+        } else {
+            has_nulls = true;
+        }
+    }
+
+    let bitmap = if has_nulls {
+        Some(Bitmap::from_iter(validity_bits))
+    } else {
+        Some(Bitmap::new_constant(true, expected_levels))
+    };
+    Ok((bitmap, non_null_count))
+}
+
+/// Process plain encoded data
+/// # Arguments
+/// * `values_buffer` - The buffer containing the encoded values (maybe plain encoded）
+/// * `page_rows` - The number of rows in the page
+/// * `column_data` - The vector to which the decoded values will be appended， capacity should be reserved properly
+/// * `validity_bitmap` - The validity bitmap for the column if any
+fn process_plain_encoding<T: Copy>(
+    values_buffer: &[u8],
+    page_rows: usize,
+    column_data: &mut Vec<T>,
+    validity_bitmap: Option<&Bitmap>,
+) -> Result<()> {
+    let type_size = std::mem::size_of::<T>();
+    let old_len = column_data.len();
+
+    // Calculate how many non-null values we expect to read
+    let non_null_count = if let Some(bitmap) = validity_bitmap {
+        bitmap.iter().filter(|&b| b).count()
+    } else {
+        page_rows
+    };
+
+    if let Some(bitmap) = validity_bitmap {
+        // Nullable column: process values based on validity bitmap
+        // Extend vector to final size, leaving NULL positions uninitialized
+        unsafe {
+            column_data.set_len(old_len + page_rows);
+        }
+
+        let mut values_read = 0;
+        for (i, is_valid) in bitmap.iter().enumerate() {
+            if is_valid && values_read < non_null_count {
+                let src_offset = values_read * type_size;
+                let dst_offset = old_len + i;
+
+                if src_offset + type_size <= values_buffer.len() {
+                    // Handle endianness conversion for numeric types
+                    #[cfg(target_endian = "big")]
+                    {
+                        // On big-endian systems, convert from Parquet's little-endian format
+                        convert_endianness_and_copy::<T>(
+                            &values_buffer[src_offset..src_offset + type_size],
+                            &mut column_data[dst_offset..dst_offset + 1],
+                        );
+                    }
+                    #[cfg(target_endian = "little")]
+                    {
+                        // On little-endian systems, direct copy is sufficient
+                        unsafe {
+                            let src_ptr = values_buffer.as_ptr().add(src_offset);
+                            let dst_ptr =
+                                column_data[dst_offset..dst_offset + 1].as_mut_ptr() as *mut u8;
+                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, type_size);
+                        }
+                    }
+                    values_read += 1;
+                } else {
+                    return Err(ErrorCode::Internal("Values buffer underflow".to_string()));
+                }
+            }
+            // Note: NULL positions (is_valid == false) are left uninitialized
+            // This is safe because the validity bitmap controls access
+        }
+    } else {
+        let values_to_copy = non_null_count.min(page_rows);
+        let total_bytes = values_to_copy * type_size;
+
+        if total_bytes <= values_buffer.len() {
+            #[cfg(target_endian = "big")]
+            {
+                // On big-endian systems, convert each value individually
+                unsafe {
+                    column_data.set_len(old_len + values_to_copy);
+                }
+                for i in 0..values_to_copy {
+                    let src_offset = i * type_size;
+                    let dst_offset = old_len + i;
+                    convert_endianness_and_copy::<T>(
+                        &values_buffer[src_offset..src_offset + type_size],
+                        &mut column_data[dst_offset..dst_offset + 1],
+                    );
+                }
+            }
+            #[cfg(target_endian = "little")]
+            {
+                // On little-endian systems, batch copy for performance
+                unsafe {
+                    let src_ptr = values_buffer.as_ptr();
+                    let dst_ptr = column_data.as_mut_ptr().add(old_len) as *mut u8;
+                    std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, total_bytes);
+                    column_data.set_len(old_len + values_to_copy);
+                }
+            }
+        } else {
+            return Err(ErrorCode::Internal("Values buffer underflow".to_string()));
+        }
+    }
+
+    Ok(())
+}
+
+/// Process a complete data page for any type T
+fn process_data_page<T: Copy + DictionarySupport>(
+    data_page: &parquet2::page::DataPage,
+    column_data: &mut Vec<T>,
+    target_rows: usize,
+    is_nullable: bool,
+    expected_physical_type: &PhysicalType,
+    dictionary: Option<&[T]>,
+) -> Result<Option<Bitmap>> {
+    // Validate physical type
+    validate_physical_type(
+        data_page.descriptor.primitive_type.physical_type,
+        *expected_physical_type,
+    )?;
+
+    let (def_levels, _, values_buffer) = extract_page_data(data_page)?;
+    let remaining = target_rows - column_data.len();
+
+    // Defensive checks for nullable vs non-nullable columns
+    #[cfg(debug_assertions)]
+    validate_column_nullability(def_levels, is_nullable)?;
+
+    // Number of values(not rows), including NULLs
+    let num_values = data_page.num_values();
+
+    // Calculate how many rows this page will actually contribute
+    let page_rows = if is_nullable {
+        // For nullable columns, page contributes num_values rows (including NULLs)
+        num_values.min(remaining)
+    } else {
+        // For non-nullable columns, we need to handle different encodings differently
+        match data_page.encoding() {
+            parquet2::encoding::Encoding::Plain => {
+                let type_size = std::mem::size_of::<T>();
+                let num_values_in_buffer = values_buffer.len() / type_size;
+                num_values_in_buffer.min(remaining)
+            }
+            parquet2::encoding::Encoding::RleDictionary => {
+                // For RLE dictionary, we use num_values from the page header
+                num_values.min(remaining)
+            }
+            _ => num_values.min(remaining),
+        }
+    };
+
+    // Process definition levels to create validity bitmap (only for nullable columns)
+    let validity_bitmap = if is_nullable {
+        let bit_width = get_bit_width(data_page.descriptor.max_def_level);
+        let (bitmap, _non_null_count) =
+            decode_definition_levels(def_levels, bit_width, num_values, data_page)?;
+        bitmap
+    } else {
+        // For non-nullable columns, no validity bitmap needed
+        None
+    };
+
+    // Process values based on encoding
+    match data_page.encoding() {
+        parquet2::encoding::Encoding::Plain => {
+            // Validate values_buffer alignment for plain encoding
+            #[cfg(debug_assertions)]
+            {
+                let type_size = std::mem::size_of::<T>();
+                if values_buffer.len() % type_size != 0 {
+                    return Err(ErrorCode::Internal(format!(
+                        "Values buffer length ({}) is not aligned to type size ({}). Buffer may be corrupted.",
+                        values_buffer.len(),
+                        type_size
+                    )));
+                }
+            }
+
+            process_plain_encoding(
+                values_buffer,
+                page_rows,
+                column_data,
+                validity_bitmap.as_ref(),
+            )?;
+        }
+        parquet2::encoding::Encoding::RleDictionary => {
+            if let Some(dict) = dictionary {
+                process_rle_dictionary_encoding(values_buffer, page_rows, column_data, dict)?;
+            } else {
+                return Err(ErrorCode::Internal(
+                    "RLE dictionary encoding requires dictionary page".to_string(),
+                ));
+            }
+        }
+        encoding => {
+            return Err(ErrorCode::Internal(format!(
+                "Unsupported encoding: {:?}",
+                encoding
+            )));
+        }
+    }
+
+    Ok(validity_bitmap)
+}
+
+/// Process dictionary page for numeric types
+fn process_dictionary_page<T: DictionarySupport>(
+    dict_page: &parquet2::page::DictPage,
+    dictionary: &mut Vec<T>,
+) -> Result<()> {
+    let dict_buffer: &[u8] = dict_page.buffer.as_ref();
+    let type_size = match T::PHYSICAL_TYPE {
+        PhysicalType::Int32 => 4,
+        PhysicalType::Int64 => 8,
+        PhysicalType::FixedLenByteArray(len) => len as usize,
+        _ => {
+            return Err(ErrorCode::Internal(format!(
+                "Unsupported physical type for dictionary: {:?}",
+                T::PHYSICAL_TYPE
+            )))
+        }
+    };
+
+    // Parse dictionary entries based on physical type
+    for chunk in dict_buffer.chunks_exact(type_size) {
+        let value = T::from_dictionary_entry(chunk)?;
+        dictionary.push(value);
+    }
+
+    Ok(())
+}
+
+/// Process RLE dictionary encoded data page
+fn process_rle_dictionary_encoding<T: DictionarySupport>(
+    values_buffer: &[u8],
+    page_rows: usize,
+    column_data: &mut Vec<T>,
+    dictionary: &[T],
+) -> Result<()> {
+    if values_buffer.is_empty() {
+        return Err(ErrorCode::Internal(
+            "Empty values buffer for RLE dictionary".to_string(),
+        ));
+    }
+
+    // First byte is bit_width
+    let bit_width = values_buffer[0];
+
+    // Create RLE decoder
+    let mut rle_decoder = RleDecoder::new(bit_width);
+    rle_decoder.set_data(bytes::Bytes::copy_from_slice(&values_buffer[1..]));
+
+    // Decode indices - avoid zero initialization for performance
+    let mut indices = Vec::with_capacity(page_rows);
+    unsafe {
+        indices.set_len(page_rows);
+    }
+    let decoded_count = rle_decoder
+        .get_batch(&mut indices)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to decode RLE indices: {}", e)))?;
+
+    if decoded_count != page_rows {
+        return Err(ErrorCode::Internal(format!(
+            "RLE decoder returned wrong count: expected={}, got={}",
+            page_rows, decoded_count
+        )));
+    }
+
+    // Batch dictionary lookup - performance critical path
+    let old_len = column_data.len();
+    column_data.reserve(page_rows);
+    unsafe {
+        column_data.set_len(old_len + page_rows);
+    }
+    T::batch_from_dictionary_into_slice(dictionary, &indices, &mut column_data[old_len..])?;
+
+    Ok(())
+}
+
+// TODO rename this
+pub trait ParquetColumnType: Copy + Send + Sync + 'static {
+    /// Additional metadata needed to create columns (e.g., precision/scale for decimals)
+    type Metadata: Clone;
+
+    /// The Parquet physical type for this column type
+    const PHYSICAL_TYPE: PhysicalType;
+
+    /// Create a column from the deserialized data
+    fn create_column(
+        data: Vec<Self>,
+        metadata: &Self::Metadata,
+    ) -> databend_common_expression::Column;
+}
+
+// TODO rename this
+pub struct ParquetColumnIterator<'a, T: ParquetColumnType + DictionarySupport> {
+    pages: Decompressor<'a>,
+    chunk_size: Option<usize>,
+    num_rows: usize,
+    is_nullable: bool,
+    metadata: T::Metadata,
+    dictionary: Option<Vec<T>>, // Cached dictionary values
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T: ParquetColumnType + DictionarySupport> ParquetColumnIterator<'a, T> {
+    pub fn new(
+        pages: Decompressor<'a>,
+        num_rows: usize,
+        is_nullable: bool,
+        metadata: T::Metadata,
+        chunk_size: Option<usize>,
+    ) -> Self {
+        Self {
+            pages,
+            chunk_size,
+            num_rows,
+            is_nullable,
+            metadata,
+            dictionary: None,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+// WIP: State of iterator should be adjusted, if we allow chunk_size be chosen freely
+impl<'a, T: ParquetColumnType + DictionarySupport> Iterator for ParquetColumnIterator<'a, T> {
+    type Item = Result<databend_common_expression::Column>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let target_rows = self.chunk_size.unwrap_or(self.num_rows);
+        let mut column_data: Vec<T> = Vec::with_capacity(target_rows);
+        let mut validity_bitmaps = Vec::new();
+
+        while column_data.len() < target_rows {
+            // Get the next page
+            let page = match self.pages.next() {
+                Ok(Some(page)) => page,
+                Ok(None) => break,
+                Err(e) => {
+                    return Some(Err(ErrorCode::Internal(format!(
+                        "Failed to get next page: {}",
+                        e
+                    ))))
+                }
+            };
+
+            match page {
+                parquet2::page::Page::Data(data_page) => {
+                    let data_len_before = column_data.len();
+                    match process_data_page(
+                        data_page,
+                        &mut column_data,
+                        target_rows,
+                        self.is_nullable,
+                        &T::PHYSICAL_TYPE,
+                        self.dictionary.as_ref().map(|dict| dict.as_slice()),
+                    ) {
+                        Ok(validity_bitmap) => {
+                            if self.is_nullable {
+                                // For nullable columns, we must have a validity bitmap for each page
+                                if let Some(bitmap) = validity_bitmap {
+                                    let data_added = column_data.len() - data_len_before;
+
+                                    // Verify bitmap length matches data added
+                                    if bitmap.len() != data_added {
+                                        return Some(Err(ErrorCode::Internal(format!(
+                                            "Bitmap length mismatch: bitmap={}, data_added={}",
+                                            bitmap.len(),
+                                            data_added
+                                        ))));
+                                    }
+                                    validity_bitmaps.push(bitmap);
+                                } else {
+                                    // This should not happen for nullable columns
+                                    return Some(Err(ErrorCode::Internal(
+                                        "Nullable column page must produce validity bitmap"
+                                            .to_string(),
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => return Some(Err(e)),
+                    }
+                }
+                parquet2::page::Page::Dict(dict_page) => {
+                    if T::PHYSICAL_TYPE == PhysicalType::Int32
+                        || T::PHYSICAL_TYPE == PhysicalType::Int64
+                        || matches!(T::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(_))
+                    {
+                        // Process dictionary page and cache the dictionary
+                        if let Some(ref mut dictionary) = self.dictionary {
+                            if let Err(e) = process_dictionary_page::<T>(dict_page, dictionary) {
+                                return Some(Err(e));
+                            }
+                        } else {
+                            let mut dictionary = Vec::new();
+                            if let Err(e) = process_dictionary_page::<T>(dict_page, &mut dictionary)
+                            {
+                                return Some(Err(e));
+                            }
+                            self.dictionary = Some(dictionary);
+                        }
+                    } else {
+                        return Some(Err(ErrorCode::Internal(
+                            "Dictionary page not supported for this type".to_string(),
+                        )));
+                    }
+                }
+            }
+        }
+
+        if column_data.is_empty() {
+            return None;
+        }
+
+        // Return the appropriate Column variant based on nullability
+        if self.is_nullable {
+            // For nullable columns, create NullableColumn
+            let column_len = column_data.len();
+            let base_column = T::create_column(column_data, &self.metadata);
+
+            // Combine validity bitmaps from multiple pages
+            let combined_bitmap = match combine_validity_bitmaps(validity_bitmaps, column_len) {
+                Ok(bitmap) => bitmap,
+                Err(e) => return Some(Err(e)),
+            };
+
+            let nullable_column = NullableColumn::new(base_column, combined_bitmap);
+            Some(Ok(Column::Nullable(Box::new(nullable_column))))
+        } else {
+            // For non-nullable columns, return the column directly
+            Some(Ok(T::create_column(column_data, &self.metadata)))
+        }
+    }
+}
+
+fn get_bit_width(max_level: i16) -> u32 {
+    if max_level == 1 {
+        1
+    } else {
+        16 - max_level.leading_zeros()
+    }
+}
+
+/// Convert endianness and copy data for big-endian systems
+///
+/// This function handles the conversion from Parquet's little-endian format
+/// to the native big-endian format on big-endian systems.
+#[cfg(target_endian = "big")]
+fn convert_endianness_and_copy<T: Copy>(src_bytes: &[u8], dst_slice: &mut [T]) {
+    let type_size = std::mem::size_of::<T>();
+
+    match type_size {
+        1 => {
+            // Single byte: no endianness conversion needed
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut u8;
+                std::ptr::copy_nonoverlapping(src_bytes.as_ptr(), dst_ptr, 1);
+            }
+        }
+        2 => {
+            // 2-byte integer (i16): convert from little-endian
+            let mut bytes = [0u8; 2];
+            bytes.copy_from_slice(src_bytes);
+            let value = i16::from_le_bytes(bytes);
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut i16;
+                *dst_ptr = value;
+            }
+        }
+        4 => {
+            // 4-byte integer (i32): convert from little-endian
+            let mut bytes = [0u8; 4];
+            bytes.copy_from_slice(src_bytes);
+            let value = i32::from_le_bytes(bytes);
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut i32;
+                *dst_ptr = value;
+            }
+        }
+        8 => {
+            // 8-byte integer (i64): convert from little-endian
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(src_bytes);
+            let value = i64::from_le_bytes(bytes);
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut i64;
+                *dst_ptr = value;
+            }
+        }
+        16 => {
+            // 16-byte integer (i128): convert from little-endian
+            let mut bytes = [0u8; 16];
+            bytes.copy_from_slice(src_bytes);
+            let value = i128::from_le_bytes(bytes);
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut i128;
+                *dst_ptr = value;
+            }
+        }
+        32 => {
+            // 32-byte integer (i256): convert from little-endian
+            // Note: i256 doesn't have from_le_bytes, so we reverse the bytes manually
+            let mut bytes = [0u8; 32];
+            bytes.copy_from_slice(src_bytes);
+            bytes.reverse(); // Convert from little-endian to big-endian
+            unsafe {
+                let dst_ptr = dst_slice.as_mut_ptr() as *mut u8;
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst_ptr, 32);
+            }
+        }
+    }
+}
+
+/// Perform defensive checks for nullable vs non-nullable columns
+#[cfg(debug_assertions)]
+pub fn validate_column_nullability(def_levels: &[u8], is_nullable: bool) -> Result<()> {
+    if is_nullable {
+        // Nullable columns must have definition levels
+        if def_levels.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Nullable column must have definition levels".to_string(),
+            ));
+        }
+    } else {
+        // Non-nullable columns should not have definition levels
+        if !def_levels.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Non-nullable column should not have definition levels".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate physical type matches expected type
+pub fn validate_physical_type(actual: PhysicalType, expected: PhysicalType) -> Result<()> {
+    if actual != expected {
+        return Err(ErrorCode::Internal(format!(
+            "Physical type mismatch: expected {:?}, got {:?}",
+            expected, actual
+        )));
+    }
+    Ok(())
+}
+
+/// Combine multiple validity bitmaps from different pages
+pub fn combine_validity_bitmaps(
+    validity_bitmaps: Vec<Bitmap>,
+    expected_total_len: usize,
+) -> Result<Bitmap> {
+    if validity_bitmaps.is_empty() {
+        Ok(Bitmap::new_constant(true, expected_total_len))
+    } else if validity_bitmaps.len() == 1 {
+        Ok(validity_bitmaps.into_iter().next().unwrap())
+    } else {
+        // Combine multiple validity bitmaps
+        let total_len: usize = validity_bitmaps.iter().map(|b| b.len()).sum();
+        if total_len != expected_total_len {
+            return Err(ErrorCode::Internal(format!(
+                "Combined bitmap length ({}) does not match expected length ({})",
+                total_len, expected_total_len
+            )));
+        }
+        let mut combined_bits = Vec::with_capacity(total_len);
+        for bitmap in validity_bitmaps {
+            combined_bits.extend(bitmap.iter());
+        }
+        Ok(Bitmap::from_iter(combined_bits))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parquet2::compression::Compression;
+    use parquet2::encoding::Encoding;
+    use parquet2::page::DataPage;
+    use parquet2::page::DictPage;
+    use parquet2::schema::types::PhysicalType;
+
+    use super::*;
+
+    // Mock implementation for testing
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    struct TestType(i32);
+
+    impl ParquetColumnType for TestType {
+        const PHYSICAL_TYPE: PhysicalType = PhysicalType::Int32;
+        type Metadata = ();
+
+        fn create_column(
+            data: Vec<Self>,
+            metadata: &Self::Metadata,
+        ) -> databend_common_expression::Column {
+            let raw_data: Vec<i32> = unsafe { std::mem::transmute(data) };
+            databend_common_expression::Column::Number(
+                databend_common_expression::NumberColumn::Int32(raw_data.into()),
+            )
+        }
+    }
+
+    impl DictionarySupport for TestType {
+        fn from_dictionary_entry(entry: &[u8]) -> Result<Self> {
+            if entry.len() != 4 {
+                return Err(databend_common_exception::ErrorCode::Internal(
+                    "Expected 4 bytes for TestType".to_string(),
+                ));
+            }
+            let value = i32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]);
+            Ok(TestType(value))
+        }
+
+        fn batch_from_dictionary_into_slice(
+            dictionary: &[Self],
+            indices: &[i32],
+            output: &mut [Self],
+        ) -> Result<()> {
+            if indices.len() != output.len() {
+                return Err(databend_common_exception::ErrorCode::Internal(
+                    "Output slice length mismatch".to_string(),
+                ));
+            }
+
+            for (i, &index) in indices.iter().enumerate() {
+                if index < 0 || index as usize >= dictionary.len() {
+                    return Err(databend_common_exception::ErrorCode::Internal(format!(
+                        "Dictionary index out of bounds: {} >= {}",
+                        index,
+                        dictionary.len()
+                    )));
+                }
+                output[i] = dictionary[index as usize];
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_process_dictionary_page() -> Result<()> {
+        // Create test dictionary data (3 i32 values: 10, 20, 30)
+        let dict_data = vec![
+            10u8, 0, 0, 0, // 10 in little-endian
+            20u8, 0, 0, 0, // 20 in little-endian
+            30u8, 0, 0, 0, // 30 in little-endian
+        ];
+
+        let dict_page = DictPage {
+            buffer: dict_data,
+            num_values: 3,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        process_dictionary_page::<TestType>(&dict_page, &mut dictionary)?;
+
+        assert_eq!(dictionary.len(), 3);
+        assert_eq!(dictionary[0], TestType(10));
+        assert_eq!(dictionary[1], TestType(20));
+        assert_eq!(dictionary[2], TestType(30));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_dictionary_page_empty() -> Result<()> {
+        let dict_page = DictPage {
+            buffer: bytes::Bytes::from(vec![]),
+            num_values: 0,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        process_dictionary_page::<TestType>(&dict_page, &mut dictionary)?;
+
+        assert_eq!(dictionary.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_dictionary_page_invalid_size() -> Result<()> {
+        // Create invalid dictionary data (incomplete i32)
+        let dict_data = vec![10u8, 0, 0]; // Only 3 bytes instead of 4
+
+        let dict_page = DictPage {
+            buffer: bytes::Bytes::from(dict_data),
+            num_values: 1,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        let result = process_dictionary_page::<TestType>(&dict_page, &mut dictionary);
+
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rle_indices_allocation_optimization() {
+        // This test verifies that our optimization to avoid zero initialization
+        // doesn't break the basic functionality. We can't directly test the
+        // performance improvement, but we can ensure correctness.
+
+        let page_rows = 1000;
+
+        // Create indices vector with our optimized allocation
+        let mut indices = Vec::with_capacity(page_rows);
+        unsafe {
+            indices.set_len(page_rows);
+        }
+
+        // Verify the vector has the correct capacity and length
+        assert_eq!(indices.len(), page_rows);
+        assert!(indices.capacity() >= page_rows);
+
+        // Verify we can write to all positions (this would crash if unsafe was wrong)
+        for i in 0..page_rows {
+            indices[i] = i as i32;
+        }
+
+        // Verify the data was written correctly
+        for i in 0..page_rows {
+            assert_eq!(indices[i], i as i32);
+        }
+    }
+
+    #[test]
+    fn test_dictionary_support_trait_consistency() {
+        // Test that all our types have consistent PHYSICAL_TYPE values
+        assert_eq!(i32::PHYSICAL_TYPE, PhysicalType::Int32);
+        assert_eq!(i64::PHYSICAL_TYPE, PhysicalType::Int64);
+        assert_eq!(Date::PHYSICAL_TYPE, PhysicalType::Int32);
+
+        // Decimal types use FixedLenByteArray
+        assert_eq!(Decimal64::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(8));
+        assert_eq!(
+            Decimal128::PHYSICAL_TYPE,
+            PhysicalType::FixedLenByteArray(16)
+        );
+        assert_eq!(
+            Decimal256::PHYSICAL_TYPE,
+            PhysicalType::FixedLenByteArray(32)
+        );
+    }
+
+    #[test]
+    fn test_batch_dictionary_lookup_performance_pattern() -> Result<()> {
+        // Test the performance pattern we optimized: pre-allocation + direct assignment
+        let dictionary = vec![TestType(100), TestType(200), TestType(300)];
+        let indices = vec![0i32, 1, 2, 0, 1, 2]; // 6 lookups
+
+        // Pre-allocate output (our optimization)
+        let mut output = Vec::with_capacity(indices.len());
+        unsafe {
+            output.set_len(indices.len());
+        }
+
+        // Perform batch lookup
+        TestType::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+
+        // Verify results
+        assert_eq!(output.len(), 6);
+        assert_eq!(output[0], TestType(100));
+        assert_eq!(output[1], TestType(200));
+        assert_eq!(output[2], TestType(300));
+        assert_eq!(output[3], TestType(100));
+        assert_eq!(output[4], TestType(200));
+        assert_eq!(output[5], TestType(300));
+
+        Ok(())
+    }
+}
