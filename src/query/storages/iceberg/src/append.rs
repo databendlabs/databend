@@ -26,6 +26,8 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -238,16 +240,18 @@ impl IcebergDataFileWriter {
 
         // Group rows by partition values
         let num_rows = block.num_rows();
-        let mut partition_groups: HashMap<IcebergStruct, Vec<u32>> = HashMap::new();
+        let mut partition_groups: HashMap<IcebergStruct, MutableBitmap> = HashMap::new();
 
         for row_idx in 0..num_rows {
             // Build partition value for this row
             let partition_value =
                 self.extract_partition_value(&block, row_idx, &partition_column_indices)?;
-            partition_groups
-                .entry(partition_value)
-                .or_default()
-                .push(row_idx as u32);
+            let bitmap = partition_groups.entry(partition_value).or_insert_with(|| {
+                let mut bitmap = MutableBitmap::new();
+                bitmap.extend_constant(num_rows, false);
+                bitmap
+            });
+            bitmap.set(row_idx, true);
         }
 
         // Create FanoutWriter
@@ -258,7 +262,7 @@ impl IcebergDataFileWriter {
         > = FanoutWriter::new(data_file_writer_builder);
 
         // Write each partition group
-        for (partition_value, row_indices) in partition_groups {
+        for (partition_value, mutable_bitmap) in partition_groups {
             // Create partition key
             let partition_key = PartitionKey::new(
                 (*partition_spec).clone(),
@@ -266,8 +270,9 @@ impl IcebergDataFileWriter {
                 partition_value,
             );
 
-            // Create a filtered block with only rows for this partition
-            let filtered_block = block.take(&row_indices)?;
+            // Convert MutableBitmap to Bitmap and filter the block
+            let bitmap: Bitmap = mutable_bitmap.into();
+            let filtered_block = block.clone().filter_with_bitmap(&bitmap)?;
             let record_batch =
                 self.build_record_batch_with_schema(filtered_block, arrow_schema.clone())?;
 
@@ -337,7 +342,7 @@ impl IcebergDataFileWriter {
                             Literal::long(v as i64)
                         }
                         databend_common_expression::types::NumberScalar::UInt64(v) => {
-                            Literal::long(v as i64)
+                            Literal::decimal(v as i128)
                         }
                         databend_common_expression::types::NumberScalar::Float32(v) => {
                             Literal::float(v.0)
