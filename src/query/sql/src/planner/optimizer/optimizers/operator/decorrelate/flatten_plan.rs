@@ -790,6 +790,7 @@ impl SubqueryDecorrelatorOptimizer {
         ))
     }
 
+    #[recursive::recursive]
     fn clone_outer_recursive(&mut self, outer: &SExpr) -> Result<SExpr> {
         let children = outer
             .children
