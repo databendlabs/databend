@@ -1,0 +1,228 @@
+statement ok
+DROP DATABASE IF EXISTS test_tag_ref_db
+
+statement ok
+DROP STAGE IF EXISTS test_tag_stage
+
+statement ok
+DROP CONNECTION IF EXISTS test_tag_conn
+
+statement ok
+DROP TAG IF EXISTS test_env_tag
+
+statement ok
+DROP TAG IF EXISTS test_owner_tag
+
+statement ok
+DROP TAG IF EXISTS test_priority_tag
+
+
+
+statement ok
+CREATE DATABASE test_tag_ref_db
+
+statement ok
+CREATE TABLE test_tag_ref_db.test_table (id INT)
+
+statement ok
+CREATE TAG test_env_tag ALLOWED_VALUES = ('dev', 'prod', 'staging')
+
+statement ok
+CREATE TAG test_owner_tag
+
+statement ok
+CREATE TAG test_priority_tag ALLOWED_VALUES = ('low', 'medium', 'high')
+
+statement ok
+CREATE STAGE test_tag_stage
+
+statement ok
+CREATE CONNECTION test_tag_conn STORAGE_TYPE = 's3' ACCESS_KEY_ID = 'fake_key' SECRET_ACCESS_KEY = 'fake_secret'
+
+## Test TAG_REFERENCES with valid database - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db', 'DATABASE')
+----
+
+## Set tags on database
+statement ok
+ALTER DATABASE test_tag_ref_db SET TAG test_env_tag = 'prod'
+
+## Verify TAG_REFERENCES returns the tag for database
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db', 'DATABASE')
+----
+test_env_tag prod test_tag_ref_db test_tag_ref_db DATABASE
+
+## Verify object_id is not null for database
+query B
+SELECT object_id IS NOT NULL FROM TAG_REFERENCES('test_tag_ref_db', 'DATABASE')
+----
+1
+
+
+## Test TAG_REFERENCES with valid table - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE')
+----
+
+## Set tags on table
+statement ok
+ALTER TABLE test_tag_ref_db.test_table SET TAG test_env_tag = 'dev', test_owner_tag = 'team_a'
+
+## Verify TAG_REFERENCES returns all tags for table
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE')
+----
+test_env_tag dev test_tag_ref_db test_table TABLE
+test_owner_tag team_a test_tag_ref_db test_table TABLE
+
+## Filter by specific tag
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE') WHERE tag_name = 'test_env_tag'
+----
+test_env_tag dev test_tag_ref_db test_table TABLE
+
+## Verify object_id is not null for table
+query B
+SELECT object_id IS NOT NULL FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE') LIMIT 1
+----
+1
+
+## Unset one tag from table
+statement ok
+ALTER TABLE test_tag_ref_db.test_table UNSET TAG test_owner_tag
+
+## Verify only one tag remains
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE')
+----
+test_env_tag dev test_tag_ref_db test_table TABLE
+
+
+## Test TAG_REFERENCES with stage - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_stage', 'STAGE')
+----
+
+## Set multiple tags on stage
+statement ok
+ALTER STAGE test_tag_stage SET TAG test_env_tag = 'staging', test_owner_tag = 'data_team', test_priority_tag = 'high'
+
+## Verify TAG_REFERENCES returns all 3 tags for stage
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_stage', 'STAGE')
+----
+test_env_tag staging NULL test_tag_stage STAGE
+test_owner_tag data_team NULL test_tag_stage STAGE
+test_priority_tag high NULL test_tag_stage STAGE
+
+## Verify object_id is NULL for stage (stage has no numeric id)
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_stage', 'STAGE') LIMIT 1
+----
+1
+
+## Verify object_database is NULL for stage
+query B
+SELECT object_database IS NULL FROM TAG_REFERENCES('test_tag_stage', 'STAGE') LIMIT 1
+----
+1
+
+## Count tags on stage
+query I
+SELECT count(*) FROM TAG_REFERENCES('test_tag_stage', 'STAGE')
+----
+3
+
+## Unset one tag from stage
+statement ok
+ALTER STAGE test_tag_stage UNSET TAG test_priority_tag
+
+## Verify 2 tags remain
+query I
+SELECT count(*) FROM TAG_REFERENCES('test_tag_stage', 'STAGE')
+----
+2
+
+## Test TAG_REFERENCES with connection - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_conn', 'CONNECTION')
+----
+
+## Set tags on connection
+statement ok
+ALTER CONNECTION test_tag_conn SET TAG test_env_tag = 'prod', test_owner_tag = 'infra_team'
+
+## Verify TAG_REFERENCES returns tags for connection
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_conn', 'CONNECTION')
+----
+test_env_tag prod NULL test_tag_conn CONNECTION
+test_owner_tag infra_team NULL test_tag_conn CONNECTION
+
+## Verify object_id is NULL for connection
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_conn', 'CONNECTION') LIMIT 1
+----
+1
+
+## Test TAG_REFERENCES with invalid domain
+statement error 1006
+SELECT * FROM TAG_REFERENCES('test_tag_ref_db', 'INVALID_DOMAIN')
+
+## Test TAG_REFERENCES with non-existent database
+statement error 1003
+SELECT * FROM TAG_REFERENCES('non_existent_db', 'DATABASE')
+
+## Test TAG_REFERENCES with non-existent table
+statement error 1025
+SELECT * FROM TAG_REFERENCES('test_tag_ref_db.non_existent_table', 'TABLE')
+
+## Test TAG_REFERENCES with non-existent stage
+statement error 2501
+SELECT * FROM TAG_REFERENCES('non_existent_stage', 'STAGE')
+
+## Test TAG_REFERENCES with non-existent connection
+statement error 2510
+SELECT * FROM TAG_REFERENCES('non_existent_conn', 'CONNECTION')
+
+## Test TAG_REFERENCES with wrong number of arguments
+statement error 1006
+SELECT * FROM TAG_REFERENCES('test_tag_ref_db')
+
+statement error 1006
+SELECT * FROM TAG_REFERENCES('test_tag_ref_db', 'DATABASE', 'extra_arg')
+
+statement ok
+ALTER DATABASE test_tag_ref_db UNSET TAG test_env_tag
+
+statement ok
+ALTER TABLE test_tag_ref_db.test_table UNSET TAG test_env_tag
+
+statement ok
+ALTER STAGE test_tag_stage UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER CONNECTION test_tag_conn UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+DROP TABLE test_tag_ref_db.test_table
+
+statement ok
+DROP DATABASE test_tag_ref_db
+
+statement ok
+DROP STAGE test_tag_stage
+
+statement ok
+DROP CONNECTION test_tag_conn
+
+statement ok
+DROP TAG test_env_tag
+
+statement ok
+DROP TAG test_owner_tag
+
+statement ok
+DROP TAG test_priority_tag
