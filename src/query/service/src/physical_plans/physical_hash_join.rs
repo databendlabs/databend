@@ -283,6 +283,7 @@ impl IPhysicalPlan for HashJoin {
             )
             && experimental_new_join
             && !enable_optimization
+            && !self.need_hold_hash_table
         {
             return self.build_new_join_pipeline(builder, desc);
         }
@@ -290,9 +291,9 @@ impl IPhysicalPlan for HashJoin {
         // Create the join state with optimization flags
         let state = self.build_state(builder)?;
 
-        if let Some((build_cache_index, _)) = self.build_side_cache_info {
+        if let Some((build_cache_index, _)) = &self.build_side_cache_info {
             builder.hash_join_states.insert(
-                build_cache_index,
+                *build_cache_index,
                 HashJoinStateRef::OldHashJoinState(state.clone()),
             );
         }
@@ -423,10 +424,10 @@ impl HashJoin {
         {
             let state = factory.create_basic_state(0)?;
 
-            if let Some((build_cache_index, _)) = self.build_side_cache_info {
+            if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
                 builder.hash_join_states.insert(
-                    build_cache_index,
-                    HashJoinStateRef::NewHashJoinState(state.clone()),
+                    *build_cache_index,
+                    HashJoinStateRef::NewHashJoinState(state.clone(), column_map.clone()),
                 );
             }
         }
