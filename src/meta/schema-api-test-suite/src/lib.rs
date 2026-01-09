@@ -21,6 +21,7 @@
 
 mod db_table_harness;
 mod schema_api_test_suite;
+mod support;
 mod testing;
 
 pub use schema_api_test_suite::SchemaApiTestSuite;

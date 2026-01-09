@@ -78,7 +78,6 @@ use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
-use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -149,7 +148,6 @@ use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
-use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
@@ -164,6 +162,12 @@ use log::debug;
 use log::info;
 
 use crate::db_table_harness::DbTableHarness;
+use crate::support::DroponInfo;
+use crate::support::assert_meta_eq_without_updated;
+use crate::support::calc_and_compare_drop_on_db_result;
+use crate::support::calc_and_compare_drop_on_table_result;
+use crate::support::delete_test_data;
+use crate::support::upsert_test_data;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 
@@ -174,103 +178,6 @@ use crate::testing::get_kv_u64_data;
 /// such as `meta/embedded` and `metasrv`.
 #[derive(Copy, Clone)]
 pub struct SchemaApiTestSuite {}
-
-#[derive(PartialEq, Default, Debug)]
-struct DroponInfo {
-    pub name: String,
-    pub drop_on_cnt: i32,
-    pub non_drop_on_cnt: i32,
-}
-
-macro_rules! assert_meta_eq_without_updated {
-    ($a: expr, $b: expr, $msg: expr) => {
-        let mut aa = $a.clone();
-        aa.meta.updated_on = $b.meta.updated_on;
-        assert_eq!(aa, $b, $msg);
-    };
-}
-
-fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: Vec<DroponInfo>) {
-    let mut expected_map = BTreeMap::new();
-    for expected_item in expected {
-        expected_map.insert(expected_item.name.clone(), expected_item);
-    }
-
-    let mut get = BTreeMap::new();
-    for item in result.iter() {
-        let name = item.name_ident.to_string_key();
-        if !get.contains_key(&name) {
-            let info = DroponInfo {
-                name: name.clone(),
-                drop_on_cnt: 0,
-                non_drop_on_cnt: 0,
-            };
-            get.insert(name.clone(), info);
-        };
-
-        let drop_on_info = get.get_mut(&name).unwrap();
-        if item.meta.drop_on.is_some() {
-            drop_on_info.drop_on_cnt += 1;
-        } else {
-            drop_on_info.non_drop_on_cnt += 1;
-        }
-    }
-
-    assert_eq!(get, expected_map);
-}
-
-fn calc_and_compare_drop_on_table_result(result: Vec<TableNIV>, expected: Vec<DroponInfo>) {
-    let mut expected_map = BTreeMap::new();
-    for expected_item in expected {
-        expected_map.insert(expected_item.name.clone(), expected_item);
-    }
-
-    let mut got = BTreeMap::new();
-    for item in result.iter() {
-        let table_name = item.name().to_string_key();
-        if !got.contains_key(&table_name) {
-            let info = DroponInfo {
-                name: table_name.clone(),
-                drop_on_cnt: 0,
-                non_drop_on_cnt: 0,
-            };
-            got.insert(table_name.clone(), info);
-        };
-
-        let drop_on_info = got.get_mut(&table_name).expect("");
-        if item.value().drop_on.is_some() {
-            drop_on_info.drop_on_cnt += 1;
-        } else {
-            drop_on_info.non_drop_on_cnt += 1;
-        }
-    }
-
-    assert_eq!(got, expected_map);
-}
-
-async fn upsert_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &impl kvapi::Key,
-    value: Vec<u8>,
-) -> Result<u64, KVAppError> {
-    let res = kv_api
-        .upsert_kv(UpsertKV::update(key.to_string_key(), &value))
-        .await?;
-
-    let seq_v = res.result.unwrap();
-    Ok(seq_v.seq)
-}
-
-async fn delete_test_data(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &impl kvapi::Key,
-) -> Result<(), KVAppError> {
-    kv_api
-        .upsert_kv(UpsertKV::delete(key.to_string_key()))
-        .await?;
-
-    Ok(())
-}
 
 impl SchemaApiTestSuite {
     /// Test SchemaAPI on a single node
