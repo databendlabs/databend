@@ -163,6 +163,7 @@ use fastrace::func_name;
 use log::debug;
 use log::info;
 
+use crate::db_table_harness::DbTableHarness;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 
@@ -538,7 +539,7 @@ impl SchemaApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let util = Util::new(mt, "tenant1", "db1", "table", "JSON");
+        let util = DbTableHarness::new(mt, "tenant1", "db1", "table", "JSON");
         let tenant = util.tenant();
 
         let db_name = "db1";
@@ -557,16 +558,16 @@ impl SchemaApiTestSuite {
         {
             info!("--- prepare db1,db3 and table");
             // prepare db1
-            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            let mut util1 = DbTableHarness::new(mt, "tenant1", "db1", "", "eng1");
             util1.create_db().await?;
             assert_eq!(1, *util1.db_id());
             db_id = util1.db_id();
 
-            let mut util3 = Util::new(mt, "tenant1", "db3", "", "eng1");
+            let mut util3 = DbTableHarness::new(mt, "tenant1", "db3", "", "eng1");
             util3.create_db().await?;
             db3_id = util3.db_id();
 
-            let mut table_util = Util::new(mt, "tenant1", "db1", "table", "JSON");
+            let mut table_util = DbTableHarness::new(mt, "tenant1", "db1", "table", "JSON");
             let res = table_util.create_table().await?;
             table_id = res.0;
 
@@ -669,7 +670,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let mut util = Util::new(mt, tenant_name, "db1", "", "github");
+        let mut util = DbTableHarness::new(mt, tenant_name, "db1", "", "github");
         let tenant = util.tenant();
         info!("--- create db1");
         {
@@ -731,7 +732,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create db2");
         {
-            let mut util2 = Util::new(mt, tenant_name, "db2", "", "");
+            let mut util2 = DbTableHarness::new(mt, tenant_name, "db2", "", "");
             let res = util2.create_db().await;
             info!("create database res: {:?}", res);
             res.unwrap();
@@ -844,20 +845,20 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         info!("--- tenant1 create db1");
-        let mut util1 = Util::new(mt, "tenant1", "db1", "", "github");
+        let mut util1 = DbTableHarness::new(mt, "tenant1", "db1", "", "github");
         util1.create_db().await?;
         let db_id_1 = util1.db_id();
         assert_eq!(1, *db_id_1, "first database id is 1");
         let tenant1 = util1.tenant();
 
         info!("--- tenant1 create db2");
-        let mut util2 = Util::new(mt, "tenant1", "db2", "", "github");
+        let mut util2 = DbTableHarness::new(mt, "tenant1", "db2", "", "github");
         util2.create_db().await?;
         let db_id_2 = util2.db_id();
         assert!(*db_id_2 > *db_id_1, "second database id is > {}", db_id_1);
 
         info!("--- tenant2 create db1");
-        let mut util3 = Util::new(mt, "tenant2", "db1", "", "github");
+        let mut util3 = DbTableHarness::new(mt, "tenant2", "db1", "", "github");
         util3.create_db().await?;
         let tenant2 = util3.tenant();
         assert!(*util3.db_id() > *db_id_2, "third database id > {}", db_id_2);
@@ -938,12 +939,12 @@ impl SchemaApiTestSuite {
         let engines = ["eng1", "eng2"];
         let tenant = Tenant::new_or_err("tenant1", func_name!())?;
         {
-            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            let mut util1 = DbTableHarness::new(mt, "tenant1", "db1", "", "eng1");
             util1.create_db().await?;
             assert_eq!(1, *util1.db_id());
             db_ids.push(util1.db_id());
 
-            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng2");
+            let mut util2 = DbTableHarness::new(mt, "tenant1", "db2", "", "eng2");
             util2.create_db().await?;
             assert!(*util2.db_id() > 1);
             db_ids.push(util2.db_id());
@@ -982,19 +983,19 @@ impl SchemaApiTestSuite {
 
         let mut db_ids = vec![];
         {
-            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            let mut util1 = DbTableHarness::new(mt, "tenant1", "db1", "", "eng1");
             util1.create_db().await?;
             assert_eq!(1, *util1.db_id());
             db_ids.push(util1.db_id());
 
-            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng2");
+            let mut util2 = DbTableHarness::new(mt, "tenant1", "db2", "", "eng2");
             util2.create_db().await?;
             assert!(*util2.db_id() > 1);
             db_ids.push(util2.db_id());
         }
 
         let db_id_3 = {
-            let mut util3 = Util::new(mt, "tenant2", "db3", "", "eng1");
+            let mut util3 = DbTableHarness::new(mt, "tenant2", "db3", "", "eng1");
             util3.create_db().await?;
             util3.db_id()
         };
@@ -1055,7 +1056,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db1 and db2");
         {
             // prepare db1
-            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            let mut util1 = DbTableHarness::new(mt, "tenant1", "db1", "", "eng1");
             util1.create_db().await?;
             assert_eq!(1, *util1.db_id());
 
@@ -1077,7 +1078,7 @@ impl SchemaApiTestSuite {
             }
 
             // prepare db2
-            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng1");
+            let mut util2 = DbTableHarness::new(mt, "tenant1", "db2", "", "eng1");
             util2.create_db().await?;
             assert!(*util2.db_id() > 1);
         }
@@ -1139,8 +1140,8 @@ impl SchemaApiTestSuite {
         let db_name_1 = "db1_get_tenant_history_database";
         let db_name_2 = "db2_get_tenant_history_database";
 
-        let mut util1 = Util::new(mt, tenant_name, db_name_1, "", "eng");
-        let mut util2 = Util::new(mt, tenant_name, db_name_2, "", "eng");
+        let mut util1 = DbTableHarness::new(mt, tenant_name, db_name_1, "", "eng");
+        let mut util2 = DbTableHarness::new(mt, tenant_name, db_name_2, "", "eng");
 
         info!("--- create dropped db1 and db2; db2 is non-retainable");
         {
@@ -1152,7 +1153,7 @@ impl SchemaApiTestSuite {
 
             info!("--- update db2's drop_on");
             {
-                let dbid2 = util2.db_id;
+                let dbid2 = *util2.db_id();
                 let db2 = mt.get_pb(&DatabaseId { db_id: dbid2 }).await?;
                 let mut db2 = db2.unwrap().data;
                 db2.drop_on = Some(Utc::now() - Duration::days(1000));
@@ -1487,7 +1488,7 @@ impl SchemaApiTestSuite {
         let db = "db";
         let table_name = "tbl";
 
-        let mut util = Util::new(mt, tenant_name, db, table_name, "");
+        let mut util = DbTableHarness::new(mt, tenant_name, db, table_name, "");
         let tenant = util.tenant();
         util.create_db().await?;
         let db_id = util.db_id();
@@ -1548,7 +1549,7 @@ impl SchemaApiTestSuite {
         info!("--- prepare db and create table");
         let table_id;
         {
-            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
             util.create_db().await?;
 
             let created_on = Utc::now();
@@ -1638,7 +1639,7 @@ impl SchemaApiTestSuite {
 
         // Test undrop retention guard behavior
         {
-            let mut util = Util::new(
+            let mut util = DbTableHarness::new(
                 mt,
                 tenant_name,
                 "db_retention_guard",
@@ -1693,7 +1694,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let mut util = Util::new(mt, tenant_name, "db1", "tb2", "");
+        let mut util = DbTableHarness::new(mt, tenant_name, "db1", "tb2", "");
         let tenant = util.tenant();
 
         let db_name = "db1";
@@ -2221,7 +2222,7 @@ impl SchemaApiTestSuite {
     #[fastrace::trace]
     async fn table_drop_without_db_id_to_name<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
+        let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb2", "JSON");
 
         info!("--- prepare db and table");
         {
@@ -2231,8 +2232,10 @@ impl SchemaApiTestSuite {
 
         info!("--- drop db-id-to-name mapping to ensure dropping table does not rely on it");
         {
-            let id_to_name_key = DatabaseIdToName { db_id: util.db_id };
-            util.mt
+            let id_to_name_key = DatabaseIdToName {
+                db_id: *util.db_id(),
+            };
+            util.meta_api()
                 .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
                 .await?;
         }
@@ -2251,12 +2254,12 @@ impl SchemaApiTestSuite {
             let tenant = Tenant::new_literal(tenant_name);
 
             let db = "db1";
-            let mut util = Util::new(mt, tenant_name, db, "tb2", "JSON");
+            let mut util = DbTableHarness::new(mt, tenant_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant, db);
-            util.mt
+            util.meta_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
                 .await?;
 
@@ -2264,12 +2267,12 @@ impl SchemaApiTestSuite {
             util.drop_db().await?;
 
             // after drop db, check if db id list has been added
-            let value = util.mt.get_kv(&dbid_idlist.to_string_key()).await?;
+            let value = util.meta_api().get_kv(&dbid_idlist.to_string_key()).await?;
 
             assert!(value.is_some());
             let seqv = value.unwrap();
             let db_id_list: DbIdList = deserialize_struct(&seqv.data)?;
-            assert_eq!(db_id_list.id_list[0], util.db_id);
+            assert_eq!(db_id_list.id_list[0], *util.db_id());
         }
         // test get_tenant_history_databases can return db without db_id_list
         {
@@ -2277,13 +2280,13 @@ impl SchemaApiTestSuite {
             let tenant2 = Tenant::new_literal(tenant2_name);
 
             let db = "db2";
-            let mut util = Util::new(mt, tenant2_name, db, "tb2", "JSON");
+            let mut util = DbTableHarness::new(mt, tenant2_name, db, "tb2", "JSON");
             util.create_db().await?;
 
             // remove db id list
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant2, db);
 
-            util.mt
+            util.meta_api()
                 .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
                 .await?;
 
@@ -2299,7 +2302,7 @@ impl SchemaApiTestSuite {
             // check if get_tenant_history_databases return db_id
             let mut found = false;
             for db_info in res {
-                if db_info.database_id.db_id == util.db_id {
+                if db_info.database_id.db_id == *util.db_id() {
                     found = true;
                     break;
                 }
@@ -2317,16 +2320,16 @@ impl SchemaApiTestSuite {
         let tenant = "tenant1";
         let db = "db1";
         let table = "tb1";
-        let mut util = Util::new(mt, tenant, db, table, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant, db, table, "JSON");
         util.create_db().await?;
         let (tid, _table_meta) = util.create_table().await?;
 
         // remove db id list
         let table_id_idlist = TableIdHistoryIdent {
-            database_id: util.db_id,
+            database_id: *util.db_id(),
             table_name: table.to_string(),
         };
-        util.mt
+        util.meta_api()
             .upsert_kv(UpsertKV::delete(table_id_idlist.to_string_key()))
             .await?;
 
@@ -2334,7 +2337,10 @@ impl SchemaApiTestSuite {
         util.drop_table_by_id().await?;
 
         // after drop table, check if table id list has been added
-        let value = util.mt.get_kv(&table_id_idlist.to_string_key()).await?;
+        let value = util
+            .meta_api()
+            .get_kv(&table_id_idlist.to_string_key())
+            .await?;
 
         assert!(value.is_some());
         let seqv = value.unwrap();
@@ -2399,7 +2405,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db and table");
         let created_on = Utc::now();
-        let mut util = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant_name, db1_name, tb2_name, "JSON");
         util.create_db().await?;
 
         info!("--- create table for rename");
@@ -2472,7 +2478,7 @@ impl SchemaApiTestSuite {
 
         info!("--- create db1,db2, ok");
         let tb_ident2 = {
-            let mut util2 = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+            let mut util2 = DbTableHarness::new(mt, tenant_name, db1_name, tb2_name, "JSON");
             let old_db = util2.get_database().await?;
             let (_table_id, _table_meta) = util2
                 .create_table_with(
@@ -2541,7 +2547,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare other db");
         {
-            let mut util = Util::new(mt, tenant_name, db2_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db2_name, "", "");
             util.create_db().await?;
         }
 
@@ -2632,10 +2638,10 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db and tables");
         let created_on = Utc::now();
-        let mut util1 = Util::new(mt, tenant_name, db1_name, tb1_name, "JSON");
+        let mut util1 = DbTableHarness::new(mt, tenant_name, db1_name, tb1_name, "JSON");
         util1.create_db().await?;
 
-        let mut util2 = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+        let mut util2 = DbTableHarness::new(mt, tenant_name, db1_name, tb2_name, "JSON");
 
         info!("--- create table_a");
         let tb1_ident = {
@@ -2780,7 +2786,7 @@ impl SchemaApiTestSuite {
         };
 
         info!("--- prepare db and table");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
         util.create_db().await?;
         assert_eq!(1, *util.db_id(), "first database id is 1");
 
@@ -3204,7 +3210,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "");
             util.create_db().await?;
 
             assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -3213,7 +3219,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
         info!("--- create table");
         {
-            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "");
             let table_meta_val = table_meta(created_on);
 
             for table_name in [tbl_name_1, tbl_name_2] {
@@ -3526,7 +3532,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "");
             util.create_db().await?;
 
             assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -3535,11 +3541,11 @@ impl SchemaApiTestSuite {
         info!("--- create table");
         {
             // Create tb1
-            let mut util_tb1 = Util::new(mt, tenant_name, db_name, tbl_name_1, "JSON");
+            let mut util_tb1 = DbTableHarness::new(mt, tenant_name, db_name, tbl_name_1, "JSON");
             let (_table_id, _) = util_tb1.create_table_with(|meta| meta, |req| req).await?;
 
             // Create tb2
-            let mut util_tb2 = Util::new(mt, tenant_name, db_name, tbl_name_2, "JSON");
+            let mut util_tb2 = DbTableHarness::new(mt, tenant_name, db_name, tbl_name_2, "JSON");
             let (_table_id, _) = util_tb2.create_table_with(|meta| meta, |req| req).await?;
         }
 
@@ -3725,7 +3731,7 @@ impl SchemaApiTestSuite {
         };
 
         info!("--- prepare db and table");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
         util.create_db().await?;
         assert_eq!(1, *util.db_id(), "first database id is 1");
 
@@ -3860,7 +3866,7 @@ impl SchemaApiTestSuite {
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         // Prepare database and table.
-        let mut util = Util::new(mt, tenant_name, db_name, table_name, "FUSE");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "FUSE");
         util.create_db().await?;
         let (table_id, _) = util.create_table().await?;
 
@@ -4024,7 +4030,7 @@ impl SchemaApiTestSuite {
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         // Prepare database and table.
-        let mut util = Util::new(mt, tenant_name, db_name, table_name, "FUSE");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "FUSE");
         util.create_db().await?;
         let (table_id, _) = util.create_table().await?;
 
@@ -4301,7 +4307,7 @@ impl SchemaApiTestSuite {
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let util = Util::new(
+        let util = DbTableHarness::new(
             mt,
             "tenant1_database_gc_out_of_retention_time",
             "db1_database_gc_out_of_retention_time",
@@ -4444,7 +4450,7 @@ impl SchemaApiTestSuite {
         self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let mut util = Util::new(
+        let mut util = DbTableHarness::new(
             mt,
             "tenant1_table_gc_out_of_retention_time",
             "db1_table_gc_out_of_retention_time",
@@ -4613,7 +4619,7 @@ impl SchemaApiTestSuite {
             table_name: tb1_name.to_string(),
         };
 
-        let mut util = Util::new(mt, tenant_name, db1_name, tb1_name, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant_name, db1_name, tb1_name, "JSON");
         util.create_db().await?;
         info!("create database res: {:?}", ());
         let db_id = util.db_id();
@@ -4812,7 +4818,7 @@ impl SchemaApiTestSuite {
         let tenant_name = "tenant_table_drop_history";
         let db_name = "table_table_drop_history_db1";
         let tbl_name = "table_table_drop_history_tb1";
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -4865,7 +4871,7 @@ impl SchemaApiTestSuite {
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
-        let util = Util::new(mt, "tenant1", "db1", "tb1", "JSON");
+        let util = DbTableHarness::new(mt, "tenant1", "db1", "tb1", "JSON");
         let tenant = util.tenant();
 
         let schema = || {
@@ -4892,7 +4898,7 @@ impl SchemaApiTestSuite {
         info!("--- create db1");
         let db1_id;
         {
-            let mut util = Util::new(mt, "tenant1", "db1", "tb1", "JSON");
+            let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb1", "JSON");
             util.create_db().await?;
             db1_id = util.db_id();
             let db_name = DatabaseNameIdent::new(&tenant, "db1");
@@ -4922,7 +4928,7 @@ impl SchemaApiTestSuite {
         info!("--- create db2");
         let db2_id;
         {
-            let mut util_db2 = Util::new(mt, "tenant1", "db2", "tb1", "JSON");
+            let mut util_db2 = DbTableHarness::new(mt, "tenant1", "db2", "tb1", "JSON");
             util_db2.create_db().await?;
             db2_id = util_db2.db_id();
             drop_ids_no_boundary.push(DroppedId::Db {
@@ -5035,7 +5041,7 @@ impl SchemaApiTestSuite {
         // third create a database not dropped, but has a table drop within filter time
         let db3_id;
         {
-            let mut util_db3 = Util::new(mt, "tenant1", "db3", "tb1", "FUSE");
+            let mut util_db3 = DbTableHarness::new(mt, "tenant1", "db3", "tb1", "FUSE");
             util_db3.create_db().await?;
             db3_id = util_db3.db_id();
 
@@ -5278,7 +5284,7 @@ impl SchemaApiTestSuite {
         info!("--- create db1 tables");
         {
             let test_db_name = "db1";
-            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, test_db_name, "", "");
             util.create_db().await?;
             let db_id = util.db_id();
 
@@ -5300,7 +5306,7 @@ impl SchemaApiTestSuite {
         info!("--- create db2 tables");
         {
             let test_db_name = "db2";
-            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, test_db_name, "", "");
             util.create_db().await?;
             let db_id = util.db_id();
 
@@ -5320,7 +5326,7 @@ impl SchemaApiTestSuite {
         info!("--- create db3 tables");
         {
             let test_db_name = "db3";
-            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, test_db_name, "", "");
             util.create_db().await?;
             let db_id = util.db_id();
 
@@ -5415,7 +5421,7 @@ impl SchemaApiTestSuite {
         };
 
         info!("--- prepare db");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
         util.create_db().await?;
 
         assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -5694,7 +5700,7 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
 
         info!("--- prepare db");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
         util.create_db().await?;
         let db_id = util.db_id();
 
@@ -5895,7 +5901,7 @@ impl SchemaApiTestSuite {
             // use a new tenant and db do test
             let db_name = "orphan_db";
             let tenant_name = "orphan_tenant";
-            let mut orphan_util = Util::new(mt, tenant_name, db_name, "", "");
+            let mut orphan_util = DbTableHarness::new(mt, tenant_name, db_name, "", "");
             orphan_util.create_db().await?;
             let db_id = orphan_util.db_id();
             let tenant = orphan_util.tenant();
@@ -5971,7 +5977,7 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb";
 
         let mt = Arc::new(b.build().await);
-        let mut util = Util::new(&*mt, tenant_name, db_name, tbl_name, "");
+        let mut util = DbTableHarness::new(&*mt, tenant_name, db_name, tbl_name, "");
         util.create_db().await?;
         let db_id = util.db_id();
 
@@ -6091,7 +6097,7 @@ impl SchemaApiTestSuite {
         };
 
         info!("--- prepare db");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
         util.create_db().await?;
 
         assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -6158,7 +6164,7 @@ impl SchemaApiTestSuite {
         let db_name = "db1";
         let tbl_name = "tb2";
 
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6196,7 +6202,7 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare and get db");
         {
-            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "");
             util.create_db().await?;
 
             assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -6427,7 +6433,7 @@ impl SchemaApiTestSuite {
         };
         info!("--- prepare db and table");
         {
-            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
             util.create_db().await?;
 
             let (resp_table_id, _) = util
@@ -6543,7 +6549,7 @@ impl SchemaApiTestSuite {
     #[fastrace::trace]
     async fn truncate_table<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
+        let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb2", "JSON");
         let table_id;
 
         info!("--- prepare db and table");
@@ -6605,7 +6611,7 @@ impl SchemaApiTestSuite {
         let db_name = "db1";
 
         info!("--- prepare db and create 2 tables: tb1 tb2");
-        let mut util = Util::new(mt, tenant_name, db_name, "", "eng1");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "eng1");
         util.create_db().await?;
         assert_eq!(1, *util.db_id(), "first database id is 1");
 
@@ -6621,7 +6627,7 @@ impl SchemaApiTestSuite {
             let options = maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
             // Create first table "tb1"
-            let mut util1 = Util::new(mt, tenant_name, db_name, "tb1", "JSON");
+            let mut util1 = DbTableHarness::new(mt, tenant_name, db_name, "tb1", "JSON");
             let old_db = util1.get_database().await?;
             let (tb_id1, _) = util1
                 .create_table_with(
@@ -6638,7 +6644,7 @@ impl SchemaApiTestSuite {
             assert!(tb_id1 >= 1, "table id >= 1");
 
             // Create second table "tb2"
-            let mut util2 = Util::new(mt, tenant_name, db_name, "tb2", "JSON");
+            let mut util2 = DbTableHarness::new(mt, tenant_name, db_name, "tb2", "JSON");
             let old_db = util2.get_database().await?;
             let (tb_id2, _) = util2
                 .create_table_with(
@@ -6675,7 +6681,7 @@ impl SchemaApiTestSuite {
         // Create tables that exceeds the default mget chunk size
         let n = DEFAULT_MGET_SIZE + 20;
 
-        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+        let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb1", "eng1");
 
         info!("--- prepare db");
         {
@@ -6744,7 +6750,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         info!("--- prepare db and table");
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
         util.create_db().await?;
 
         let (resp_table_id, _) = util
@@ -7120,7 +7126,7 @@ impl SchemaApiTestSuite {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_literal(tenant_name);
 
-        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
+        let mut util = DbTableHarness::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
         let index_id;
         let index_id_2;
@@ -7453,7 +7459,7 @@ impl SchemaApiTestSuite {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_literal(tenant_name);
 
-        let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
+        let mut util = DbTableHarness::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -7556,14 +7562,14 @@ impl SchemaApiTestSuite {
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1_gc_dropped_db_after_undrop";
         let db_name = "db1_gc_dropped_db_after_undrop";
-        let mut util = Util::new(mt, tenant_name, db_name, "", "eng");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, "", "eng");
 
         let tenant = util.tenant();
         let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
 
         // 1. Create database
         util.create_db().await?;
-        let db_id = util.db_id;
+        let db_id = *util.db_id();
 
         info!("Created database with ID: {}", db_id);
 
@@ -7782,7 +7788,7 @@ impl SchemaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         info!("--- create db1 on node_a");
-        let mut util = Util::new(node_a, "tenant1", "db1", "", "github");
+        let mut util = DbTableHarness::new(node_a, "tenant1", "db1", "", "github");
         util.create_db().await?;
         let tenant = util.tenant();
         assert_eq!(1, *util.db_id(), "first database id is 1");
@@ -7829,13 +7835,13 @@ impl SchemaApiTestSuite {
         let mut db_ids = vec![];
 
         // Create db1
-        let mut util1 = Util::new(node_a, "tenant1", "db1", "", "github");
+        let mut util1 = DbTableHarness::new(node_a, "tenant1", "db1", "", "github");
         util1.create_db().await?;
         db_ids.push(util1.db_id());
         let tenant = util1.tenant();
 
         // Create db3
-        let mut util3 = Util::new(node_a, "tenant1", "db3", "", "github");
+        let mut util3 = DbTableHarness::new(node_a, "tenant1", "db3", "", "github");
         util3.create_db().await?;
         db_ids.push(util3.db_id());
 
@@ -7875,7 +7881,7 @@ impl SchemaApiTestSuite {
         let db_id;
 
         {
-            let mut util = Util::new(node_a, tenant_name, db_name, "", "github");
+            let mut util = DbTableHarness::new(node_a, tenant_name, db_name, "", "github");
             let res = util.create_db().await;
             info!("create database res: {:?}", res);
             assert!(res.is_ok());
@@ -7889,7 +7895,7 @@ impl SchemaApiTestSuite {
 
             let options = maplit::btreemap! {"opt-1".into() => "val-1".into()};
             for tb in tables {
-                let mut table_util = Util::new(node_a, tenant_name, db_name, tb, "JSON");
+                let mut table_util = DbTableHarness::new(node_a, tenant_name, db_name, tb, "JSON");
                 let old_db = table_util.get_database().await?;
                 let (table_id, _) = table_util
                     .create_table_with(
@@ -7931,7 +7937,7 @@ impl SchemaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         info!("--- create table tb1 on node_a");
-        let mut util = Util::new(node_a, "tenant1", "db1", "tb1", "github");
+        let mut util = DbTableHarness::new(node_a, "tenant1", "db1", "tb1", "github");
         util.create_db().await?;
         let tenant = util.tenant();
 
@@ -8007,7 +8013,7 @@ impl SchemaApiTestSuite {
             table_name: tbl_name.to_string(),
         };
         {
-            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
             util.create_db().await?;
 
             let (table_id_result, _) = util
@@ -8197,7 +8203,7 @@ impl SchemaApiTestSuite {
         let dict_name2 = "dict2";
         let dict_name3 = "dict3";
 
-        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_tenant = util.tenant();
         let dict_id;
 
@@ -8284,7 +8290,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- prepare db2");
             let db_name = "db2";
-            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "eng1");
             {
                 util.create_db().await?;
             }
@@ -8402,262 +8408,5 @@ impl SchemaApiTestSuite {
         }
 
         Ok(())
-    }
-}
-
-struct Util<'a, MT>
-where MT: kvapi::KVApi<Error = MetaError>
-{
-    tenant: Tenant,
-    db_name: String,
-    table_name: String,
-    engine: String,
-    created_on: DateTime<Utc>,
-    db_id: u64,
-    table_id: u64,
-    mt: &'a MT,
-}
-
-impl<'a, MT> Util<'a, MT>
-where MT: kvapi::KVApi<Error = MetaError>
-{
-    fn new(
-        mt: &'a MT,
-        tenant: impl ToString,
-        db_name: impl ToString,
-        tbl_name: impl ToString,
-        engine: impl ToString,
-    ) -> Self {
-        Self {
-            tenant: Tenant::new_or_err(tenant, func_name!()).unwrap(),
-            db_name: db_name.to_string(),
-            table_name: tbl_name.to_string(),
-            engine: engine.to_string(),
-            created_on: Utc::now(),
-            db_id: 0,
-            table_id: 0,
-            mt,
-        }
-    }
-
-    fn tenant(&self) -> Tenant {
-        self.tenant.clone()
-    }
-
-    fn db_name(&self) -> String {
-        self.db_name.clone()
-    }
-
-    fn db_id(&self) -> DatabaseId {
-        DatabaseId::new(self.db_id)
-    }
-
-    fn tbl_name(&self) -> String {
-        self.table_name.clone()
-    }
-
-    fn engine(&self) -> String {
-        self.engine.clone()
-    }
-
-    fn schema(&self) -> Arc<TableSchema> {
-        Arc::new(TableSchema::new(vec![
-            TableField::new("number", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("variant", TableDataType::Variant),
-        ]))
-    }
-
-    fn options(&self) -> BTreeMap<String, String> {
-        maplit::btreemap! {"opt‐1".into() => "val-1".into()}
-    }
-
-    fn table_meta(&self) -> TableMeta {
-        TableMeta {
-            schema: self.schema(),
-            engine: self.engine(),
-            options: self.options(),
-            created_on: self.created_on,
-            ..TableMeta::default()
-        }
-    }
-}
-
-impl<'a, MT> Util<'a, MT>
-where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi
-{
-    async fn create_db(&mut self) -> anyhow::Result<()> {
-        let plan = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            catalog_name: None,
-            name_ident: DatabaseNameIdent::new(self.tenant(), self.db_name()),
-            meta: DatabaseMeta {
-                engine: self.engine(),
-                ..DatabaseMeta::default()
-            },
-        };
-
-        let res = self.mt.create_database(plan).await?;
-        self.db_id = *res.db_id;
-
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    async fn drop_db(&self) -> anyhow::Result<()> {
-        let req = DropDatabaseReq {
-            if_exists: false,
-            name_ident: DatabaseNameIdent::new(self.tenant(), self.db_name()),
-        };
-
-        self.mt.drop_database(req).await?;
-        Ok(())
-    }
-
-    async fn get_database(
-        &self,
-    ) -> anyhow::Result<std::sync::Arc<databend_common_meta_app::schema::DatabaseInfo>> {
-        let req = GetDatabaseReq::new(self.tenant(), self.db_name());
-        let res = self.mt.get_database(req).await?;
-        Ok(res)
-    }
-}
-
-impl<'a, MT> Util<'a, MT>
-where MT: kvapi::KVApi<Error = MetaError> + TableApi
-{
-    /// Create table but let user customize the table meta
-    async fn create_table_with(
-        &mut self,
-        f: impl FnOnce(TableMeta) -> TableMeta,
-        r: impl FnOnce(CreateTableReq) -> CreateTableReq,
-    ) -> anyhow::Result<(u64, TableMeta)> {
-        let table_meta = self.table_meta();
-
-        let table_meta = f(table_meta);
-
-        let req = CreateTableReq {
-            create_option: CreateOption::Create,
-            catalog_name: None,
-            name_ident: TableNameIdent {
-                tenant: self.tenant(),
-                db_name: self.db_name(),
-                table_name: self.tbl_name(),
-            },
-            table_meta: table_meta.clone(),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
-
-        let req = r(req);
-
-        let resp = self.mt.create_table(req.clone()).await?;
-        let table_id = resp.table_id;
-
-        self.table_id = table_id;
-
-        Ok((table_id, table_meta))
-    }
-
-    async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
-        let table_meta = self.table_meta();
-        let req = CreateTableReq {
-            create_option: CreateOption::Create,
-            catalog_name: None,
-            name_ident: TableNameIdent {
-                tenant: self.tenant(),
-                db_name: self.db_name(),
-                table_name: self.tbl_name(),
-            },
-            table_meta: table_meta.clone(),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
-        let resp = self.mt.create_table(req.clone()).await?;
-        let table_id = resp.table_id;
-
-        self.table_id = table_id;
-
-        Ok((table_id, table_meta))
-    }
-
-    async fn drop_table_by_id(&mut self) -> anyhow::Result<()> {
-        let req = DropTableByIdReq {
-            tenant: self.tenant().clone(),
-            table_name: self.tbl_name(),
-            if_exists: false,
-            db_id: self.db_id,
-            tb_id: self.table_id,
-            db_name: "".to_string(),
-            engine: "FUSE".to_string(),
-            temp_prefix: "".to_string(),
-        };
-        self.mt.drop_table_by_id(req.clone()).await?;
-
-        Ok(())
-    }
-
-    async fn update_copied_files(
-        &self,
-        n: usize,
-    ) -> anyhow::Result<BTreeMap<String, TableCopiedFileInfo>> {
-        let mut file_infos = BTreeMap::new();
-
-        for i in 0..n {
-            let stage_info = TableCopiedFileInfo {
-                etag: Some(format!("etag{}", i)),
-                content_length: 1024,
-                last_modified: Some(Utc::now()),
-            };
-            file_infos.insert(format!("file{}", i), stage_info);
-        }
-
-        let copied_file_req = UpsertTableCopiedFileReq {
-            file_info: file_infos.clone(),
-            ttl: Some(std::time::Duration::from_secs(86400)),
-            insert_if_not_exists: true,
-        };
-
-        let req = UpdateTableMetaReq {
-            table_id: self.table_id,
-            seq: MatchSeq::Any,
-            new_table_meta: self.table_meta(),
-            base_snapshot_location: None,
-            lvt_check: None,
-        };
-
-        let req = UpdateMultiTableMetaReq {
-            update_table_metas: vec![(req, Default::default())],
-            copied_files: vec![(self.table_id, copied_file_req)],
-            ..Default::default()
-        };
-
-        self.mt.update_multi_table_meta(req).await?.unwrap();
-
-        Ok(file_infos)
-    }
-
-    async fn get_table(
-        &self,
-    ) -> anyhow::Result<std::sync::Arc<databend_common_meta_app::schema::TableInfo>> {
-        let req = GetTableReq::new(&self.tenant(), self.db_name(), self.tbl_name());
-        let res = self.mt.get_table(req).await?;
-        Ok(res)
-    }
-
-    async fn get_table_by_name(
-        &self,
-        table_name: &str,
-    ) -> anyhow::Result<std::sync::Arc<databend_common_meta_app::schema::TableInfo>> {
-        let req = GetTableReq::new(&self.tenant(), self.db_name(), table_name);
-        let res = self.mt.get_table(req).await?;
-        Ok(res)
-    }
-
-    async fn list_history_tables(&self, include_dropped: bool) -> anyhow::Result<Vec<TableNIV>> {
-        let req = ListTableReq::new(&self.tenant(), self.db_id());
-        let res = self.mt.list_history_tables(include_dropped, req).await?;
-        Ok(res)
     }
 }

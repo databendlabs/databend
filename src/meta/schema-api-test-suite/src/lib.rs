@@ -19,6 +19,7 @@
 #![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
+mod db_table_harness;
 mod schema_api_test_suite;
 mod testing;
 
