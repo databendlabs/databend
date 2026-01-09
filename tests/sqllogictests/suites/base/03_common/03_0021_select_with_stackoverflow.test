@@ -17,7 +17,7 @@ CREATE TABLE test_table_2 (identification VARCHAR)
 
 statement ok
 SELECT * FROM (
-  SELECT DISTINCT 
+  SELECT DISTINCT
     t1.id AS main_id,
     t1.partner_id AS related_id,
     'partner' AS relation_type
@@ -30,13 +30,13 @@ SELECT * FROM (
     null, null, null, null, null, null, null, null, null, null
   )
   AND EXISTS (
-    SELECT 1 
-    FROM test_table_2 t2 
+    SELECT 1
+    FROM test_table_2 t2
     WHERE t2.identification = t1.partner_id
   )
-  
+
   UNION ALL
-  
+
   SELECT DISTINCT
     t1.id AS main_id,
     t1.parent_id AS related_id,
@@ -50,9 +50,16 @@ SELECT * FROM (
     null, null, null, null, null, null, null, null, null, null
   )
   AND EXISTS (
-    SELECT 1 
-    FROM test_table_2 t2 
+    SELECT 1
+    FROM test_table_2 t2
     WHERE t2.identification = t1.parent_id
   )
 ) t
 LIMIT 0, 100
+
+
+statement ok
+DROP TABLE IF EXISTS test_table_1
+
+statement ok
+DROP TABLE IF EXISTS test_table_2
