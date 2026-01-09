@@ -14,12 +14,113 @@
 
 use std::io::Write;
 
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::*;
-use databend_common_formats::column_from_json;
 use goldenfile::Mint;
+use serde_json::Value;
 
 use super::run_ast;
+
+fn column_from_json_value(data_type: &DataType, json: serde_json::Value) -> Column {
+    let rows = match json {
+        Value::Array(values) => values,
+        other => panic!("column_from_json! expects a json array, got {other:?}"),
+    };
+
+    let mut builder = ColumnBuilder::with_capacity(data_type, rows.len());
+    for value in rows.iter() {
+        if value.is_null() {
+            builder.push(ScalarRef::Null);
+        } else {
+            builder.push(scalar_from_json_value(data_type, value));
+        }
+    }
+    builder.build()
+}
+
+fn scalar_from_json_value(data_type: &DataType, value: &Value) -> ScalarRef<'static> {
+    match data_type {
+        DataType::Nullable(inner) => scalar_from_json_value(inner, value),
+        DataType::EmptyArray => match value {
+            Value::Array(values) if values.is_empty() => ScalarRef::EmptyArray,
+            other => panic!("Expected empty array value, got {other:?}"),
+        },
+        DataType::Array(inner) => {
+            let Value::Array(values) = value else {
+                panic!("Expected array value, got {value:?}");
+            };
+
+            let mut builder = ColumnBuilder::with_capacity(inner, values.len());
+            for item in values.iter() {
+                if item.is_null() {
+                    builder.push(ScalarRef::Null);
+                } else {
+                    builder.push(scalar_from_json_value(inner, item));
+                }
+            }
+            ScalarRef::Array(builder.build())
+        }
+        DataType::Number(num_ty) => {
+            let scalar = match num_ty {
+                NumberDataType::UInt8 => NumberScalar::UInt8(
+                    u8::try_from(json_to_u64(value)).expect("number out of range for UInt8"),
+                ),
+                NumberDataType::UInt16 => NumberScalar::UInt16(
+                    u16::try_from(json_to_u64(value)).expect("number out of range for UInt16"),
+                ),
+                NumberDataType::UInt32 => NumberScalar::UInt32(
+                    u32::try_from(json_to_u64(value)).expect("number out of range for UInt32"),
+                ),
+                NumberDataType::UInt64 => NumberScalar::UInt64(json_to_u64(value)),
+                NumberDataType::Int8 => NumberScalar::Int8(
+                    i8::try_from(json_to_i64(value)).expect("number out of range for Int8"),
+                ),
+                NumberDataType::Int16 => NumberScalar::Int16(
+                    i16::try_from(json_to_i64(value)).expect("number out of range for Int16"),
+                ),
+                NumberDataType::Int32 => NumberScalar::Int32(
+                    i32::try_from(json_to_i64(value)).expect("number out of range for Int32"),
+                ),
+                NumberDataType::Int64 => NumberScalar::Int64(json_to_i64(value)),
+                NumberDataType::Float32 => {
+                    NumberScalar::Float32((json_to_f64(value) as f32).into())
+                }
+                NumberDataType::Float64 => NumberScalar::Float64(json_to_f64(value).into()),
+            };
+            ScalarRef::Number(scalar)
+        }
+        other => panic!("column_from_json! doesn't support DataType {other:?} in this test"),
+    }
+}
+
+fn json_to_u64(value: &Value) -> u64 {
+    value
+        .as_u64()
+        .or_else(|| value.as_i64().and_then(|v| u64::try_from(v).ok()))
+        .unwrap_or_else(|| panic!("Expected integer number, got {value:?}"))
+}
+
+fn json_to_i64(value: &Value) -> i64 {
+    value
+        .as_i64()
+        .or_else(|| value.as_u64().and_then(|v| i64::try_from(v).ok()))
+        .unwrap_or_else(|| panic!("Expected integer number, got {value:?}"))
+}
+
+fn json_to_f64(value: &Value) -> f64 {
+    value
+        .as_f64()
+        .unwrap_or_else(|| panic!("Expected number, got {value:?}"))
+}
+
+macro_rules! column_from_json {
+    ($data_type:expr, $($json:tt)+) => {{
+        column_from_json_value(&$data_type, ::serde_json::json!($($json)+))
+    }};
+}
 
 #[test]
 fn test_array() {
