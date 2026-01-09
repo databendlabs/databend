@@ -15,13 +15,14 @@
 use std::fmt;
 use std::future::Future;
 use std::marker::PhantomData;
+use std::panic::Location;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
-use log::debug;
-use log::info;
+use log::Level;
+use log::Record;
 use pin_project_lite::pin_project;
 use tokio::time::Instant;
 
@@ -125,6 +126,7 @@ where Self: Future
     }
 
     /// Log elapsed time(total and busy) in DEBUG level when the future is ready.
+    #[track_caller]
     fn log_elapsed_debug<'a>(
         self,
         ctx: impl fmt::Display + 'a,
@@ -132,12 +134,27 @@ where Self: Future
     where
         Self: Future + Sized,
     {
+        let caller = Location::caller();
+        let caller_file = caller.file();
+        let caller_line = caller.line();
+
         self.with_timing::<'a>(move |_output, total, busy| {
-            debug!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
+            if log::log_enabled!(Level::Debug) {
+                let args = format_args!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
+                let record = Record::builder()
+                    .args(args)
+                    .level(Level::Debug)
+                    .target(module_path!())
+                    .file(Some(caller_file))
+                    .line(Some(caller_line))
+                    .build();
+                log::logger().log(&record);
+            }
         })
     }
 
     /// Log elapsed time(total and busy) in info level when the future is ready.
+    #[track_caller]
     fn log_elapsed_info<'a>(
         self,
         ctx: impl fmt::Display + 'a,
@@ -145,8 +162,22 @@ where Self: Future
     where
         Self: Future + Sized,
     {
+        let caller = Location::caller();
+        let caller_file = caller.file();
+        let caller_line = caller.line();
+
         self.with_timing::<'a>(move |_output, total, busy| {
-            info!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
+            if log::log_enabled!(Level::Info) {
+                let args = format_args!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
+                let record = Record::builder()
+                    .args(args)
+                    .level(Level::Info)
+                    .target(module_path!())
+                    .file(Some(caller_file))
+                    .line(Some(caller_line))
+                    .build();
+                log::logger().log(&record);
+            }
         })
     }
 }

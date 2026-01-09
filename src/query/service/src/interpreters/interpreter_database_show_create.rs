@@ -69,6 +69,16 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             } else {
                 info.push_str(&engine);
             }
+
+            let options = db
+                .options()
+                .iter()
+                .map(|(k, v)| format!("{}='{}'", k, v))
+                .collect::<Vec<_>>()
+                .join(", ");
+            if !db.options().is_empty() {
+                write!(info, " OPTIONS ({})", options).expect("failed to format database options");
+            }
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new(

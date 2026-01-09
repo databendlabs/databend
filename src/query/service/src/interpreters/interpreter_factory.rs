@@ -38,6 +38,7 @@ use super::interpreter_table_modify_connection::ModifyTableConnectionInterpreter
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
+use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::CreateTagInterpreter;
@@ -661,6 +662,9 @@ impl InterpreterFactory {
             )?)),
             Plan::RefreshDatabaseCache(refresh_database_cache) => Ok(Arc::new(
                 RefreshDatabaseCacheInterpreter::try_create(ctx, *refresh_database_cache.clone())?,
+            )),
+            Plan::AlterDatabase(alter_database) => Ok(Arc::new(
+                AlterDatabaseInterpreter::try_create(ctx, *alter_database.clone())?,
             )),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 

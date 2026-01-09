@@ -15,3 +15,4 @@
 //! Provide analysis utilities for meta service.
 
 pub mod count_prefix;
+pub mod request_histogram;
