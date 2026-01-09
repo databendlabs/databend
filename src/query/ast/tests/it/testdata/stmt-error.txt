@@ -227,7 +227,7 @@ error:
   --> SQL:1:15
   |
 1 | insert into t format
-  | ------        ^^^^^^ unexpected `format`. it's reserved keyword, you may avoid using it, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, or `.`
+  | ------        ^^^^^^ unexpected `format`. it's reserved keyword, you may avoid using it, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, `.`, or `/`
   | |              
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`
 

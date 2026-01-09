@@ -30,6 +30,7 @@ use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::SnapshotRefType;
+use crate::ast::TableRef;
 use crate::ast::WindowDefinition;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
@@ -850,10 +851,7 @@ pub enum TableReference {
     // Table name
     Table {
         span: Span,
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
-        ref_name: Option<Identifier>,
+        table: TableRef,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         with_options: Option<WithOptions>,
@@ -932,10 +930,7 @@ impl Display for TableReference {
         match self {
             TableReference::Table {
                 span: _,
-                catalog,
-                database,
                 table,
-                ref_name,
                 alias,
                 temporal,
                 with_options,
@@ -943,13 +938,7 @@ impl Display for TableReference {
                 unpivot,
                 sample,
             } => {
-                write_dot_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter()).chain(Some(table)),
-                )?;
-                if let Some(ref_name) = ref_name {
-                    write!(f, "/{ref_name}")?;
-                }
+                write!(f, "{table}")?;
 
                 if let Some(temporal) = temporal {
                     write!(f, " {temporal}")?;
