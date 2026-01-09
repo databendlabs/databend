@@ -85,6 +85,7 @@ fn decode(v: &str) -> Result<Vec<u8>> {
 }
 
 impl JwkKey {
+    #[expect(deprecated)]
     fn get_public_key(&self) -> Result<PubKey> {
         match self.kty.as_str() {
             // Todo(youngsofun): the "alg" field is optional, maybe we need a config for it
