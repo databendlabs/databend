@@ -34,9 +34,7 @@ SELECT * FROM (
     FROM test_table_2 t2
     WHERE t2.identification = t1.partner_id
   )
-
   UNION ALL
-
   SELECT DISTINCT
     t1.id AS main_id,
     t1.parent_id AS related_id,
