@@ -40,7 +40,6 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
-use crate::pipelines::processors::transforms::wrap_nullable_block;
 use crate::sessions::QueryContext;
 
 pub struct SemiRightHashJoin {
@@ -214,10 +213,10 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
 
             let probe_block = match self.probe_data_block.num_columns() {
                 0 => None,
-                _ => Some(wrap_nullable_block(&DataBlock::take(
+                _ => Some(DataBlock::take(
                     &self.probe_data_block,
                     &self.probed_rows.matched_probe,
-                )?)),
+                )?),
             };
 
             let build_block = match self.join_state.columns.is_empty() {
