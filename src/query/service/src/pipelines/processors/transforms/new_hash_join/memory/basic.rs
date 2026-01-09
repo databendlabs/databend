@@ -49,6 +49,7 @@ pub struct BasicHashJoin {
     pub(crate) method: HashMethodKind,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) state: Arc<BasicHashJoinState>,
+    pub(crate) scan_blocks: Vec<DataBlock>,
 }
 
 impl BasicHashJoin {
@@ -69,6 +70,7 @@ impl BasicHashJoin {
             method,
             function_ctx,
             squash_block: SquashBlocks::new(block_size, block_bytes),
+            scan_blocks: vec![],
         })
     }
     pub(crate) fn add_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
@@ -98,15 +100,20 @@ impl BasicHashJoin {
         let Some(chunk_index) = self.steal_chunk_index() else {
             if SCAN_MAP {
                 if let Some(null_keys) = self.squash_block.finalize()? {
+                    self.scan_blocks.push(null_keys);
+                }
+
+                if !self.scan_blocks.is_empty() {
                     let locked = self.state.mutex.lock();
                     let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+                    for scan_block in std::mem::take(&mut self.scan_blocks) {
+                        let chunk_index = self.state.chunks.len();
+                        let scan_map = vec![0; scan_block.num_rows()];
 
-                    let chunk_index = self.state.chunks.len();
-                    let scan_map = vec![0; null_keys.num_rows()];
-
-                    self.state.chunks.as_mut().push(null_keys);
-                    self.state.scan_map.as_mut().push(scan_map);
-                    self.state.scan_queue.as_mut().push_back(chunk_index);
+                        self.state.chunks.as_mut().push(scan_block);
+                        self.state.scan_map.as_mut().push(scan_map);
+                        self.state.scan_queue.as_mut().push_back(chunk_index);
+                    }
                 }
             }
 
@@ -133,15 +140,7 @@ impl BasicHashJoin {
                     let null_keys = chunk_block.clone().filter_with_bitmap(&(!(&bitmap)))?;
 
                     if let Some(null_keys) = self.squash_block.add_block(null_keys)? {
-                        let locked = self.state.mutex.lock();
-                        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-                        let chunk_index = self.state.chunks.len();
-                        let scan_map = vec![0; null_keys.num_rows()];
-
-                        self.state.chunks.as_mut().push(null_keys);
-                        self.state.scan_map.as_mut().push(scan_map);
-                        self.state.scan_queue.as_mut().push_back(chunk_index);
+                        self.scan_blocks.push(null_keys);
                     }
                 }
 
