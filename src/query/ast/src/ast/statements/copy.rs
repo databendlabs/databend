@@ -27,12 +27,13 @@ use url::Url;
 
 use crate::ParseError;
 use crate::Result;
-use crate::ast::{Hint, WithOptions};
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
 use crate::ast::TableRef;
 use crate::ast::With;
+use crate::ast::WithOptions;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;

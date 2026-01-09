@@ -21,7 +21,6 @@ use ethnum::i256;
 
 use super::quote::QuotedString;
 use crate::Span;
-use crate::ast::WithOptions;
 use crate::ast::quote::QuotedIdent;
 
 // Identifier of table name or column name.

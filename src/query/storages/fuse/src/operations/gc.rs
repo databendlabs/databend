@@ -210,7 +210,7 @@ impl FuseTable {
                 }
 
                 if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
+                    location_gen.gen_snapshot_location(None, &s.snapshot_id, s.format_version)
                 {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
@@ -284,7 +284,7 @@ impl FuseTable {
             let mut ts_to_be_purged = HashSet::new();
             for s in remain_snapshots {
                 if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
+                    location_gen.gen_snapshot_location(None, &s.snapshot_id, s.format_version)
                 {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
@@ -849,9 +849,11 @@ impl FuseTable {
         let Some((gc_root_id, gc_root_ver)) = last_snapshot.prev_snapshot_id else {
             return Ok(None);
         };
-        let gc_root_path = self
-            .meta_location_generator()
-            .ref_snapshot_location_from_uuid(branch_id, &gc_root_id, gc_root_ver)?;
+        let gc_root_path = self.meta_location_generator().gen_snapshot_location(
+            Some(branch_id),
+            &gc_root_id,
+            gc_root_ver,
+        )?;
         // Try to read gc_root snapshot
         match SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await {
             Ok((gc_root_snap, _)) => {

@@ -216,6 +216,7 @@ impl QueryContext {
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
+        branch_name: Option<&str>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self
@@ -224,7 +225,7 @@ impl QueryContext {
             .build_catalog(table_info.catalog_info.clone(), self.session_state()?)?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
-        match (table_args, is_default) {
+        let tbl = match (table_args, is_default) {
             (Some(table_args), true) => {
                 let default_catalog = self
                     .shared
@@ -272,7 +273,9 @@ impl QueryContext {
                 }
             }
             (None, false) => catalog.get_table_by_info(table_info),
-        }
+        }?;
+
+        table_with_opt_branch(tbl, branch_name)
     }
 
     // Build external table by stage info, this is used in:
@@ -534,12 +537,7 @@ impl QueryContext {
             _ => table,
         };
 
-        let table = if let Some(branch) = branch {
-            table.with_branch(branch)?
-        } else {
-            table
-        };
-        Ok(table)
+        table_with_opt_branch(table, branch)
     }
 
     pub fn mark_unload_callbacked(&self) -> bool {
@@ -824,9 +822,11 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
-            }
+            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
+                &table_info.inner,
+                table_info.branch.as_deref(),
+                plan.tbl_args.clone(),
+            ),
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
             }
@@ -1851,12 +1851,13 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
+        let table_target_id = table.get_target_id();
 
         let cached_table_timestamps = {
             self.shared
                 .table_meta_timestamps
                 .lock()
-                .get(&table_id)
+                .get(&table_target_id)
                 .copied()
         };
 
@@ -1908,7 +1909,7 @@ impl TableContext for QueryContext {
 
             if txn_mgr.is_active() {
                 // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_target_id);
 
                 if let Some(existing_ts) = existing_timestamp {
                     // Defensively check that:
@@ -1926,7 +1927,7 @@ impl TableContext for QueryContext {
                     // When a table is first mutated within an active transaction, record its
                     // segment_block_timestamp as the transaction's begin timestamp for this table.
                     txn_mgr.set_table_txn_begin_timestamp(
-                        table_id,
+                        table_target_id,
                         table_meta_timestamps.segment_block_timestamp,
                     );
                 }
@@ -1935,7 +1936,7 @@ impl TableContext for QueryContext {
 
         {
             let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_id, table_meta_timestamps);
+            cache.insert(table_target_id, table_meta_timestamps);
         }
 
         Ok(table_meta_timestamps)
@@ -2344,4 +2345,12 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
+}
+
+fn table_with_opt_branch(tbl: Arc<dyn Table>, branch_name: Option<&str>) -> Result<Arc<dyn Table>> {
+    if let Some(branch) = branch_name {
+        tbl.with_branch(branch)
+    } else {
+        Ok(tbl)
+    }
 }

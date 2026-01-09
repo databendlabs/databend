@@ -85,10 +85,11 @@ impl FuseSnapshotFunc {
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.simple().to_string());
-            snapshot_locations.push(
-                location_generator
-                    .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?,
-            );
+            snapshot_locations.push(location_generator.gen_snapshot_location(
+                None,
+                &s.snapshot_id,
+                current_snapshot_version,
+            )?);
             let (id, ver) = s
                 .prev_snapshot_id
                 .map_or((None, 0), |(id, v)| (Some(id.simple().to_string()), v));

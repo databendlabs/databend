@@ -765,10 +765,7 @@ pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReferenceElement {
     Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
-        ref_name: Option<Identifier>,
+        table: TableRef,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         with_options: Option<WithOptions>,
@@ -812,10 +809,10 @@ pub enum TableReferenceElement {
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_with_ref ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
+            #table_ref ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
-            (catalog, database, table, ref_name),
+            table,
             temporal,
             with_options,
             alias,
@@ -827,10 +824,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         )| {
             let table_sample = get_table_sample(sample, sample_block_level, sample_row_level);
             TableReferenceElement::Table {
-                catalog,
-                database,
                 table,
-                ref_name,
                 alias,
                 temporal,
                 with_options,
@@ -1040,10 +1034,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
         let table_ref = match input.elem {
             TableReferenceElement::Group(table_ref) => table_ref,
             TableReferenceElement::Table {
-                catalog,
-                database,
                 table,
-                ref_name,
                 alias,
                 temporal,
                 with_options,
@@ -1052,10 +1043,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 sample,
             } => TableReference::Table {
                 span: transform_span(input.span.tokens),
-                catalog,
-                database,
                 table,
-                ref_name,
                 alias,
                 temporal,
                 with_options,

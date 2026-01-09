@@ -30,6 +30,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -96,6 +97,17 @@ pub trait Table: Sync + Send {
         self.get_table_info().ident.table_id
     }
 
+    /// Returns the effective target ID for this table reference.
+    ///
+    /// - If this is a branch, returns the branch ID.
+    /// - Otherwise, returns the physical table ID.
+    ///
+    /// This ID uniquely identifies the concrete target of an operation.
+    fn get_target_id(&self) -> u64 {
+        self.get_table_branch()
+            .map_or(self.get_id(), |v| v.branch_id())
+    }
+
     fn distribution_level(&self) -> DistributionLevel {
         DistributionLevel::Local
     }
@@ -104,8 +116,17 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    fn get_table_branch(&self) -> Option<&BranchInfo> {
+        None
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
-        DataSourceInfo::TableSource(self.get_table_info().clone())
+        let table_info = self.get_table_info().clone();
+        let branch = self.get_table_branch().map(|b| b.name.clone());
+        DataSourceInfo::TableSource(TableInfoWithBranch {
+            inner: table_info,
+            branch,
+        })
     }
 
     /// get_data_metrics will get data metrics from table.
@@ -530,7 +551,13 @@ pub trait TableExt: Table {
             meta,
             ..table_info.clone()
         };
-        catalog.get_table_by_info(&table_info)
+        let table = catalog.get_table_by_info(&table_info)?;
+        if let Some(branch) = self.get_table_branch() {
+            let branch_name = branch.branch_name();
+            table.with_branch(branch_name)
+        } else {
+            Ok(table)
+        }
     }
 
     fn check_mutable(&self) -> Result<()> {
@@ -728,6 +755,26 @@ pub enum DistributionLevel {
     Local,
     Cluster,
     Warehouse,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct TableInfoWithBranch {
+    pub inner: TableInfo,
+    pub branch: Option<String>,
+}
+
+impl TableInfoWithBranch {
+    pub fn new(inner: &TableInfo) -> Self {
+        TableInfoWithBranch {
+            inner: inner.clone(),
+            branch: None,
+        }
+    }
+
+    pub fn with_branch(mut self, branch: Option<String>) -> Self {
+        self.branch = branch;
+        self
+    }
 }
 
 pub fn is_temp_table_by_table_info(table_info: &TableInfo) -> bool {

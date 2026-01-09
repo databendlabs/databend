@@ -54,15 +54,17 @@ impl Binder {
         }
 
         let query = match &stmt.src {
-            CopyIntoLocationSource::Table(table) => {
+            CopyIntoLocationSource::Table {
+                table,
+                with_options,
+            } => {
                 let (catalog_name, database_name, table_name) = self
                     .normalize_object_identifier_triple(
                         &table.catalog,
                         &table.database,
                         &table.table,
                     );
-                let with_options_str = table
-                    .with_options
+                let with_options_str = with_options
                     .as_ref()
                     .map_or(String::new(), |with_options| format!(" {with_options}"));
 

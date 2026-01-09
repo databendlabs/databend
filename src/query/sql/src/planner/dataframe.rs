@@ -25,6 +25,7 @@ use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::CatalogManager;
@@ -56,11 +57,13 @@ impl Dataframe {
         table_name: &str,
     ) -> Result<Self> {
         let table = TableReference::Table {
-            database: db.map(|db| Identifier::from_name(None, db)),
-            table: Identifier::from_name(None, table_name),
-            ref_name: None,
+            table: TableRef {
+                catalog: None,
+                database: db.map(|db| Identifier::from_name(None, db)),
+                table: Identifier::from_name(None, table_name),
+                branch: None,
+            },
             span: None,
-            catalog: None,
             alias: None,
             temporal: None,
             with_options: None,
@@ -449,11 +452,13 @@ impl Dataframe {
         let mut table_ref = vec![];
         for (db, table_name) in from {
             let table = TableReference::Table {
-                database: db.map(|db| Identifier::from_name(None, db)),
-                table: Identifier::from_name(None, table_name),
-                ref_name: None,
+                table: TableRef {
+                    catalog: None,
+                    database: db.map(|db| Identifier::from_name(None, db)),
+                    table: Identifier::from_name(None, table_name),
+                    branch: None,
+                },
                 span: None,
-                catalog: None,
                 alias: None,
                 temporal: None,
                 with_options: None,

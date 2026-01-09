@@ -317,7 +317,7 @@ async fn try_rebuild_req(
         dal.write(&location, merged_snapshot.to_bytes()?).await?;
 
         // build new table meta
-        let new_table_meta = FuseTable::build_new_table_meta(
+        let new_table_meta = latest_table.build_new_table_meta(
             &latest_table.table_info.meta,
             &location,
             &merged_snapshot,
