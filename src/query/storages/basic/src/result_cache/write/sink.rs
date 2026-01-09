@@ -117,6 +117,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
+            cache_key_extras: self.ctx.get_cache_key_extras(),
         };
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)
