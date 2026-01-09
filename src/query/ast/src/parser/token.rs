@@ -343,6 +343,8 @@ pub enum TokenKind {
     ALLOWED_IP_LIST,
     #[token("ALLOWED_VALUES", ignore(ascii_case))]
     ALLOWED_VALUES,
+    #[token("ALLOW_QUOTED_NULLS", ignore(ascii_case))]
+    ALLOW_QUOTED_NULLS,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("AFTER", ignore(ascii_case))]
@@ -629,6 +631,7 @@ pub enum TokenKind {
     YEARWEEK,
     #[token("MICROSECOND", ignore(ascii_case))]
     MICROSECOND,
+
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
@@ -1016,6 +1019,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTED_EMPTY_FIELD_AS", ignore(ascii_case))]
+    QUOTED_EMPTY_FIELD_AS,
     #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
     QUOTED_IDENTIFIERS,
     #[token("RANGE", ignore(ascii_case))]

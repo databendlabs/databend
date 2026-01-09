@@ -3104,9 +3104,8 @@ dependencies = [
 
 [[package]]
 name = "csv-core"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d02f3b0da4c6504f86e9cd789d8dbafab48c2321be74e9987593de5a894d93d"
+version = "0.1.13"
+source = "git+https://github.com/youngsofun/rust-csv.git?rev=346f18c#346f18c01681dabd640110b5c496bcea692d319e"
 dependencies = [
  "memchr",
 ]
