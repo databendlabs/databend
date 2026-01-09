@@ -20,106 +20,44 @@ use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
-use serde_json::Value;
 
 use super::run_ast;
 
-fn column_from_json_value(data_type: &DataType, json: serde_json::Value) -> Column {
-    let rows = match json {
-        Value::Array(values) => values,
-        other => panic!("column_from_json! expects a json array, got {other:?}"),
-    };
-
-    let mut builder = ColumnBuilder::with_capacity(data_type, rows.len());
-    for value in rows.iter() {
-        if value.is_null() {
-            builder.push(ScalarRef::Null);
-        } else {
-            builder.push(scalar_from_json_value(data_type, value));
+/// Build a Nullable<Array<T>> column from Vec<Option<Column>>
+fn nullable_array_column<T: ValueType + ArgType>(arrays: Vec<Option<T::Column>>) -> Column {
+    let inner_type = T::data_type();
+    let data_type = DataType::Array(Box::new(inner_type)).wrap_nullable();
+    let mut builder = ColumnBuilder::with_capacity(&data_type, arrays.len());
+    for arr in arrays {
+        match arr {
+            None => builder.push(ScalarRef::Null),
+            Some(col) => builder.push(ScalarRef::Array(T::upcast_column(col))),
         }
     }
     builder.build()
 }
 
-fn scalar_from_json_value(data_type: &DataType, value: &Value) -> ScalarRef<'static> {
-    match data_type {
-        DataType::Nullable(inner) => scalar_from_json_value(inner, value),
-        DataType::EmptyArray => match value {
-            Value::Array(values) if values.is_empty() => ScalarRef::EmptyArray,
-            other => panic!("Expected empty array value, got {other:?}"),
-        },
-        DataType::Array(inner) => {
-            let Value::Array(values) = value else {
-                panic!("Expected array value, got {value:?}");
-            };
-
-            let mut builder = ColumnBuilder::with_capacity(inner, values.len());
-            for item in values.iter() {
-                if item.is_null() {
-                    builder.push(ScalarRef::Null);
-                } else {
-                    builder.push(scalar_from_json_value(inner, item));
-                }
-            }
-            ScalarRef::Array(builder.build())
-        }
-        DataType::Number(num_ty) => {
-            let scalar = match num_ty {
-                NumberDataType::UInt8 => NumberScalar::UInt8(
-                    u8::try_from(json_to_u64(value)).expect("number out of range for UInt8"),
-                ),
-                NumberDataType::UInt16 => NumberScalar::UInt16(
-                    u16::try_from(json_to_u64(value)).expect("number out of range for UInt16"),
-                ),
-                NumberDataType::UInt32 => NumberScalar::UInt32(
-                    u32::try_from(json_to_u64(value)).expect("number out of range for UInt32"),
-                ),
-                NumberDataType::UInt64 => NumberScalar::UInt64(json_to_u64(value)),
-                NumberDataType::Int8 => NumberScalar::Int8(
-                    i8::try_from(json_to_i64(value)).expect("number out of range for Int8"),
-                ),
-                NumberDataType::Int16 => NumberScalar::Int16(
-                    i16::try_from(json_to_i64(value)).expect("number out of range for Int16"),
-                ),
-                NumberDataType::Int32 => NumberScalar::Int32(
-                    i32::try_from(json_to_i64(value)).expect("number out of range for Int32"),
-                ),
-                NumberDataType::Int64 => NumberScalar::Int64(json_to_i64(value)),
-                NumberDataType::Float32 => {
-                    NumberScalar::Float32((json_to_f64(value) as f32).into())
-                }
-                NumberDataType::Float64 => NumberScalar::Float64(json_to_f64(value).into()),
-            };
-            ScalarRef::Number(scalar)
-        }
-        other => panic!("column_from_json! doesn't support DataType {other:?} in this test"),
+/// Build an EmptyArray column with n rows
+fn empty_array_column(n: usize) -> Column {
+    let mut builder = ColumnBuilder::with_capacity(&DataType::EmptyArray, n);
+    for _ in 0..n {
+        builder.push(ScalarRef::EmptyArray);
     }
+    builder.build()
 }
 
-fn json_to_u64(value: &Value) -> u64 {
-    value
-        .as_u64()
-        .or_else(|| value.as_i64().and_then(|v| u64::try_from(v).ok()))
-        .unwrap_or_else(|| panic!("Expected integer number, got {value:?}"))
-}
-
-fn json_to_i64(value: &Value) -> i64 {
-    value
-        .as_i64()
-        .or_else(|| value.as_u64().and_then(|v| i64::try_from(v).ok()))
-        .unwrap_or_else(|| panic!("Expected integer number, got {value:?}"))
-}
-
-fn json_to_f64(value: &Value) -> f64 {
-    value
-        .as_f64()
-        .unwrap_or_else(|| panic!("Expected number, got {value:?}"))
-}
-
-macro_rules! column_from_json {
-    ($data_type:expr, $($json:tt)+) => {{
-        column_from_json_value(&$data_type, ::serde_json::json!($($json)+))
-    }};
+/// Build a Nullable<EmptyArray> column
+fn nullable_empty_array_column(nulls: Vec<bool>) -> Column {
+    let data_type = DataType::EmptyArray.wrap_nullable();
+    let mut builder = ColumnBuilder::with_capacity(&data_type, nulls.len());
+    for is_null in nulls {
+        if is_null {
+            builder.push(ScalarRef::Null);
+        } else {
+            builder.push(ScalarRef::EmptyArray);
+        }
+    }
+    builder.build()
 }
 
 #[test]
@@ -538,17 +476,20 @@ fn test_array_count(file: &mut impl Write) {
     ]);
 
     {
-        let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
-        let column = column_from_json!(data_type, [null, [1, 5, 8, 3], [1, 5], null]);
+        let column = nullable_array_column::<Int16Type>(vec![
+            None,
+            Some(Int16Type::column_from_iter([1, 5, 8, 3].into_iter(), &[])),
+            Some(Int16Type::column_from_iter([1, 5].into_iter(), &[])),
+            None,
+        ]);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 
-    let u64_type = UInt64Type::data_type().wrap_nullable();
     run_ast(file, "array_count([a, b, c, d])", &[
-        ("a", column_from_json!(u64_type, [1, 2, null, 4])),
-        ("b", column_from_json!(u64_type, [2, null, 5, 6])),
-        ("c", column_from_json!(u64_type, [3, 7, 8, 9])),
-        ("d", column_from_json!(u64_type, [4, 6, 5, null])),
+        ("a", UInt64Type::from_opt_data(vec![Some(1), Some(2), None, Some(4)])),
+        ("b", UInt64Type::from_opt_data(vec![Some(2), None, Some(5), Some(6)])),
+        ("c", UInt64Type::from_opt_data(vec![Some(3), Some(7), Some(8), Some(9)])),
+        ("d", UInt64Type::from_opt_data(vec![Some(4), Some(6), Some(5), None])),
     ]);
 
     // Test with variant type
@@ -557,13 +498,12 @@ fn test_array_count(file: &mut impl Write) {
     run_ast(file, "array_count(parse_json('[1.2, 3.4, 5.6, 7.8]'))", &[]);
 
     {
-        let column = column_from_json!(DataType::EmptyArray, [[], [], []]);
+        let column = empty_array_column(3);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 
     {
-        let data_type = DataType::EmptyArray.wrap_nullable();
-        let column = column_from_json!(data_type, [null, [], null]);
+        let column = nullable_empty_array_column(vec![true, false, true]);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 }
@@ -580,10 +520,12 @@ fn test_array_max(file: &mut impl Write) {
 
     run_ast(file, "array_max(a)", &[(
         "a",
-        column_from_json!(
-            DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable(),
-            [null, [1, 5, 8, 3], [1, 5], null]
-        ),
+        nullable_array_column::<Int16Type>(vec![
+            None,
+            Some(Int16Type::column_from_iter([1, 5, 8, 3].into_iter(), &[])),
+            Some(Int16Type::column_from_iter([1, 5].into_iter(), &[])),
+            None,
+        ]),
     )]);
 
     run_ast(file, "array_max([a, b, c, d])", &[
@@ -623,12 +565,12 @@ fn test_array_max(file: &mut impl Write) {
 
     run_ast(file, "array_max(a)", &[(
         "a",
-        column_from_json!(DataType::EmptyArray, [[], []]),
+        empty_array_column(2),
     )]);
 
     run_ast(file, "array_max(a)", &[(
         "a",
-        column_from_json!(DataType::EmptyArray.wrap_nullable(), [null, [], []]),
+        nullable_empty_array_column(vec![true, false, false]),
     )]);
 }
 
