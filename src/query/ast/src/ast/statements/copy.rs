@@ -27,7 +27,7 @@ use url::Url;
 
 use crate::ParseError;
 use crate::Result;
-use crate::ast::Hint;
+use crate::ast::{Hint, WithOptions};
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
@@ -340,7 +340,10 @@ impl Display for CopyIntoTableSource {
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewritten as `(SELECT * FROM table)`
-    Table(TableRef),
+    Table {
+        table: Box<TableRef>,
+        with_options: Option<WithOptions>,
+    },
 }
 
 impl Display for CopyIntoLocationSource {
@@ -349,8 +352,15 @@ impl Display for CopyIntoLocationSource {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
             }
-            CopyIntoLocationSource::Table(table) => {
-                write!(f, "{}", table)
+            CopyIntoLocationSource::Table {
+                table,
+                with_options,
+            } => {
+                write!(f, "{}", table)?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
+                }
+                Ok(())
             }
         }
     }

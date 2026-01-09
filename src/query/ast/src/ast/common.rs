@@ -159,7 +159,7 @@ pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub with_options: Option<WithOptions>,
+    pub branch: Option<Identifier>,
 }
 
 impl Display for TableRef {
@@ -173,8 +173,8 @@ impl Display for TableRef {
         }
         write!(f, "{}", self.table)?;
 
-        if let Some(with_options) = &self.with_options {
-            write!(f, " {with_options}")?;
+        if let Some(branch) = &self.branch {
+            write!(f, "/{branch}")?;
         }
         Ok(())
     }
