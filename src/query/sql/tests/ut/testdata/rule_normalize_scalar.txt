@@ -1,0 +1,39 @@
+in           : a = 5
+out          : eq<UInt64, UInt64>(a (#0), 5_u64)
+
+in           : a != 3 and a != 4 and a != 5
+out          : and_filters<Boolean, Boolean, Boolean>(noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(3_u8 AS UInt64)), noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(4_u8 AS UInt64)), noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(5_u8 AS UInt64)))
+
+in           : a != 3 and true and a != 5
+out          : and_filters<Boolean, Boolean>(noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(3_u8 AS UInt64)), noteq<UInt64, UInt64>(a (#0), CAST<UInt8>(5_u8 AS UInt64)))
+
+in           : a != 3 and false and a != 5
+out          : false
+
+in           : true and true
+out          : true
+
+in           : a = 3 or a = 4 or a = 5
+out          : or_filters<Boolean, Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 3_u64), eq<UInt64, UInt64>(a (#0), 4_u64), eq<UInt64, UInt64>(a (#0), 5_u64))
+
+in           : a = 3 or true or a = 5
+out          : true
+
+in           : a = 3 or false or a = 5
+out          : or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 3_u64), eq<UInt64, UInt64>(a (#0), 5_u64))
+
+in           : a = 3 or false
+out          : eq<UInt64, UInt64>(a (#0), 3_u64)
+
+in           : false or false
+out          : false
+
+in           : (a = 9 or a = 8) and (a = 7 or a = 5) and a = 3
+out          : and_filters<Boolean, Boolean, Boolean>(or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 9_u64), eq<UInt64, UInt64>(a (#0), 8_u64)), or_filters<Boolean, Boolean>(eq<UInt64, UInt64>(a (#0), 7_u64), eq<UInt64, UInt64>(a (#0), 5_u64)), eq<UInt64, UInt64>(a (#0), 3_u64))
+
+in           : not(not(b))
+out          : b (#1)
+
+in           : is_not_null(c < 3 and c < 4)
+out          : is_not_null<T0=Boolean><T0 NULL>(and<Boolean NULL, Boolean NULL>(lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(3_u8 AS UInt64 NULL)), lt<UInt64 NULL, UInt64 NULL>(c (#2), CAST<UInt8>(4_u8 AS UInt64 NULL))))
+

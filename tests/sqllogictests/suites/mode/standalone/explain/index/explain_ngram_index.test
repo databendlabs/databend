@@ -130,7 +130,7 @@ Filter
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%月无声%'))], limit: NONE]
     └── estimated rows: 16.00
 
-query T
+query IT
 SELECT id, content FROM t1 WHERE content LIKE '%your eggs%'
 ----
 8 Put all your eggs in one basket
@@ -193,7 +193,7 @@ TableScan
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs'))], limit: NONE]
 └── estimated rows: 0.03
 
-query T
+query IT
 SELECT id, content FROM t1 WHERE content LIKE '%your eggs%'
 ----
 8 Put all your eggs in one basket
@@ -316,7 +316,7 @@ INSERT INTO t3 VALUES
 (3, 'The early bird catches the worm', 'When life gives you lemons, make lemonade'),
 (4, 'Actions speak louder than words', 'Put all your eggs in one basket');
 
-query II
+query III
 select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_ngram_index_db', 't3');
 ----
 209 894 NULL

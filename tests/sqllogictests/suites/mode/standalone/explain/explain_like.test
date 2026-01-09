@@ -53,7 +53,7 @@ Sort(Single)
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [and_filters(t1.s (#0) >= 'abcd', t1.s (#0) < 'abce')], limit: NONE]
+        ├── push downs: [filters: [t1.s (#0) >= 'abcd' and t1.s (#0) < 'abce'], limit: NONE]
         └── estimated rows: 5.00
 
 query T

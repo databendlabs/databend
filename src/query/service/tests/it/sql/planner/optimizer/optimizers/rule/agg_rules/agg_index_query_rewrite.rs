@@ -381,7 +381,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         {
             let mut metadata = metadata.write();
-            metadata.add_agg_indexes("default.default.t".to_string(), vec![(
+            metadata.add_agg_indices("default.default.t".to_string(), vec![(
                 0,
                 suite.index.to_string(),
                 index,

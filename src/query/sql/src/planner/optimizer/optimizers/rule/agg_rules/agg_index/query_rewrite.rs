@@ -437,9 +437,10 @@ impl PredicatesSplitter {
     fn split(&mut self, pred: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr>) {
         if let ScalarExpr::FunctionCall(func) = pred {
             match func.func_name.as_str() {
-                "and" => {
-                    self.split(&func.arguments[0], column_map);
-                    self.split(&func.arguments[1], column_map);
+                "and" | "and_filters" => {
+                    for arg in &func.arguments {
+                        self.split(arg, column_map);
+                    }
                 }
                 "eq" if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
                     && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
@@ -834,6 +835,7 @@ impl RangeClasses {
     }
 }
 
+#[derive(Debug)]
 struct ResidualClasses {
     residual_preds: BTreeMap<String, ScalarExpr>,
 }

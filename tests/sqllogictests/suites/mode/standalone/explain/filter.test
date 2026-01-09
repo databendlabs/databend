@@ -20,7 +20,7 @@ explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [is_true(t1.a (#0) = 1), is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))]
+├── filters: [is_true(t1.a (#0) = 1), t1.b (#1) > 2 or t1.b (#1) < 100]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -30,7 +30,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t1.a (#0) = 1, (t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
+    ├── push downs: [filters: [t1.a (#0) = 1 and (t1.b (#1) > 2 or t1.b (#1) < 100)], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -38,7 +38,7 @@ explain select * from t1 where b > 2 or b > 2 or b < 100;
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))]
+├── filters: [t1.b (#1) > 2 or t1.b (#1) < 100]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -48,7 +48,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
+    ├── push downs: [filters: [t1.b (#1) > 2 or t1.b (#1) < 100], limit: NONE]
     └── estimated rows: 0.00
 
 statement ok
@@ -112,8 +112,8 @@ explain select number from numbers(6) where number = 1 or number = 5 or number =
 ----
 Filter
 ├── output columns: [numbers.number (#0)]
-├── filters: [or_filters(numbers.number (#0) = 1, numbers.number (#0) = 5, numbers.number (#0) = 3)]
-├── estimated rows: 5.25
+├── filters: [numbers.number (#0) = 1 or numbers.number (#0) = 5 or numbers.number (#0) = 3]
+├── estimated rows: 3.00
 └── TableScan
     ├── table: default.system.numbers
     ├── scan id: 0
@@ -122,7 +122,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [or_filters(numbers.number (#0) = 1, numbers.number (#0) = 5, numbers.number (#0) = 3)], limit: NONE]
+    ├── push downs: [filters: [numbers.number (#0) = 1 or numbers.number (#0) = 5 or numbers.number (#0) = 3], limit: NONE]
     └── estimated rows: 6.00
 
 statement ok

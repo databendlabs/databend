@@ -113,7 +113,7 @@ RowFetch
                 ├── read size: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                ├── push downs: [filters: [and_filters(and_filters(t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000), t_11831.uid (#0) = 11)], limit: NONE]
+                ├── push downs: [filters: [t_11831.time (#3) >= 1686672000000 and t_11831.time (#3) <= 1686758399000 and t_11831.uid (#0) = 11], limit: NONE]
                 └── estimated rows: 0.00
 
 statement ok
@@ -221,7 +221,7 @@ Limit
             └── estimated rows: 0.00
 
 # Will use lazy materialization
-query ?
+query T
 explain with cte as (select a, a + 1 as X, b + 1 as Y from t_lazy order by a limit 3) select X,Y,a from (select * from cte order by Y limit 2) order by X limit 1;
 ----
 Limit

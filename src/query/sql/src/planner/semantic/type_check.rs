@@ -284,7 +284,7 @@ impl<'a> TypeChecker<'a> {
 
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (scalar, data_type): Box<(ScalarExpr, DataType)> = match expr {
+        match expr {
             Expr::ColumnRef {
                 span,
                 column:
@@ -454,7 +454,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 };
 
-                Box::new((scalar, data_type))
+                Ok(Box::new((scalar, data_type)))
             }
 
             Expr::IsNull {
@@ -462,9 +462,9 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let args = &[expr.as_ref()];
                 if *not {
-                    self.resolve_function(*span, "is_not_null", vec![], args)?
+                    self.resolve_function(*span, "is_not_null", vec![], args)
                 } else {
-                    self.resolve_function(*span, "is_null", vec![], args)?
+                    self.resolve_function(*span, "is_null", vec![], args)
                 }
             }
 
@@ -517,7 +517,7 @@ impl<'a> TypeChecker<'a> {
                         right: right.clone(),
                     },
                 ])?;
-                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])?
+                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])
             }
 
             Expr::InList {
@@ -571,9 +571,9 @@ impl<'a> TypeChecker<'a> {
                                 window: None,
                                 lambda: None,
                             },
-                        })?
+                        })
                     } else {
-                        self.resolve_function(*span, "contains", vec![], &args)?
+                        self.resolve_function(*span, "contains", vec![], &args)
                     }
                 } else {
                     let mut result = list
@@ -607,7 +607,7 @@ impl<'a> TypeChecker<'a> {
                             expr: Box::new(result),
                         };
                     }
-                    self.resolve(&result)?
+                    self.resolve(&result)
                 }
             }
 
@@ -638,7 +638,7 @@ impl<'a> TypeChecker<'a> {
                     self.resolve_scalar_function_call(*span, "and", vec![], vec![
                         ge_func.clone(),
                         le_func.clone(),
-                    ])?
+                    ])
                 } else {
                     // Rewrite `expr NOT BETWEEN low AND high`
                     // into `expr < low OR expr > high`
@@ -655,7 +655,7 @@ impl<'a> TypeChecker<'a> {
                         high.as_ref(),
                     )?;
 
-                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])?
+                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])
                 }
             }
 
@@ -665,7 +665,7 @@ impl<'a> TypeChecker<'a> {
                 left,
                 right,
                 ..
-            } => self.resolve_binary_op_or_subquery(span, op, left, right)?,
+            } => self.resolve_binary_op_or_subquery(span, op, left, right),
 
             Expr::JsonOp {
                 span,
@@ -674,12 +674,10 @@ impl<'a> TypeChecker<'a> {
                 right,
             } => {
                 let func_name = op.to_func_name();
-                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])?
+                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])
             }
 
-            Expr::UnaryOp { span, op, expr, .. } => {
-                self.resolve_unary_op(*span, op, expr.as_ref())?
-            }
+            Expr::UnaryOp { span, op, expr, .. } => self.resolve_unary_op(*span, op, expr.as_ref()),
 
             Expr::Cast {
                 expr, target_type, ..
@@ -718,7 +716,7 @@ impl<'a> TypeChecker<'a> {
                     checked_expr.data_type().clone()
                 };
 
-                Box::new((
+                Ok(Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: false,
@@ -727,7 +725,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     target_type,
-                ))
+                )))
             }
 
             Expr::TryCast {
@@ -763,7 +761,7 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     checked_expr.data_type().clone()
                 };
-                Box::new((
+                Ok(Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: true,
@@ -772,7 +770,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     .into(),
                     target_type,
-                ))
+                )))
             }
 
             Expr::Case {
@@ -817,7 +815,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 let args_ref: Vec<&Expr> = arguments.iter().collect();
 
-                self.resolve_function(*span, "if", vec![], &args_ref)?
+                self.resolve_function(*span, "if", vec![], &args_ref)
             }
 
             Expr::Substring {
@@ -831,10 +829,10 @@ impl<'a> TypeChecker<'a> {
                 if let Some(substring_for) = substring_for {
                     arguments.push(substring_for.as_ref());
                 }
-                self.resolve_function(*span, "substring", vec![], &arguments)?
+                self.resolve_function(*span, "substring", vec![], &arguments)
             }
 
-            Expr::Literal { span, value } => self.resolve_literal(*span, value)?,
+            Expr::Literal { span, value } => self.resolve_literal(*span, value),
 
             Expr::FunctionCall {
                 span,
@@ -969,7 +967,7 @@ impl<'a> TypeChecker<'a> {
                         &window.ignore_nulls,
                     )?;
                     let display_name = format!("{:#}", expr);
-                    self.resolve_window(*span, display_name, &window.window, func)?
+                    self.resolve_window(*span, display_name, &window.window, func)
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
                     let mut new_params = Vec::with_capacity(params.len());
                     for param in params {
@@ -1007,10 +1005,10 @@ impl<'a> TypeChecker<'a> {
                         }
                         // general window function
                         let func = WindowFuncType::Aggregate(new_agg_func);
-                        self.resolve_window(*span, display_name, &window.window, func)?
+                        self.resolve_window(*span, display_name, &window.window, func)
                     } else {
                         // aggregate function
-                        Box::new((new_agg_func.into(), data_type))
+                        Ok(Box::new((new_agg_func.into(), data_type)))
                     }
                 } else if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     if lambda.is_none() {
@@ -1020,12 +1018,12 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
                     let lambda = lambda.as_ref().unwrap();
-                    self.resolve_lambda_function(*span, func_name, &args, lambda)?
+                    self.resolve_lambda_function(*span, func_name, &args, lambda)
                 } else if GENERAL_SEARCH_FUNCTIONS.contains(&uni_case_func_name) {
                     match func_name.to_lowercase().as_str() {
-                        "score" => self.resolve_score_search_function(*span, func_name, &args)?,
-                        "match" => self.resolve_match_search_function(*span, func_name, &args)?,
-                        "query" => self.resolve_query_search_function(*span, func_name, &args)?,
+                        "score" => self.resolve_score_search_function(*span, func_name, &args),
+                        "match" => self.resolve_match_search_function(*span, func_name, &args),
+                        "query" => self.resolve_query_search_function(*span, func_name, &args),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "cannot find search function {}",
@@ -1035,14 +1033,14 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                 } else if ASYNC_FUNCTIONS.contains(&uni_case_func_name) {
-                    self.resolve_async_function(*span, func_name, &args)?
+                    self.resolve_async_function(*span, func_name, &args)
                 } else if BUILTIN_FUNCTIONS
                     .get_property(func_name)
                     .map(|property| property.kind == FunctionKind::SRF)
                     .unwrap_or(false)
                 {
                     // Set returning function
-                    self.resolve_set_returning_function(*span, func_name, &args)?
+                    self.resolve_set_returning_function(*span, func_name, &args)
                 } else {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
@@ -1062,7 +1060,7 @@ impl<'a> TypeChecker<'a> {
                             .scalar;
                         new_params.push(constant);
                     }
-                    self.resolve_function(*span, func_name, new_params, &args)?
+                    self.resolve_function(*span, func_name, new_params, &args)
                 }
             }
 
@@ -1074,10 +1072,10 @@ impl<'a> TypeChecker<'a> {
                     // aggregate window function
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::Aggregate(new_agg_func);
-                    self.resolve_window(*span, display_name, window, func)?
+                    self.resolve_window(*span, display_name, window, func)
                 } else {
                     // aggregate function
-                    Box::new((new_agg_func.into(), data_type))
+                    Ok(Box::new((new_agg_func.into(), data_type)))
                 }
             }
 
@@ -1090,10 +1088,10 @@ impl<'a> TypeChecker<'a> {
                 subquery,
                 None,
                 None,
-            )?,
+            ),
 
             Expr::Subquery { subquery, .. } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None)?
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None)
             }
 
             Expr::InSubquery {
@@ -1117,7 +1115,7 @@ impl<'a> TypeChecker<'a> {
                     subquery,
                     Some(*expr.clone()),
                     Some(SubqueryComparisonOp::Equal),
-                )?
+                )
             }
 
             Expr::LikeSubquery {
@@ -1133,7 +1131,7 @@ impl<'a> TypeChecker<'a> {
                 span,
                 modifier,
                 &BinaryOperator::Like(escape.clone()),
-            )?,
+            ),
 
             Expr::LikeAnyWithEscape {
                 span,
@@ -1145,7 +1143,7 @@ impl<'a> TypeChecker<'a> {
                 &BinaryOperator::LikeAny(Some(escape.clone())),
                 left,
                 right,
-            )?,
+            ),
 
             Expr::LikeWithEscape {
                 span,
@@ -1160,7 +1158,7 @@ impl<'a> TypeChecker<'a> {
                     BinaryOperator::Like(Some(escape.clone()))
                 };
 
-                self.resolve_binary_op_or_subquery(span, &like_op, left, right)?
+                self.resolve_binary_op_or_subquery(span, &like_op, left, right)
             }
 
             expr @ Expr::MapAccess { span, .. } => {
@@ -1198,16 +1196,16 @@ impl<'a> TypeChecker<'a> {
                     };
                     paths.push_front((*span, path));
                 }
-                self.resolve_map_access(*span, expr, paths)?
+                self.resolve_map_access(*span, expr, paths)
             }
 
             Expr::Extract {
                 span, kind, expr, ..
-            } => self.resolve_extract_expr(*span, kind, expr)?,
+            } => self.resolve_extract_expr(*span, kind, expr),
 
             Expr::DatePart {
                 span, kind, expr, ..
-            } => self.resolve_extract_expr(*span, kind, expr)?,
+            } => self.resolve_extract_expr(*span, kind, expr),
 
             Expr::Interval { span, expr, unit } => {
                 let ex = Expr::Cast {
@@ -1243,7 +1241,7 @@ impl<'a> TypeChecker<'a> {
                         lambda: None,
                     },
                 };
-                self.resolve(&ex)?
+                self.resolve(&ex)
             }
             Expr::DateAdd {
                 span,
@@ -1251,21 +1249,21 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => self.resolve_date_arith(*span, unit, interval, date, expr)?,
+            } => self.resolve_date_arith(*span, unit, interval, date, expr),
             Expr::DateDiff {
                 span,
                 unit,
                 date_start,
                 date_end,
                 ..
-            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr)?,
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr),
             Expr::DateBetween {
                 span,
                 unit,
                 date_start,
                 date_end,
                 ..
-            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr)?,
+            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr),
             Expr::DateSub {
                 span,
                 unit,
@@ -1282,10 +1280,10 @@ impl<'a> TypeChecker<'a> {
                 },
                 date,
                 expr,
-            )?,
+            ),
             Expr::DateTrunc {
                 span, unit, date, ..
-            } => self.resolve_date_trunc(*span, date, unit)?,
+            } => self.resolve_date_trunc(*span, date, unit),
             Expr::TimeSlice {
                 span,
                 unit,
@@ -1293,25 +1291,25 @@ impl<'a> TypeChecker<'a> {
                 slice_length,
                 start_or_end,
             } => {
-                self.resolve_time_slice(*span, date, *slice_length, unit, start_or_end.to_string())?
+                self.resolve_time_slice(*span, date, *slice_length, unit, start_or_end.to_string())
             }
             Expr::LastDay {
                 span, unit, date, ..
-            } => self.resolve_last_day(*span, date, unit)?,
+            } => self.resolve_last_day(*span, date, unit),
             Expr::PreviousDay {
                 span, unit, date, ..
-            } => self.resolve_previous_or_next_day(*span, date, unit, true)?,
+            } => self.resolve_previous_or_next_day(*span, date, unit, true),
             Expr::NextDay {
                 span, unit, date, ..
-            } => self.resolve_previous_or_next_day(*span, date, unit, false)?,
+            } => self.resolve_previous_or_next_day(*span, date, unit, false),
             Expr::Trim {
                 span,
                 expr,
                 trim_where,
                 ..
-            } => self.resolve_trim_function(*span, expr, trim_where)?,
+            } => self.resolve_trim_function(*span, expr, trim_where),
 
-            Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs)?,
+            Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs),
 
             Expr::Position {
                 substr_expr,
@@ -1321,11 +1319,11 @@ impl<'a> TypeChecker<'a> {
             } => self.resolve_function(*span, "locate", vec![], &[
                 substr_expr.as_ref(),
                 str_expr.as_ref(),
-            ])?,
+            ]),
 
-            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs)?,
+            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs),
 
-            Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
+            Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs),
 
             Expr::Hole { span, .. } | Expr::Placeholder { span } => {
                 return Err(ErrorCode::SemanticError(
@@ -1333,11 +1331,8 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(*span));
             }
-            Expr::StageLocation { span, location } => {
-                self.resolve_stage_location(*span, location)?
-            }
-        };
-        Ok(Box::new((scalar, data_type)))
+            Expr::StageLocation { span, location } => self.resolve_stage_location(*span, location),
+        }
     }
 
     fn resolve_binary_op_or_subquery(
@@ -4137,27 +4132,12 @@ impl<'a> TypeChecker<'a> {
                 ]))
             }
             ("equal_null", &[arg_x, arg_y]) => {
-                // Rewrite equal_null(x, y) to ifnull(x = y, false) or (x is null and y is null)
+                // Rewrite equal_null(x, y) to if(is_not_null( x = y ), is_true( x = y ), x is null and y is null)
                 let eq_expr = Expr::BinaryOp {
                     span,
                     op: BinaryOperator::Eq,
                     left: Box::new(arg_x.clone()),
                     right: Box::new(arg_y.clone()),
-                };
-                let ifnull_expr = Expr::FunctionCall {
-                    span,
-                    func: ASTFunctionCall {
-                        distinct: false,
-                        name: Identifier::from_name(span, "ifnull"),
-                        args: vec![eq_expr, Expr::Literal {
-                            span,
-                            value: Literal::Boolean(false),
-                        }],
-                        params: vec![],
-                        order_by: vec![],
-                        window: None,
-                        lambda: None,
-                    },
                 };
 
                 let is_null_x = Expr::IsNull {
@@ -4170,14 +4150,30 @@ impl<'a> TypeChecker<'a> {
                     expr: Box::new(arg_y.clone()),
                     not: false,
                 };
-                let and_expr = Expr::BinaryOp {
-                    span,
-                    op: BinaryOperator::And,
-                    left: Box::new(is_null_x),
-                    right: Box::new(is_null_y),
-                };
 
-                Some(self.resolve_function(span, "or", vec![], &[&ifnull_expr, &and_expr]))
+                Some(self.resolve_function(span, "if", vec![], &[
+                    &Expr::IsNull {
+                        span,
+                        expr: Box::new(eq_expr.clone()),
+                        not: true,
+                    },
+                    &Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            name: Identifier::from_name(span, "is_true"),
+                            args: vec![eq_expr],
+                            ..Default::default()
+                        },
+                    },
+                    &Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            name: Identifier::from_name(span, "and_filters"),
+                            args: vec![is_null_x, is_null_y],
+                            ..Default::default()
+                        },
+                    },
+                ]))
             }
             ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {

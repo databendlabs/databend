@@ -122,7 +122,7 @@ TableScan
 ├── push downs: [filters: [is_true(t.s (#1) = '12')], limit: NONE]
 └── estimated rows: 2.67
 
-query TT
+query IT
 select * from t where s = '12';
 ----
 
@@ -151,7 +151,7 @@ TableScan
 ├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
 └── estimated rows: 1.00
 
-query TT
+query IT
 select * from t where c = 6;
 ----
 
@@ -161,7 +161,7 @@ create or replace table t_index(`bloom(0)` binary, `bloom(1)` binary);
 statement ok
 copy into t_index from  @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet' file_format=(type=parquet missing_field_as=field_default);
 
-query I
+query BB
 select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
 ----
 0 0
@@ -169,6 +169,6 @@ select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order 
 
 
 # re-generate other bloom index
-query TT
+query IT
 select * from t where c = 12;
 ----

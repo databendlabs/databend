@@ -17,14 +17,13 @@ use itertools::Itertools;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 
 pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
     let filter: Filter = s_expr.plan().clone().try_into()?;
-    let join = s_expr.child(0)?;
+    let join = s_expr.unary_child();
     let mut new_predicates = Vec::new();
     let mut origin_predicates = filter.predicates.clone();
     for predicate in filter.predicates.iter() {
@@ -33,8 +32,7 @@ pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
                 if matches!(func.func_name.as_str(), "or" | "or_filters") =>
             {
                 for join_child in join.children() {
-                    let rel_expr = RelExpr::with_s_expr(join_child);
-                    let prop = rel_expr.derive_relational_prop()?;
+                    let prop = join_child.derive_relational_prop()?;
                     if let Some(predicate) =
                         extract_or_predicate(&func.arguments, &prop.used_columns)?
                     {
@@ -62,7 +60,9 @@ fn extract_or_predicate(
     for or_arg in flatten_or_args.iter() {
         let mut sub_scalars = Vec::new();
         match or_arg {
-            ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "and" | "and_filters") =>
+            {
                 let and_args = flatten_and(&func.arguments);
                 for and_arg in and_args.iter() {
                     match and_arg {
@@ -95,11 +95,11 @@ fn extract_or_predicate(
             return Ok(None);
         }
 
-        extracted_scalars.push(make_and_expr(&sub_scalars));
+        extracted_scalars.push(make_and_expr(sub_scalars));
     }
 
     if !extracted_scalars.is_empty() {
-        return Ok(Some(make_or_expr(&extracted_scalars)));
+        return Ok(Some(make_or_expr(extracted_scalars)));
     }
 
     Ok(None)
@@ -128,7 +128,9 @@ fn flatten_and(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
     let mut flattened_and = Vec::new();
     for and_arg in and_args.iter() {
         match and_arg {
-            ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "and" | "and_filters") =>
+            {
                 flattened_and.extend(flatten_and(&func.arguments));
             }
             _ => flattened_and.push(and_arg.clone()),
@@ -138,33 +140,29 @@ fn flatten_and(and_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
 }
 
 // Merge predicates to AND scalar
-fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    scalars
-        .iter()
-        .cloned()
-        .reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "and".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
-        })
-        .unwrap()
+fn make_and_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
+    if scalars.len() == 1 {
+        return scalars.pop().unwrap();
+    }
+    FunctionCall {
+        span: None,
+        func_name: "and_filters".to_string(),
+        params: vec![],
+        arguments: scalars,
+    }
+    .into()
 }
 
 // Merge predicates to OR scalar
-fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    scalars
-        .iter()
-        .cloned()
-        .reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "or".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
-        })
-        .unwrap()
+fn make_or_expr(mut scalars: Vec<ScalarExpr>) -> ScalarExpr {
+    if scalars.len() == 1 {
+        return scalars.pop().unwrap();
+    }
+    FunctionCall {
+        span: None,
+        func_name: "or_filters".to_string(),
+        params: vec![],
+        arguments: scalars,
+    }
+    .into()
 }

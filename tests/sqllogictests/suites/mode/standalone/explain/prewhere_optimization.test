@@ -45,7 +45,7 @@ explain select * from t_where_optimizer where a = 1 or b > 2
 ----
 Filter
 ├── output columns: [t_where_optimizer.a (#0), t_where_optimizer.b (#1)]
-├── filters: [is_true((t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2))]
+├── filters: [t_where_optimizer.a (#0) = 1 or t_where_optimizer.b (#1) > 2]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_where_optimizer
@@ -55,7 +55,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true((t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2))], limit: NONE]
+    ├── push downs: [filters: [t_where_optimizer.a (#0) = 1 or t_where_optimizer.b (#1) > 2], limit: NONE]
     └── estimated rows: 0.00
 
 query T
@@ -73,7 +73,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
+    ├── push downs: [filters: [t_where_optimizer.a (#0) = 1 and t_where_optimizer.b (#1) > 2], limit: NONE]
     └── estimated rows: 0.00
 
 query T

@@ -81,7 +81,6 @@ impl<'a> Selector<'a> {
     }
 
     // Process `SelectExpr`.
-    #[allow(clippy::too_many_arguments)]
     fn process_select_expr(
         &self,
         select_expr: &mut SelectExpr,
@@ -403,7 +402,6 @@ impl<'a> Selector<'a> {
     }
 
     // Process SelectExpr::Others.
-    #[allow(clippy::too_many_arguments)]
     fn process_others(
         &self,
         expr: &Expr,
@@ -444,7 +442,6 @@ impl<'a> Selector<'a> {
         self.select_value(Value::Scalar(constant), data_type, buffers, has_false)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn process_expr(
         &self,
         expr: &Expr,

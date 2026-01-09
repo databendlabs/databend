@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::SampleConfig;
@@ -37,7 +36,6 @@ use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
-use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -330,25 +328,11 @@ impl Operator for Scan {
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
-                let mut statistics = OpStatistics {
-                    precise_cardinality: Some(precise_cardinality),
-                    column_stats,
-                };
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(
-                    &mut statistics,
-                    precise_cardinality as f64,
-                    HashSet::new(),
-                );
-                let mut selectivity = MAX_SELECTIVITY;
-                for pred in prewhere.predicates.iter() {
-                    // Compute selectivity for each conjunction
-                    selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
-                }
-                // Update other columns's statistic according to selectivity.
-                sb.update_other_statistic_by_selectivity(selectivity);
-                column_stats = statistics.column_stats;
-                (precise_cardinality as f64) * selectivity
+                let mut sb = SelectivityEstimator::new(column_stats, precise_cardinality as f64);
+                let cardinality = sb.apply(&prewhere.predicates)?;
+                column_stats = sb.into_column_stats();
+                cardinality
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,

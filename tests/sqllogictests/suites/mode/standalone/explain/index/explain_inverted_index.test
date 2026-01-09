@@ -35,7 +35,7 @@ EXPLAIN SELECT id, content FROM t1 WHERE query('content:"early bird"')
 Filter
 ├── output columns: [t1.id (#0), t1.content (#1)]
 ├── filters: [t1._search_matched (#2)]
-├── estimated rows: 10.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.test_inverted_index_db.t1
     ├── scan id: 0
@@ -63,11 +63,11 @@ RowFetch
     └── Sort(Single)
         ├── output columns: [t1.id (#0), t1._row_id (#3)]
         ├── sort keys: [id ASC NULLS LAST]
-        ├── estimated rows: 10.00
+        ├── estimated rows: 5.00
         └── Filter
             ├── output columns: [t1.id (#0), t1._row_id (#3)]
             ├── filters: [t1._search_matched (#2)]
-            ├── estimated rows: 10.00
+            ├── estimated rows: 5.00
             └── TableScan
                 ├── table: default.test_inverted_index_db.t1
                 ├── scan id: 0
@@ -95,11 +95,11 @@ RowFetch
     └── Sort(Single)
         ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
         ├── sort keys: [_search_score ASC NULLS LAST]
-        ├── estimated rows: 10.00
+        ├── estimated rows: 5.00
         └── Filter
             ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
             ├── filters: [t1._search_matched (#2)]
-            ├── estimated rows: 10.00
+            ├── estimated rows: 5.00
             └── TableScan
                 ├── table: default.test_inverted_index_db.t1
                 ├── scan id: 0
@@ -127,7 +127,7 @@ RowFetch
     └── Filter
         ├── output columns: [t1._row_id (#3)]
         ├── filters: [t1._search_matched (#2)]
-        ├── estimated rows: 10.00
+        ├── estimated rows: 5.00
         └── TableScan
             ├── table: default.test_inverted_index_db.t1
             ├── scan id: 0
@@ -168,7 +168,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE query('content:"early bird"')
 Filter
 ├── output columns: [t2.id (#0), t2.content (#1)]
 ├── filters: [t2._search_matched (#2)]
-├── estimated rows: 10.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.test_inverted_index_db.t2
     ├── scan id: 0
@@ -192,11 +192,11 @@ Limit
 └── Sort(Single)
     ├── output columns: [t2.id (#0), t2.content (#1)]
     ├── sort keys: [id ASC NULLS LAST]
-    ├── estimated rows: 10.00
+    ├── estimated rows: 5.00
     └── Filter
         ├── output columns: [t2.id (#0), t2.content (#1)]
         ├── filters: [t2._search_matched (#2)]
-        ├── estimated rows: 10.00
+        ├── estimated rows: 5.00
         └── TableScan
             ├── table: default.test_inverted_index_db.t2
             ├── scan id: 0
@@ -214,4 +214,3 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_inverted_index_db
-

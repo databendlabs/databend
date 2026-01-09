@@ -649,6 +649,20 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
+    pub fn data_type_remove_generics(&self) -> DataType {
+        match self {
+            Expr::Constant(Constant { data_type, .. }) => data_type.clone(),
+            Expr::ColumnRef(ColumnRef { data_type, .. }) => data_type.clone(),
+            Expr::Cast(Cast { dest_type, .. }) => dest_type.clone(),
+            Expr::FunctionCall(FunctionCall {
+                return_type,
+                generics,
+                ..
+            }) => return_type.remove_generics(generics),
+            Expr::LambdaFunctionCall(LambdaFunctionCall { return_type, .. }) => return_type.clone(),
+        }
+    }
+
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
         struct ColumnRefs<I>(HashMap<I, DataType>);
         impl<I: ColumnIndex> ExprVisitor<I> for ColumnRefs<I> {

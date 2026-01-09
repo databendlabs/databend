@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 
-use super::selectivity::DEFAULT_SELECTIVITY;
 use crate::IndexType;
 
 pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
@@ -67,19 +66,6 @@ impl Ndv {
         match self {
             Ndv::Stat(v) => v,
             Ndv::Max(v) => v,
-        }
-    }
-
-    pub fn equal_selectivity(&self, not: bool) -> f64 {
-        let ndv = self.value();
-        if ndv == 0.0 {
-            0.0
-        } else {
-            let selectivity = if not { 1.0 - 1.0 / ndv } else { 1.0 / ndv };
-            match self {
-                Ndv::Stat(_) => selectivity,
-                Ndv::Max(_) => selectivity.max(DEFAULT_SELECTIVITY),
-            }
         }
     }
 }

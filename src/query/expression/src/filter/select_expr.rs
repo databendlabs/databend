@@ -20,6 +20,7 @@ use itertools::Itertools;
 use crate::Expr;
 use crate::Function;
 use crate::FunctionID;
+use crate::FunctionRegistry;
 use crate::LikePattern;
 use crate::Scalar;
 use crate::expr::*;
@@ -48,14 +49,32 @@ pub enum SelectExpr {
     BooleanScalar((Scalar, DataType)),
 }
 
-#[derive(Default)]
 pub struct SelectExprBuilder {
-    not_function: Option<(FunctionID, Arc<Function>)>,
+    not_function: (FunctionID, Arc<Function>),
+    nullable_not_function: (FunctionID, Arc<Function>),
 }
 
 impl SelectExprBuilder {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(fn_registry: &'static FunctionRegistry) -> Self {
+        let funcs =
+            fn_registry.search_candidates("not", &[], &[Expr::<usize>::Constant(Constant {
+                span: None,
+                scalar: Scalar::Boolean(true),
+                data_type: DataType::Boolean,
+            })]);
+
+        SelectExprBuilder {
+            not_function: funcs
+                .iter()
+                .find(|(id, func)| func.signature.return_type.is_boolean())
+                .unwrap()
+                .clone(),
+            nullable_not_function: funcs
+                .iter()
+                .find(|(id, func)| func.signature.return_type.is_nullable())
+                .unwrap()
+                .clone(),
+        }
     }
 
     pub fn build(&mut self, expr: &Expr) -> SelectExprBuildResult {
@@ -139,7 +158,6 @@ impl SelectExprBuilder {
                             .can_reorder(can_reorder)
                         }
                         "not" => {
-                            self.not_function = Some((*id.clone(), function.clone()));
                             let result = self.build_select_expr(&args[0], not ^ true);
                             if result.can_push_down_not {
                                 result
@@ -215,9 +233,11 @@ impl SelectExprBuilder {
                     .can_push_down_not(false)
             }
             Expr::Constant(Constant {
-                scalar, data_type, ..
-            }) if matches!(data_type, &DataType::Boolean | &DataType::Nullable(box DataType::Boolean)) =>
-            {
+                scalar,
+                data_type:
+                    data_type @ (DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
+                ..
+            }) => {
                 let scalar = if not {
                     match scalar {
                         Scalar::Null => Scalar::Null,
@@ -259,24 +279,31 @@ impl SelectExprBuilder {
 
     fn other_select_expr(&self, expr: &Expr, not: bool) -> SelectExprBuildResult {
         let can_push_down_not = !not
-            || matches!(expr.data_type(), DataType::Boolean | DataType::Nullable(box DataType::Boolean));
-        let expr = if not && can_push_down_not {
-            self.wrap_not(expr)
+            || matches!(expr.data_type_remove_generics(), DataType::Boolean | DataType::Nullable(box DataType::Boolean));
+
+        let expr = SelectExpr::Others(if not && can_push_down_not {
+            self.wrap_not(expr.clone())
         } else {
             expr.clone()
-        };
-        SelectExprBuildResult::new(SelectExpr::Others(expr)).can_push_down_not(can_push_down_not)
+        });
+
+        SelectExprBuildResult::new(expr).can_push_down_not(can_push_down_not)
     }
 
-    fn wrap_not(&self, expr: &Expr) -> Expr {
-        let (id, function) = self.not_function.as_ref().unwrap();
+    fn wrap_not(&self, expr: Expr) -> Expr {
+        let data_type = expr.data_type_remove_generics();
+        let (id, function) = if data_type.is_nullable() {
+            self.nullable_not_function.clone()
+        } else {
+            self.not_function.clone()
+        };
         FunctionCall {
             span: None,
-            id: Box::new(id.clone()),
-            function: function.clone(),
+            id: Box::new(id),
+            return_type: function.signature.return_type.clone(),
+            function,
             generics: vec![],
-            args: vec![expr.clone()],
-            return_type: expr.data_type().clone(),
+            args: vec![expr],
         }
         .into()
     }

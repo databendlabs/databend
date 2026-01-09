@@ -61,8 +61,8 @@ explain select * from t1 inner join t2 on t1.a = t2.a where t2.a <= 2 or (t1.a >
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
-├── filters: [is_true((t2.a (#2) <= 2 OR (t1.a (#0) > 1 AND t2.a (#2) > 1)))]
-├── estimated rows: 2.00
+├── filters: [t2.a (#2) <= 2 or t1.a (#0) > 1 and t2.a (#2) > 1]
+├── estimated rows: 3.56
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── join type: INNER
@@ -72,7 +72,7 @@ Filter
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 2.67
+    ├── estimated rows: 3.56
     ├── TableScan(Build)
     │   ├── table: default.default.t2
     │   ├── scan id: 1
@@ -82,8 +82,8 @@ Filter
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    │   ├── push downs: [filters: [is_true((t2.a (#2) <= 2 OR t2.a (#2) > 1))], limit: NONE]
-    │   └── estimated rows: 2.25
+    │   ├── push downs: [filters: [t2.a (#2) <= 2 or t2.a (#2) > 1], limit: NONE]
+    │   └── estimated rows: 3.00
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── scan id: 0
@@ -93,7 +93,7 @@ Filter
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true((t1.a (#0) <= 2 OR t1.a (#0) > 1))], limit: NONE]
+        ├── push downs: [filters: [t1.a (#0) <= 2 or t1.a (#0) > 1], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 3.56
 

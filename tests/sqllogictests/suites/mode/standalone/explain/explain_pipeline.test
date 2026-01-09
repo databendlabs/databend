@@ -58,7 +58,7 @@ insert into template values(1);
 statement ok
 explain pipeline truncate table template;
 
-query T
+query I
 select * from template;
 ----
 1
