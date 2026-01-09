@@ -29,6 +29,7 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::With;
@@ -627,12 +628,14 @@ impl<R: Rng> SqlGenerator<'_, R> {
 
         let table_ref = TableReference::Table {
             span: None,
-            // TODO
-            catalog: None,
-            // TODO
-            database: table.db_name.clone(),
-            table: table.name.clone(),
-            ref_name: None,
+            table: TableRef {
+                // TODO
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                // TODO
+                branch: None,
+            },
             // TODO
             alias: None,
             // TODO

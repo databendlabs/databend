@@ -263,27 +263,21 @@ impl RewriteVisitor {
     }
 
     fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
-        if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            ..
-        } = table_ref
-        {
-            if let Some(v) = catalog.as_mut() {
+        if let TableReference::Table { table, .. } = table_ref {
+            if let Some(v) = table.catalog.as_mut() {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
                     v.name = mapped_name.clone();
                 }
             }
 
-            if let Some(v) = database.as_mut() {
+            if let Some(v) = table.database.as_mut() {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
                     v.name = mapped_name.clone();
                 }
             }
 
-            if let Some(mapped_name) = self.mapping.get(&table.name) {
-                table.name = mapped_name.clone();
+            if let Some(mapped_name) = self.mapping.get(&table.table.name) {
+                table.table.name = mapped_name.clone();
             }
         }
     }

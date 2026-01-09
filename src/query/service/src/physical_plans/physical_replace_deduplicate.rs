@@ -106,7 +106,7 @@ impl IPhysicalPlan for ReplaceDeduplicate {
 
         let tbl = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None)?;
+            .build_table_by_table_info(&self.table_info, None, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
 
         let mut delete_column_idx = 0;

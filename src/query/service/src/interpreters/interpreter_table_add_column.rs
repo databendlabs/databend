@@ -282,9 +282,11 @@ async fn generate_new_snapshot(
         new_snapshot.schema = new_table_schema.clone();
 
         // write down new snapshot
-        let new_snapshot_location = fuse_table
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
+            None,
+            &new_snapshot.snapshot_id,
+            TableSnapshot::VERSION,
+        )?;
 
         let data = new_snapshot.to_bytes()?;
         fuse_table

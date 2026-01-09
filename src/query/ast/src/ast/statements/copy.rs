@@ -33,11 +33,13 @@ use crate::ast::Query;
 use crate::ast::SelectTarget;
 use crate::ast::TableRef;
 use crate::ast::With;
+use crate::ast::WithOptions;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
+use crate::ast::write_dot_separated_list;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -340,7 +342,12 @@ impl Display for CopyIntoTableSource {
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewritten as `(SELECT * FROM table)`
-    Table(TableRef),
+    Table {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        with_options: Option<WithOptions>,
+    },
 }
 
 impl Display for CopyIntoLocationSource {
@@ -349,8 +356,20 @@ impl Display for CopyIntoLocationSource {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
             }
-            CopyIntoLocationSource::Table(table) => {
-                write!(f, "{}", table)
+            CopyIntoLocationSource::Table {
+                catalog,
+                database,
+                table,
+                with_options,
+            } => {
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(table)),
+                )?;
+                if let Some(with_options) = with_options {
+                    write!(f, " {with_options}")?;
+                }
+                Ok(())
             }
         }
     }

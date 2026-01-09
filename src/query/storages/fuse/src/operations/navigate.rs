@@ -21,7 +21,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -234,24 +233,18 @@ impl FuseTable {
         table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
         // 2. the table option `snapshot_location`
+        let loc = self.meta_location_generator.gen_snapshot_location(
+            self.get_branch_id(),
+            &snapshot.snapshot_id,
+            format_version,
+        )?;
         let new_branch = match self.table_branch.as_ref() {
             Some(branch) => {
-                let loc = self
-                    .meta_location_generator
-                    .ref_snapshot_location_from_uuid(
-                        branch.id,
-                        &snapshot.snapshot_id,
-                        format_version,
-                    )?;
-                Some(SnapshotRef {
-                    loc,
-                    ..branch.clone()
-                })
+                let mut new_branch = branch.clone();
+                new_branch.info.loc = loc;
+                Some(new_branch)
             }
             None => {
-                let loc = self
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
                 table_info
                     .meta
                     .options
@@ -555,6 +548,7 @@ impl FuseTable {
         }
     }
 
+    // Only used when the table branch is none.
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,
@@ -583,9 +577,11 @@ impl FuseTable {
                 .try_check_aborting()
                 .with_context(|| "failed to find snapshot")?;
             if pred(snapshot.as_ref()) {
-                let snapshot_location = self
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+                let snapshot_location = self.meta_location_generator.gen_snapshot_location(
+                    None,
+                    &snapshot.snapshot_id,
+                    format_version,
+                )?;
                 return Ok(snapshot_location);
             }
         }

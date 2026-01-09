@@ -525,9 +525,11 @@ impl IPhysicalPlan for ChunkFillAndReorder {
 
         for fill_and_reorder in &self.fill_and_reorders {
             if let Some(fill_and_reorder) = fill_and_reorder {
-                let table = builder
-                    .ctx
-                    .build_table_by_table_info(&fill_and_reorder.target_table_info, None)?;
+                let table = builder.ctx.build_table_by_table_info(
+                    &fill_and_reorder.target_table_info,
+                    None,
+                    None,
+                )?;
 
                 let table_default_schema = &table.schema().remove_computed_fields();
                 let table_computed_schema = &table.schema().remove_virtual_computed_fields();
@@ -677,9 +679,11 @@ impl IPhysicalPlan for ChunkAppendData {
         let mut sort_num = 0;
 
         for append_data in self.target_tables.iter() {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&append_data.target_table_info, None)?;
+            let table = builder.ctx.build_table_by_table_info(
+                &append_data.target_table_info,
+                None,
+                None,
+            )?;
             let block_thresholds = table.get_block_thresholds();
             compact_task_builders.push(Box::new(
                 builder.block_compact_task_builder(block_thresholds)?,
@@ -902,9 +906,10 @@ impl IPhysicalPlan for ChunkCommitInsert {
         let mut tables = HashMap::new();
 
         for target in &self.targets {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&target.target_table_info, None)?;
+            let table =
+                builder
+                    .ctx
+                    .build_table_by_table_info(&target.target_table_info, None, None)?;
             let block_thresholds = table.get_block_thresholds();
             serialize_segment_builders.push(Box::new(
                 builder.serialize_segment_transform_builder(
