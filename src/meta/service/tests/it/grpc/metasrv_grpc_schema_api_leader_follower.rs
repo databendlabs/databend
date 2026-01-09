@@ -14,7 +14,7 @@
 
 //! Test metasrv SchemaApi by writing to leader and then reading from a follower.
 
-use databend_common_meta_api::SchemaApiTestSuite;
+use databend_common_meta_schema_api_test_suite::SchemaApiTestSuite;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
