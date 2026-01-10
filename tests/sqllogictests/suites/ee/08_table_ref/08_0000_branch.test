@@ -45,6 +45,13 @@ optimize table t1 compact
 statement ok
 ALTER TABLE t1 CREATE BRANCH dev
 
+## Schema change should be rejected if there are active branches
+statement error 1132
+ALTER TABLE t1 MODIFY COLUMN a STRING
+
+statement error 1132
+ALTER TABLE t1 ADD COLUMN c INT64 AS (a + 1) STORED
+
 query IT
 SELECT * FROM t1/dev ORDER BY a
 ----
@@ -109,6 +116,16 @@ SELECT * FROM t1/from_dev ORDER BY a
 1 a
 2 b
 3 c
+
+statement ok
+ALTER TABLE t1 ADD COLUMN c INT default 0
+
+query ITI
+SELECT * FROM t1/from_dev ORDER BY a
+----
+1 a 0
+2 b 0
+3 c 0
 
 ## Test duplicate branch name
 statement error 2746
