@@ -439,7 +439,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_and_table_rename<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -571,7 +570,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_create_get_drop<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         &self,
         mt: &MT,
@@ -744,7 +742,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_create_get_drop_in_diff_tenant<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi,
     >(
@@ -835,7 +832,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_list<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         &self,
         mt: &MT,
@@ -879,7 +875,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_list_in_diff_tenant<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         &self,
         mt: &MT,
@@ -933,7 +928,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_rename<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         &self,
         mt: &MT,
@@ -1038,7 +1032,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn get_tenant_history_databases<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         &self,
         mt: &MT,
@@ -1094,7 +1087,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_drop_undrop_list_history<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi,
     >(
@@ -1326,7 +1318,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn catalog_create_get_list_drop<MT: kvapi::KVApi<Error = MetaError> + CatalogApi>(
         &self,
         mt: &MT,
@@ -1384,7 +1375,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn drop_table_without_tableid_to_name<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -1434,7 +1424,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_least_visible_time<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -1511,7 +1500,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn vacuum_retention_timestamp<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
     >(
@@ -1595,7 +1583,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_create_get_drop<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -2126,7 +2113,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_drop_without_db_id_to_name<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb2", "JSON");
@@ -2152,7 +2138,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn list_db_without_db_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi {
         // test drop a db without db_id_list
@@ -2220,7 +2205,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn drop_table_without_table_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         // test drop a table without table_id_list
@@ -2257,7 +2241,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_rename<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -2494,7 +2477,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_swap<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -2667,7 +2649,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_update_meta<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -3084,7 +3065,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_update_mask_policy<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + SecurityApi + DatamaskApi,
     >(
@@ -3421,7 +3401,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_update_row_access_policy<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + SecurityApi + RowAccessPolicyApi,
     >(
@@ -3611,7 +3590,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_upsert_option<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -3757,7 +3735,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn mask_policy_drop_with_table_lifecycle<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + SecurityApi + DatamaskApi,
     >(
@@ -3921,7 +3898,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn row_access_policy_drop_with_table_lifecycle<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + SecurityApi + RowAccessPolicyApi,
     >(
@@ -4097,7 +4073,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_drop_out_of_retention_time_history<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi,
     >(
@@ -4167,7 +4142,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn create_out_of_retention_time_db<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi>(
         self,
         mt: &MT,
@@ -4207,7 +4181,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn database_gc_out_of_retention_time<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
     >(
@@ -4294,7 +4267,6 @@ impl SchemaApiTestSuite {
     }
 
     /// Return table id and table meta
-    #[fastrace::trace]
     async fn create_out_of_retention_time_table<MT: kvapi::KVApi<Error = MetaError> + TableApi>(
         self,
         mt: &MT,
@@ -4350,7 +4322,6 @@ impl SchemaApiTestSuite {
         Ok((table_id, drop_data))
     }
 
-    #[fastrace::trace]
     async fn table_gc_out_of_retention_time<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
     >(
@@ -4508,7 +4479,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn db_table_gc_out_of_retention_time<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi + IndexApi,
     >(
@@ -4715,7 +4685,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_drop_out_of_retention_time_history<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -4773,7 +4742,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_history_filter<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -5107,7 +5075,6 @@ impl SchemaApiTestSuite {
     // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE]
     // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE - 1]
     // case 5: with limit 3 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
-    #[fastrace::trace]
     async fn table_history_filter_with_limit<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -5291,7 +5258,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_drop_undrop_list_history<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -5595,7 +5561,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_commit_table_meta<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
     >(
@@ -5871,7 +5836,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn concurrent_commit_table_meta<
         B: kvapi::ApiBuilder<MT>,
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + 'static,
@@ -5977,7 +5941,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn get_table_by_id<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -6064,7 +6027,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn get_table_name_by_id<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         let tenant_name = "tenant1";
@@ -6099,7 +6061,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn get_db_name_by_id<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi {
         let tenant_name = "tenant1";
@@ -6146,7 +6107,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn test_sequence_0<MT: kvapi::KVApi<Error = MetaError> + SequenceApi>(
         &self,
         mt: &MT,
@@ -6154,7 +6114,6 @@ impl SchemaApiTestSuite {
         self.test_sequence_with_version(mt, 0).await
     }
 
-    #[fastrace::trace]
     async fn test_sequence_1<MT: kvapi::KVApi<Error = MetaError> + SequenceApi>(
         &self,
         mt: &MT,
@@ -6162,7 +6121,6 @@ impl SchemaApiTestSuite {
         self.test_sequence_with_version(mt, 1).await
     }
 
-    #[fastrace::trace]
     async fn test_sequence_with_version<MT: kvapi::KVApi<Error = MetaError> + SequenceApi>(
         &self,
         mt: &MT,
@@ -6305,7 +6263,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn get_table_copied_file<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -6453,7 +6410,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn truncate_table<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         let mut util = DbTableHarness::new(mt, "tenant1", "db1", "tb2", "JSON");
@@ -6508,7 +6464,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_list<MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi>(
         &self,
         mt: &MT,
@@ -6582,7 +6537,6 @@ impl SchemaApiTestSuite {
     }
 
     /// Test listing many tables that exceeds default mget chunk size.
-    #[fastrace::trace]
     async fn table_list_many<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         // Create tables that exceeds the default mget chunk size
@@ -6627,7 +6581,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_index_create_drop<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + IndexApi,
     >(
@@ -7027,7 +6980,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + IndexApi {
         let tenant_name = "tenant1";
@@ -7360,7 +7312,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + LockApi {
         let tenant_name = "tenant1";
@@ -7881,7 +7832,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn update_table_with_copied_files<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
     >(
@@ -8100,7 +8050,6 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     async fn dictionary_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + DictionaryApi {
         let tenant_name = "tenant1";
