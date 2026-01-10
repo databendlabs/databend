@@ -140,6 +140,12 @@ impl Interpreter for AddTableColumnInterpreter {
                     table_info.desc
                 )));
             }
+            if fuse_table.contains_active_branches() {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Adding stored computed columns is not allowed on table '{}' while it has active branches",
+                    table_info.desc
+                )));
+            }
             let base_snapshot = fuse_table.read_table_snapshot().await?;
             let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
             let table_meta_timestamps = self

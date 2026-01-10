@@ -25,6 +25,7 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use chrono::Utc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -62,6 +63,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SnapshotRef;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -832,6 +834,15 @@ impl FuseTable {
             && self
                 .cluster_type()
                 .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
+    }
+
+    pub fn contains_active_branches(&self) -> bool {
+        let now = Utc::now();
+        self.table_info
+            .meta
+            .refs
+            .values()
+            .any(|r| r.typ == SnapshotRefType::Branch && r.expire_at.is_none_or(|t| t > now))
     }
 }
 

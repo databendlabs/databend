@@ -401,6 +401,13 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
+        if fuse_table.contains_active_branches() {
+            return Err(ErrorCode::AlterTableError(format!(
+                "table {} has active branches, modifying columns should be avoided",
+                table_info.desc
+            )));
+        }
+
         // construct sql for selecting data from old table.
         // computed columns are ignored, as it is build from other columns.
         let query_fields = new_schema_without_computed_fields
