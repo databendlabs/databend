@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -32,6 +38,9 @@ use parquet::schema::types::ColumnPath;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
+const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.9;
+const DELTA_RANGE_TOLERANCE: f64 = 1.05;
+const DELTA_MIN_NDV: u64 = 1024;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -40,6 +49,7 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
     enable_dictionary: bool,
+    enable_parquet_int32_delta_encoding: bool,
     metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
     blocks_to_parquet_with_stats(
@@ -48,6 +58,7 @@ pub fn blocks_to_parquet(
         write_buffer,
         compression,
         enable_dictionary,
+        enable_parquet_int32_delta_encoding,
         metadata,
         None,
     )
@@ -69,6 +80,7 @@ pub fn blocks_to_parquet_with_stats(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
     enable_dictionary: bool,
+    enable_parquet_int32_delta_encoding: bool,
     metadata: Option<Vec<KeyValue>>,
     column_stats: Option<&StatisticsOfColumns>,
 ) -> Result<FileMetaData> {
@@ -78,11 +90,15 @@ pub fn blocks_to_parquet_with_stats(
     // the streaming writer and only rely on the first block's NDV (and row count) snapshot.
     let num_rows = blocks[0].num_rows();
     let arrow_schema = Arc::new(table_schema.into());
+    let column_metrics = column_stats.map(ColumnStatsView);
 
     let props = build_parquet_writer_properties(
         compression,
         enable_dictionary,
-        column_stats,
+        enable_parquet_int32_delta_encoding,
+        column_metrics
+            .as_ref()
+            .map(|view| view as &dyn EncodingStatsProvider),
         metadata,
         num_rows,
         table_schema,
@@ -105,7 +121,8 @@ pub fn blocks_to_parquet_with_stats(
 pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,
-    cols_stats: Option<impl NdvProvider>,
+    enable_parquet_int32_delta_encoding: bool,
+    column_metrics: Option<&dyn EncodingStatsProvider>,
     metadata: Option<Vec<KeyValue>>,
     num_rows: usize,
     table_schema: &TableSchema,
@@ -120,27 +137,62 @@ pub fn build_parquet_writer_properties(
         .set_key_value_metadata(metadata);
 
     if enable_dictionary {
-        // Enable dictionary for all columns
-        builder = builder
-            .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_dictionary_enabled(true);
-        if let Some(cols_stats) = cols_stats {
-            // Disable dictionary of columns that have high cardinality
-            for (column_id, components) in table_schema_arrow_leaf_paths(table_schema) {
-                if let Some(ndv) = cols_stats.column_ndv(&column_id) {
+        builder = builder.set_dictionary_enabled(true);
+    } else {
+        builder = builder.set_dictionary_enabled(false);
+    }
+
+    if enable_dictionary || enable_parquet_int32_delta_encoding {
+        builder = builder.set_writer_version(WriterVersion::PARQUET_2_0);
+    }
+
+    let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(table_schema)
+        .into_iter()
+        .map(|(id, path)| (id, ColumnPath::from(path)))
+        .collect();
+
+    if enable_dictionary {
+        if let Some(metrics) = column_metrics {
+            for (column_id, column_path) in &column_paths {
+                if let Some(ndv) = metrics.column_ndv(column_id) {
                     if num_rows > 0
                         && (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD
                     {
-                        builder = builder
-                            .set_column_dictionary_enabled(ColumnPath::from(components), false);
+                        builder = builder.set_column_dictionary_enabled(column_path.clone(), false);
                     }
                 }
             }
         }
-        builder.build()
-    } else {
-        builder.set_dictionary_enabled(false).build()
     }
+
+    if enable_parquet_int32_delta_encoding {
+        if let Some(metrics) = column_metrics {
+            for field in table_schema.leaf_fields() {
+                if !matches!(
+                    field.data_type().remove_nullable(),
+                    TableDataType::Number(NumberDataType::Int32)
+                ) {
+                    continue;
+                }
+                let column_id = field.column_id();
+                let Some(stats) = metrics.column_stats(&column_id) else {
+                    continue;
+                };
+                let Some(ndv) = metrics.column_ndv(&column_id) else {
+                    continue;
+                };
+                if should_apply_int32_delta(stats, ndv, num_rows) {
+                    if let Some(path) = column_paths.get(&column_id) {
+                        builder = builder
+                            .set_column_dictionary_enabled(path.clone(), false)
+                            .set_column_encoding(path.clone(), Encoding::DELTA_BINARY_PACKED);
+                    }
+                }
+            }
+        }
+    }
+
+    builder.build()
 }
 
 /// Provides per column NDV statistics
@@ -151,6 +203,65 @@ pub trait NdvProvider {
 impl NdvProvider for &StatisticsOfColumns {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.get(column_id).and_then(|item| item.distinct_of_values)
+    }
+}
+
+pub trait EncodingStatsProvider: NdvProvider {
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics>;
+}
+
+struct ColumnStatsView<'a>(&'a StatisticsOfColumns);
+
+impl<'a> NdvProvider for ColumnStatsView<'a> {
+    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+        self.0
+            .get(column_id)
+            .and_then(|item| item.distinct_of_values)
+    }
+}
+
+impl<'a> EncodingStatsProvider for ColumnStatsView<'a> {
+    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
+        self.0.get(column_id)
+    }
+}
+
+fn should_apply_int32_delta(stats: &ColumnStatistics, ndv: u64, num_rows: usize) -> bool {
+    if ndv < DELTA_MIN_NDV || num_rows == 0 || stats.null_count > 0 {
+        return false;
+    }
+    let Some(min) = scalar_to_i64(&stats.min) else {
+        return false;
+    };
+    let Some(max) = scalar_to_i64(&stats.max) else {
+        return false;
+    };
+    if max <= min {
+        return false;
+    }
+    let ndv_ratio = ndv as f64 / num_rows as f64;
+    if ndv_ratio < DELTA_HIGH_CARDINALITY_RATIO {
+        return false;
+    }
+    let span = (max - min + 1) as f64;
+    let contiguous_ratio = span / ndv as f64;
+    contiguous_ratio <= DELTA_RANGE_TOLERANCE
+}
+
+fn scalar_to_i64(val: &Scalar) -> Option<i64> {
+    match val {
+        Scalar::Number(num) => match num {
+            NumberScalar::Int8(v) => Some(*v as i64),
+            NumberScalar::Int16(v) => Some(*v as i64),
+            NumberScalar::Int32(v) => Some(*v as i64),
+            NumberScalar::Int64(v) => Some(*v),
+            NumberScalar::UInt8(v) => Some(*v as i64),
+            NumberScalar::UInt16(v) => Some(*v as i64),
+            NumberScalar::UInt32(v) => Some(*v as i64),
+            NumberScalar::UInt64(v) => i64::try_from(*v).ok(),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -171,6 +282,12 @@ mod tests {
     impl NdvProvider for TestNdvProvider {
         fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
             self.ndv.get(column_id).copied()
+        }
+    }
+
+    impl EncodingStatsProvider for TestNdvProvider {
+        fn column_stats(&self, _column_id: &ColumnId) -> Option<&ColumnStatistics> {
+            None
         }
     }
 
@@ -211,10 +328,12 @@ mod tests {
             .map(|(id, path)| (id, ColumnPath::from(path)))
             .collect();
 
+        let provider = TestNdvProvider { ndv };
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
             true,
-            Some(TestNdvProvider { ndv }),
+            false,
+            Some(&provider),
             None,
             1000,
             &schema,
@@ -250,7 +369,8 @@ mod tests {
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
             false,
-            None::<TestNdvProvider>,
+            false,
+            None,
             None,
             1000,
             &schema,

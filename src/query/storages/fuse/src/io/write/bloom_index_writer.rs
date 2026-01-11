@@ -78,6 +78,7 @@ impl BloomIndexState {
             &mut data,
             TableCompression::None,
             false,
+            false,
             None,
         )?;
         let data_size = data.len() as u64;

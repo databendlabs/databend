@@ -78,6 +78,7 @@ impl ResultCacheWriter {
             &mut buf,
             TableCompression::None,
             false,
+            false,
             None,
         )?;
 

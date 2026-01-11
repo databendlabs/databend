@@ -339,7 +339,21 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            enable_parquet_int32_delta_encoding: true,
         }
+    }
+
+    pub fn get_write_settings_with_ctx(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+    ) -> Result<WriteSettings> {
+        let mut settings = self.get_write_settings();
+        if matches!(settings.storage_format, FuseStorageFormat::Parquet) {
+            settings.enable_parquet_int32_delta_encoding = ctx
+                .get_settings()
+                .get_enable_parquet_int32_delta_encoding()?;
+        }
+        Ok(settings)
     }
 
     /// Get max page size.

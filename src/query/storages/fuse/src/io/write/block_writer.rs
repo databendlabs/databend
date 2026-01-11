@@ -97,6 +97,7 @@ pub fn serialize_block_with_column_stats(
                 buf,
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
+                write_settings.enable_parquet_int32_delta_encoding,
                 None,
                 column_stats,
             )?;

@@ -216,6 +216,7 @@ impl VectorIndexBuilder {
             TableCompression::Zstd,
             // No dictionary page for vector index
             false,
+            false,
             Some(metadata),
         )?;
 
@@ -321,6 +322,7 @@ impl VectorIndexBuilder {
             // Zstd has the best compression ratio
             TableCompression::Zstd,
             // No dictionary page for vector index
+            false,
             false,
             Some(metadata),
         )?;
