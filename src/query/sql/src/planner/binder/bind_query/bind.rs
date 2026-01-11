@@ -58,7 +58,7 @@ struct CTERefCounter {
 impl CTERefCounter {
     fn enter_table_reference(&mut self, table_ref: &TableReference) {
         if let TableReference::Table { table, .. } = table_ref {
-            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+            let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
             if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
                 *count += 1;
             }
@@ -356,12 +356,9 @@ impl TableNameReplacer {
 
     #[recursive::recursive]
     fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
-        if let TableReference::Table {
-            database, table, ..
-        } = table_reference
-        {
-            if database.is_none() || database.as_ref().unwrap().name == self.database {
-                self.replace_identifier(table);
+        if let TableReference::Table { table, .. } = table_reference {
+            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
+                self.replace_identifier(&mut table.table);
             }
         }
     }

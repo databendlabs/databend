@@ -102,8 +102,6 @@ impl Binder {
     ) -> Result<Plan> {
         let InsertStmt {
             with,
-            catalog,
-            database,
             table,
             columns,
             source,
@@ -113,16 +111,23 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None, &None);
-        let (catalog_name, database_name, table_name) = (
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let (catalog_name, database_name, table_name, branch_name) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
+            table_identifier.branch_name(),
         );
 
         let table = self
             .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
+            .get_table_with_batch(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                branch_name.as_deref(),
+                None,
+            )
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
@@ -155,6 +160,13 @@ impl Binder {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
+                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
+                        // Planned to be implemented in the next PR.
+                        if branch_name.is_some() {
+                            return Err(ErrorCode::Unimplemented(
+                                "Insert into branch from stage is not supported yet",
+                            ));
+                        }
                         return self
                             .bind_copy_from_attachment(
                                 bind_context,
@@ -227,6 +239,13 @@ impl Binder {
                         }))
                     }
                     loc => {
+                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
+                        // Planned to be implemented in the next PR.
+                        if branch_name.is_some() {
+                            return Err(ErrorCode::Unimplemented(
+                                "Insert into branch from stage is not supported yet",
+                            ));
+                        }
                         let (mut stage_info, path) =
                             resolve_stage_location(self.ctx.as_ref(), loc).await?;
                         stage_info.file_format_params = file_format_params;
@@ -263,9 +282,10 @@ impl Binder {
         };
 
         let plan = Insert {
-            catalog: catalog_name.to_string(),
-            database: database_name.to_string(),
+            catalog: catalog_name,
+            database: database_name,
             table: table_name,
+            branch: branch_name,
             schema,
             overwrite: *overwrite,
             source: input_source?,

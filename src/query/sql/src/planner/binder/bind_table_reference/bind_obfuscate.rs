@@ -25,6 +25,7 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -187,10 +188,12 @@ fn build_subquery(
 
     let table = TableReference::Table {
         span: None,
-        catalog: None,
-        database: Some(database.clone()),
-        table: table_name.clone(),
-        ref_name: None,
+        table: TableRef {
+            catalog: None,
+            database: Some(database.clone()),
+            table: table_name.clone(),
+            branch: None,
+        },
         alias: None,
         temporal: None,
         with_options: None,

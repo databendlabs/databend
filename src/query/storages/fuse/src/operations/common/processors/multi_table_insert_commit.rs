@@ -298,7 +298,7 @@ async fn build_update_table_meta_req(
 
     // build new table meta
     let new_table_meta =
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
+        fuse_table.build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
     let table_id = fuse_table.table_info.ident.table_id;
     let table_version = fuse_table.table_info.ident.seq;
 

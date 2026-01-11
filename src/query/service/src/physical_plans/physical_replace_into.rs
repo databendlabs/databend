@@ -111,7 +111,7 @@ impl IPhysicalPlan for ReplaceInto {
         let segment_partition_num = std::cmp::min(self.segments.len(), max_threads as usize);
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None)?;
+            .build_table_by_table_info(&self.table_info, None, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let schema = DataSchema::from(table.schema()).into();
         let cluster_stats_gen = table.get_cluster_stats_gen(

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use derive_visitor::VisitorMut;
 
@@ -26,10 +27,7 @@ impl ViewRewriter {
     fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
         if let TableReference::Table {
             span,
-            catalog,
-            database,
             table,
-            ref_name,
             alias,
             temporal,
             with_options,
@@ -43,14 +41,16 @@ impl ViewRewriter {
             // create view default.v_t as select * from t;
             // use db1; -- db1 does not contain table `t`
             // select * from default.v_t; => select * from (select * from t); -- will return err that unknown table db1.t
-            if database.is_none() {
+            if table.database.is_none() {
                 let database = Some(Identifier::from_name(*span, self.current_database.clone()));
                 *table_ref = TableReference::Table {
                     span: *span,
-                    catalog: catalog.clone(),
-                    database,
-                    table: table.clone(),
-                    ref_name: ref_name.clone(),
+                    table: TableRef {
+                        catalog: table.catalog.clone(),
+                        database,
+                        table: table.table.clone(),
+                        branch: table.branch.clone(),
+                    },
                     alias: alias.clone(),
                     temporal: temporal.clone(),
                     with_options: with_options.clone(),

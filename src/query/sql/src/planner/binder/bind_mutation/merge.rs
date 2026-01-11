@@ -16,6 +16,7 @@ use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::MergeOption;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
@@ -52,10 +53,12 @@ impl Binder {
 
         let target_reference = TableReference::Table {
             span: None,
-            catalog: stmt.catalog.clone(),
-            database: stmt.database.clone(),
-            table: stmt.table_ident.clone(),
-            ref_name: None,
+            table: TableRef {
+                catalog: stmt.catalog.clone(),
+                database: stmt.database.clone(),
+                table: stmt.table_ident.clone(),
+                branch: None,
+            },
             alias: stmt.target_alias.clone(),
             temporal: None,
             with_options: None,

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -64,6 +64,7 @@ impl FuseSnapshotFunc {
         location_generator: &TableMetaLocationGenerator,
         snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
+        branch_id: Option<u64>,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<String> = Vec::with_capacity(len);
@@ -85,10 +86,11 @@ impl FuseSnapshotFunc {
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.simple().to_string());
-            snapshot_locations.push(
-                location_generator
-                    .snapshot_location_from_uuid(&s.snapshot_id, current_snapshot_version)?,
-            );
+            snapshot_locations.push(location_generator.gen_snapshot_location(
+                branch_id,
+                &s.snapshot_id,
+                current_snapshot_version,
+            )?);
             let (id, ver) = s
                 .prev_snapshot_id
                 .map_or((None, 0), |(id, v)| (Some(id.simple().to_string()), v));
@@ -192,20 +194,22 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let tenant_id = ctx.get_tenant();
+        let (table_name, branch_name) = parse_table_name(self.args.table_name.as_str())?;
+        let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                self.args.database_name.as_str(),
-                self.args.table_name.as_str(),
+            .get_table_with_batch(
+                &current_catalog,
+                &self.args.database_name,
+                &table_name,
+                branch_name.as_deref(),
+                None,
             )
             .await?;
 
         let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther("Invalid table engine, only FUSE table supports fuse_snapshot")
         })?;
+        let branch_id = table.get_branch_id();
 
         let meta_location_generator = table.meta_location_generator.clone();
         let snapshot_location = table.snapshot_loc();
@@ -241,7 +245,7 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                         table.operator.clone(),
                         meta_location_generator.clone(),
                         snapshot_location,
-                        table.get_branch_id(),
+                        branch_id,
                         limit,
                     )
                     .await?;
@@ -258,6 +262,7 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 &meta_location_generator,
                 &snapshot_lite,
                 snapshot_version,
+                branch_id,
             )?));
         }
         Ok(Some(DataBlock::empty_with_schema(Arc::new(

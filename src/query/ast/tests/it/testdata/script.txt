@@ -500,17 +500,19 @@ Return {
                                     span: Some(
                                         34..36,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            34..36,
-                                        ),
-                                        name: "t1",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                34..36,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -1822,17 +1824,19 @@ Loop {
                                     span: Some(
                                         28..29,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            28..29,
-                                        ),
-                                        name: "t",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                28..29,
+                                            ),
+                                            name: "t",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,

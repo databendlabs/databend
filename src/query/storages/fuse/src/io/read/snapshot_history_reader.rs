@@ -82,12 +82,8 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                     let next = snapshot
                         .prev_snapshot_id
                         .map(|(prev_id, prev_ver)| {
-                            let next_loc = if let Some(id) = branch_id {
-                                loc_gen.ref_snapshot_location_from_uuid(id, &prev_id, prev_ver)
-                            } else {
-                                loc_gen.snapshot_location_from_uuid(&prev_id, prev_ver)
-                            };
-
+                            let next_loc =
+                                loc_gen.gen_snapshot_location(branch_id, &prev_id, prev_ver);
                             next_loc.map(|loc| (loc, prev_ver))
                         })
                         .transpose()?;

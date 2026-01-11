@@ -99,6 +99,7 @@ pub use lock::LockMeta;
 pub use lock::LockType;
 pub use ownership::Ownership;
 pub use sequence::*;
+pub use table::BranchInfo;
 pub use table::CommitTableMetaReply;
 pub use table::CommitTableMetaReq;
 pub use table::CreateTableIndexReq;

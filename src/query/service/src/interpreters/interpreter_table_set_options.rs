@@ -278,9 +278,11 @@ async fn set_segment_format(
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
-    let location = fuse_table
-        .meta_location_generator()
-        .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    let location = fuse_table.meta_location_generator().gen_snapshot_location(
+        None,
+        &new_snapshot.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
 
     fuse_table
         .get_operator()

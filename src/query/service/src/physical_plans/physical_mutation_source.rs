@@ -119,7 +119,7 @@ impl IPhysicalPlan for MutationSource {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None)?;
+            .build_table_by_table_info(&self.table_info, None, None)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
         let is_delete = self.input_type == MutationType::Delete;

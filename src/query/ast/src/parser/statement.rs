@@ -3007,21 +3007,11 @@ pub fn insert_stmt(
         map_res(
             rule! {
                 #with? ~ INSERT ~ #hint? ~ OVERWRITE? ~ INTO?  ~ TABLE?
-                ~ #dot_separated_idents_1_to_3
+                ~ #table_ref
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(
-                with,
-                _,
-                opt_hints,
-                overwrite,
-                into,
-                _,
-                (catalog, database, table),
-                opt_columns,
-                source,
-            )| {
+            |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
                     return Err(nom::Err::Failure(ErrorKind::Other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
@@ -3030,8 +3020,6 @@ pub fn insert_stmt(
                 Ok(Statement::Insert(InsertStmt {
                     hints: opt_hints,
                     with,
-                    catalog,
-                    database,
                     table,
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)

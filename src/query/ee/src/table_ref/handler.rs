@@ -123,13 +123,11 @@ impl TableRefHandler for RealTableRefHandler {
         };
 
         // write down new snapshot
-        let new_snapshot_location = fuse_table
-            .meta_location_generator()
-            .ref_snapshot_location_from_uuid(
-                seq,
-                &new_snapshot.snapshot_id,
-                new_snapshot.format_version,
-            )?;
+        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
+            Some(seq),
+            &new_snapshot.snapshot_id,
+            new_snapshot.format_version,
+        )?;
         let data = new_snapshot.to_bytes()?;
         fuse_table
             .get_operator_ref()

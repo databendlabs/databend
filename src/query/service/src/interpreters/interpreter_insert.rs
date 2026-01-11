@@ -18,6 +18,7 @@ use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -114,7 +115,13 @@ impl Interpreter for InsertInterpreter {
                 .get_table_by_info(table_info)?
         } else {
             self.ctx
-                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .get_table_with_batch(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                    self.plan.branch.as_deref(),
+                    None,
+                )
                 .await?
         };
 
@@ -214,6 +221,8 @@ impl Interpreter for InsertInterpreter {
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
+                    let table_info = TableInfoWithBranch::new(table1.get_table_info())
+                        .with_branch(self.plan.branch.clone());
                     if table.support_distributed_insert()
                         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {
@@ -221,7 +230,7 @@ impl Interpreter for InsertInterpreter {
                         let input = exchange.input.clone();
                         exchange.derive(vec![PhysicalPlan::new(DistributedInsertSelect {
                             input,
-                            table_info: table1.get_table_info().clone(),
+                            table_info,
                             select_schema: plan.schema(),
                             select_column_bindings,
                             insert_schema: self.plan.dest_schema(),
@@ -235,7 +244,7 @@ impl Interpreter for InsertInterpreter {
                             // TODO: we reuse the id of other plan here,
                             // which is not correct. We should generate a new id for insert.
                             input: select_plan,
-                            table_info: table1.get_table_info().clone(),
+                            table_info,
                             select_schema: plan.schema(),
                             select_column_bindings,
                             insert_schema: self.plan.dest_schema(),
@@ -263,7 +272,7 @@ impl Interpreter for InsertInterpreter {
                 )?;
 
                 //  Execute the hook operator.
-                {
+                if self.plan.branch.is_none() {
                     let hook_operator = HookOperator::create(
                         self.ctx.clone(),
                         self.plan.catalog.clone(),
@@ -326,7 +335,7 @@ impl Interpreter for InsertInterpreter {
         )?;
 
         //  Execute the hook operator.
-        {
+        if self.plan.branch.is_none() {
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 self.plan.catalog.clone(),

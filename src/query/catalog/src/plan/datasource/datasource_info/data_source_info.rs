@@ -15,18 +15,18 @@
 use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::schema::TableInfo;
 
 use crate::catalog::CATALOG_DEFAULT;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
 use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
+use crate::table::TableInfoWithBranch;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
-    TableSource(TableInfo),
+    TableSource(TableInfoWithBranch),
     // Internal/External source, like `s3://` or `azblob://`.
     StageSource(StageTableInfo),
     // stage source with parquet format used for select.
@@ -40,7 +40,7 @@ pub enum DataSourceInfo {
 impl DataSourceInfo {
     pub fn schema(&self) -> Arc<TableSchema> {
         match self {
-            DataSourceInfo::TableSource(table_info) => table_info.schema(),
+            DataSourceInfo::TableSource(table_info) => table_info.inner.schema(),
             DataSourceInfo::StageSource(table_info) => table_info.schema(),
             DataSourceInfo::ParquetSource(table_info) => table_info.schema(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.schema(),
@@ -55,7 +55,7 @@ impl DataSourceInfo {
     pub fn catalog_name(&self) -> &str {
         match self {
             DataSourceInfo::TableSource(table_info) => {
-                &table_info.catalog_info.name_ident.catalog_name
+                &table_info.inner.catalog_info.name_ident.catalog_name
             }
             _ => CATALOG_DEFAULT,
         }
@@ -63,7 +63,7 @@ impl DataSourceInfo {
 
     pub fn desc(&self) -> String {
         match self {
-            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
+            DataSourceInfo::TableSource(table_info) => table_info.inner.desc.clone(),
             DataSourceInfo::StageSource(table_info) => table_info.desc(),
             DataSourceInfo::ParquetSource(table_info) => table_info.desc(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.desc(),

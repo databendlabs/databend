@@ -7,15 +7,18 @@ Insert(
     InsertStmt {
         hints: None,
         with: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                12..13,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         columns: [
             Identifier {
@@ -53,15 +56,18 @@ Insert(
     InsertStmt {
         hints: None,
         with: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                12..13,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         columns: [
             Identifier {
@@ -99,15 +105,18 @@ Insert(
     InsertStmt {
         hints: None,
         with: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                18..19,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    18..19,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         columns: [],
         source: Select {
@@ -141,17 +150,19 @@ Insert(
                                 span: Some(
                                     34..36,
                                 ),
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        34..36,
-                                    ),
-                                    name: "t2",
-                                    quote: None,
-                                    ident_type: None,
+                                table: TableRef {
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            34..36,
+                                        ),
+                                        name: "t2",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    branch: None,
                                 },
-                                ref_name: None,
                                 alias: None,
                                 temporal: None,
                                 with_options: None,
