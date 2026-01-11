@@ -31,6 +31,7 @@ mod sync_crash_me;
 mod system;
 mod table_function;
 mod table_function_factory;
+mod tag_references;
 mod temporary_tables_table;
 mod udf_table;
 
@@ -46,5 +47,6 @@ pub use system::get_fuse_table_snapshot;
 pub use system::get_fuse_table_statistics;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;
+pub use tag_references::TagReferencesTable;
 pub use temporary_tables_table::TemporaryTablesTable;
 pub use udf_table::UDTFTable;

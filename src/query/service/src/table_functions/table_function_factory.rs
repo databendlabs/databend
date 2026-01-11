@@ -66,6 +66,7 @@ use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::system::TableStatisticsFunc;
+use crate::table_functions::tag_references::TagReferencesTable;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -322,6 +323,11 @@ impl TableFunctionFactory {
         creators.insert(
             "policy_references".to_string(),
             (next_id(), Arc::new(PolicyReferencesTable::create)),
+        );
+
+        creators.insert(
+            "tag_references".to_string(),
+            (next_id(), Arc::new(TagReferencesTable::create)),
         );
 
         creators.insert(
