@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SnapshotRef;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
@@ -90,6 +91,7 @@ impl TableRefHandler for RealTableRefHandler {
             None => fuse_table.snapshot_loc(),
         };
 
+        let schema = table_info.schema();
         let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
             .read_table_snapshot_with_location(snapshot_loc)
             .await?
@@ -100,6 +102,12 @@ impl TableRefHandler for RealTableRefHandler {
                     that is no longer directly supported by the current version and requires migration. \
                     Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
                     table_id
+                )));
+            }
+            if plan.ref_type == SnapshotRefType::Branch && schema.as_ref() != &snapshot.schema {
+                return Err(ErrorCode::IllegalReference(format!(
+                    "Cannot create branch from snapshot '{}' with a different schema",
+                    snapshot.snapshot_id,
                 )));
             }
             let mut new_snapshot = TableSnapshot::try_from_previous(
@@ -113,7 +121,7 @@ impl TableRefHandler for RealTableRefHandler {
             let new_snapshot = TableSnapshot::try_new(
                 Some(seq),
                 None,
-                table_info.schema().as_ref().clone(),
+                schema.as_ref().clone(),
                 Default::default(),
                 vec![],
                 None,

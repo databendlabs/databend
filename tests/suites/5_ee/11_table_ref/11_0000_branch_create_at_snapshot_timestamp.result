@@ -1,0 +1,14 @@
+drop database if exists test_ee_11_table_ref
+create database test_ee_11_table_ref
+create table t11_0000(a int)
+two insertions
+latest snapshot should contain 3 rows
+3
+create branch at snapshot (expect 2 rows)
+2
+create branch at timestamp (expect 2 rows)
+2
+alter table schema
+create branch from old snapshot after schema change should fail
+1
+1
