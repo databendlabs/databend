@@ -4994,6 +4994,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner",
+ "futures",
  "jsonb",
  "lexical-core",
  "log",
