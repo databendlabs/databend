@@ -22,6 +22,7 @@ use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
 
@@ -34,6 +35,7 @@ pub fn column_chunks_to_record_batch(
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
+    selection: Option<RowSelection>,
 ) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
@@ -70,7 +72,7 @@ pub fn column_chunks_to_record_batch(
         &field_levels,
         row_group.as_ref(),
         num_rows,
-        None,
+        selection,
     )?;
     let record = record_reader.next().unwrap()?;
     assert!(record_reader.next().is_none());

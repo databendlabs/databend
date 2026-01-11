@@ -23,5 +23,6 @@ pub mod parquet;
 
 pub use block_reader::BlockReader;
 pub use block_reader_merge_io::BlockReadResult;
+pub(crate) use block_reader_merge_io::DataItem;
 pub use block_reader_native::NativeReaderExt;
 pub use block_reader_native::NativeSourceData;

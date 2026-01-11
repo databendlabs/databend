@@ -27,6 +27,7 @@ mod virtual_column;
 pub use agg_index::AggIndexReader;
 pub use block::BlockReadResult;
 pub use block::BlockReader;
+pub(crate) use block::DataItem;
 pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
 pub use bloom::BloomBlockFilterReader;
