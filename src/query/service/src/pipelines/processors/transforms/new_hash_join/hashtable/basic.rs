@@ -15,6 +15,7 @@
 use databend_common_exception::Result;
 use databend_common_hashtable::RowPtr;
 
+#[derive(Debug)]
 pub struct ProbedRows {
     pub unmatched: Vec<u64>,
     pub matched_probe: Vec<u64>,

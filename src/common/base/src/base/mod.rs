@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod barrier;
 mod build_info;
 mod dma;
 mod drop_callback;
@@ -30,6 +31,7 @@ mod take_mut;
 mod uniq_id;
 mod watch_notify;
 
+pub use barrier::Barrier;
 pub use build_info::*;
 pub use dma::*;
 pub use drop_callback::DropCallback;

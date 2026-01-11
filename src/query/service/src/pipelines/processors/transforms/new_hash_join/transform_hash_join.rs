@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::Barrier;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
@@ -26,7 +27,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
-use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -100,10 +100,12 @@ impl Processor for TransformHashJoin {
             self.build_port.finish();
             self.probe_port.finish();
 
-            return match &self.stage {
-                Stage::Finished => Ok(Event::Finished),
-                _ => Ok(Event::Async),
-            };
+            if !matches!(self.stage, Stage::Finished) {
+                self.stage = Stage::Finished;
+                self.stage_sync_barrier.reduce_quorum(1);
+            }
+
+            return Ok(Event::Finished);
         }
 
         if !self.joined_port.can_push() {

@@ -18,7 +18,12 @@ use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
-use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
+use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
+use crate::pipelines::processors::transforms::memory::AntiRightHashJoin;
+use crate::pipelines::processors::transforms::memory::OuterRightHashJoin;
+use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
+use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
+use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
 
 pub trait GraceMemoryJoin: Join {
     fn reset_memory(&mut self);
@@ -52,6 +57,14 @@ fn reset_basic_state(state: &BasicHashJoinState) {
         state.build_queue.as_mut().clear();
     }
 
+    if !state.scan_map.is_empty() {
+        state.scan_map.as_mut().clear();
+    }
+
+    if !state.scan_queue.is_empty() {
+        state.scan_queue.as_mut().clear();
+    }
+
     *state.hash_table.as_mut() = HashJoinHashTable::Null;
 }
 
@@ -63,6 +76,41 @@ impl GraceMemoryJoin for InnerHashJoin {
 }
 
 impl GraceMemoryJoin for OuterLeftHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for SemiLeftHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for AntiLeftHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for OuterRightHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for SemiRightHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for AntiRightHashJoin {
     fn reset_memory(&mut self) {
         self.performance_context.clear();
         reset_basic_state(&self.basic_state);

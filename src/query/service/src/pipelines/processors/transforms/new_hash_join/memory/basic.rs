@@ -49,6 +49,7 @@ pub struct BasicHashJoin {
     pub(crate) method: HashMethodKind,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) state: Arc<BasicHashJoinState>,
+    pub(crate) scan_blocks: Vec<DataBlock>,
 }
 
 impl BasicHashJoin {
@@ -69,6 +70,7 @@ impl BasicHashJoin {
             method,
             function_ctx,
             squash_block: SquashBlocks::new(block_size, block_bytes),
+            scan_blocks: vec![],
         })
     }
     pub(crate) fn add_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
@@ -85,15 +87,36 @@ impl BasicHashJoin {
             let chunk_index = self.state.chunks.len();
             self.state.chunks.as_mut().push(squashed_block);
             self.state.build_queue.as_mut().push_back(chunk_index);
+            self.state.scan_map.as_mut().push(vec![]);
+            self.state.scan_queue.as_mut().push_back(chunk_index);
         }
 
         Ok(())
     }
 
-    pub(crate) fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+    pub(crate) fn final_build<const SCAN_MAP: bool>(&mut self) -> Result<Option<ProgressValues>> {
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
+            if SCAN_MAP {
+                if let Some(null_keys) = self.squash_block.finalize()? {
+                    self.scan_blocks.push(null_keys);
+                }
+
+                if !self.scan_blocks.is_empty() {
+                    let locked = self.state.mutex.lock();
+                    let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+                    for scan_block in std::mem::take(&mut self.scan_blocks) {
+                        let chunk_index = self.state.chunks.len();
+                        let scan_map = vec![0; scan_block.num_rows()];
+
+                        self.state.chunks.as_mut().push(scan_block);
+                        self.state.scan_map.as_mut().push(scan_map);
+                        self.state.scan_queue.as_mut().push_back(chunk_index);
+                    }
+                }
+            }
+
             return Ok(None);
         };
 
@@ -110,9 +133,17 @@ impl BasicHashJoin {
 
         chunk_block = chunk_block.project(&self.desc.build_projection);
         if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
-            keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+            if bitmap.true_count() != bitmap.len() {
+                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
-            if bitmap.null_count() != bitmap.len() {
+                if SCAN_MAP {
+                    let null_keys = chunk_block.clone().filter_with_bitmap(&(!(&bitmap)))?;
+
+                    if let Some(null_keys) = self.squash_block.add_block(null_keys)? {
+                        self.scan_blocks.push(null_keys);
+                    }
+                }
+
                 chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
             }
         }
@@ -125,6 +156,13 @@ impl BasicHashJoin {
         // restore storage block
         {
             let chunks = self.state.chunks.as_mut();
+
+            if SCAN_MAP {
+                let mut scan_map = vec![0; chunk_block.num_rows()];
+                let scan_maps = self.state.scan_map.as_mut();
+                std::mem::swap(&mut scan_maps[chunk_index], &mut scan_map);
+            }
+
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
@@ -182,7 +220,9 @@ impl BasicHashJoin {
         if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             return;
         }
-        let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
+        let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny)
+            || (matches!(self.desc.join_type, JoinType::LeftSemi | JoinType::LeftAnti)
+                && self.desc.other_predicate.is_none());
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);

@@ -30,6 +30,7 @@ mod transform_hash_join_build;
 mod transform_hash_join_probe;
 mod util;
 
+pub use common::wrap_nullable_block;
 pub use common::wrap_true_validity;
 pub use desc::HashJoinDesc;
 pub use desc::RuntimeFilterDesc;
