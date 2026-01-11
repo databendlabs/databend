@@ -39,8 +39,9 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::sessions::QueryContext;
+
 #[allow(clippy::enum_variant_names)]
-enum HashTable {
+pub(crate) enum HashTable {
     MovedOut,
     AggregateHashTable(AggregateHashTable),
 }

@@ -68,6 +68,7 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     pub max_partial_capacity: usize,
+    pub hash_index_partition_threshold: usize,
 }
 
 impl Default for HashTableConfig {
@@ -80,11 +81,40 @@ impl Default for HashTableConfig {
             block_fill_factor: 1.8,
             partial_agg: false,
             max_partial_capacity: 131072,
+            hash_index_partition_threshold: usize::MAX,
         }
     }
 }
 
 impl HashTableConfig {
+    pub fn new_experiment_partial(
+        radix_bits: u64,
+        node_nums: usize,
+        active_threads: usize,
+    ) -> Self {
+        let capacity = if node_nums != 1 {
+            131072 * (2 << node_nums)
+        } else {
+            let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
+            let cache_per_active_thread =
+                L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
+            let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
+            (cache_per_active_thread / size_per_entry).next_power_of_two()
+        };
+
+        // not support payload growth when `enable_experiment_aggregate` = 1
+        HashTableConfig {
+            current_max_radix_bits: Arc::new(AtomicU64::new(radix_bits)),
+            initial_radix_bits: radix_bits,
+            max_radix_bits: radix_bits,
+            repartition_radix_bits_incr: 0,
+            partial_agg: true,
+            max_partial_capacity: capacity,
+            hash_index_partition_threshold: usize::MAX,
+            ..Default::default()
+        }
+    }
+
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
         self.current_max_radix_bits = Arc::new(AtomicU64::new(initial_radix_bits));
@@ -109,6 +139,7 @@ impl HashTableConfig {
         self.partial_agg = partial_agg;
         self.repartition_radix_bits_incr = 4;
         self.max_partial_capacity = 131072 * (2 << node_nums);
+        self.hash_index_partition_threshold = usize::MAX;
 
         self
     }
@@ -131,5 +162,10 @@ impl HashTableConfig {
             }
             break;
         }
+    }
+
+    pub fn with_hash_index_partition_threshold(mut self, threshold: usize) -> Self {
+        self.hash_index_partition_threshold = threshold;
+        self
     }
 }

@@ -14,7 +14,9 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -32,6 +34,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
+use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
 use super::AggregateExpand;
@@ -62,6 +65,7 @@ pub struct AggregateFinal {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+    pub shuffle_mode: AggregateShuffleMode,
 }
 
 #[typetag::serde]
@@ -138,6 +142,7 @@ impl IPhysicalPlan for AggregateFinal {
             before_group_by_schema: self.before_group_by_schema.clone(),
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
+            shuffle_mode: self.shuffle_mode.clone(),
         })
     }
 
@@ -181,8 +186,19 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector =
-                AggregateInjector::create(builder.ctx.clone(), params.clone());
+            builder.exchange_injector = if params.enable_experiment_aggregate {
+                AggregateInjector::<true>::create(
+                    builder.ctx.clone(),
+                    params.clone(),
+                    self.shuffle_mode.clone(),
+                )
+            } else {
+                AggregateInjector::<false>::create(
+                    builder.ctx.clone(),
+                    params.clone(),
+                    self.shuffle_mode.clone(),
+                )
+            };
         }
 
         self.input.build_pipeline(builder)?;
@@ -201,6 +217,7 @@ impl IPhysicalPlan for AggregateFinal {
             max_restore_worker,
             after_group_parallel,
             builder.ctx.clone(),
+            self.shuffle_mode.clone(),
         )
     }
 }
@@ -259,117 +276,17 @@ impl PhysicalPlanBuilder {
                     .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
-                    .aggregate_functions
-                    .iter()
-                    .map(|v| match &v.scalar {
-                        ScalarExpr::AggregateFunction(agg) => {
-                            let arg_indices = agg
-                                .args
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-                            let sort_desc_indices = agg.sort_descs
-                                .iter()
-                                .map(|desc| {
-                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function description must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<_>>()?;
-                            let sort_descs = agg.sort_descs
-                                .iter()
-                                .map(|desc| desc.try_into())
-                                .collect::<Result<_>>()?;
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: agg.func_name.clone(),
-                                    udaf: None,
-                                    return_type: *agg.return_type.clone(),
-                                    args,
-                                    params: agg.params.clone(),
-                                    sort_descs,
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                sort_desc_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        ScalarExpr::UDAFCall(udaf) => {
-                            let arg_indices = udaf
-                                .arguments
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: udaf.name.clone(),
-                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
-                                    return_type: *udaf.return_type.clone(),
-                                    args,
-                                    params: vec![],
-                                    sort_descs: vec![],
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                sort_desc_indices: vec![],
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        _ => Err(ErrorCode::Internal(
-                            "Expected aggregate function".to_string(),
-                        )),
-                    })
-                    .collect::<Result<_>>()?;
+                let mut agg_funcs =
+                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 let settings = self.ctx.get_settings();
                 let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
                 if agg.grouping_sets.is_some() {
                     group_by_shuffle_mode = "before_merge".to_string();
                 }
+
+                let is_cluster_aggregate = Exchange::check_physical_plan(&input);
+                let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // ignore `_grouping_id`.
@@ -422,6 +339,7 @@ impl PhysicalPlanBuilder {
                             stat_info: Some(stat_info),
                             rank_limit: None,
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
+                            shuffle_mode: shuffle_mode.clone(),
                         }
                     } else {
                         AggregatePartial {
@@ -432,6 +350,7 @@ impl PhysicalPlanBuilder {
                             group_by: group_items,
                             stat_info: Some(stat_info),
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
+                            shuffle_mode: shuffle_mode.clone(),
                         }
                     };
 
@@ -474,6 +393,7 @@ impl PhysicalPlanBuilder {
                         input: PhysicalPlan::new(expand),
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
+                        shuffle_mode: shuffle_mode.clone(),
                     })
                 } else {
                     PhysicalPlan::new(AggregatePartial {
@@ -484,6 +404,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         rank_limit,
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
+                        shuffle_mode: shuffle_mode.clone(),
                     })
                 }
             }
@@ -507,111 +428,8 @@ impl PhysicalPlanBuilder {
                     aggregate.input.output_schema()?
                 };
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
-                    .aggregate_functions
-                    .iter()
-                    .map(|v| match &v.scalar {
-                        ScalarExpr::AggregateFunction(agg) => {
-                            let arg_indices = agg
-                                .args
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let sort_desc_indices = agg.sort_descs
-                                .iter()
-                                .map(|desc| {
-                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function sort description must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<_>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-                            let sort_descs = agg.sort_descs
-                                .iter()
-                                .map(|desc| desc.try_into())
-                                .collect::<Result<_>>()?;
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: agg.func_name.clone(),
-                                    udaf: None,
-                                    return_type: *agg.return_type.clone(),
-                                    args,
-                                    params: agg.params.clone(),
-                                    sort_descs,
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                sort_desc_indices,
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        ScalarExpr::UDAFCall(udaf) => {
-                            let arg_indices = udaf
-                                .arguments
-                                .iter()
-                                .map(|arg| {
-                                    if let ScalarExpr::BoundColumnRef(col) = arg {
-                                        Ok(col.column.index)
-                                    } else {
-                                        Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef"
-                                                .to_string(),
-                                        ))
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>()?;
-                            let args = arg_indices
-                                .iter()
-                                .map(|i| {
-                                    Ok(input_schema
-                                        .field_with_name(&i.to_string())?
-                                        .data_type()
-                                        .clone())
-                                })
-                                .collect::<Result<_>>()?;
-
-                            Ok(AggregateFunctionDesc {
-                                sig: AggregateFunctionSignature {
-                                    name: udaf.name.clone(),
-                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
-                                    return_type: *udaf.return_type.clone(),
-                                    args,
-                                    params: vec![],
-                                    sort_descs: vec![],
-                                },
-                                output_column: v.index,
-                                arg_indices,
-                                sort_desc_indices: vec![],
-                                display: v.scalar.as_expr()?.sql_display(),
-                            })
-                        }
-                        _ => Err(ErrorCode::Internal(
-                            "Expected aggregate function".to_string(),
-                        )),
-                    })
-                    .collect::<Result<_>>()?;
+                let mut agg_funcs =
+                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
@@ -628,6 +446,7 @@ impl PhysicalPlanBuilder {
                 if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
+                    let shuffle_mode = partial.shuffle_mode.clone();
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -637,6 +456,7 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
+                        shuffle_mode,
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -656,6 +476,7 @@ impl PhysicalPlanBuilder {
 
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
+                    let shuffle_mode = partial.shuffle_mode.clone();
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -665,6 +486,7 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
+                        shuffle_mode,
                     })
                 }
             }
@@ -675,4 +497,165 @@ impl PhysicalPlanBuilder {
 
         Ok(result)
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum AggregateShuffleMode {
+    // calculate shuffle destination based on hash of rows
+    Row,
+    // calculate shuffle destination based on id of bucket
+    // cpu_nums in cluster stored in it
+    Bucket(u64),
+}
+
+impl AggregateShuffleMode {
+    pub fn determine_radix_bits(&self) -> u64 {
+        match &self {
+            AggregateShuffleMode::Row => 0,
+            AggregateShuffleMode::Bucket(hint) => hint.trailing_zeros() as u64,
+        }
+    }
+}
+
+// TODO: ROW_SHUFFLE_ENABLE_THRESHOLD need to find
+const ROW_SHUFFLE_ENABLE_THRESHOLD: u64 = 256;
+
+fn determine_shuffle_mode(
+    ctx: Arc<dyn TableContext>,
+    is_cluster_aggregate: bool,
+) -> Result<AggregateShuffleMode> {
+    let settings = ctx.get_settings();
+    let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
+    let thread_nums = settings.get_max_threads()?;
+
+    let parallelism = if is_cluster_aggregate {
+        (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two()
+    } else {
+        thread_nums.next_power_of_two()
+    };
+
+    let use_bucket = match force_shuffle_mode.as_str() {
+        "row" => false,
+        "bucket" => true,
+        "auto" => parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
+        _ => false,
+    };
+
+    let shuffle_mode = if use_bucket {
+        AggregateShuffleMode::Bucket(parallelism)
+    } else {
+        AggregateShuffleMode::Row
+    };
+
+    Ok(shuffle_mode)
+}
+
+fn build_aggregate_function(
+    agg_functions: &[ScalarItem],
+    input_schema: &DataSchemaRef,
+) -> Result<Vec<AggregateFunctionDesc>> {
+    agg_functions
+        .iter()
+        .map(|v| match &v.scalar {
+            ScalarExpr::AggregateFunction(agg) => {
+                let arg_indices = agg
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Aggregate function argument must be a BoundColumnRef".to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let sort_desc_indices = agg
+                    .sort_descs
+                    .iter()
+                    .map(|desc| {
+                        if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Aggregate function sort description must be a BoundColumnRef"
+                                    .to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<_>>()?;
+                let args = arg_indices
+                    .iter()
+                    .map(|i| {
+                        Ok(input_schema
+                            .field_with_name(&i.to_string())?
+                            .data_type()
+                            .clone())
+                    })
+                    .collect::<Result<_>>()?;
+                let sort_descs = agg
+                    .sort_descs
+                    .iter()
+                    .map(|desc| desc.try_into())
+                    .collect::<Result<_>>()?;
+                Ok(AggregateFunctionDesc {
+                    sig: AggregateFunctionSignature {
+                        name: agg.func_name.clone(),
+                        udaf: None,
+                        return_type: *agg.return_type.clone(),
+                        args,
+                        params: agg.params.clone(),
+                        sort_descs,
+                    },
+                    output_column: v.index,
+                    arg_indices,
+                    sort_desc_indices,
+                    display: v.scalar.as_expr()?.sql_display(),
+                })
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let arg_indices = udaf
+                    .arguments
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Aggregate function argument must be a BoundColumnRef".to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let args = arg_indices
+                    .iter()
+                    .map(|i| {
+                        Ok(input_schema
+                            .field_with_name(&i.to_string())?
+                            .data_type()
+                            .clone())
+                    })
+                    .collect::<Result<_>>()?;
+
+                Ok(AggregateFunctionDesc {
+                    sig: AggregateFunctionSignature {
+                        name: udaf.name.clone(),
+                        udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
+                        return_type: *udaf.return_type.clone(),
+                        args,
+                        params: vec![],
+                        sort_descs: vec![],
+                    },
+                    output_column: v.index,
+                    arg_indices,
+                    sort_desc_indices: vec![],
+                    display: v.scalar.as_expr()?.sql_display(),
+                })
+            }
+            _ => Err(ErrorCode::Internal(
+                "Expected aggregate function".to_string(),
+            )),
+        })
+        .collect::<Result<_>>()
 }

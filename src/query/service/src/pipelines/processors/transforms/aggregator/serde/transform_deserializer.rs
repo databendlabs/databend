@@ -31,9 +31,8 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
-use databend_common_pipeline_transforms::processors::UnknownMode;
+use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_storages_parquet::deserialize_row_group_meta_from_bytes;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -42,7 +41,9 @@ use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::NEW_SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
+use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
@@ -62,7 +63,7 @@ impl TransformDeserializer {
     ) -> Result<ProcessorPtr> {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
 
-        Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+        Ok(ProcessorPtr::create(AccumulatingTransformer::create(
             input,
             output,
             TransformDeserializer {
@@ -72,7 +73,11 @@ impl TransformDeserializer {
         )))
     }
 
-    fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
+    fn recv_data(
+        &self,
+        dict: Vec<DataPacket>,
+        fragment_data: FragmentData,
+    ) -> Result<Vec<DataBlock>> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
         let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
@@ -82,7 +87,7 @@ impl TransformDeserializer {
         let row_count: u32 = row_count_meta.read_scalar()?;
 
         if row_count == 0 {
-            return Ok(DataBlock::new_with_meta(vec![], 0, meta));
+            return Ok(vec![DataBlock::new_with_meta(vec![], 0, meta)]);
         }
 
         let Some(meta) = meta
@@ -92,8 +97,12 @@ impl TransformDeserializer {
             let data_block =
                 deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
             return match data_block.num_columns() == 0 {
-                true => Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta)),
-                false => data_block.add_meta(meta),
+                true => Ok(vec![DataBlock::new_with_meta(
+                    vec![],
+                    row_count as usize,
+                    meta,
+                )]),
+                false => Ok(vec![data_block.add_meta(meta)?]),
             };
         };
 
@@ -110,9 +119,61 @@ impl TransformDeserializer {
                     block = block.slice(0..0);
                 }
 
-                Ok(DataBlock::empty_with_meta(
+                Ok(vec![DataBlock::empty_with_meta(
                     AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
-                ))
+                )])
+            }
+            PARTITIONED_AGGREGATE_TYPE => {
+                let data_block = deserialize_block(
+                    dict,
+                    fragment_data,
+                    &self.schema,
+                    self.arrow_schema.clone(),
+                )?;
+
+                if meta.is_empty {
+                    return Ok(vec![]);
+                }
+
+                if meta.buckets.len() != meta.payload_row_counts.len() {
+                    return Err(ErrorCode::Internal(
+                        "Invalid partitioned aggregate serde meta".to_string(),
+                    ));
+                }
+
+                let mut offset = 0;
+                let mut metas = Vec::with_capacity(meta.buckets.len());
+                for (bucket, rows) in meta.buckets.iter().zip(meta.payload_row_counts.iter()) {
+                    let rows = *rows;
+                    let start = offset;
+                    offset += rows;
+                    if offset > data_block.num_rows() {
+                        return Err(ErrorCode::Internal(
+                            "Partitioned aggregate payload rows exceed block rows".to_string(),
+                        ));
+                    }
+
+                    let payload_block = if rows == 0 {
+                        DataBlock::empty()
+                    } else {
+                        data_block.slice(start..offset)
+                    };
+
+                    metas.push(AggregateMeta::Serialized(SerializedPayload {
+                        bucket: *bucket,
+                        data_block: payload_block,
+                        max_partition_count: 0,
+                    }));
+                }
+
+                if offset != data_block.num_rows() {
+                    return Err(ErrorCode::Internal(
+                        "Partitioned aggregate payload rows do not match block rows".to_string(),
+                    ));
+                }
+                Ok(vec![DataBlock::empty_with_meta(
+                    AggregateMeta::create_partitioned(None, metas),
+                )])
             }
             SPILLED_TYPE => {
                 let data_schema = Arc::new(exchange_defines::spilled_schema());
@@ -152,9 +213,9 @@ impl TransformDeserializer {
                     }
                 }
 
-                Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
-                    buckets_payload,
-                )))
+                Ok(vec![DataBlock::empty_with_meta(
+                    AggregateMeta::create_spilled(buckets_payload),
+                )])
             }
             NEW_SPILLED_TYPE => {
                 let data_schema = Arc::new(exchange_defines::new_spilled_schema());
@@ -188,9 +249,18 @@ impl TransformDeserializer {
                     }
                 }
 
-                Ok(DataBlock::empty_with_meta(
-                    AggregateMeta::create_new_spilled(spilled_payloads),
-                ))
+                let shuffle_bucket = meta.shuffle_bucket;
+                if shuffle_bucket == -1 {
+                    todo!()
+                } else {
+                    let payloads = spilled_payloads
+                        .into_iter()
+                        .map(AggregateMeta::NewBucketSpilled)
+                        .collect();
+
+                    let partitioned = AggregateMeta::create_partitioned(None, payloads);
+                    return Ok(vec![DataBlock::empty_with_meta(partitioned)]);
+                }
             }
             other => Err(ErrorCode::Internal(format!(
                 "Unknown aggregate serde meta type {other}"
@@ -199,16 +269,39 @@ impl TransformDeserializer {
     }
 }
 
-impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
-    const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
-    const NAME: &'static str = "TransformDeserializer";
-
-    fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<Vec<DataBlock>> {
+impl TransformDeserializer {
+    fn transform_exchange_meta(
+        &mut self,
+        mut meta: ExchangeDeserializeMeta,
+    ) -> Result<Vec<DataBlock>> {
         match meta.packet.pop().unwrap() {
-            DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
+            DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
             DataPacket::ErrorCode(err) => Err(err),
             _ => unreachable!(),
         }
+    }
+}
+
+impl AccumulatingTransform for TransformDeserializer {
+    const NAME: &'static str = "TransformDeserializer";
+
+    fn transform(&mut self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
+        if let Some(block_meta_ref) = data_block.get_meta() {
+            if ExchangeDeserializeMeta::downcast_ref_from(block_meta_ref).is_some() {
+                let block_meta = data_block.take_meta().unwrap();
+                let Some(meta) = ExchangeDeserializeMeta::downcast_from(block_meta) else {
+                    unreachable!("block_meta_ref is ExchangeDeserializeMeta");
+                };
+
+                if data_block.num_rows() != 0 {
+                    return Err(ErrorCode::Internal("DataBlockMeta has rows"));
+                }
+
+                return self.transform_exchange_meta(meta);
+            }
+        }
+
+        Ok(vec![data_block])
     }
 }
 

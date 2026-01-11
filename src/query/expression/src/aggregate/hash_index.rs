@@ -22,13 +22,68 @@ use super::payload_row::CompareState;
 use crate::ProjectedBlock;
 
 pub(super) struct HashIndex {
-    pub entries: Vec<Entry>,
+    partitions: Vec<Partition>,
+    partition_selector: PartitionSelector,
     pub count: usize,
     pub capacity: usize,
-    pub capacity_mask: usize,
 }
 
 const INCREMENT_BITS: usize = 5;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(super) struct Slot {
+    pub partition: usize,
+    pub offset: usize,
+}
+
+#[derive(Clone)]
+struct Partition {
+    entries: Vec<Entry>,
+    capacity_mask: usize,
+}
+
+impl Partition {
+    fn with_capacity(capacity: usize) -> Self {
+        debug_assert!(capacity.is_power_of_two());
+        Self {
+            entries: vec![Entry::default(); capacity],
+            capacity_mask: capacity - 1,
+        }
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        self.entries.len() * std::mem::size_of::<Entry>()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PartitionSelector {
+    mask: u64,
+    shift: u64,
+}
+
+impl PartitionSelector {
+    fn new(partition_count: usize) -> Self {
+        debug_assert!(partition_count.is_power_of_two());
+        let bits = partition_count.trailing_zeros() as u64;
+        if bits == 0 {
+            return Self { mask: 0, shift: 0 };
+        }
+        let shift = 64 - bits;
+        let mask = ((1u64 << bits) - 1) << shift;
+
+        Self { mask, shift }
+    }
+
+    #[inline(always)]
+    fn index(&self, hash: u64) -> usize {
+        if self.mask == 0 {
+            0
+        } else {
+            ((hash & self.mask) >> self.shift) as usize
+        }
+    }
+}
 
 /// Derive an odd probing step from the high bits of the hash so the walk spans all slots.
 ///
@@ -46,35 +101,43 @@ fn next_slot(slot: usize, hash: u64, mask: usize) -> usize {
     (slot + step(hash)) & mask
 }
 
-#[inline(always)]
-fn init_slot(hash: u64, capacity_mask: usize) -> usize {
-    hash as usize & capacity_mask
-}
-
 impl HashIndex {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, max_partition_capacity: usize) -> Self {
         debug_assert!(capacity.is_power_of_two());
-        let capacity_mask = capacity - 1;
+        let max_partition_capacity = max_partition_capacity.max(1);
+
+        let mut partition_count = 1;
+        while capacity / partition_count > max_partition_capacity {
+            partition_count <<= 1;
+        }
+
+        let partition_capacity = capacity / partition_count;
+        let partition_selector = PartitionSelector::new(partition_count);
+        let partitions = (0..partition_count)
+            .map(|_| Partition::with_capacity(partition_capacity))
+            .collect();
+
         Self {
-            entries: vec![Entry::default(); capacity],
+            partitions,
+            partition_selector,
             count: 0,
             capacity,
-            capacity_mask,
         }
     }
 
-    fn find_or_insert(&mut self, mut slot: usize, hash: u64) -> (usize, bool) {
+    fn find_or_insert(&mut self, mut slot: Slot, hash: u64) -> (Slot, bool) {
         let salt = Entry::hash_to_salt(hash);
-        let entries = self.entries.as_mut_slice();
+        let partition = self.partition_mut(slot.partition);
+        let entries = partition.entries.as_mut_slice();
         loop {
-            debug_assert!(entries.get(slot).is_some());
+            debug_assert!(entries.get(slot.offset).is_some());
             // SAFETY: slot is always in range
-            let entry = unsafe { entries.get_unchecked_mut(slot) };
+            let entry = unsafe { entries.get_unchecked_mut(slot.offset) };
             if entry.is_occupied() {
                 if entry.get_salt() == salt {
                     return (slot, false);
                 } else {
-                    slot = next_slot(slot, hash, self.capacity_mask);
+                    slot.offset = next_slot(slot.offset, hash, partition.capacity_mask);
                     continue;
                 }
             } else {
@@ -84,22 +147,47 @@ impl HashIndex {
         }
     }
 
-    pub fn probe_slot(&mut self, hash: u64) -> usize {
-        let entries = self.entries.as_mut_slice();
-        let mut slot = init_slot(hash, self.capacity_mask);
-        while entries[slot].is_occupied() {
-            slot = next_slot(slot, hash, self.capacity_mask);
-        }
-        slot as _
+    #[inline(always)]
+    fn init_slot(&self, hash: u64) -> Slot {
+        let partition = self.partition_selector.index(hash);
+        let offset = hash as usize & self.partition(partition).capacity_mask;
+        Slot { partition, offset }
     }
 
-    pub fn mut_entry(&mut self, slot: usize) -> &mut Entry {
-        &mut self.entries[slot]
+    pub fn probe_slot(&mut self, hash: u64) -> Slot {
+        let mut slot = self.init_slot(hash);
+        let partition = self.partition_mut(slot.partition);
+        let mask = partition.capacity_mask;
+        let entries = partition.entries.as_mut_slice();
+        while entries[slot.offset].is_occupied() {
+            slot.offset = next_slot(slot.offset, hash, mask);
+        }
+        slot
+    }
+
+    #[inline(always)]
+    fn partition(&self, index: usize) -> &Partition {
+        debug_assert!(index < self.partitions.len());
+        // SAFETY: index checked above
+        unsafe { self.partitions.get_unchecked(index) }
+    }
+
+    #[inline(always)]
+    fn partition_mut(&mut self, index: usize) -> &mut Partition {
+        debug_assert!(index < self.partitions.len());
+        // SAFETY: index checked above
+        unsafe { self.partitions.get_unchecked_mut(index) }
+    }
+
+    pub fn mut_entry(&mut self, slot: Slot) -> &mut Entry {
+        &mut self.partition_mut(slot.partition).entries[slot.offset]
     }
 
     pub fn reset(&mut self) {
         self.count = 0;
-        self.entries.fill(Entry::default());
+        for partition in self.partitions.iter_mut() {
+            partition.entries.fill(Entry::default());
+        }
     }
 
     pub fn resize_threshold(&self) -> usize {
@@ -107,7 +195,11 @@ impl HashIndex {
     }
 
     pub fn allocated_bytes(&self) -> usize {
-        self.entries.len() * std::mem::size_of::<Entry>()
+        self.partitions.iter().map(Partition::allocated_bytes).sum()
+    }
+
+    pub fn partition_count(&self) -> usize {
+        self.partitions.len()
     }
 }
 
@@ -185,7 +277,7 @@ impl HashIndex {
     ) -> usize {
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
             *row = i.into();
-            state.slots[i] = init_slot(state.group_hashes[i], self.capacity_mask);
+            state.slots[i] = self.init_slot(state.group_hashes[i]);
         }
 
         let mut new_group_count = 0;
@@ -245,7 +337,8 @@ impl HashIndex {
             for row in state.no_match_vector[..no_match_count].iter().copied() {
                 let slot = &mut state.slots[row];
                 let hash = state.group_hashes[row];
-                *slot = next_slot(*slot, hash, self.capacity_mask);
+                let mask = self.partition(slot.partition).capacity_mask;
+                slot.offset = next_slot(slot.offset, hash, mask);
             }
             remaining_entries = no_match_count;
         }
@@ -408,7 +501,7 @@ mod tests {
                 want_count,
                 want,
             } = self;
-            let mut hash_index = HashIndex::with_capacity(capacity);
+            let mut hash_index = HashIndex::with_capacity(capacity, usize::MAX);
 
             let mut adapter = TestTableAdapter::new(incoming, payload);
 
@@ -437,11 +530,12 @@ mod tests {
     fn test_probe_walk_covers_full_capacity() {
         // This test make sure that we can always cover all slots in the table
         let capacity = 16;
-        let capacity_mask = capacity - 1;
+        let hash_index = HashIndex::with_capacity(capacity, 1 << 16);
+        let capacity_mask = hash_index.partition(0).capacity_mask;
 
         for high_bits in 0u64..(1 << INCREMENT_BITS) {
             let hash = high_bits << (64 - INCREMENT_BITS);
-            let mut slot = init_slot(hash, capacity_mask);
+            let mut slot = hash_index.init_slot(hash);
             let mut visited = HashSet::with_capacity(capacity);
 
             for _ in 0..capacity {
@@ -449,7 +543,7 @@ mod tests {
                     visited.insert(slot),
                     "hash {hash:#x} revisited slot {slot} before covering the table"
                 );
-                slot = next_slot(slot, hash, capacity_mask);
+                slot.offset = next_slot(slot.offset, hash, capacity_mask);
             }
 
             assert_eq!(
@@ -458,7 +552,7 @@ mod tests {
                 "hash {hash:#x} failed to cover every slot for capacity {capacity}"
             );
             assert_eq!(
-                init_slot(hash, capacity_mask),
+                hash_index.init_slot(hash),
                 slot,
                 "hash {hash:#x} walk did not return to its start after {capacity} steps"
             );
@@ -484,5 +578,15 @@ mod tests {
             want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
         }
         .run_hash_index();
+    }
+
+    #[test]
+    fn test_hash_index_partitioning_respects_threshold() {
+        let threshold = 1 << 16;
+        let capacity = threshold * 2;
+        let hash_index = HashIndex::with_capacity(capacity, threshold);
+
+        assert_eq!(hash_index.partition_count(), 2);
+        assert_eq!(hash_index.partition(0).entries.len(), threshold);
     }
 }

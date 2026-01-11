@@ -63,6 +63,7 @@ pub use databend_common_sql::executor::physical_plans::window::*;
 pub use physical_add_stream_column::AddStreamColumn;
 pub use physical_aggregate_expand::AggregateExpand;
 pub use physical_aggregate_final::AggregateFinal;
+pub use physical_aggregate_final::AggregateShuffleMode;
 pub use physical_aggregate_partial::AggregatePartial;
 pub use physical_async_func::AsyncFunction;
 pub use physical_broadcast::BroadcastSink;
