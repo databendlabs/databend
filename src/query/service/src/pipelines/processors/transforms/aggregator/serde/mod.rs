@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregate_scatter;
 mod serde_meta;
 mod transform_aggregate_serializer;
 mod transform_aggregate_spill_writer;
@@ -20,6 +21,7 @@ mod transform_exchange_aggregate_serializer;
 mod transform_exchange_async_barrier;
 mod transform_spill_reader;
 
+pub use aggregate_scatter::*;
 pub use serde_meta::*;
 pub use transform_aggregate_serializer::*;
 pub use transform_aggregate_spill_writer::*;

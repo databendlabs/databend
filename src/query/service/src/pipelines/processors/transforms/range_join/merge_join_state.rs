@@ -67,6 +67,8 @@ impl RangeJoinState {
             if i == left_len {
                 break;
             }
+            debug_assert!(left_join_key_col.index(i).is_some());
+            debug_assert!(right_join_key_col.index(j).is_some());
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
             let right_scalar = unsafe { right_join_key_col.index_unchecked(j) };
             if compare_scalar(
