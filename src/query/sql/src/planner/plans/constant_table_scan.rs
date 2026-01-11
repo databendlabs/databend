@@ -222,10 +222,12 @@ impl Operator for ConstantTableScan {
             )
             .ok();
             let column_stat = ColumnStat {
-                min,
-                max,
+                min: min.clone(),
+                max: max.clone(),
                 ndv: Ndv::Stat(ndv as _),
                 null_count,
+                origin_min: min,
+                origin_max: max,
                 histogram,
             };
             column_stats.insert(*index, column_stat);
