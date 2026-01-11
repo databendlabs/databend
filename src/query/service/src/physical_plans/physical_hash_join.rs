@@ -452,6 +452,7 @@ impl HashJoin {
             let joined_output = OutputPort::create();
 
             let hash_join = TransformHashJoin::create(
+                self.get_id(),
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
