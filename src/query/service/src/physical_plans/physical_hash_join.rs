@@ -454,7 +454,8 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let stage_sync_barrier = Arc::new(Barrier::new(output_len));
+        let barrier = databend_common_base::base::Barrier::new(output_len);
+        let stage_sync_barrier = Arc::new(barrier);
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
         for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
