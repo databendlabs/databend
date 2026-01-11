@@ -57,7 +57,6 @@ use tokio::time::sleep;
 pub struct TestSuite {}
 
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -81,7 +80,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn test_single_node<KV, B>(&self, builder: &B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -132,7 +130,6 @@ impl TestSuite {
 }
 
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
@@ -181,7 +178,6 @@ impl TestSuite {
     }
 
     /// Test the proposed_at time field .
-    #[fastrace::trace]
     pub async fn kv_write_read_proposed_at<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read_proposed_at() start");
         let proposed_at;
@@ -207,7 +203,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
@@ -263,7 +258,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
@@ -307,7 +301,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {} start", func_name!());
 
@@ -409,7 +402,6 @@ impl TestSuite {
     }
 
     /// Test expire time in seconds or milliseconds.
-    #[fastrace::trace]
     pub async fn kv_expire_sec_or_ms<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {} start", func_name!());
 
@@ -482,7 +474,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_upsert_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add with ttl
 
@@ -510,7 +501,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
@@ -578,7 +568,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
@@ -608,7 +597,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
@@ -1240,7 +1228,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_transaction_fetch_add_u64<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1357,7 +1344,6 @@ impl TestSuite {
     }
 
     /// Tests match_seq must match the record seq to take place the operation.
-    #[fastrace::trace]
     pub async fn kv_transaction_fetch_add_u64_match_seq<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1465,7 +1451,6 @@ impl TestSuite {
     }
 
     /// Tests match_seq must match the record seq to take place the operation.
-    #[fastrace::trace]
     pub async fn kv_txn_put_sequential<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {}", func_path!());
 
@@ -1516,7 +1501,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_txn_put_sequential_expire_and_ttl<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1570,7 +1554,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add a record via transaction with ttl
 
@@ -1899,7 +1882,6 @@ impl TestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,

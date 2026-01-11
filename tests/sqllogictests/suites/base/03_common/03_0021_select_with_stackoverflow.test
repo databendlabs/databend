@@ -3,3 +3,61 @@ SELECT 65792
 ----
 65792
 
+statement ok
+DROP TABLE IF EXISTS test_table_1
+
+statement ok
+DROP TABLE IF EXISTS test_table_2
+
+statement ok
+CREATE TABLE test_table_1 (id VARCHAR, partner_id VARCHAR, parent_id VARCHAR)
+
+statement ok
+CREATE TABLE test_table_2 (identification VARCHAR)
+
+statement ok
+SELECT * FROM (
+  SELECT DISTINCT
+    t1.id AS main_id,
+    t1.partner_id AS related_id,
+    'partner' AS relation_type
+  FROM test_table_1 t1
+  WHERE t1.id IN (
+    'test_id_001', null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM test_table_2 t2
+    WHERE t2.identification = t1.partner_id
+  )
+  UNION ALL
+  SELECT DISTINCT
+    t1.id AS main_id,
+    t1.parent_id AS related_id,
+    'parent' AS relation_type
+  FROM test_table_1 t1
+  WHERE t1.id IN (
+    'test_id_001', null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, null, null, null, null, null, null
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM test_table_2 t2
+    WHERE t2.identification = t1.parent_id
+  )
+) t
+LIMIT 0, 100
+
+
+statement ok
+DROP TABLE IF EXISTS test_table_1
+
+statement ok
+DROP TABLE IF EXISTS test_table_2
