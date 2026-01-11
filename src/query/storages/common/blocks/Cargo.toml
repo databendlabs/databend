@@ -7,11 +7,15 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+arrow-array = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
+
+[dev-dependencies]
+bytes = { workspace = true }
 
 [build-dependencies]
 

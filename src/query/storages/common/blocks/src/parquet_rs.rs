@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_array::RecordBatch;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -32,6 +33,24 @@ use parquet::schema::types::ColumnPath;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
+
+/// Maximum batch memory size threshold for page splitting (64MB).
+///
+/// Parquet page headers use i32 for `uncompressed_page_size` (encoded but not compressed),
+/// which has a max value of ~2GB. ArrowWriter internally splits data into mini-batches of
+/// `write_batch_size` (default 1024 rows), and only checks page size limits AFTER each
+/// mini-batch is written. If a mini-batch exceeds 2GB after encoding, it still becomes
+/// a single page, causing integer overflow in the page header.
+///
+/// We estimate batch size using Arrow's in-memory size (`get_array_memory_size`), which
+/// approximates raw data size. For PLAIN-encoded strings (Databend's default), this is
+/// close to the encoded size. We split batches before passing to ArrowWriter to ensure
+/// each chunk stays well under the 2GB limit.
+///
+/// Using 64MB for better read performance: smaller pages allow parallel decoding,
+/// reduce memory pressure during deserialization, and improve CPU cache utilization.
+/// This is also well above Parquet's default of 1MB while staying far below the 2GB limit.
+pub const MAX_BATCH_MEMORY_SIZE: usize = 1 << 26; // 64MB
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -95,10 +114,52 @@ pub fn blocks_to_parquet_with_stats(
 
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
-        writer.write(&batch)?;
+        write_batch_with_page_limit(&mut writer, &batch, MAX_BATCH_MEMORY_SIZE)?;
     }
     let file_meta = writer.close()?;
     Ok(file_meta)
+}
+
+/// Write a RecordBatch to ArrowWriter, splitting into smaller batches if needed.
+///
+/// ArrowWriter's page size enforcement only works at `write_batch_size` boundaries (default 1024 rows).
+/// When a mini-batch of 1024 rows contains large string/binary values totaling > 2GB after encoding,
+/// the entire mini-batch becomes a single page, causing integer overflow in the page header's
+/// `uncompressed_page_size` field (which is i32, max ~2GB).
+///
+/// This function estimates batch size using Arrow's in-memory size (approximating raw data size)
+/// and splits large batches before passing to ArrowWriter. For PLAIN-encoded data, in-memory size
+/// is close to encoded size, making this a reasonable approximation.
+pub fn write_batch_with_page_limit<W: std::io::Write + Send>(
+    writer: &mut ArrowWriter<W>,
+    batch: &RecordBatch,
+    max_batch_size: usize,
+) -> Result<()> {
+    let estimated_size = batch.get_array_memory_size();
+    let num_rows = batch.num_rows();
+
+    if estimated_size <= max_batch_size || num_rows <= 1 {
+        // Batch is small enough or cannot be split further
+        writer.write(batch)?;
+        return Ok(());
+    }
+
+    // Calculate how many rows per chunk to stay under the limit
+    // Use a slightly smaller target to account for estimation inaccuracy
+    let target_size = max_batch_size * 9 / 10; // 90% of limit for safety margin
+    let rows_per_chunk = ((num_rows as f64 * target_size as f64) / estimated_size as f64) as usize;
+    let rows_per_chunk = rows_per_chunk.max(1); // At least 1 row per chunk
+
+    // Split and write
+    let mut offset = 0;
+    while offset < num_rows {
+        let length = (rows_per_chunk).min(num_rows - offset);
+        let chunk = batch.slice(offset, length);
+        writer.write(&chunk)?;
+        offset += length;
+    }
+
+    Ok(())
 }
 
 /// Create writer properties, optionally disabling dictionaries for high-cardinality columns.
@@ -158,9 +219,14 @@ impl NdvProvider for &StatisticsOfColumns {
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::StringType;
     use databend_common_expression::types::number::NumberDataType;
+    use parquet::file::reader::FileReader;
+    use parquet::file::serialized_reader::SerializedFileReader;
 
     use super::*;
 
@@ -262,5 +328,143 @@ mod tests {
                 "dictionary must remain disabled when enable_dictionary is false",
             );
         }
+    }
+
+    /// Test that large batches are split to prevent page size overflow.
+    ///
+    /// ArrowWriter splits data into mini-batches of `write_batch_size` (default 1024 rows),
+    /// and only checks page size limits after each mini-batch. If a mini-batch exceeds 2GB,
+    /// it still becomes a single page, causing i32 overflow in `uncompressed_page_size`.
+    ///
+    /// This test verifies that our `write_batch_with_page_limit` function correctly splits
+    /// large batches before passing to ArrowWriter, preventing this overflow.
+    #[test]
+    fn test_large_batch_is_split_to_prevent_page_overflow() {
+        // Create a schema with a string column
+        let schema = TableSchema::new(vec![TableField::new("big_string", TableDataType::String)]);
+
+        // Create 100 rows with 1MB strings each = 100MB total
+        // Use a small page limit (10MB) for testing
+        let test_page_limit = 10 * 1024 * 1024; // 10MB
+        let big_string = "x".repeat(1024 * 1024); // 1MB per value
+        let values: Vec<String> = (0..100).map(|_| big_string.clone()).collect();
+
+        let string_column = StringType::from_data(values.clone());
+        let block = DataBlock::new_from_columns(vec![string_column]);
+
+        // Write using blocks_to_parquet (with our custom limit for testing)
+        let arrow_schema = Arc::new((&schema).into());
+        let batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+
+        // Verify the batch size exceeds our test limit
+        let batch_size = batch.get_array_memory_size();
+        assert!(
+            batch_size > test_page_limit,
+            "Test setup error: batch size {} should exceed limit {}",
+            batch_size,
+            test_page_limit
+        );
+
+        // Write with page limit splitting
+        let props = WriterProperties::builder()
+            .set_dictionary_enabled(false)
+            .build();
+        let mut buffer = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_schema, Some(props)).unwrap();
+
+        // Use our splitting function with the test limit
+        write_batch_with_page_limit(&mut writer, &batch, test_page_limit).unwrap();
+        let _ = writer.close().unwrap();
+
+        // Read the parquet file and count pages
+        let reader = SerializedFileReader::new(bytes::Bytes::from(buffer)).unwrap();
+        let row_group = reader.get_row_group(0).unwrap();
+        let mut page_reader = row_group.get_column_page_reader(0).unwrap();
+
+        let mut page_count = 0;
+        let mut total_values = 0;
+        while let Some(page) = page_reader.get_next_page().unwrap() {
+            page_count += 1;
+            total_values += page.num_values() as usize;
+        }
+
+        // Verify that the batch was split into multiple pages
+        assert!(
+            page_count > 1,
+            "Expected multiple pages due to splitting, but got {} page(s). \
+             Batch size: {}, Page limit: {}",
+            page_count,
+            batch_size,
+            test_page_limit
+        );
+
+        // Verify all values were written
+        assert_eq!(
+            total_values, 100,
+            "Expected 100 values total across all pages, got {}",
+            total_values
+        );
+
+        println!(
+            "Test passed: {} pages created for {} values with {}MB batch and {}MB limit",
+            page_count,
+            total_values,
+            batch_size / 1024 / 1024,
+            test_page_limit / 1024 / 1024
+        );
+    }
+
+    /// Test that without splitting, a large batch creates only one page.
+    ///
+    /// This demonstrates the problematic behavior: ArrowWriter's internal mini-batch size
+    /// (default 1024 rows) determines page boundaries. When rows are small enough to fit
+    /// within a mini-batch, all data ends up in a single page regardless of total size.
+    /// Our `write_batch_with_page_limit` function addresses this by pre-splitting batches.
+    #[test]
+    fn test_without_splitting_creates_single_page() {
+        let schema = TableSchema::new(vec![TableField::new("big_string", TableDataType::String)]);
+
+        // Create 20 rows with 1MB strings each = 20MB total
+        let big_string = "x".repeat(1024 * 1024);
+        let values: Vec<String> = (0..20).map(|_| big_string.clone()).collect();
+
+        let string_column = StringType::from_data(values.clone());
+        let block = DataBlock::new_from_columns(vec![string_column]);
+
+        let arrow_schema = Arc::new((&schema).into());
+        let batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+
+        // Write WITHOUT splitting (direct write)
+        let props = WriterProperties::builder()
+            .set_dictionary_enabled(false)
+            .build();
+        let mut buffer = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_schema, Some(props)).unwrap();
+
+        // Direct write without splitting
+        writer.write(&batch).unwrap();
+        let _ = writer.close().unwrap();
+
+        // Count pages
+        let reader = SerializedFileReader::new(bytes::Bytes::from(buffer)).unwrap();
+        let row_group = reader.get_row_group(0).unwrap();
+        let mut page_reader = row_group.get_column_page_reader(0).unwrap();
+
+        let mut page_count = 0;
+        while let Some(_page) = page_reader.get_next_page().unwrap() {
+            page_count += 1;
+        }
+
+        // Without splitting, all data goes into a single page
+        // (This is the problematic behavior we're fixing)
+        assert_eq!(
+            page_count, 1,
+            "Without splitting, expected exactly 1 page, got {}",
+            page_count
+        );
     }
 }
