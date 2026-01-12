@@ -49,7 +49,6 @@ pub struct BasicHashJoin {
     pub(crate) method: HashMethodKind,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) state: Arc<BasicHashJoinState>,
-    pub(crate) scan_blocks: Vec<DataBlock>,
 }
 
 impl BasicHashJoin {
@@ -70,7 +69,6 @@ impl BasicHashJoin {
             method,
             function_ctx,
             squash_block: SquashBlocks::new(block_size, block_bytes),
-            scan_blocks: vec![],
         })
     }
     pub(crate) fn add_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
@@ -98,25 +96,6 @@ impl BasicHashJoin {
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
-            if SCAN_MAP {
-                if let Some(null_keys) = self.squash_block.finalize()? {
-                    self.scan_blocks.push(null_keys);
-                }
-
-                if !self.scan_blocks.is_empty() {
-                    let locked = self.state.mutex.lock();
-                    let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-                    for scan_block in std::mem::take(&mut self.scan_blocks) {
-                        let chunk_index = self.state.chunks.len();
-                        let scan_map = vec![0; scan_block.num_rows()];
-
-                        self.state.chunks.as_mut().push(scan_block);
-                        self.state.scan_map.as_mut().push(scan_map);
-                        self.state.scan_queue.as_mut().push_back(chunk_index);
-                    }
-                }
-            }
-
             return Ok(None);
         };
 
@@ -136,15 +115,13 @@ impl BasicHashJoin {
             if bitmap.true_count() != bitmap.len() {
                 keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
-                if SCAN_MAP {
-                    let null_keys = chunk_block.clone().filter_with_bitmap(&(!(&bitmap)))?;
-
-                    if let Some(null_keys) = self.squash_block.add_block(null_keys)? {
-                        self.scan_blocks.push(null_keys);
+                chunk_block = match SCAN_MAP {
+                    true => {
+                        let null_keys = chunk_block.clone().filter_with_bitmap(&(!(&bitmap)))?;
+                        DataBlock::concat(&[chunk_block.filter_with_bitmap(&bitmap)?, null_keys])?
                     }
-                }
-
-                chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
+                    false => chunk_block.filter_with_bitmap(&bitmap)?,
+                };
             }
         }
 
