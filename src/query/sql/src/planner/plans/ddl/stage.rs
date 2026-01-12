@@ -51,7 +51,7 @@ pub struct AlterStagePlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AlterStageActionPlan {
-    Set(AlterStageSetPlan),
+    Set(Box<AlterStageSetPlan>),
     Unset(AlterStageUnsetPlan),
 }
 
