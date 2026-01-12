@@ -313,6 +313,8 @@ Functions overloads:
 1 as_string(Variant NULL) :: String NULL
 0 as_timestamp(Variant) :: Timestamp NULL
 1 as_timestamp(Variant NULL) :: Timestamp NULL
+0 as_timestamp_tz(Variant) :: TimestampTz NULL
+1 as_timestamp_tz(Variant NULL) :: TimestampTz NULL
 0 ascii(String) :: UInt8
 1 ascii(String NULL) :: UInt8 NULL
 0 asin(Float64) :: Float64
@@ -2302,6 +2304,8 @@ Functions overloads:
 1 is_string(Variant NULL) :: Boolean NULL
 0 is_timestamp(Variant) :: Boolean
 1 is_timestamp(Variant NULL) :: Boolean NULL
+0 is_timestamp_tz(Variant) :: Boolean
+1 is_timestamp_tz(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
 0 isinf(Float32) :: Boolean
@@ -4468,12 +4472,14 @@ Functions overloads:
 11 to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
 12 to_timestamp(TimestampTz) :: Timestamp
 13 to_timestamp(TimestampTz NULL) :: Timestamp NULL
-0 to_timestamp_tz(String) :: TimestampTz
-1 to_timestamp_tz(String NULL) :: TimestampTz NULL
-2 to_timestamp_tz(Date) :: TimestampTz
-3 to_timestamp_tz(Date NULL) :: TimestampTz NULL
-4 to_timestamp_tz(Timestamp) :: TimestampTz
-5 to_timestamp_tz(Timestamp NULL) :: TimestampTz NULL
+0 to_timestamp_tz(Variant) :: TimestampTz NULL
+1 to_timestamp_tz(Variant NULL) :: TimestampTz NULL
+2 to_timestamp_tz(String) :: TimestampTz
+3 to_timestamp_tz(String NULL) :: TimestampTz NULL
+4 to_timestamp_tz(Date) :: TimestampTz
+5 to_timestamp_tz(Date NULL) :: TimestampTz NULL
+6 to_timestamp_tz(Timestamp) :: TimestampTz
+7 to_timestamp_tz(Timestamp NULL) :: TimestampTz NULL
 0 to_uint16(Variant) :: UInt16 NULL
 1 to_uint16(Variant NULL) :: UInt16 NULL
 2 to_uint16(String) :: UInt16
@@ -4945,12 +4951,14 @@ Functions overloads:
 9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
 10 try_to_timestamp(Int64, UInt64) :: Timestamp
 11 try_to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
-0 try_to_timestamp_tz(String) :: TimestampTz NULL
-1 try_to_timestamp_tz(String NULL) :: TimestampTz NULL
-2 try_to_timestamp_tz(Date) :: TimestampTz NULL
-3 try_to_timestamp_tz(Date NULL) :: TimestampTz NULL
-4 try_to_timestamp_tz(Timestamp) :: TimestampTz NULL
-5 try_to_timestamp_tz(Timestamp NULL) :: TimestampTz NULL
+0 try_to_timestamp_tz(Variant) :: TimestampTz NULL
+1 try_to_timestamp_tz(Variant NULL) :: TimestampTz NULL
+2 try_to_timestamp_tz(String) :: TimestampTz NULL
+3 try_to_timestamp_tz(String NULL) :: TimestampTz NULL
+4 try_to_timestamp_tz(Date) :: TimestampTz NULL
+5 try_to_timestamp_tz(Date NULL) :: TimestampTz NULL
+6 try_to_timestamp_tz(Timestamp) :: TimestampTz NULL
+7 try_to_timestamp_tz(Timestamp NULL) :: TimestampTz NULL
 0 try_to_uint16(Variant) :: UInt16 NULL
 1 try_to_uint16(Variant NULL) :: UInt16 NULL
 2 try_to_uint16(String) :: UInt16 NULL
