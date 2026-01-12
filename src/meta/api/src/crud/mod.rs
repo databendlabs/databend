@@ -259,10 +259,10 @@ where
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn list(&self) -> Result<Vec<ValueOf<R>>, MetaError> {
+    pub async fn list(&self, limit: Option<u64>) -> Result<Vec<ValueOf<R>>, MetaError> {
         let dir_name = DirName::new(self.ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, limit).await?;
         let values = values.try_collect().await?;
 
         Ok(values)

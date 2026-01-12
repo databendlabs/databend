@@ -72,7 +72,7 @@ impl SettingMgr {
     #[fastrace::trace]
     pub async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let prefix = self.setting_prefix();
-        let mut strm = self.kv_api.list_kv(&prefix).await?;
+        let mut strm = self.kv_api.list_kv(&prefix, None).await?;
 
         let mut settings = Vec::new();
         while let Some(item) = strm.try_next().await? {

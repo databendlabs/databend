@@ -952,7 +952,7 @@ where
                 file: "dummy".to_string(),
             };
             let dir_name = DirName::new(copied_file_ident);
-            let copied_files = self.list_pb_vec(&dir_name).await?;
+            let copied_files = self.list_pb_vec(&dir_name, None).await?;
 
             let seq_2 = self.get_seq(&table_id).await?;
 
@@ -1627,7 +1627,7 @@ where
 
         let dir_name = DirName::new(table_id_history_ident);
 
-        let ident_histories = self.list_pb_vec(&dir_name).await?;
+        let ident_histories = self.list_pb_vec(&dir_name, None).await?;
 
         let mut res = vec![];
         let now = Utc::now();
@@ -1762,7 +1762,7 @@ where
             file: "".to_string(),
         };
 
-        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let res = self.list_pb_vec(&DirName::new(key), None).await?;
         let mut file_info = BTreeMap::new();
         for (name_key, seqv) in res {
             file_info.insert(name_key.file, seqv.data);

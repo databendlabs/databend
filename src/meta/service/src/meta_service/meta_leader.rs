@@ -105,7 +105,11 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.sto.get_sm_v003();
-                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
+                let res = sm
+                    .kv_api()
+                    .list_kv_collect(&req.prefix, None)
+                    .await
+                    .unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -147,7 +151,7 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
 
             MetaGrpcReadReq::ListKV(req) => {
                 let strm =
-                    kv_api.list_kv(&req.prefix).await.map_err(|e| {
+                    kv_api.list_kv(&req.prefix, None).await.map_err(|e| {
                         MetaOperationError::DataError(MetaDataError::ReadError(
                             MetaDataReadError::new("list_kv", &req.prefix, &e),
                         ))
@@ -325,17 +329,14 @@ impl<'a> MetaLeader<'a> {
         prefix: &str,
         limit: Option<u64>,
     ) -> Result<BoxStream<StreamItem>, io::Error> {
-        let sm = self.sto.get_sm_v003();
-        let kv_api = sm.kv_api();
-        let strm = kv_api.list_kv(prefix).await?;
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .list_kv(prefix, limit)
+            .await?;
         let strm = strm.map_err(|e| Status::internal(e.to_string()));
-
-        let strm = match limit {
-            Some(n) => strm.take(n as usize).boxed(),
-            None => strm.boxed(),
-        };
-
-        Ok(strm)
+        Ok(strm.boxed())
     }
 }
 

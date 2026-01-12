@@ -292,7 +292,7 @@ where
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(prefix).await?;
+            let strm = self.list_pb(prefix, None).await?;
             let name_ids = strm.try_collect::<Vec<_>>().await?;
 
             let id_idents = name_ids
@@ -448,7 +448,11 @@ mod tests {
             Ok(strm.boxed())
         }
 
-        async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        async fn list_kv(
+            &self,
+            _prefix: &str,
+            _limit: Option<u64>,
+        ) -> Result<KVStream<Self::Error>, Self::Error> {
             unimplemented!()
         }
 

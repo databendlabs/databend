@@ -860,12 +860,12 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // there should be 6 table ids : create or replace table 6 times
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 6);
 
     // there should be ownerships for 2 db ids and 5 table ids, one of the ownership is revoked by drop table
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 7);
 
     for sql in vacuum_stmts {
@@ -874,16 +874,16 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // After vacuum, 1 table ids left
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 1);
 
     let prefix = "__fd_table_id_to_name";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 1);
 
     // There are ownership objs of  2 dbs and 1 tables
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 3);
 
     // db1.t1 should still be accessible

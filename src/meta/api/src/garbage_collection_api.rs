@@ -206,7 +206,7 @@ async fn remove_copied_files_for_dropped_table(
 
         let dir_name = DirName::new(copied_file_ident);
 
-        let key_stream = kv_api.list_pb_keys(&dir_name).await?;
+        let key_stream = kv_api.list_pb_keys(&dir_name, None).await?;
         let copied_files = key_stream.take(batch_size).try_collect::<Vec<_>>().await?;
 
         if copied_files.is_empty() {
@@ -259,7 +259,7 @@ pub async fn get_history_tables_for_gc(
         table_name: "dummy".to_string(),
     };
     let dir_name = DirName::new(ident);
-    let table_history_kvs = kv_api.list_pb_vec(&dir_name).await?;
+    let table_history_kvs = kv_api.list_pb_vec(&dir_name, None).await?;
 
     let mut args = vec![];
 
@@ -466,7 +466,7 @@ async fn gc_dropped_db_by_id(
 
         let mut num_db_id_table_name_keys_removed = 0;
         let batch_size = 1024;
-        let key_stream = kv_api.list_pb_keys(&dir_name).await?;
+        let key_stream = kv_api.list_pb_keys(&dir_name, None).await?;
         let mut chunks = key_stream.chunks(batch_size);
         while let Some(targets) = chunks.next().await {
             let mut txn = TxnRequest::default();
@@ -511,7 +511,7 @@ async fn gc_dropped_db_by_id(
     };
     let dir_name = DirName::new(table_history_ident);
 
-    let table_history_items = kv_api.list_pb_vec(&dir_name).await?;
+    let table_history_items = kv_api.list_pb_vec(&dir_name, None).await?;
 
     let mut txn = TxnRequest::default();
 
@@ -566,7 +566,7 @@ async fn gc_dropped_db_by_id(
             ObjectTagIdRef::new(taggable_object.clone(), 0),
         );
         let obj_tag_dir = DirName::new(obj_tag_prefix);
-        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir, None).await?;
         while let Some(entry) = tag_stream.try_next().await? {
             let tag_id = entry.key.name().tag_id;
             // Delete object -> tag reference
@@ -762,7 +762,7 @@ async fn remove_data_for_dropped_table(
             tenant,
             auto_increment_key,
         ));
-        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name, None).await?;
 
         while let Some(auto_increment_ident) = auto_increments.try_next().await? {
             txn.if_then.push(txn_op_del(&auto_increment_ident));
@@ -805,7 +805,7 @@ async fn remove_data_for_dropped_table(
             ObjectTagIdRef::new(taggable_object.clone(), 0),
         );
         let obj_tag_dir = DirName::new(obj_tag_prefix);
-        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir, None).await?;
         while let Some(entry) = tag_stream.try_next().await? {
             let tag_id = entry.key.name().tag_id;
             // Delete object -> tag reference
