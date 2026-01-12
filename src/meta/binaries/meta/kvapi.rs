@@ -88,7 +88,7 @@ impl KvApiCommand {
                 serde_json::to_string_pretty(&res)?
             }
             KvApiCommand::List(prefix) => {
-                let res = client.list_kv_collect(prefix.as_str()).await?;
+                let res = client.list_kv_collect(prefix.as_str(), None).await?;
                 serde_json::to_string_pretty(&res)?
             }
         };

@@ -123,7 +123,7 @@ impl UdfMgr {
     #[fastrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = DirName::new(UdfIdent::new(&self.tenant, ""));
-        let strm = self.kv_api.list_pb_values(&key).await?;
+        let strm = self.kv_api.list_pb_values(&key, None).await?;
 
         match strm.try_collect().await {
             Ok(udfs) => Ok(udfs),
@@ -138,7 +138,7 @@ impl UdfMgr {
         let dir = DirName::new(key);
         let udfs = self
             .kv_api
-            .list_pb_values(&dir)
+            .list_pb_values(&dir, None)
             .await?
             .try_collect::<Vec<_>>()
             .await?;

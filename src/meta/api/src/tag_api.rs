@@ -188,7 +188,7 @@ where
 
             // Transaction failed. Check if it's due to references or concurrent modification.
             let refs: Vec<String> = self
-                .list_pb(&refs_dir)
+                .list_pb(&refs_dir, None)
                 .await?
                 .map_ok(|entry| entry.key.name().object.to_string())
                 .try_collect()
@@ -456,7 +456,7 @@ where
         let obj_ref_key =
             ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
-        let stream = self.list_pb(&refs_dir).await?;
+        let stream = self.list_pb(&refs_dir, None).await?;
         Ok(stream
             .map_ok(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
@@ -482,7 +482,7 @@ where
             2,
         );
         let refs = self
-            .list_pb(&refs_dir)
+            .list_pb(&refs_dir, None)
             .await?
             .map_ok(|entry| {
                 let object = entry.key.name().object.clone();

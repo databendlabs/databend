@@ -4187,6 +4187,7 @@ dependencies = [
  "databend-common-meta-types",
  "display-more 0.2.1",
  "fastrace",
+ "futures-util",
  "log",
  "state-machine-api",
  "tokio",
