@@ -1,7 +1,6 @@
 """Progress reporting utilities for Databend processes."""
 
 import sys
-from typing import Dict, Any
 
 
 class ProgressReporter:

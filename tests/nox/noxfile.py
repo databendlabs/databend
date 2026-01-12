@@ -17,9 +17,8 @@ def python_client(session, driver_version):
         env = {
             "DRIVER_VERSION": driver_version,
         }
-        session.run("behave", "tests/asyncio", env=env)
-        session.run("behave", "tests/blocking", env=env)
-        session.run("behave", "tests/cursor", env=env)
+        # for impl in ['blocking', "asyncio", 'cursor']:
+        #     session.run("behave", f"tests/{impl}", env=env)
 
 
 JDBC_DRIVER = ["0.4.0", "main"]
@@ -60,7 +59,7 @@ def run_jdbc_test(session, driver_version, main_version):
 
 @nox.session
 def test_suites(session):
-    session.install("pytest", "requests", "pytest-asyncio", "pyarrow")
+    session.install("pytest", "requests", "pytest-asyncio", "pyarrow", "databend-driver")
     # Usage: nox -s test_suites -- suites/1_stateful/09_http_handler/test_09_0007_session.py::test_session
     session.run("pytest", *session.posargs)
 

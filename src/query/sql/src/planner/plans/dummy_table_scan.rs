@@ -53,11 +53,16 @@ use crate::plans::RelOperator;
 ///
 /// The `source_table_indexes` field solves this by tracking which tables' data was used
 /// to compute the constant values. During physical plan building, we use these indexes
-/// to compute partition SHAs for the source tables, ensuring proper cache invalidation.
+/// to add cache invalidation keys for the source tables, ensuring proper cache invalidation.
+///
+/// Note: The query result cache stores these keys under the historical name
+/// `partitions_shas`. For normal table scans we use a partition SHA256; for Fuse tables
+/// (e.g. when folded into DummyTableScan) we may use snapshot_location (or a stable
+/// sentinel for empty tables) as the invalidation key.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct DummyTableScan {
     /// Table indexes that this DummyTableScan depends on.
-    /// When building the physical plan, we compute partition SHAs for these tables
+    /// When building the physical plan, we add cache invalidation keys for these tables
     /// to ensure query result cache is invalidated when source data changes.
     pub source_table_indexes: Vec<IndexType>,
 }

@@ -48,5 +48,3 @@ ORDER BY i_item_id NULLS FIRST,
          s_state NULLS FIRST
 LIMIT 100;
 ----
-
-

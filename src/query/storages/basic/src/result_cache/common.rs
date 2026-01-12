@@ -55,4 +55,7 @@ pub struct ResultCacheValue {
     pub partitions_shas: Vec<String>,
     /// The location of the result cache file.
     pub location: String,
+    /// Additional factors that participated in the cache key (e.g., row access policy predicates).
+    #[serde(default)]
+    pub cache_key_extras: Vec<String>,
 }

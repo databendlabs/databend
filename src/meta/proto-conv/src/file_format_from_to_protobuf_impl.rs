@@ -481,11 +481,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
                 Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
-        let null_display = if p.null_display.is_empty() {
-            "\\N".to_string()
-        } else {
-            p.null_display
-        };
+        let null_display = p.null_display.unwrap_or_else(|| "\\N".to_string());
 
         let empty_field_as = p
             .empty_field_as
@@ -506,6 +502,12 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             .map_err(|e| Incompatible::new(format!("{:?}", e)))?
             .unwrap_or_default();
 
+        let quoted_empty_field_as = if let Some(value) = p.quoted_empty_field_as {
+            EmptyFieldAs::from_str(&value).map_err(|e| Incompatible::new(format!("{:?}", e)))?
+        } else {
+            EmptyFieldAs::String
+        };
+
         Ok(Self {
             compression,
             headers: p.headers,
@@ -516,7 +518,9 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             nan_display: p.nan_display,
             null_display,
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
+            allow_quoted_nulls: p.allow_quoted_nulls,
             empty_field_as,
+            quoted_empty_field_as,
             binary_format,
             output_header: p.output_header,
             geometry_format,
@@ -536,8 +540,10 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             quote: self.quote.clone(),
             escape: self.escape.clone(),
             nan_display: self.nan_display.clone(),
-            null_display: self.null_display.clone(),
+            null_display: Some(self.null_display.clone()),
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
+            allow_quoted_nulls: self.allow_quoted_nulls,
+            quoted_empty_field_as: Some(self.quoted_empty_field_as.to_string()),
             empty_field_as: Some(self.empty_field_as.to_string()),
             binary_format: Some(self.binary_format.to_string()),
             output_header: self.output_header,

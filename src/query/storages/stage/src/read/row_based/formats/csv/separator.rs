@@ -34,6 +34,16 @@ use crate::read::row_based::formats::csv::CsvInputFormat;
 
 pub const MAX_CSV_COLUMNS: usize = 1000;
 
+#[inline]
+pub fn is_quoted(end: usize) -> bool {
+    csv_core::QUOTED_MASK & end > 0
+}
+
+#[inline]
+pub fn unquote(end: usize) -> usize {
+    (!csv_core::QUOTED_MASK) & end
+}
+
 pub struct CsvReader {
     load_ctx: Arc<LoadContext>,
 
@@ -87,6 +97,7 @@ impl CsvReader {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
             })
+            .mark_quoted(true)
             .build();
         let projection = load_ctx.pos_projection.clone();
         let max_fields = match &projection {
@@ -150,7 +161,7 @@ impl CsvReader {
                                 // support we expect 4 fields but got row with only 2 columns : "1,2\n"
                                 // here we pretend we read "1,2,,\n"
                                 debug_assert!(self.n_end > 0);
-                                let end = self.field_ends[n_end - 1];
+                                let end = unquote(self.field_ends[n_end - 1]);
                                 for i in n_end..self.num_fields {
                                     self.field_ends[i] = end;
                                 }
@@ -301,9 +312,12 @@ impl CsvReader {
     fn check_num_field(&self) -> std::result::Result<(), FileParseError> {
         let expected = self.num_fields;
         let found = self.n_end;
+        let ends = &self.field_ends;
+        // allow trailing ","
         if found < expected
             || found > expected + 1
-            || (found == expected + 1 && self.field_ends[expected] != self.field_ends[expected - 1])
+            || (found == expected + 1
+                && (is_quoted(ends[expected]) || ends[expected] != unquote(ends[expected - 1])))
         {
             Err(FileParseError::NumberOfColumnsMismatch {
                 table: expected,

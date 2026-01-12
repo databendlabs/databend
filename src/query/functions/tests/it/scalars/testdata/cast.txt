@@ -1597,7 +1597,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-TIME": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: failed to parse year in date: failed to parse four digit integer as year: invalid digit, expected 0-9 but got A. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `CAST('A NON-TIMESTAMP STR' AS Timestamp)`
 
 
 
@@ -1797,7 +1797,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date "A NON-DATE": failed to parse "A NO" as year (a four digit integer): invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `CAST('A NON-DATE STR' AS Date)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: failed to parse year in date: failed to parse four digit integer as year: invalid digit, expected 0-9 but got A. while evaluating function `to_date('A NON-DATE STR')` in expr `CAST('A NON-DATE STR' AS Date)`
 
 
 

@@ -1,7 +1,5 @@
 """Databend Query service management utilities."""
 
-import time
-import requests
 from typing import Optional
 
 from .progress import ProgressReporter
@@ -41,7 +39,7 @@ class DatabendQuery:
     def _print_start_info(self) -> None:
         """Print startup information."""
         config = self._parse_config()
-        ProgressReporter.print_message(f"🚀 Starting databend-query...")
+        ProgressReporter.print_message("🚀 Starting databend-query...")
         ProgressReporter.print_message(f"   Binary: {self.binary_path}")
         ProgressReporter.print_message(f"   Config: {self.config_path}")
 

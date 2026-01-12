@@ -94,7 +94,8 @@ impl ToReadDataSourcePlan for dyn Table {
             bytes: statistics.read_bytes,
         });
 
-        // We need the partition sha256 to specify the result cache.
+        // Add a cache invalidation key for query result cache.
+        // For normal table scans we use the partition SHA256.
         let settings = ctx.get_settings();
         if settings.get_enable_query_result_cache()? {
             let sha = parts.compute_sha256()?;

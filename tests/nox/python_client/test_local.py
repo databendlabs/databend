@@ -112,7 +112,7 @@ def run_load_file(load_method):
     ret = [row.values() for row in rows]
     expected = [
         (-1, 1, 1.0, "'", None, date(2011, 3, 6), datetime(2011, 3, 6, 6, 20, tzinfo=timezone.utc)),
-        (-2, 2, 2.0, '"', None, date(2012, 5, 31), datetime(2012, 5, 31, 11, 20, tzinfo=timezone.utc)),
+        (-2, 2, 2.0, '"', "", date(2012, 5, 31), datetime(2012, 5, 31, 11, 20, tzinfo=timezone.utc)),
         (-3, 3, 3.0, "\\", "NULL", date(2016, 4, 4), datetime(2016, 4, 4, 11, 30, tzinfo=timezone.utc)),
     ]
     assert ret == expected, f"{load_method} ret: {ret}"
