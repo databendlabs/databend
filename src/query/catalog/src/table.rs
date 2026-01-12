@@ -97,12 +97,16 @@ pub trait Table: Sync + Send {
         self.get_table_info().ident.table_id
     }
 
-    /// Returns the effective target ID for this table reference.
+    /// Returns the effective unique ID for this table reference.
     ///
     /// - If this is a branch, returns the branch ID.
     /// - Otherwise, returns the physical table ID.
     ///
-    /// This ID uniquely identifies the concrete target of an operation.
+    /// NOTE:
+    /// - `branch_id` is **globally unique across all tables**, not scoped per table.
+    /// - Branch IDs are allocated from a global ID generator and do NOT collide
+    ///   even for branches created on different tables.
+    /// - Therefore, using `branch_id` alone as a cache key namespace is safe.
     fn get_target_id(&self) -> u64 {
         self.get_table_branch()
             .map_or(self.get_id(), |v| v.branch_id())

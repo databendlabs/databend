@@ -194,6 +194,7 @@ pub struct TableMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotRef {
     /// The unique id of the reference.
+    /// It is allocated from a global sequence and is unique cluster-wide.
     pub id: u64,
     /// After this timestamp, the reference becomes inactive.
     pub expire_at: Option<DateTime<Utc>>,

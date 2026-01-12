@@ -1864,13 +1864,13 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
-        let table_target_id = table.get_target_id();
+        let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {
             self.shared
                 .table_meta_timestamps
                 .lock()
-                .get(&table_target_id)
+                .get(&table_unique_id)
                 .copied()
         };
 
@@ -1922,7 +1922,7 @@ impl TableContext for QueryContext {
 
             if txn_mgr.is_active() {
                 // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_target_id);
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_unique_id);
 
                 if let Some(existing_ts) = existing_timestamp {
                     // Defensively check that:
@@ -1940,7 +1940,7 @@ impl TableContext for QueryContext {
                     // When a table is first mutated within an active transaction, record its
                     // segment_block_timestamp as the transaction's begin timestamp for this table.
                     txn_mgr.set_table_txn_begin_timestamp(
-                        table_target_id,
+                        table_unique_id,
                         table_meta_timestamps.segment_block_timestamp,
                     );
                 }
@@ -1949,7 +1949,7 @@ impl TableContext for QueryContext {
 
         {
             let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_target_id, table_meta_timestamps);
+            cache.insert(table_unique_id, table_meta_timestamps);
         }
 
         Ok(table_meta_timestamps)
