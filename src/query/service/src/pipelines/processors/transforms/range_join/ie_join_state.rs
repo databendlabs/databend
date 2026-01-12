@@ -354,12 +354,12 @@ impl RangeJoinState {
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         unsafe { l1_index_column.index_unchecked(j) }
                     {
-                        right_buffer.push((-right - 1) as usize - right_offset);
+                        right_buffer.push(((-right - 1) as usize - right_offset) as u32);
                     }
                     if let ScalarRef::Number(NumberScalar::Int64(left)) =
                         unsafe { l1_index_column.index_unchecked(*p as usize) }
                     {
-                        left_buffer.push((left - 1) as usize - left_offset);
+                        left_buffer.push(((left - 1) as usize - left_offset) as u32);
                     }
                 }
                 j += 1;
@@ -370,28 +370,19 @@ impl RangeJoinState {
         }
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
-        let mut indices = Vec::with_capacity(left_buffer.len());
         let mut buffer = Vec::with_capacity(left_buffer.len());
         for res in left_buffer.iter() {
-            indices.push((0u32, *res as u32));
             if !left_match.is_empty() {
-                buffer.push((*res + left_offset) as u64);
+                buffer.push(*res as u64 + left_offset as u64);
             }
         }
-        let mut left_result_block =
-            DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
-        indices.clear();
+        let mut left_result_block = left_table[left_idx].take(left_buffer.as_slice())?;
         for res in right_buffer.iter() {
-            indices.push((0u32, *res as u32));
             if !right_match.is_empty() {
-                buffer.push((*res + right_offset) as u64);
+                buffer.push(*res as u64 + right_offset as u64);
             }
         }
-        let right_result_block = DataBlock::take_blocks(
-            &right_table[right_idx..right_idx + 1],
-            &indices,
-            indices.len(),
-        );
+        let right_result_block = right_table[right_idx].take(right_buffer.as_slice())?;
         // Merge left_result_block and right_result_block
         left_result_block.merge_block(right_result_block);
         if !left_match.is_empty() || !right_match.is_empty() {
@@ -479,7 +470,7 @@ impl RangeJoinState {
             .take(outer_table[outer_idx].num_rows())
         {
             if !state {
-                indices.push((0u32, (i - outer_offset) as u32));
+                indices.push((i - outer_offset) as u32);
             }
         }
 
@@ -487,11 +478,7 @@ impl RangeJoinState {
             return Ok(DataBlock::empty());
         }
 
-        let outer_result_block = DataBlock::take_blocks(
-            &outer_table[outer_idx..outer_idx + 1],
-            &indices,
-            indices.len(),
-        );
+        let outer_result_block = outer_table[outer_idx].take(indices.as_slice())?;
 
         let null_columns = inner_table[inner_idx]
             .columns()

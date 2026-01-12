@@ -30,11 +30,18 @@ use super::ValueType;
 use super::column_type_error;
 use super::domain_type_error;
 use super::scalar_type_error;
+use crate::BlockEntry;
+use crate::Chunk;
+use crate::ChunkIndex;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnView;
 use crate::Domain;
 use crate::ScalarRef;
 use crate::arrow::buffer_into_mut;
+use crate::types::nullable::NullableColumnBuilder;
+use crate::types::NullableType;
+use crate::TakeIndex;
 
 pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + Copy + PartialEq + Eq + Default + Send + 'static;
@@ -259,5 +266,89 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
 impl<T: SimpleType> ReturnType for SimpleValueType<T> {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
+    }
+
+    fn column_from_vec(vec: Vec<Self::Scalar>, _: &GenericMap) -> Self::Column {
+        vec.into()
+    }
+}
+
+impl<T: SimpleType> SimpleValueType<T> {
+    pub fn take_from_views(
+        views: &[ColumnView<SimpleValueType<T>>],
+        indices: &ChunkIndex,
+        data_type: &DataType,
+    ) -> BlockEntry {
+        let mut builder = Vec::with_capacity(indices.num_rows());
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => match &views[block as usize] {
+                    ColumnView::Const(scalar, _) => {
+                        builder.resize(builder.len() + rows.len(), *scalar);
+                    }
+                    ColumnView::Column(buffer) => {
+                        rows.take_primitive_types(buffer.as_slice(), &mut builder);
+                    }
+                },
+                Chunk::Repeat { block, rows } => match &views[block as usize] {
+                    ColumnView::Const(scalar, _) => {
+                        builder.resize(builder.len() + rows.count as usize, *scalar);
+                    }
+                    ColumnView::Column(buffer) => {
+                        rows.take_primitive_types(buffer.as_slice(), &mut builder);
+                    }
+                },
+                Chunk::Range { block, row, len } => match &views[block as usize] {
+                    ColumnView::Const(scalar, _) => {
+                        builder.resize(builder.len() + len as usize, *scalar);
+                    }
+                    ColumnView::Column(buffer) => {
+                        (row..row + len).take_primitive_types(buffer.as_slice(), &mut builder);
+                    }
+                },
+            };
+        }
+        T::upcast_column(builder.into(), data_type).into()
+    }
+}
+
+impl<T: SimpleType> NullableColumnBuilder<SimpleValueType<T>> {
+    pub fn take_from_views(
+        views: &[ColumnView<NullableType<SimpleValueType<T>>>],
+        indices: &ChunkIndex,
+        data_type: &DataType,
+    ) -> BlockEntry {
+        let mut builder = Self::with_capacity(indices.num_rows(), &[]);
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    let view = &views[block as usize];
+                    for row in TakeIndex::iter(rows) {
+                        match unsafe { view.index_unchecked(row) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+                Chunk::Repeat { block, rows } => {
+                    let view = &views[block as usize];
+                    match unsafe { view.index_unchecked(rows.row as usize) } {
+                        Some(value) => builder.push_repeat(value, rows.count as usize),
+                        None => builder.push_repeat_null(rows.count as usize),
+                    }
+                }
+                Chunk::Range { block, row, len } => {
+                    let view = &views[block as usize];
+                    for r in row..row + len {
+                        match unsafe { view.index_unchecked(r as usize) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+            }
+        }
+        let column = builder.build();
+        NullableType::<SimpleValueType<T>>::upcast_column_with_type(column, data_type).into()
     }
 }

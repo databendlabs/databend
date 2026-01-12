@@ -13,6 +13,9 @@ Databend is a Rust workspace rooted at `Cargo.toml`. The query engine (`src/quer
 ## Coding Style & Naming Conventions
 Rust sources follow `rustfmt.toml` (4-space indent, 100-column width) and must pass `cargo clippy -- -D warnings`. Keep modules and files in `snake_case`, exposed types and traits in `CamelCase`, and SQL suite files prefixed with the numeric order already in `tests/suites/`. Favor `common/exception` helpers plus `tracing` spans for errors and observability. Python utilities in `tests/` should satisfy Ruff defaults, and shell scripts must round-trip through `shfmt -l -w`.
 
+## Debug Guidelines
+Always use `cargo clippy` to make sure there are no compilation errors. Fully verifying the whole project may take too long, partial verification can speed things up, but eventually a full verification will be needed.
+
 ## Testing Guidelines
 Unit tests stay close to the affected crate (`#[cfg(test)]` modules), and integration behavior belongs in the relevant SQL suites or meta harness (`tests/metactl`, `tests/meta-kvapi`). Every planner, executor, or storage change should add at least one regression SQL file plus expected output when deterministic. Use cluster variants (`make stateless-cluster-test` and TLS mode) whenever coordination, transactions, or auth are involved. Document new fixtures or configs in `tests/README.md` (or inline comments) so CI remains reproducible.
 

@@ -107,7 +107,7 @@ impl AsyncSink for AggIndexSink {
     async fn on_finish(&mut self) -> Result<()> {
         for (loc, indexes) in &self.location_data {
             let start = Instant::now();
-            let block = DataBlock::take_blocks(&self.blocks, indexes, indexes.len());
+            let block = DataBlock::take_blocks(&self.blocks, indexes);
             let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                 loc,
                 self.index_id,

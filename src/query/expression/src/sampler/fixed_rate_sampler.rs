@@ -104,7 +104,7 @@ impl<R: Rng> FixedRateSampler<R> {
             .is_some_and(|indices| indices.len() == self.block_size)
         {
             let indices = self.indices.pop_front().unwrap();
-            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
             self.dense_blocks.push(block)
         }
 
@@ -115,7 +115,7 @@ impl<R: Rng> FixedRateSampler<R> {
         debug_assert!(self.indices.is_empty());
 
         if is_final {
-            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+            let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
             self.sparse_blocks.clear();
             self.dense_blocks.push(block);
             return;
@@ -125,7 +125,7 @@ impl<R: Rng> FixedRateSampler<R> {
             self.indices.push_back(indices);
             return;
         }
-        let block = DataBlock::take_blocks(&self.sparse_blocks, &indices, indices.len());
+        let block = DataBlock::take_blocks(&self.sparse_blocks, &indices);
         self.sparse_blocks.clear();
         for (i, index) in indices.iter_mut().enumerate() {
             index.0 = 0;

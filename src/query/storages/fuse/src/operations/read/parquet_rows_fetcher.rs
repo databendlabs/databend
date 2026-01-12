@@ -27,7 +27,6 @@ use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockIndex;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -141,7 +140,6 @@ impl RowsFetcher for ParquetRowsFetcher {
         row_ids: &[u64],
         metadata: HashMap<u64, Self::Metadata>,
     ) -> Result<DataBlock> {
-        let num_rows = row_ids.len();
         let final_block_index = metadata
             .keys()
             .enumerate()
@@ -160,11 +158,11 @@ impl RowsFetcher for ParquetRowsFetcher {
                     let task_indices: &mut Vec<_> = v.get_mut();
 
                     let final_index = task_indices.len() as u32;
-                    task_indices.push((0u32, idx as u32));
+                    task_indices.push(idx as u32);
                     final_indices.push((final_block_index[&block_id], final_index));
                 }
                 Entry::Vacant(v) => {
-                    v.insert(vec![(0u32, idx as u32)]);
+                    v.insert(vec![idx as u32]);
                     final_indices.push((final_block_index[&block_id], 0_u32));
                 }
             }
@@ -213,11 +211,7 @@ impl RowsFetcher for ParquetRowsFetcher {
             }
         }
 
-        Ok(DataBlock::take_blocks(
-            &final_blocks,
-            &final_indices,
-            num_rows,
-        ))
+        Ok(DataBlock::take_blocks(&final_blocks, &final_indices))
     }
 }
 
@@ -250,7 +244,7 @@ impl ParquetRowsFetcher {
         &self,
         metadata: Arc<RowsFetchMetadataImpl>,
         final_index: u32,
-        take_indices: Vec<BlockIndex>,
+        take_indices: Vec<u32>,
     ) -> impl Future<Output = Result<(u32, DataBlock)>> + use<> {
         {
             let settings = self.settings;
@@ -265,10 +259,9 @@ impl ParquetRowsFetcher {
                     )
                     .await?;
 
-                let block = Self::build_block(&reader, &metadata, chunk)?;
                 Ok((
                     final_index,
-                    DataBlock::take_blocks(&[block], &take_indices, take_indices.len()),
+                    Self::build_block(&reader, &metadata, chunk)?.take(take_indices.as_slice())?,
                 ))
             }
         }

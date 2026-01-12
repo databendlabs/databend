@@ -92,19 +92,12 @@ impl RangeJoinState {
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         unsafe { right_idx_col.index_unchecked(k) }
                     {
-                        right_buffer.push((-right - 1) as usize - right_offset);
+                        right_buffer.push(((-right - 1) as usize - right_offset) as u32);
                     }
                 }
                 if !left_result_block.is_empty() {
-                    let mut indices = Vec::with_capacity(right_buffer.len());
-                    for res in right_buffer.iter() {
-                        indices.push((0u32, *res as u32));
-                    }
-                    let right_result_block = DataBlock::take_blocks(
-                        &right_table[right_idx..right_idx + 1],
-                        &indices,
-                        indices.len(),
-                    );
+                    let right_result_block =
+                        right_table[right_idx].take(right_buffer.as_slice())?;
                     // Merge left_result_block and right_result_block
                     left_result_block.merge_block(right_result_block);
                     for filter in self.other_conditions.iter() {

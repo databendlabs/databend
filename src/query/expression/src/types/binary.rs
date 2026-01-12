@@ -28,10 +28,16 @@ use super::ValueType;
 use super::column_type_error;
 use super::domain_type_error;
 use super::scalar_type_error;
+use crate::BlockEntry;
+use crate::Chunk;
+use crate::ChunkIndex;
 use crate::ColumnBuilder;
+use crate::ColumnView;
 use crate::property::Domain;
-use crate::values::Column;
-use crate::values::Scalar;
+use crate::values::{Column, Scalar};
+use crate::TakeIndex;
+use super::nullable::NullableColumnBuilder;
+use super::NullableType;
 
 pub type BinaryColumn = databend_common_column::binary::BinaryColumn;
 pub type BinaryColumnBuilder = databend_common_column::binary::BinaryColumnBuilder;
@@ -195,4 +201,88 @@ impl ReturnType for BinaryType {
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
     }
+}
+
+pub fn take_binary_from_views<T>(
+    views: &[ColumnView<T>],
+    indices: &ChunkIndex,
+) -> BlockEntry
+where
+    T: ArgType<ColumnBuilder = BinaryColumnBuilder>,
+    for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+{
+    let mut builder = BinaryColumnBuilder::with_capacity(indices.num_rows(), 0);
+    for chunk in indices.iter_chunk() {
+        match chunk {
+            Chunk::Single { block, rows } => {
+                let view = &views[block as usize];
+                for row in TakeIndex::iter(rows) {
+                    let scalar = unsafe { view.index_unchecked(row) };
+                    builder.put_slice(scalar.as_ref());
+                    builder.commit_row();
+                }
+            }
+            Chunk::Repeat { block, rows } => {
+                let view = &views[block as usize];
+                for row in rows.iter() {
+                    let scalar = unsafe { view.index_unchecked(row) };
+                    builder.put_slice(scalar.as_ref());
+                    builder.commit_row();
+                }
+            }
+            Chunk::Range { block, row, len } => {
+                let view = &views[block as usize];
+                for r in row..row + len {
+                    let scalar = unsafe { view.index_unchecked(r as usize) };
+                    builder.put_slice(scalar.as_ref());
+                    builder.commit_row();
+                }
+            }
+        }
+    }
+    let column = T::build_column(builder);
+    T::upcast_column(column).into()
+}
+
+pub fn take_nullable_binary_from_views<T>(
+    views: &[ColumnView<NullableType<T>>],
+    indices: &ChunkIndex,
+    data_type: &DataType,
+) -> BlockEntry
+where
+    T: ArgType<ColumnBuilder = BinaryColumnBuilder>,
+    for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+{
+    let mut builder = NullableColumnBuilder::<T>::with_capacity(indices.num_rows(), &[]);
+    for chunk in indices.iter_chunk() {
+        match chunk {
+            Chunk::Single { block, rows } => {
+                let view = &views[block as usize];
+                for row in TakeIndex::iter(rows) {
+                    match unsafe { view.index_unchecked(row) } {
+                        Some(value) => builder.push(value),
+                        None => builder.push_null(),
+                    }
+                }
+            }
+            Chunk::Repeat { block, rows } => {
+                let view = &views[block as usize];
+                match unsafe { view.index_unchecked(rows.row as usize) } {
+                    Some(value) => builder.push_repeat(value, rows.count as usize),
+                    None => builder.push_repeat_null(rows.count as usize),
+                }
+            }
+            Chunk::Range { block, row, len } => {
+                let view = &views[block as usize];
+                for r in row..row + len {
+                    match unsafe { view.index_unchecked(r as usize) } {
+                        Some(value) => builder.push(value),
+                        None => builder.push_null(),
+                    }
+                }
+            }
+        }
+    }
+    let column = builder.build();
+    NullableType::<T>::upcast_column_with_type(column, data_type).into()
 }

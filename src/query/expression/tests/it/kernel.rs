@@ -105,20 +105,21 @@ pub fn test_pass() {
     {
         let mut blocks = Vec::with_capacity(3);
         let indices = vec![
-            (0, 0, 1),
-            (1, 0, 1),
-            (2, 0, 1),
-            (0, 1, 1),
-            (1, 1, 1),
-            (2, 1, 1),
-            (0, 2, 1),
-            (1, 2, 1),
-            (2, 2, 1),
-            (0, 3, 1),
-            (1, 3, 1),
-            (2, 3, 1),
-            // repeat 3
-            (0, 0, 3),
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (0, 1),
+            (1, 1),
+            (2, 1),
+            (0, 2),
+            (1, 2),
+            (2, 2),
+            (0, 3),
+            (1, 3),
+            (2, 3),
+            (0, 0),
+            (0, 0),
+            (0, 0),
         ];
         for i in 0..3 {
             let mut entries = Vec::with_capacity(3);
@@ -174,38 +175,6 @@ pub fn test_pass() {
         run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, None);
         run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, Some(4));
     }
-
-    run_take_by_slice_limit(
-        &mut file,
-        &DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
-            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
-        ]),
-        (2, 3),
-        None,
-    );
-
-    run_take_by_slice_limit(
-        &mut file,
-        &DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
-            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
-        ]),
-        (2, 3),
-        Some(2),
-    );
 
     run_scatter(
         &mut file,

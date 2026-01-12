@@ -109,8 +109,7 @@ impl<R: Rng> FixedSizeSampler<R> {
             .chunks_mut(self.block_size)
             .enumerate()
             .map(|(i, indices)| {
-                let rows = indices.len();
-                let block = DataBlock::take_blocks(&self.blocks, indices, rows);
+                let block = DataBlock::take_blocks(&self.blocks, indices);
 
                 for (j, (b, r)) in indices.iter_mut().enumerate() {
                     *b = i as u32;
