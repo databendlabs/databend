@@ -149,7 +149,6 @@ async fn compute_table_segments_diffs(
     Ok((table_segments_diffs, table_original_snapshots))
 }
 
-// TODO(zhyass): Branch writes are currently not allowed inside a transaction.
 // Support for transactional branch writes is planned for the next PR.
 async fn try_rebuild_req(
     ctx: Arc<dyn TableContext>,

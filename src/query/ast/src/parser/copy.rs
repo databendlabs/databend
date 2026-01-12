@@ -33,7 +33,6 @@ use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
-use crate::parser::common::table_ref;
 use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
@@ -63,16 +62,28 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         rule! {
             #with? ~ COPY
             ~ #hint?
-            ~ INTO ~ #table_ref ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ INTO ~ #dot_separated_idents_1_to_3 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ^FROM ~ ^#copy_into_table_source
             ~ #copy_into_table_option*
         },
-        |(with, _copy, opt_hints, _into, dst, dst_columns, _from, src, opts)| {
+        |(
+            with,
+            _copy,
+            opt_hints,
+            _into,
+            (catalog, database, table),
+            dst_columns,
+            _from,
+            src,
+            opts,
+        )| {
             let mut copy_stmt = CopyIntoTableStmt {
                 with,
                 hints: opt_hints,
                 src,
-                dst,
+                catalog,
+                database,
+                table,
                 dst_columns: dst_columns.map(|(_, columns, _)| columns),
                 files: Default::default(),
                 pattern: Default::default(),

@@ -31,7 +31,6 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
-use crate::ast::TableRef;
 use crate::ast::With;
 use crate::ast::WithOptions;
 use crate::ast::quote::QuotedString;
@@ -52,7 +51,9 @@ use crate::ast::write_dot_separated_list;
 pub struct CopyIntoTableStmt {
     pub with: Option<With>,
     pub src: CopyIntoTableSource,
-    pub dst: TableRef,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
     pub dst_columns: Option<Vec<Identifier>>,
 
     pub hints: Option<Hint>,
@@ -100,7 +101,16 @@ impl Display for CopyIntoTableStmt {
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
         }
-        write!(f, " INTO {}", self.dst)?;
+
+        write!(f, " INTO ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(self.database.iter())
+                .chain(Some(&self.table)),
+        )?;
+
         if let Some(columns) = &self.dst_columns {
             write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))?;
         }

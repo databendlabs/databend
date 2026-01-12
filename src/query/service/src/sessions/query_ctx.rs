@@ -537,7 +537,17 @@ impl QueryContext {
             _ => table,
         };
 
-        table_with_opt_branch(table, branch)
+        if let Some(branch) = branch {
+            // TODO(zhyass): Branch are currently not allowed inside a transaction.
+            if self.txn_mgr().lock().is_active() {
+                return Err(ErrorCode::StorageUnsupported(
+                    "Branch operations are not supported within an active transaction",
+                ));
+            }
+            table.with_branch(branch)
+        } else {
+            Ok(table)
+        }
     }
 
     pub fn mark_unload_callbacked(&self) -> bool {

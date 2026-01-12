@@ -147,11 +147,8 @@ impl Binder {
         location: &FileLocation,
         is_transform: bool,
     ) -> Result<CopyIntoTablePlan> {
-        let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
-            &stmt.dst.catalog,
-            &stmt.dst.database,
-            &stmt.dst.table,
-        );
+        let (catalog_name, database_name, table_name) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
         let table = self
