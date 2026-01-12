@@ -1408,6 +1408,35 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
             }
+            Plan::AlterStage(plan) => {
+                match UserApiProvider::instance()
+                    .get_stage(&tenant, &plan.stage_name)
+                    .await
+                {
+                    Ok(stage) => {
+                        if enable_experimental_rbac_check {
+                            let privileges = vec![UserPrivilegeType::Read, UserPrivilegeType::Write];
+                            for privilege in privileges {
+                                self.validate_stage_access(&stage, privilege).await?;
+                            }
+                        } else {
+                            self.validate_access(
+                                &GrantObject::Global,
+                                UserPrivilegeType::Super,
+                                false,
+                                false,
+                            )
+                            .await?;
+                        }
+                    }
+                    Err(e) => {
+                        return match e.code() {
+                            ErrorCode::UNKNOWN_STAGE if plan.if_exists => Ok(()),
+                            _ => Err(e.add_message("error on validating stage access")),
+                        }
+                    }
+                }
+            }
             Plan::UseDatabase(plan) => {
                 let ctl = self.ctx.get_catalog(&ctl_name).await?;
                 // Use db is special. Should not check the privilege.

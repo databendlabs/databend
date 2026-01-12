@@ -14,8 +14,10 @@
 
 use std::fmt::Debug;
 
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,4 +40,30 @@ pub struct RemoveStagePlan {
     pub stage: StageInfo,
     pub path: String,
     pub pattern: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlterStagePlan {
+    pub if_exists: bool,
+    pub stage_name: String,
+    pub action: AlterStageActionPlan,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AlterStageActionPlan {
+    Set(AlterStageSetPlan),
+    Unset(AlterStageUnsetPlan),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct AlterStageSetPlan {
+    pub storage_params: Option<StorageParams>,
+    pub file_format: Option<FileFormatParams>,
+    pub comment: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct AlterStageUnsetPlan {
+    pub file_format: bool,
+    pub comment: bool,
 }

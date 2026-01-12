@@ -154,6 +154,7 @@ impl Plan {
 
             // Stages
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),
+            Plan::AlterStage(_) => Ok("AlterStage".to_string()),
             Plan::DropStage(_) => Ok("DropStage".to_string()),
             Plan::RemoveStage(_) => Ok("RemoveStage".to_string()),
 
