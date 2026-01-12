@@ -13,6 +13,9 @@
 ## limitations under the License.
 
 statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
 DROP DATABASE IF EXISTS test_tag
 
 statement ok

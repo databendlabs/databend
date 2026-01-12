@@ -14,7 +14,7 @@ stmt "insert into test_vacuum_orphan_refs.a values (2),(3)"
 stmt "optimize table test_vacuum_orphan_refs.a compact"
 
 FST_SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('test_vacuum_orphan_refs','a') where row_count=2" | $BENDSQL_CLIENT_CONNECT)
-echo "alter table test_vacuum_orphan_refs.a create branch b at(snapshot => '$FST_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
+echo "set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b at(snapshot => '$FST_SNAPSHOT_ID')" | $BENDSQL_CLIENT_CONNECT
 
 SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_orphan_refs','a') limit 1" | $BENDSQL_CLIENT_CONNECT)
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)

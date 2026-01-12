@@ -13,6 +13,9 @@
 ## limitations under the License.
 
 statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
 CREATE OR REPLACE DATABASE test_table_ref;
 
 statement ok
