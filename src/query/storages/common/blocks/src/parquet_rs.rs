@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -46,10 +47,6 @@ const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
 /// approximates raw data size. For PLAIN-encoded strings (Databend's default), this is
 /// close to the encoded size. We split batches before passing to ArrowWriter to ensure
 /// each chunk stays well under the 2GB limit.
-///
-/// Using 64MB for better read performance: smaller pages allow parallel decoding,
-/// reduce memory pressure during deserialization, and improve CPU cache utilization.
-/// This is also well above Parquet's default of 1MB while staying far below the 2GB limit.
 pub const MAX_BATCH_MEMORY_SIZE: usize = 1 << 26; // 64MB
 
 /// Serialize data blocks to parquet format.
@@ -122,38 +119,56 @@ pub fn blocks_to_parquet_with_stats(
 
 /// Write a RecordBatch to ArrowWriter, splitting into smaller batches if needed.
 ///
-/// ArrowWriter's page size enforcement only works at `write_batch_size` boundaries (default 1024 rows).
-/// When a mini-batch of 1024 rows contains large string/binary values totaling > 2GB after encoding,
-/// the entire mini-batch becomes a single page, causing integer overflow in the page header's
-/// `uncompressed_page_size` field (which is i32, max ~2GB).
+/// ArrowWriter only checks page limits after each `write_batch_size` mini-batch (default 1024 rows).
+/// If a mini-batch exceeds the `uncompressed_page_size` i32 limit (~2GB), the page header overflows.
 ///
-/// This function estimates batch size using Arrow's in-memory size (approximating raw data size)
-/// and splits large batches before passing to ArrowWriter. For PLAIN-encoded data, in-memory size
-/// is close to encoded size, making this a reasonable approximation.
+/// This function estimates batch size using Arrow's in-memory size and calculates rows per chunk
+/// upfront (assuming uniform row size). Note: RecordBatch::slice() shares underlying buffers, so
+/// we cannot measure sliced chunk sizes directly. If a single row exceeds `max_batch_size`, we
+/// fail with an error.
+///
+/// LIMITATION: This approach assumes roughly uniform row sizes. For rows with highly skewed sizes
+/// (e.g., some rows containing very large strings), the actual chunk size may exceed the estimate.
+/// However, with a 64MB limit vs 2GB overflow threshold (32x margin), this is safe in practice.
+/// A complete solution requires enforcing maximum size limits on variable-length types (String,
+/// Binary, Variant, etc.) at the data ingestion layer.
 pub fn write_batch_with_page_limit<W: std::io::Write + Send>(
     writer: &mut ArrowWriter<W>,
     batch: &RecordBatch,
     max_batch_size: usize,
 ) -> Result<()> {
-    let estimated_size = batch.get_array_memory_size();
     let num_rows = batch.num_rows();
-
-    if estimated_size <= max_batch_size || num_rows <= 1 {
-        // Batch is small enough or cannot be split further
+    if num_rows == 0 {
         writer.write(batch)?;
         return Ok(());
     }
 
-    // Calculate how many rows per chunk to stay under the limit
-    // Use a slightly smaller target to account for estimation inaccuracy
-    let target_size = max_batch_size * 9 / 10; // 90% of limit for safety margin
-    let rows_per_chunk = ((num_rows as f64 * target_size as f64) / estimated_size as f64) as usize;
-    let rows_per_chunk = rows_per_chunk.max(1); // At least 1 row per chunk
+    // Fast path: batch fits within limit, no split needed
+    let batch_size = batch.get_array_memory_size();
+    if batch_size <= max_batch_size {
+        writer.write(batch)?;
+        return Ok(());
+    }
 
-    // Split and write
+    // Check if single row exceeds limit
+    if num_rows == 1 {
+        return Err(ErrorCode::Internal(format!(
+            "A single row requires {} bytes which exceeds the configured Parquet chunk limit ({} bytes). Unable to split further.",
+            batch_size, max_batch_size
+        )));
+    }
+
+    // Calculates rows per chunk upfront (assuming uniform row size).
+    // Note: RecordBatch::slice() shares underlying buffers, so get_array_memory_size()
+    // on sliced batches returns the full buffer size. We estimate chunk size by ratio.
+    let target_size = max_batch_size * 9 / 10; // 90% of limit for safety margin
+    let rows_per_chunk =
+        ((num_rows as f64 * target_size as f64) / batch_size as f64).ceil() as usize;
+    let rows_per_chunk = rows_per_chunk.max(1);
+
     let mut offset = 0;
     while offset < num_rows {
-        let length = (rows_per_chunk).min(num_rows - offset);
+        let length = rows_per_chunk.min(num_rows - offset);
         let chunk = batch.slice(offset, length);
         writer.write(&chunk)?;
         offset += length;
@@ -413,6 +428,34 @@ mod tests {
             total_values,
             batch_size / 1024 / 1024,
             test_page_limit / 1024 / 1024
+        );
+    }
+
+    #[test]
+    fn test_single_row_exceeding_limit_errors() {
+        let schema = TableSchema::new(vec![TableField::new("big_string", TableDataType::String)]);
+        let oversized_value = "x".repeat(2 * 1024 * 1024); // 2MB
+        let string_column = StringType::from_data(vec![oversized_value]);
+        let block = DataBlock::new_from_columns(vec![string_column]);
+
+        let arrow_schema = Arc::new((&schema).into());
+        let batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+
+        let props = WriterProperties::builder()
+            .set_dictionary_enabled(false)
+            .build();
+        let mut buffer = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut buffer, arrow_schema, Some(props)).unwrap();
+
+        let err = write_batch_with_page_limit(&mut writer, &batch, 512 * 1024)
+            .expect_err("single oversized row should trigger an error");
+        assert!(
+            err.message()
+                .contains("exceeds the configured Parquet chunk limit"),
+            "unexpected error message: {}",
+            err.message()
         );
     }
 
