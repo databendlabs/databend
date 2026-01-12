@@ -98,6 +98,7 @@ impl GraceMemoryJoin for AntiLeftHashJoin {
 
 impl GraceMemoryJoin for OuterRightHashJoin {
     fn reset_memory(&mut self) {
+        self.finished = false;
         self.performance_context.clear();
         reset_basic_state(&self.basic_state);
     }
@@ -105,6 +106,7 @@ impl GraceMemoryJoin for OuterRightHashJoin {
 
 impl GraceMemoryJoin for SemiRightHashJoin {
     fn reset_memory(&mut self) {
+        self.finished = false;
         self.performance_context.clear();
         reset_basic_state(&self.basic_state);
     }
@@ -112,6 +114,7 @@ impl GraceMemoryJoin for SemiRightHashJoin {
 
 impl GraceMemoryJoin for AntiRightHashJoin {
     fn reset_memory(&mut self) {
+        self.finished = false;
         self.performance_context.clear();
         reset_basic_state(&self.basic_state);
     }
