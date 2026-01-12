@@ -313,8 +313,9 @@ async fn try_rebuild_req(
         // write snapshot
         let dal = latest_table.get_operator();
         let location_generator = &latest_table.meta_location_generator;
+        // TODO(zhyass): branch are currently not allowed inside a transaction. So the branch id is none.
         let location = location_generator.gen_snapshot_location(
-            latest_table.get_branch_id(),
+            None,
             &merged_snapshot.snapshot_id,
             TableSnapshot::VERSION,
         )?;

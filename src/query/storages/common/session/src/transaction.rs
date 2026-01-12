@@ -397,21 +397,21 @@ impl TxnManager {
             .collect()
     }
 
-    pub fn get_table_txn_begin_timestamp(&self, table_target_id: u64) -> Option<DateTime<Utc>> {
+    pub fn get_table_txn_begin_timestamp(&self, table_unique_id: u64) -> Option<DateTime<Utc>> {
         self.txn_buffer
             .table_tnx_begin_timestamps
-            .get(&table_target_id)
+            .get(&table_unique_id)
             .cloned()
     }
 
     pub fn set_table_txn_begin_timestamp(
         &mut self,
-        table_target_id: u64,
+        table_unique_id: u64,
         timestamps: DateTime<Utc>,
     ) {
         self.txn_buffer
             .table_tnx_begin_timestamps
-            .insert(table_target_id, timestamps);
+            .insert(table_unique_id, timestamps);
     }
 
     pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {
