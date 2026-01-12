@@ -30,6 +30,7 @@ mod index;
 mod inverted_index;
 mod page_index;
 mod range_index;
+mod virtual_column;
 
 pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexBuilder;
@@ -56,3 +57,4 @@ pub use inverted_index::extract_fsts;
 pub use page_index::PageIndex;
 pub use range_index::RangeIndex;
 pub use range_index::statistics_to_domain;
+pub use virtual_column::VirtualColumnFileMeta;

@@ -57,6 +57,8 @@ pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
 
+pub type VirtualColumnMetaCache = HybridCache<VirtualColumnFileMeta>;
+
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
@@ -174,6 +176,13 @@ impl CachedObject<VectorIndexMeta> for VectorIndexMeta {
     type Cache = VectorIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_vector_index_meta_cache()
+    }
+}
+
+impl CachedObject<VirtualColumnFileMeta> for VirtualColumnFileMeta {
+    type Cache = VirtualColumnMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_virtual_column_meta_cache()
     }
 }
 
@@ -330,6 +339,15 @@ impl From<VectorIndexFile> for CacheValue<VectorIndexFile> {
         CacheValue {
             mem_bytes: std::mem::size_of::<VectorIndexFile>() + value.data.len(),
             inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<VirtualColumnFileMeta> for CacheValue<VirtualColumnFileMeta> {
+    fn from(value: VirtualColumnFileMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
         }
     }
 }

@@ -158,7 +158,6 @@ impl Binder {
             false,
             true,
             None,
-            bind_context.allow_virtual_column,
         );
 
         let (s_expr, mut bind_context) =
@@ -182,6 +181,7 @@ impl Binder {
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
+            bound_virtual_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),

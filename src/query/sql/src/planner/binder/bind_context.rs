@@ -32,6 +32,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
@@ -47,6 +48,7 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::VirtualColumn;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::column_binding::ColumnBinding;
 use crate::binder::project_set::SetReturningInfo;
@@ -112,6 +114,14 @@ pub enum NameResolutionResult {
     Alias { alias: String, scalar: ScalarExpr },
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct VirtualColumnName {
+    pub table_index: IndexType,
+    pub source_column_id: ColumnId,
+    pub source_column_name: String,
+    pub key_name: String,
+}
+
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -121,6 +131,9 @@ pub struct BindContext {
 
     // map internal column: (table_index, column_id) -> column_index
     pub bound_internal_columns: BTreeMap<(IndexType, ColumnId), IndexType>,
+
+    // map virtual column: shared_virtual_column_name -> (column_id, column_index)
+    pub bound_virtual_columns: BTreeMap<VirtualColumnName, (ColumnId, IndexType)>,
 
     pub aggregate_info: AggregateInfo,
 
@@ -221,6 +234,7 @@ impl BindContext {
             parent: None,
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
+            bound_virtual_columns: BTreeMap::new(),
             aggregate_info: AggregateInfo::default(),
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
@@ -266,6 +280,7 @@ impl BindContext {
             parent: Some(Box::new(parent.clone())),
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
+            bound_virtual_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
             windows: Default::default(),
             srf_info: Default::default(),
@@ -697,6 +712,108 @@ impl BindContext {
         }
 
         Ok(column_binding)
+    }
+
+    pub fn add_virtual_column_binding(
+        &mut self,
+        metadata: MetadataRef,
+        virtual_column_name: VirtualColumnName,
+    ) -> Option<ColumnBinding> {
+        if !self.allow_virtual_column {
+            return None;
+        }
+
+        let table_index = virtual_column_name.table_index;
+        let (column_index, is_new) = match self
+            .bound_virtual_columns
+            .entry(virtual_column_name.clone())
+        {
+            btree_map::Entry::Vacant(e) => {
+                let mut metadata = metadata.write();
+                let table_entry = metadata.table(table_index);
+                let table = table_entry.table();
+                let table_info = table.get_table_info();
+
+                let virtual_schema = table_info.meta.virtual_schema.as_ref()?;
+                let mut column_id = None;
+                for virtual_field in &virtual_schema.fields {
+                    if virtual_field.source_column_id == virtual_column_name.source_column_id
+                        && virtual_field.name == virtual_column_name.key_name
+                    {
+                        column_id = Some(virtual_field.column_id);
+                        break;
+                    }
+                }
+                // column_id does not exist. Generate a temporary shared column id
+                let column_id = if let Some(column_id) = column_id {
+                    column_id
+                } else {
+                    let exists_virtual_columns =
+                        metadata.virtual_columns_by_table_index(table_index);
+                    let mut max_column_id = 0;
+                    for exists_virtual_column in exists_virtual_columns {
+                        if let ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) =
+                            exists_virtual_column
+                        {
+                            if column_id > max_column_id {
+                                max_column_id = column_id;
+                            }
+                        }
+                    }
+                    if max_column_id >= virtual_schema.next_column_id {
+                        max_column_id + 1
+                    } else {
+                        virtual_schema.next_column_id
+                    }
+                };
+
+                let source_column_name = virtual_column_name.source_column_name.clone();
+                let source_column_id = virtual_column_name.source_column_id;
+                let column_name = virtual_column_name.key_name.clone();
+                // todo
+                let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
+                let is_try = true;
+
+                let column_index = metadata.add_virtual_column(
+                    table_index,
+                    source_column_name,
+                    source_column_id,
+                    column_id,
+                    column_name,
+                    table_data_type,
+                    is_try,
+                );
+
+                e.insert((column_id, column_index));
+                (column_index, true)
+            }
+            btree_map::Entry::Occupied(e) => {
+                let (_column_id, column_index) = e.get();
+                (*column_index, false)
+            }
+        };
+
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+
+        let column = metadata.column(column_index);
+        let column_binding = ColumnBindingBuilder::new(
+            column.name(),
+            column_index,
+            Box::new(column.data_type()),
+            Visibility::InVisible,
+        )
+        .database_name(Some(table.database().to_string()))
+        .table_name(Some(table.name().to_string()))
+        .table_index(Some(table_index))
+        .build();
+
+        if is_new {
+            debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
+            self.columns.push(column_binding.clone());
+        }
+
+        Some(column_binding)
     }
 
     pub fn column_set(&self) -> ColumnSet {

@@ -56,6 +56,9 @@ pub struct VirtualBlockMetaIndex {
     pub virtual_block_location: String,
     // Key is virtual column id, value is the column meta.
     pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
+    // Key is source column id, value is the key column and value column meta.
+    pub shared_virtual_column_names: BTreeMap<ColumnId, Vec<String>>,
+    pub shared_virtual_column_metas: BTreeMap<ColumnId, (VirtualColumnMeta, VirtualColumnMeta)>,
     // If all the virtual columns are generated,
     // we can reduce IO by ignoring the source column.
     pub ignored_source_column_ids: HashSet<ColumnId>,

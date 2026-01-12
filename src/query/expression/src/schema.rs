@@ -184,7 +184,7 @@ pub struct VirtualDataSchema {
     pub metadata: BTreeMap<String, String>,
     // next column id that assign to VirtualDataField.column_id
     #[serde(default = "uninit_virtual_column_id")]
-    pub next_column_id: u32,
+    pub next_column_id: ColumnId,
     pub number_of_blocks: u64,
 }
 
