@@ -149,12 +149,10 @@ pub fn write_batch_with_page_limit<W: std::io::Write + Send>(
         return Ok(());
     }
 
-    // Calculates rows per chunk upfront (assuming uniform row size).
-    // Note: RecordBatch::slice() shares underlying buffers, so get_array_memory_size()
-    // on sliced batches returns the full buffer size. We estimate chunk size by ratio.
-    let target_size = max_batch_size * 9 / 10; // 90% of limit for safety margin
+    // Calculate rows per chunk assuming uniform row size.
+    // Note: RecordBatch::slice() shares underlying buffers, so we estimate by ratio.
     let rows_per_chunk =
-        ((num_rows as f64 * target_size as f64) / batch_size as f64).ceil() as usize;
+        ((num_rows as f64 * max_batch_size as f64) / batch_size as f64).ceil() as usize;
     let rows_per_chunk = rows_per_chunk.max(1);
 
     let mut offset = 0;
