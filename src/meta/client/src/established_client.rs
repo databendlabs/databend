@@ -16,6 +16,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_meta_types::Endpoint;
@@ -122,8 +124,11 @@ pub struct EstablishedClient {
     /// A unique identifier for the client, used to distinguish between different clients.
     uniq: u64,
 
-    /// The timestamp when this client was created.
+    /// The timestamp when this client was created (human-readable for logging).
     created_at: String,
+
+    /// The instant when this client was created (for TTL checking).
+    created_instant: Instant,
 }
 
 impl fmt::Display for EstablishedClient {
@@ -155,6 +160,7 @@ impl EstablishedClient {
         // Get current timestamp in human-readable string
         let utc_time = Utc::now();
         let created_at = utc_time.format("%Y-%m-%d-%H:%M:%S-UTC").to_string();
+        let created_instant = Instant::now();
 
         let endpoints_string = format!("{}", &*endpoints.lock());
 
@@ -168,6 +174,7 @@ impl EstablishedClient {
             error: Arc::new(Mutex::new(None)),
             uniq,
             created_at,
+            created_instant,
         };
 
         info!("Created: {client}, features={:?}", client.features);
@@ -207,6 +214,15 @@ impl EstablishedClient {
 
     pub(crate) fn set_error(&self, error: Status) {
         *self.error.lock() = Some(error);
+    }
+
+    /// Check if this client has exceeded its TTL (time-to-live).
+    ///
+    /// Returns `true` if the client has been alive longer than the specified TTL.
+    /// This is used to force reconnection periodically to prevent h2 stream reset
+    /// accumulation that can lead to `too_many_internal_resets` errors.
+    pub(crate) fn is_expired(&self, ttl: Duration) -> bool {
+        self.created_instant.elapsed() > ttl
     }
 
     /// Try to update the current endpoint to the leader.

@@ -221,6 +221,7 @@ impl MetaGrpcClient {
             tls_config,
             required_features,
             endpoints.clone(),
+            None, // Use default connection TTL
         );
 
         let rt = Runtime::with_worker_threads(
