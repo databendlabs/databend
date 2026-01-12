@@ -486,10 +486,22 @@ fn test_array_count(file: &mut impl Write) {
     }
 
     run_ast(file, "array_count([a, b, c, d])", &[
-        ("a", UInt64Type::from_opt_data(vec![Some(1), Some(2), None, Some(4)])),
-        ("b", UInt64Type::from_opt_data(vec![Some(2), None, Some(5), Some(6)])),
-        ("c", UInt64Type::from_opt_data(vec![Some(3), Some(7), Some(8), Some(9)])),
-        ("d", UInt64Type::from_opt_data(vec![Some(4), Some(6), Some(5), None])),
+        (
+            "a",
+            UInt64Type::from_opt_data(vec![Some(1), Some(2), None, Some(4)]),
+        ),
+        (
+            "b",
+            UInt64Type::from_opt_data(vec![Some(2), None, Some(5), Some(6)]),
+        ),
+        (
+            "c",
+            UInt64Type::from_opt_data(vec![Some(3), Some(7), Some(8), Some(9)]),
+        ),
+        (
+            "d",
+            UInt64Type::from_opt_data(vec![Some(4), Some(6), Some(5), None]),
+        ),
     ]);
 
     // Test with variant type
@@ -563,10 +575,7 @@ fn test_array_max(file: &mut impl Write) {
         &[],
     );
 
-    run_ast(file, "array_max(a)", &[(
-        "a",
-        empty_array_column(2),
-    )]);
+    run_ast(file, "array_max(a)", &[("a", empty_array_column(2))]);
 
     run_ast(file, "array_max(a)", &[(
         "a",
