@@ -179,7 +179,7 @@ impl Binder {
                     ));
                 }
 
-                AlterStageActionPlan::Set(set_plan)
+                AlterStageActionPlan::Set(Box::new(set_plan))
             }
             AlterStageAction::Unset(targets) => {
                 let mut unset_plan = AlterStageUnsetPlan::default();
