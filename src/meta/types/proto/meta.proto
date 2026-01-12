@@ -428,6 +428,15 @@ message KeysCount {
   uint64 count = 2;
 }
 
+// Request to list key-value pairs under a prefix.
+message KvListRequest {
+  // The prefix to list keys under.
+  string prefix = 1;
+
+  // THe max number of item to return
+  optional uint64 limit = 2;
+}
+
 service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
@@ -448,6 +457,13 @@ service MetaService {
   //
   // 2023-10-17: since 1.2.163
   rpc KvReadV1(RaftRequest) returns (stream StreamItem);
+
+  // List key-value pairs under a prefix.
+  //
+  // Returns a stream of key-value pairs matching the given prefix.
+  //
+  // 2026-**-**: since 1.2.** TODO: fill when merged.
+  rpc KvList(KvListRequest) returns (stream StreamItem);
 
   // Export all meta data.
   //

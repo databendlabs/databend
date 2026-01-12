@@ -41,6 +41,7 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -51,6 +52,7 @@ use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_metrics::count::Count;
 use databend_common_tracing::start_trace_for_remote_request;
+use display_more::DisplayOptionExt;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -96,6 +98,10 @@ impl MetricsCollector {
             start: Instant::now(),
             req_str,
         }
+    }
+
+    fn incr_count(&mut self) {
+        self.count += 1;
     }
 }
 
@@ -206,6 +212,27 @@ impl MetaServiceImpl {
             .map_err(GrpcHelper::internal_err);
 
         network_metrics::incr_request_result(res.is_ok());
+        res
+    }
+
+    #[fastrace::trace]
+    async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        debug!(
+            "{}: Received KvListRequest: prefix={}, limit={}",
+            func_name!(),
+            prefix,
+            limit.display()
+        );
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let res = meta_handle.handle_kv_list(prefix, limit).await;
+        network_metrics::incr_request_result(res.is_ok());
+
         res
     }
 
@@ -328,7 +355,6 @@ impl MetaService for MetaServiceImpl {
 
     type KvReadV1Stream = BoxStream<StreamItem>;
 
-    #[allow(unused)]
     async fn kv_read_v1(
         &self,
         request: Request<RaftRequest>,
@@ -350,12 +376,12 @@ impl MetaService for MetaServiceImpl {
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
             // MetricsCollector logs metrics when dropped
-            let mut _collector = MetricsCollector::new(req_str);
+            let mut metrics_collector = MetricsCollector::new(req_str);
 
             let strm = strm.map(move |item| {
                 let _g = &guard; // hold the guard until the stream is done.
                 network_metrics::incr_stream_sent_item(req_typ);
-                _collector.count += 1;
+                metrics_collector.incr_count();
                 item
             });
 
@@ -365,6 +391,55 @@ impl MetaService for MetaServiceImpl {
             GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
 
             Ok(resp)
+        })
+        .await
+    }
+
+    type KvListStream = BoxStream<StreamItem>;
+
+    /// List key-value pairs by prefix.
+    ///
+    /// This RPC requires leadership. If this node is not the leader,
+    /// it returns a `Status::unavailable` error with the leader's endpoint in metadata.
+    /// Clients should retry with the leader directly.
+    async fn kv_list(
+        &self,
+        request: Request<KvListRequest>,
+    ) -> Result<Response<Self::KvListStream>, Status> {
+        self.check_token(request.metadata())?;
+
+        let _guard = thread_tracking_guard(&request);
+
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+
+        let root = start_trace_for_remote_request(func_path!(), &request);
+
+        let req = request.into_inner();
+        let req_str = format!(
+            "KvList: prefix={}, limit={}",
+            req.prefix,
+            req.limit.display()
+        );
+
+        ThreadTracker::tracking_future(async move {
+            let guard = InFlightRead::guard();
+
+            let strm = self
+                .handle_kv_list(req.prefix, req.limit)
+                .in_span(root)
+                .await?;
+
+            // MetricsCollector logs metrics when dropped
+            let mut metrics_collector = MetricsCollector::new(req_str);
+
+            let strm = strm.map(move |item| {
+                let _g = &guard;
+                network_metrics::incr_stream_sent_item("kv_list");
+                metrics_collector.incr_count();
+                item
+            });
+
+            Ok(Response::new(strm.boxed()))
         })
         .await
     }
