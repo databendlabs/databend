@@ -19,7 +19,16 @@
 #![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
+mod db_table_harness;
 mod schema_api_test_suite;
+mod support;
 mod testing;
 
 pub use schema_api_test_suite::SchemaApiTestSuite;
+
+#[cfg(test)]
+mod tests {
+    // Just for making sure this crate compiles.
+    #[test]
+    fn test_foo() {}
+}

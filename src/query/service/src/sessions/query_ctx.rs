@@ -219,10 +219,13 @@ impl QueryContext {
         branch_name: Option<&str>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self
-            .shared
-            .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.session_state()?)?;
+        let catalog_name = table_info.catalog();
+        let catalog =
+            databend_common_base::runtime::block_on(self.shared.catalog_manager.get_catalog(
+                self.get_tenant().tenant_name(),
+                catalog_name,
+                self.session_state()?,
+            ))?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
         let tbl = match (table_args, is_default) {
