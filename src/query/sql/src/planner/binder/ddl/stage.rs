@@ -163,9 +163,11 @@ impl Binder {
                     file_format: None,
                     comment: options.comment.clone(),
                 };
-                if !options.file_format.is_empty() {
-                    set_plan.file_format =
-                        Some(self.try_resolve_file_format(&options.file_format).await?);
+                if let Some(file_format) = options.file_format.as_ref() {
+                    if !file_format.is_empty() {
+                        set_plan.file_format =
+                            Some(self.try_resolve_file_format(file_format).await?);
+                    }
                 }
 
                 if set_plan.storage_params.is_none()
