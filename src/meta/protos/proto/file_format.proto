@@ -110,7 +110,7 @@ message CsvFileFormatParams {
   string nan_display = 5;
   string escape = 6;
   string quote = 7;
-  string null_display = 8;
+  optional string null_display = 8;
   // corresponding to `!error_on_column_count_mismatch`
   // for we can not set default value in proto3
   bool allow_column_count_mismatch = 9;
@@ -118,6 +118,8 @@ message CsvFileFormatParams {
   optional string binary_format = 11;
   bool output_header = 12;
   optional string geometry_format = 13;
+  bool allow_quoted_nulls = 14;
+  optional string quoted_empty_field_as = 15;
 }
 
 message TsvFileFormatParams {

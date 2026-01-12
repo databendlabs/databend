@@ -14,12 +14,51 @@
 
 use std::io::Write;
 
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::*;
-use databend_common_formats::column_from_json;
 use goldenfile::Mint;
 
 use super::run_ast;
+
+/// Build a Nullable<Array<T>> column from Vec<Option<Column>>
+fn nullable_array_column<T: ValueType + ArgType>(arrays: Vec<Option<T::Column>>) -> Column {
+    let inner_type = T::data_type();
+    let data_type = DataType::Array(Box::new(inner_type)).wrap_nullable();
+    let mut builder = ColumnBuilder::with_capacity(&data_type, arrays.len());
+    for arr in arrays {
+        match arr {
+            None => builder.push(ScalarRef::Null),
+            Some(col) => builder.push(ScalarRef::Array(T::upcast_column(col))),
+        }
+    }
+    builder.build()
+}
+
+/// Build an EmptyArray column with n rows
+fn empty_array_column(n: usize) -> Column {
+    let mut builder = ColumnBuilder::with_capacity(&DataType::EmptyArray, n);
+    for _ in 0..n {
+        builder.push(ScalarRef::EmptyArray);
+    }
+    builder.build()
+}
+
+/// Build a Nullable<EmptyArray> column
+fn nullable_empty_array_column(nulls: Vec<bool>) -> Column {
+    let data_type = DataType::EmptyArray.wrap_nullable();
+    let mut builder = ColumnBuilder::with_capacity(&data_type, nulls.len());
+    for is_null in nulls {
+        if is_null {
+            builder.push(ScalarRef::Null);
+        } else {
+            builder.push(ScalarRef::EmptyArray);
+        }
+    }
+    builder.build()
+}
 
 #[test]
 fn test_array() {
@@ -437,17 +476,32 @@ fn test_array_count(file: &mut impl Write) {
     ]);
 
     {
-        let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
-        let column = column_from_json!(data_type, [null, [1, 5, 8, 3], [1, 5], null]);
+        let column = nullable_array_column::<Int16Type>(vec![
+            None,
+            Some(Int16Type::column_from_iter([1, 5, 8, 3].into_iter(), &[])),
+            Some(Int16Type::column_from_iter([1, 5].into_iter(), &[])),
+            None,
+        ]);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 
-    let u64_type = UInt64Type::data_type().wrap_nullable();
     run_ast(file, "array_count([a, b, c, d])", &[
-        ("a", column_from_json!(u64_type, [1, 2, null, 4])),
-        ("b", column_from_json!(u64_type, [2, null, 5, 6])),
-        ("c", column_from_json!(u64_type, [3, 7, 8, 9])),
-        ("d", column_from_json!(u64_type, [4, 6, 5, null])),
+        (
+            "a",
+            UInt64Type::from_opt_data(vec![Some(1), Some(2), None, Some(4)]),
+        ),
+        (
+            "b",
+            UInt64Type::from_opt_data(vec![Some(2), None, Some(5), Some(6)]),
+        ),
+        (
+            "c",
+            UInt64Type::from_opt_data(vec![Some(3), Some(7), Some(8), Some(9)]),
+        ),
+        (
+            "d",
+            UInt64Type::from_opt_data(vec![Some(4), Some(6), Some(5), None]),
+        ),
     ]);
 
     // Test with variant type
@@ -456,13 +510,12 @@ fn test_array_count(file: &mut impl Write) {
     run_ast(file, "array_count(parse_json('[1.2, 3.4, 5.6, 7.8]'))", &[]);
 
     {
-        let column = column_from_json!(DataType::EmptyArray, [[], [], []]);
+        let column = empty_array_column(3);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 
     {
-        let data_type = DataType::EmptyArray.wrap_nullable();
-        let column = column_from_json!(data_type, [null, [], null]);
+        let column = nullable_empty_array_column(vec![true, false, true]);
         run_ast(file, "array_count(a)", &[("a", column)]);
     }
 }
@@ -479,10 +532,12 @@ fn test_array_max(file: &mut impl Write) {
 
     run_ast(file, "array_max(a)", &[(
         "a",
-        column_from_json!(
-            DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable(),
-            [null, [1, 5, 8, 3], [1, 5], null]
-        ),
+        nullable_array_column::<Int16Type>(vec![
+            None,
+            Some(Int16Type::column_from_iter([1, 5, 8, 3].into_iter(), &[])),
+            Some(Int16Type::column_from_iter([1, 5].into_iter(), &[])),
+            None,
+        ]),
     )]);
 
     run_ast(file, "array_max([a, b, c, d])", &[
@@ -520,14 +575,11 @@ fn test_array_max(file: &mut impl Write) {
         &[],
     );
 
-    run_ast(file, "array_max(a)", &[(
-        "a",
-        column_from_json!(DataType::EmptyArray, [[], []]),
-    )]);
+    run_ast(file, "array_max(a)", &[("a", empty_array_column(2))]);
 
     run_ast(file, "array_max(a)", &[(
         "a",
-        column_from_json!(DataType::EmptyArray.wrap_nullable(), [null, [], []]),
+        nullable_empty_array_column(vec![true, false, false]),
     )]);
 }
 

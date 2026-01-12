@@ -59,7 +59,7 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
-        let mut named_args = bind_table_args(&mut scalar_binder, &[], named_params)?.named;
+        let mut named_args = bind_table_args(&mut scalar_binder, &[], named_params, &None)?.named;
         let seed = match named_args.remove("seed") {
             Some(v) => u64_value(&v).ok_or(ErrorCode::BadArguments("invalid seed"))?,
             None => {

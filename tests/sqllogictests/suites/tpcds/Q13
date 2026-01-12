@@ -44,5 +44,3 @@ WHERE s_store_sk = ss_store_sk
                                                            AND ss_net_profit BETWEEN 50 AND 250)) ;
 ----
 7.75 516.34250000 366.85500000 1467.42
-
-

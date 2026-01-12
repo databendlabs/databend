@@ -175,8 +175,14 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
-    fn add_partitions_sha(&self, sha: String);
+    /// Add a cache invalidation key for query result cache.
+    ///
+    /// Historically named `partitions_sha` because most callers use a partition SHA256,
+    /// but some callers may use other stable version identifiers (e.g. Fuse snapshot_location).
+    fn add_partitions_sha(&self, key: String);
     fn get_partitions_shas(&self) -> Vec<String>;
+    fn add_cache_key_extra(&self, extra: String);
+    fn get_cache_key_extras(&self) -> Vec<String>;
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;

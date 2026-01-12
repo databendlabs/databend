@@ -87,12 +87,12 @@ impl AsyncMpscSink for WriteResultCacheSink {
             return Ok(());
         }
 
-        // Skip cache writing if there are no partition SHAs.
-        // Without partition SHAs, we cannot detect data changes and the cache
+        // Skip cache writing if there are no cache invalidation keys.
+        // Without invalidation keys, we cannot detect data changes and the cache
         // may return stale results. This can happen when queries are pure constants
         // (like SELECT 1) that don't depend on any table data.
         // Note: Queries with DummyTableScan that depend on table statistics should
-        // have partition SHAs added via DummyTableScan.source_table_indexes.
+        // have invalidation keys added via DummyTableScan.source_table_indexes.
         if self.partitions_shas.is_empty() {
             return Ok(());
         }
@@ -117,6 +117,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
+            cache_key_extras: self.ctx.get_cache_key_extras(),
         };
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)

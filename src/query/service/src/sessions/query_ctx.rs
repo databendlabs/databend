@@ -218,10 +218,13 @@ impl QueryContext {
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self
-            .shared
-            .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.session_state()?)?;
+        let catalog_name = table_info.catalog();
+        let catalog =
+            databend_common_base::runtime::block_on(self.shared.catalog_manager.get_catalog(
+                self.get_tenant().tenant_name(),
+                catalog_name,
+                self.session_state()?,
+            ))?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
         match (table_args, is_default) {
@@ -966,13 +969,13 @@ impl TableContext for QueryContext {
 
     fn add_partitions_sha(&self, s: String) {
         let mut shas = self.shared.partitions_shas.write();
-        // Avoid duplicate SHAs when the same table is scanned multiple times.
+        // Avoid duplicate invalidation keys when the same table is scanned multiple times.
         // Example: `SELECT * FROM t WHERE a > (SELECT MIN(a) FROM t)`
         // In this query, table `t` appears twice:
         // 1. The main TableScan adds SHA via table_read_plan.rs
         // 2. The scalar subquery is optimized to DummyTableScan, which also
-        //    adds SHA for its source table `t` via build_dummy_table_scan
-        // Without deduplication, the same SHA would appear twice in the list.
+        //    adds an invalidation key for its source table `t` via build_dummy_table_scan
+        // Without deduplication, the same key would appear twice in the list.
         if !shas.contains(&s) {
             shas.push(s);
         }
@@ -980,9 +983,22 @@ impl TableContext for QueryContext {
 
     fn get_partitions_shas(&self) -> Vec<String> {
         let mut sha = self.shared.partitions_shas.read().clone();
-        // Sort to make sure the SHAs are stable for the same query.
+        // Sort to make sure the keys are stable for the same query.
         sha.sort();
         sha
+    }
+
+    fn add_cache_key_extra(&self, extra: String) {
+        let mut extras = self.shared.cache_key_extras.write();
+        if !extras.contains(&extra) {
+            extras.push(extra);
+        }
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        let mut extras = self.shared.cache_key_extras.read().clone();
+        extras.sort();
+        extras
     }
 
     fn get_cacheable(&self) -> bool {

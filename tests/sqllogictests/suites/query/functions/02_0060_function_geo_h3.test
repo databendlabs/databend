@@ -120,7 +120,7 @@ select h3_get_base_cell(644325524701193974)
 query F
 select h3_hex_area_m2(1)
 ----
-6.097884417941339e11
+609788441794.1339
 
 query F
 select h3_hex_area_km2(1)
@@ -154,9 +154,9 @@ query F
 select h3_hex_area_m2(res) as m2 from t2 order by m2
 ----
 1770347654.491309
-1.239343465508818e10
-8.680178039899731e10
-6.097884417941339e11
+12393434655.08818
+86801780398.99731
+609788441794.1339
 
 query F
 select h3_hex_area_km2(res) as km2 from t2 order by km2
