@@ -22,9 +22,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -174,6 +178,7 @@ pub const ORPHAN_POSTFIX: &str = "orphan";
 async fn remove_copied_files_for_dropped_table(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: &TableId,
+    require_dropped: bool,
 ) -> Result<usize, MetaError> {
     let batch_size = 1024;
 
@@ -190,10 +195,11 @@ async fn remove_copied_files_for_dropped_table(
             return Ok(num_removed_copied_files);
         };
 
-        // TODO: enable this check. Currently when gc db, the table may not be dropped.
-        // if seq_table_meta.data.drop_on.is_none() {
-        //     return Ok(());
-        // }
+        // When vacuuming dropped tables, ensure the table is still in `dropped` state.
+        // During database GC, some historical table records may not have `drop_on` set.
+        if require_dropped && seq_table_meta.data.drop_on.is_none() {
+            return Ok(num_removed_copied_files);
+        }
 
         // Make sure the table meta is not changed, such as being un-dropped.
         txn.condition
@@ -520,7 +526,7 @@ async fn gc_dropped_db_by_id(
             let table_id_ident = TableId { table_id: *tb_id };
 
             let num_removed_copied_files =
-                remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
+                remove_copied_files_for_dropped_table(kv_api, &table_id_ident, false).await?;
             let _ = remove_data_for_dropped_table(
                 kv_api,
                 tenant,
@@ -528,6 +534,7 @@ async fn gc_dropped_db_by_id(
                 db_id,
                 &table_id_ident,
                 &mut txn,
+                false,
             )
             .await?;
             num_meta_keys_removed += num_removed_copied_files;
@@ -612,7 +619,7 @@ async fn gc_dropped_table_by_id(
     // First remove all copied files for the dropped table.
     // These markers are not part of the table and can be removed in separate transactions.
     let num_removed_copied_files =
-        remove_copied_files_for_dropped_table(kv_api, table_id_ident).await?;
+        remove_copied_files_for_dropped_table(kv_api, table_id_ident, true).await?;
 
     let mut trials = txn_backoff(None, func_name!());
     loop {
@@ -628,6 +635,7 @@ async fn gc_dropped_table_by_id(
             db_id_table_name.db_id,
             table_id_ident,
             &mut txn,
+            true,
         )
         .await?;
 
@@ -725,6 +733,7 @@ async fn remove_data_for_dropped_table(
     db_id: u64,
     table_id: &TableId,
     txn: &mut TxnRequest,
+    require_dropped: bool,
 ) -> Result<Result<(), String>, MetaError> {
     let seq_meta = kv_api.get_pb(table_id).await?;
 
@@ -734,12 +743,13 @@ async fn remove_data_for_dropped_table(
         return Ok(Err(err));
     };
 
-    // TODO: enable this check. Currently when gc db, the table may not be dropped.
-    // if seq_meta.data.drop_on.is_none() {
-    //     let err = format!("Table {:?} is not dropped, can not remove", table_id);
-    //     warn!("{}", err);
-    //     return Ok(Err(err));
-    // }
+    // When vacuuming dropped tables, ensure the table is still in `dropped` state.
+    // During database GC, some historical table records may not have `drop_on` set.
+    if require_dropped && seq_meta.data.drop_on.is_none() {
+        let err = format!("Table {:?} is not dropped, can not remove", table_id);
+        warn!("{}", err);
+        return Ok(Err(err));
+    }
 
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
@@ -821,6 +831,42 @@ async fn remove_data_for_dropped_table(
             txn.if_then.push(txn_op_del(&obj_ref_key));
             txn.if_then.push(txn_op_del(&tag_ref_key));
         }
+    }
+
+    let tb_meta = &seq_meta.data;
+
+    // Clean up policy references for the dropped table.
+    // These records may have been orphaned if the table was dropped via DROP DATABASE.
+
+    // Delete masking policy references
+    {
+        let policy_ids: HashSet<u64> = tb_meta
+            .column_mask_policy_columns_ids
+            .values()
+            .map(|policy_map| policy_map.policy_id)
+            .collect();
+
+        txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
+            txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                MaskPolicyIdTableId {
+                    policy_id,
+                    table_id: table_id.table_id,
+                },
+            ))
+        }));
+    }
+
+    // Delete row access policy reference
+    if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {
+        txn.if_then
+            .push(txn_op_del(&RowAccessPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                RowAccessPolicyIdTableId {
+                    policy_id: policy_map.policy_id,
+                    table_id: table_id.table_id,
+                },
+            )));
     }
 
     Ok(Ok(()))
