@@ -431,10 +431,10 @@ impl Statement {
             }
             Statement::AlterStage(stage) => {
                 let mut stage_clone = stage.clone();
-                if let AlterStageAction::Set(options) = &mut stage_clone.action {
-                    if let Some(location) = &mut options.location {
-                        location.connection = location.connection.mask();
-                    }
+                if let AlterStageAction::Set(options) = &mut stage_clone.action
+                    && let Some(location) = &mut options.location
+                {
+                    location.connection = location.connection.mask();
                 }
                 format!("{}", Statement::AlterStage(stage_clone))
             }
