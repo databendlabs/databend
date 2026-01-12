@@ -116,7 +116,7 @@ impl StageApi for StageMgr {
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let dir_name = DirName::new(self.stage_ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let stages = values.try_collect().await?;
 
         Ok(stages)
@@ -138,7 +138,7 @@ impl StageApi for StageMgr {
             };
 
             // list all stage file keys, and delete them
-            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix).await?;
+            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix, None).await?;
             let mut dels: Vec<TxnOp> = file_keys
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))
@@ -232,7 +232,7 @@ impl StageApi for StageMgr {
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let files = values.try_collect().await?;
 
         Ok(files)

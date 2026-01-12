@@ -267,7 +267,7 @@ impl WorkloadApi for WorkloadMgr {
     async fn get_all(&self) -> Result<Vec<WorkloadGroup>> {
         let list_reply = self
             .metastore
-            .list_kv_collect(&format!("{}/", self.workload_key_prefix))
+            .list_kv_collect(&format!("{}/", self.workload_key_prefix), None)
             .await?;
 
         let mut workload_groups = Vec::with_capacity(list_reply.len());

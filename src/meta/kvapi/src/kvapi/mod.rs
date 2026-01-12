@@ -33,6 +33,7 @@ pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
 pub use api::KVStream;
+pub use api::limit_stream;
 pub use dir_name::DirName;
 pub use item::Item;
 pub use item::NonEmptyItem;

@@ -54,7 +54,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_file_formats(&self, tenant: &Tenant) -> Result<Vec<UserDefinedFileFormat>> {
         let file_format_api_provider = self.file_format_api(tenant);
-        let get_file_formats = file_format_api_provider.list();
+        let get_file_formats = file_format_api_provider.list(None);
 
         match get_file_formats.await {
             Err(e) => Err(ErrorCode::from(e).add_message_back(" (while get file_format)")),

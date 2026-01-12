@@ -247,7 +247,7 @@ where
                 DirName::new_with_level(ident, 2)
             }
         };
-        let list_res = self.list_pb_vec(&dir).await?;
+        let list_res = self.list_pb_vec(&dir, None).await?;
         let mut table_indexes = HashMap::new();
         for (k, v) in list_res {
             let table_id = k.name().table_id;
@@ -482,7 +482,7 @@ where
                 DirName::new_with_level(ident, 3)
             }
         };
-        let list_res = self.list_pb_vec(&dir).await?;
+        let list_res = self.list_pb_vec(&dir, None).await?;
         let mut table_indexes = HashMap::new();
         for (k, v) in list_res {
             let table_id = k.name().table_id;

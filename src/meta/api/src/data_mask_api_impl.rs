@@ -156,7 +156,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             ));
 
             // List all table-policy references
-            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix).await?;
+            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix, None).await?;
 
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {

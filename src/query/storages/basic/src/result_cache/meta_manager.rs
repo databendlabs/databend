@@ -72,7 +72,7 @@ impl ResultCacheMetaManager {
 
     #[async_backtrace::framed]
     pub async fn list(&self, prefix: &str) -> Result<Vec<ResultCacheValue>> {
-        let result = self.inner.list_kv_collect(prefix).await?;
+        let result = self.inner.list_kv_collect(prefix, None).await?;
 
         let mut r = vec![];
         for (_key, val) in result {
