@@ -43,6 +43,7 @@ use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterRolePlan;
+use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
@@ -387,6 +388,7 @@ pub enum Plan {
 
     // Stages
     CreateStage(Box<CreateStagePlan>),
+    AlterStage(Box<AlterStagePlan>),
     DropStage(Box<DropStagePlan>),
     RemoveStage(Box<RemoveStagePlan>),
 
