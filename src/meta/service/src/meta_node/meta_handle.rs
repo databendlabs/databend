@@ -47,6 +47,7 @@ use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::Wait;
 use databend_common_meta_types::raft_types::WatchReceiver;
 use databend_common_meta_types::sys_data::SysData;
+use display_more::DisplayOptionExt;
 use futures::Stream;
 use futures::stream::BoxStream;
 use tokio::sync::mpsc;
@@ -184,6 +185,38 @@ impl MetaHandle {
             Box::pin(fu)
         })
         .await
+    }
+
+    pub async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let histogram_label = "kv_list";
+
+        let res = self
+            .request(move |meta_node| {
+                let fu = async move {
+                    meta_node
+                        .handle_kv_list(prefix.clone(), limit)
+                        .log_elapsed_info(format!(
+                            "KvList: prefix={}, limit={}",
+                            prefix,
+                            limit.display()
+                        ))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(histogram_label, total);
+                        })
+                        .await
+                };
+                Box::pin(fu)
+            })
+            .await;
+
+        match res {
+            Ok(inner) => inner,
+            Err(stopped) => Err(Status::unavailable(stopped.to_string())),
+        }
     }
 
     pub async fn handle_transaction(
