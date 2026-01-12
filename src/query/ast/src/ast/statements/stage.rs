@@ -66,6 +66,81 @@ impl Display for CreateStageStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct AlterStageStmt {
+    pub if_exists: bool,
+    pub stage_name: String,
+    pub action: AlterStageAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum AlterStageAction {
+    Set(AlterStageSetOptions),
+    Unset(Vec<AlterStageUnsetTarget>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Drive, DriveMut)]
+pub struct AlterStageSetOptions {
+    pub location: Option<UriLocation>,
+    pub file_format: Option<FileFormatOptions>,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum AlterStageUnsetTarget {
+    FileFormat,
+    Comment,
+}
+
+impl Display for AlterStageStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ALTER STAGE")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", self.stage_name)?;
+        match &self.action {
+            AlterStageAction::Set(options) => {
+                write!(f, " SET")?;
+                let mut wrote_option = false;
+                if let Some(location) = &options.location {
+                    if wrote_option {
+                        write!(f, ",")?;
+                    }
+                    wrote_option = true;
+                    write!(f, " {}", location)?;
+                }
+                if let Some(file_format) = &options.file_format {
+                    if wrote_option {
+                        write!(f, ",")?;
+                    }
+                    wrote_option = true;
+                    write!(f, " FILE_FORMAT = ({})", file_format)?;
+                }
+                if let Some(comment) = &options.comment {
+                    if wrote_option {
+                        write!(f, ",")?;
+                    }
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
+            }
+            AlterStageAction::Unset(targets) => {
+                write!(f, " UNSET")?;
+                for (i, target) in targets.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ",")?;
+                    }
+                    match target {
+                        AlterStageUnsetTarget::FileFormat => write!(f, " FILE_FORMAT")?,
+                        AlterStageUnsetTarget::Comment => write!(f, " COMMENT")?,
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SelectStageOption {
     Files(Vec<String>),
