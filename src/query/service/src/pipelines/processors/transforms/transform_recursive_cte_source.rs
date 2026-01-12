@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
@@ -42,7 +46,8 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::IndexType;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
-use databend_common_storages_basic::MemoryTable;
+use databend_common_storages_basic::RecursiveCteMemoryTable;
+use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::CreateTableInterpreter;
@@ -68,14 +73,25 @@ pub struct TransformRecursiveCteSource {
 
     recursive_step: usize,
     cte_scan_tables: Vec<Arc<dyn Table>>,
+    cte_prepare_ids: Vec<u64>,
 }
+
+static NEXT_R_CTE_ID: AtomicU64 = AtomicU64::new(1);
 
 impl TransformRecursiveCteSource {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
-        union_plan: UnionAll,
+        mut union_plan: UnionAll,
     ) -> Result<ProcessorPtr> {
+        let mut exec_ids = HashMap::new();
+        assign_exec_ids(&mut union_plan.left, &mut exec_ids);
+        assign_exec_ids(&mut union_plan.right, &mut exec_ids);
+        let cte_prepare_ids = exec_ids
+            .values()
+            .filter_map(|ids| ids.last().copied())
+            .collect();
+
         let left_outputs = union_plan
             .left_outputs
             .iter()
@@ -108,6 +124,7 @@ impl TransformRecursiveCteSource {
                 right_outputs,
                 recursive_step: 0,
                 cte_scan_tables: vec![],
+                cte_prepare_ids,
             },
         )
     }
@@ -198,9 +215,14 @@ impl AsyncSource for TransformRecursiveCteSource {
                 self.recursive_step == 1,
             )?;
             // Prepare the data of next round recursive.
-            for table in self.cte_scan_tables.iter() {
-                let memory_table = table.as_any().downcast_ref::<MemoryTable>().unwrap();
-                memory_table.update(vec![data.clone()]);
+
+            debug_assert_eq!(self.cte_prepare_ids.len(), self.cte_scan_tables.len());
+            for (exec_id, table) in self.cte_prepare_ids.iter().zip(self.cte_scan_tables.iter()) {
+                let memory_table = table
+                    .as_any()
+                    .downcast_ref::<RecursiveCteMemoryTable>()
+                    .unwrap();
+                memory_table.update_with_id(*exec_id, vec![data.clone()]);
             }
             res = Some(data);
         } else {
@@ -210,6 +232,21 @@ impl AsyncSource for TransformRecursiveCteSource {
             let _ = drop_tables(ctx, table_names).await?;
         }
         Ok(res)
+    }
+}
+
+fn assign_exec_ids(plan: &mut PhysicalPlan, mapping: &mut HashMap<String, Vec<u64>>) {
+    if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
+        let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
+        recursive_cte_scan.exec_id = Some(id);
+        mapping
+            .entry(recursive_cte_scan.table_name.clone())
+            .or_default()
+            .push(id);
+    }
+
+    for child in plan.children_mut() {
+        assign_exec_ids(child, mapping);
     }
 }
 
@@ -271,6 +308,9 @@ async fn create_memory_table_for_cte_scan(
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(table_fields);
 
+                let mut options = BTreeMap::new();
+                options.insert(OPT_KEY_RECURSIVE_CTE.to_string(), "1".to_string());
+
                 self.plans.push(CreateTablePlan {
                     schema,
                     create_option: CreateOption::CreateIfNotExists,
@@ -285,7 +325,7 @@ async fn create_memory_table_for_cte_scan(
                     table_properties: Default::default(),
                     table_partition: None,
                     storage_params: None,
-                    options: Default::default(),
+                    options,
                     field_comments: vec![],
                     cluster_key: None,
                     as_select: None,

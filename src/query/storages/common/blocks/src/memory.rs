@@ -23,7 +23,12 @@ use parking_lot::RwLock;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
+pub type InMemoryRecursiveData<K> = HashMap<K, Arc<RwLock<HashMap<u64, Vec<DataBlock>>>>>;
+
 pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<InMemoryDataKey>>>> =
+    LazyLock::new(|| Arc::new(Default::default()));
+
+pub static IN_MEMORY_R_CTE_DATA: LazyLock<Arc<RwLock<InMemoryRecursiveData<InMemoryDataKey>>>> =
     LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
