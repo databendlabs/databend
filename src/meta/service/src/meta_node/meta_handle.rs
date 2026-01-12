@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::BuildInfoRef;
+use display_more::DisplayOptionExt;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -184,6 +185,38 @@ impl MetaHandle {
             Box::pin(fu)
         })
         .await
+    }
+
+    pub async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let histogram_label = "kv_list";
+
+        let res = self
+            .request(move |meta_node| {
+                let fu = async move {
+                    meta_node
+                        .handle_kv_list(prefix.clone(), limit)
+                        .log_elapsed_info(format!(
+                            "KvList: prefix={}, limit={}",
+                            prefix,
+                            limit.display()
+                        ))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(histogram_label, total);
+                        })
+                        .await
+                };
+                Box::pin(fu)
+            })
+            .await;
+
+        match res {
+            Ok(inner) => inner,
+            Err(stopped) => Err(Status::unavailable(stopped.to_string())),
+        }
     }
 
     pub async fn handle_transaction(

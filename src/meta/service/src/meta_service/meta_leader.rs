@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -313,6 +314,18 @@ impl<'a> MetaLeader<'a> {
         }
 
         Ok(Ok(()))
+    }
+
+    /// List key-value pairs by prefix.
+    ///
+    /// Returns a stream of `StreamItem` wrapped in tonic's `BoxStream`,
+    /// which has item type `Result<StreamItem, Status>`.
+    pub async fn kv_list(&self, prefix: &str) -> Result<BoxStream<StreamItem>, io::Error> {
+        let sm = self.sto.get_sm_v003();
+        let kv_api = sm.kv_api();
+        let strm = kv_api.list_kv(prefix).await?;
+        let strm = strm.map_err(|e| Status::internal(e.to_string()));
+        Ok(strm.boxed())
     }
 }
 

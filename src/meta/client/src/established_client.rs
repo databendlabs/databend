@@ -29,6 +29,7 @@ use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -72,7 +73,7 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
         );
 
         self.inspect(|response| {
-            let forwarded_leader = GrpcHelper::get_response_meta_leader(response);
+            let forwarded_leader = GrpcHelper::parse_leader_from_metadata(response.metadata());
 
             // `leader` is set iff the request is forwarded by a follower to a leader
             if let Some(leader) = forwarded_leader {
@@ -112,6 +113,20 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
             }
         })
             .inspect_err(|status| {
+                // Extract leader from error status metadata (e.g., from kv_list redirect)
+                if let Some(leader) = GrpcHelper::parse_leader_from_metadata(status.metadata()) {
+                    info!(
+                        "{client} update_client: received leader({}) from error status, endpoints: {}",
+                        leader,
+                        &*client.endpoints.lock(),
+                    );
+
+                    let mut endpoints = client.endpoints.lock();
+                    if let Err(e) = endpoints.set_current(Some(leader.to_string())) {
+                        error!("fail to update leader from status: {:?}; endpoints: {}", e, endpoints);
+                    }
+                }
+
                 warn!("{client} update_client: set received error: {:?}", status);
                 client.set_error(status.clone());
             })
@@ -260,6 +275,14 @@ impl EstablishedClient {
     ) -> Result<Response<Streaming<StreamItem>>, Status> {
         let resp = self.client.kv_read_v1(request).await;
         resp.update_client(self)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn kv_list(
+        &mut self,
+        request: impl tonic::IntoRequest<KvListRequest>,
+    ) -> Result<Response<Streaming<StreamItem>>, Status> {
+        self.client.kv_list(request).await.update_client(self)
     }
 
     #[async_backtrace::framed]
