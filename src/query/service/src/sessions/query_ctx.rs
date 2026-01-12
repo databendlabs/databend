@@ -538,6 +538,15 @@ impl QueryContext {
         };
 
         let table = if let Some(branch) = branch {
+            if !self
+                .get_settings()
+                .get_enable_experimental_table_ref()
+                .unwrap_or_default()
+            {
+                return Err(ErrorCode::Unimplemented(
+                    "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+                ));
+            }
             table.with_branch(branch)?
         } else {
             table

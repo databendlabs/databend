@@ -15,7 +15,7 @@ after vacuum
 4
 4
 2
->>>> select c from test_vacuum_orphan_refs.a/b order by c
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b order by c
 1
 2
 after add pure orphan files

@@ -35,7 +35,7 @@ ls -l /tmp/test_vacuum_orphan_refs/"$PREFIX"/_sg/ | wc -l
 ls -l /tmp/test_vacuum_orphan_refs/"$PREFIX"/_i_b_v2/ | wc -l
 ls -l /tmp/test_vacuum_orphan_refs/"$PREFIX"/_ref/ | wc -l
 
-stmt "select c from test_vacuum_orphan_refs.a/b order by c"
+stmt "set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b order by c"
 
 # simulates orphans
 mkdir -p /tmp/test_vacuum_orphan_refs/"$PREFIX"/_ref/1/
