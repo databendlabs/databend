@@ -33,6 +33,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 unindent = { workspace = true }
 url = { workspace = true }
+zmij = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

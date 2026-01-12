@@ -40,6 +40,7 @@ fn test_cast() {
         test_cast_between_number_and_string(file, is_try);
         test_cast_between_boolean_and_string(file, is_try);
         test_cast_between_string_and_decimal(file, is_try);
+        test_to_decimal_with_precision_args(file, is_try);
         test_cast_between_number_and_boolean(file, is_try);
         test_cast_between_date_and_timestamp(file, is_try);
         test_cast_between_string_and_timestamp(file, is_try);
@@ -756,6 +757,55 @@ fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
             ]),
         )],
     );
+}
+
+fn test_to_decimal_with_precision_args(file: &mut impl Write, is_try: bool) {
+    let func_name = if is_try {
+        "try_to_decimal"
+    } else {
+        "to_decimal"
+    };
+
+    // Constant numeric inputs with explicit precision/scale arguments.
+    run_ast(file, format!("{func_name}(10, 3)(123.456)"), &[]);
+    run_ast(file, format!("{func_name}(10, 3)(-123.456)"), &[]);
+    run_ast(file, format!("{func_name}(12, 1)(-9876.5)"), &[]);
+    run_ast(file, format!("{func_name}(6, 2)(5)"), &[]);
+    run_ast(file, format!("{func_name}(6, 2)(-5)"), &[]);
+    run_ast(file, format!("{func_name}(6, 2)(true)"), &[]);
+    run_ast(file, format!("{func_name}(10, 2)(123.45::FLOAT32)"), &[]);
+    run_ast(file, format!("{func_name}(10, 2)(-123.45::FLOAT32)"), &[]);
+    run_ast(
+        file,
+        format!("{func_name}(12, 4)(123.456::DECIMAL(9,3))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{func_name}(12, 4)(-123.456::DECIMAL(9,3))"),
+        &[],
+    );
+
+    // Column based conversions for floats, integers, and decimals.
+    run_ast(file, format!("{func_name}(12, 4)(a)"), &[(
+        "a",
+        Float64Type::from_data(vec![0.1, -2.3456, 987.6543]),
+    )]);
+    run_ast(file, format!("{func_name}(8, 0)(b)"), &[(
+        "b",
+        Int32Type::from_data(vec![0, 1, -2, 123_456]),
+    )]);
+    run_ast(file, format!("{func_name}(9, 3)(c)"), &[(
+        "c",
+        Float32Type::from_data(vec![0.25f32, -1.125, 123.5]),
+    )]);
+    run_ast(file, format!("{func_name}(15, 3)(d)"), &[(
+        "d",
+        Decimal128Type::from_data_with_size(
+            [123_450i128, -9_999, 1_000_000, -76_543],
+            Some(DecimalSize::new_unchecked(10, 2)),
+        ),
+    )]);
 }
 
 #[test]

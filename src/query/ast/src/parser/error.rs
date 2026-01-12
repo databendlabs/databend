@@ -255,7 +255,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             format!("unexpected `{span_text}`")
         };
         if let Some(suggestion) = has_suggestion {
-            msg += &format!(". {}", suggestion);
+            write!(msg, ". {}", suggestion).unwrap();
             labels = vec![(inner.span, msg)];
 
             // Return early to skip context labels when we have intelligent suggestions

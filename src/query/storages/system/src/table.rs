@@ -60,6 +60,9 @@ pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
     const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Local;
     const BROADCAST_TRUNCATE: bool = false;
+    /// Whether query results can be cached when this table is involved.
+    /// Default is false for system tables. Override to true for static tables like `system.one`.
+    const RESULT_CAN_BE_CACHED: bool = false;
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
@@ -169,6 +172,10 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
 
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         TTable::BROADCAST_TRUNCATE
+    }
+
+    fn result_can_be_cached(&self) -> bool {
+        TTable::RESULT_CAN_BE_CACHED
     }
 }
 

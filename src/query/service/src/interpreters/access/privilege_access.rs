@@ -51,6 +51,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -277,6 +278,10 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         self.access_system_history(Some(catalog_name), Some(db_name), None, privileges)?;
         let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        if if_exists && !catalog.exists_database(&tenant, db_name).await? {
+            return Ok(());
+        }
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
             UserPrivilegeType::Create => true,
@@ -295,7 +300,6 @@ impl PrivilegeAccess {
                 return Ok(());
             }
             Err(_err) => {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
                 match self
                     .convert_to_id(&tenant, &catalog, db_name, None, false)
                     .await
@@ -573,6 +577,60 @@ impl PrivilegeAccess {
             false,
         )
         .await
+    }
+
+    async fn validate_tag_object_access(
+        &self,
+        object: &TagSetObject,
+        tenant: &Tenant,
+    ) -> Result<()> {
+        match object {
+            TagSetObject::Database(target) => {
+                self.validate_db_access(
+                    &target.catalog,
+                    &target.database,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                )
+                .await
+            }
+            TagSetObject::Table(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.table,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::Stage(target) => {
+                match UserApiProvider::instance()
+                    .get_stage(tenant, &target.stage_name)
+                    .await
+                {
+                    Ok(stage) => {
+                        self.validate_stage_access(&stage, UserPrivilegeType::Write)
+                            .await
+                    }
+                    Err(e) => {
+                        if e.code() == ErrorCode::UNKNOWN_STAGE && target.if_exists {
+                            Ok(())
+                        } else {
+                            Err(e.add_message("error on validating stage access"))
+                        }
+                    }
+                }
+            }
+            TagSetObject::Connection(target) => {
+                self.validate_connection_access(
+                    target.connection_name.clone(),
+                    UserPrivilegeType::AccessConnection,
+                )
+                .await
+            }
+        }
     }
 
     async fn validate_seq_access(&self, seq: String) -> Result<()> {
@@ -1817,6 +1875,14 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_seq_access(plan.ident.name().to_string())
                     .await?;
             }
+            Plan::SetObjectTags(plan) => {
+                self.validate_tag_object_access(&plan.object, &tenant)
+                    .await?;
+            }
+            Plan::UnsetObjectTags(plan) => {
+                self.validate_tag_object_access(&plan.object, &tenant)
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -2035,6 +2101,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameWorkloadGroup(_) => {}
             Plan::SetWorkloadGroupQuotas(_) => {}
             Plan::UnsetWorkloadGroupQuotas(_) => {}
+            Plan::AlterDatabase(plan) => {
+                self
+                    .validate_db_access(
+                        &plan.catalog,
+                        &plan.database,
+                        UserPrivilegeType::Alter,
+                        plan.if_exists,
+                    )
+                    .await?;
+            }
         }
 
         Ok(())

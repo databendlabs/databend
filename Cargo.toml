@@ -63,6 +63,7 @@ databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-kvapi-test-suite = { path = "src/meta/kvapi-test-suite" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
+databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
@@ -158,7 +159,7 @@ async-compression = { git = "https://github.com/datafuse-extras/async-compressio
 ] }
 async-recursion = "1.1.1"
 async-stream = "0.3.3"
-async-trait = { version = "0.1.88" }
+async-trait = { version = "0.1.89" }
 backoff = { version = "0.4", features = ["futures", "tokio"] } # FIXME: use backon to replace this.
 backon = "1"
 backtrace = { version = "0.3.73", features = [
@@ -196,10 +197,11 @@ cookie = "0.18.1"
 crc32fast = "1.3.2"
 cron = "0.12.0"
 crossbeam-channel = "0.5.6"
-csv-core = "0.1.11"
+csv-core = "0.1.13"
 ctor = "0.2"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
+databend-base = "0.1"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
 deltalake = "0.26"
@@ -240,7 +242,7 @@ hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
-hive_metastore = "0.1.0"
+hive_metastore = "0.2.0"
 hostname = "0.3.1"
 http = "1"
 humantime = "2.1.0"
@@ -249,13 +251,13 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 lru = "0.12"
 
 ## in branch dev
-iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae", features = [
+iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
-iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "a5e780ae" }
+iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
+iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
+iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
+iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -459,6 +461,7 @@ wkt = "0.11.1"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
 zip = "3.0.0"
+zmij = "1.0"
 zstd = "0.12.3"
 
 # AST needed
@@ -570,7 +573,10 @@ async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.gi
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
+csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "346f18c" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.1.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }

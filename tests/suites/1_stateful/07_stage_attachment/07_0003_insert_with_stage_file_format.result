@@ -2,16 +2,16 @@
 >>>> create table t1 (a string, b string, c string, d string not null)
 >>>> drop stage if exists s1
 >>>> create stage s1
->>>> copy into @s1 from (select 'Null', 'NULL', '', '') file_format = (type = csv)
-1	20	20
+>>>> copy into @s1 from (select NULL, 'Null', '', '') file_format = (type = csv null_display='Null')
+1	18	18
 <<<<
 Succeeded
-20
+18
 null
 >>>> list @s1
 <<<<
 >>>> select a is null, b is null, c, d = '' from t1
-true	false	NULL	true
+true	false		true
 <<<<
 >>>> drop table if exists t1
 >>>> drop stage if exists s1

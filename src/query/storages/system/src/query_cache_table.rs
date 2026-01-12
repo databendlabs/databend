@@ -69,6 +69,7 @@ impl AsyncSystemTable for QueryCacheTable {
         let mut num_rows_vec = Vec::with_capacity(cached_values.len());
         let mut partitions_sha_vec = Vec::with_capacity(cached_values.len());
         let mut location_vec = Vec::with_capacity(cached_values.len());
+        let mut cache_key_extras_vec = Vec::with_capacity(cached_values.len());
         let mut active_result_scan: Vec<bool> = Vec::with_capacity(cached_values.len());
 
         cached_values.iter().for_each(|x| {
@@ -78,6 +79,7 @@ impl AsyncSystemTable for QueryCacheTable {
             num_rows_vec.push(x.num_rows as u64);
             partitions_sha_vec.push(x.partitions_shas.clone());
             location_vec.push(x.location.as_str());
+            cache_key_extras_vec.push(x.cache_key_extras.clone());
         });
 
         let active_query_ids = ctx.get_query_id_history();
@@ -95,6 +97,11 @@ impl AsyncSystemTable for QueryCacheTable {
             .map(|part| part.into_iter().join(", "))
             .collect();
 
+        let cache_key_extras_vec: Vec<String> = cache_key_extras_vec
+            .into_iter()
+            .map(|extras| extras.into_iter().join(", "))
+            .collect();
+
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(sql_vec),
             StringType::from_data(query_id_vec),
@@ -107,6 +114,12 @@ impl AsyncSystemTable for QueryCacheTable {
                     .collect::<Vec<_>>(),
             ),
             StringType::from_data(location_vec),
+            StringType::from_data(
+                cache_key_extras_vec
+                    .iter()
+                    .map(|extras| extras.as_str())
+                    .collect::<Vec<_>>(),
+            ),
             BooleanType::from_data(active_result_scan),
         ]))
     }
@@ -121,6 +134,7 @@ impl QueryCacheTable {
             TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("partitions_sha", TableDataType::String),
             TableField::new("location", TableDataType::String),
+            TableField::new("cache_key_extras", TableDataType::String),
             TableField::new("active_result_scan", TableDataType::Boolean),
         ]);
 

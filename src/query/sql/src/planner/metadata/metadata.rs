@@ -651,6 +651,16 @@ impl TableEntry {
     pub fn update_table_index(&mut self, table_index: IndexType) {
         self.index = table_index;
     }
+
+    pub fn qualified_name(&self) -> String {
+        match &self.branch {
+            None => format!("{}.{}.{}", self.catalog, self.database, self.name),
+            Some(branch) => format!(
+                "{}.{}.{}/{}",
+                self.catalog, self.database, self.name, branch
+            ),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

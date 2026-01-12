@@ -18,11 +18,11 @@ class PortDetector:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     sock.connect(("0.0.0.0", port))
-                    print("OK :{} is listening".format(port))
+                    print(f"OK :{port} is listening")
                     return
             except Exception as e:
                 print(e)
-                print("... connecting to :{}".format(port))
+                print(f"... connecting to :{port}")
                 time.sleep(0.3)
 
         raise TimeoutError(
@@ -108,18 +108,15 @@ class ProcessManager:
 
     @staticmethod
     def start_process(
-        cmd: list, service_name: str, log_dir: str = None
+        cmd: list, service_name: str, log_dir: Optional[str] = None
     ) -> subprocess.Popen:
         """Start a subprocess with common configuration."""
-        import os
         from .progress import ProgressReporter
 
-        # Print the command being executed
         ProgressReporter.print_message(f"🔧 Executing: {' '.join(cmd)}")
 
         os.makedirs(log_dir, exist_ok=True)
 
-        # Open log files for stdout and stderr
         stdout_file = open(f"{log_dir}/{service_name}_stdout.log", "w")
         stderr_file = open(f"{log_dir}/{service_name}_stderr.log", "w")
 
@@ -127,7 +124,9 @@ class ProcessManager:
             f"📝 Logs: stdout={log_dir}/stdout.log, stderr={log_dir}/stderr.log"
         )
 
-        return subprocess.Popen(cmd, stdout=stdout_file, stderr=stderr_file, text=True)
+        proc = subprocess.Popen(cmd, stdout=stdout_file, stderr=stderr_file, text=True)
+        proc._log_files = (stdout_file, stderr_file)  # Store for cleanup
+        return proc
 
     @staticmethod
     def stop_process(process: subprocess.Popen, service_name: str) -> None:
@@ -145,6 +144,11 @@ class ProcessManager:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+
+        # Close log files if they were opened
+        if hasattr(process, "_log_files"):
+            for f in process._log_files:
+                f.close()
 
     @staticmethod
     def is_process_running(process: Optional[subprocess.Popen]) -> bool:

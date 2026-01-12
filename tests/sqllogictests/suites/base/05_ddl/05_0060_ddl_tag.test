@@ -1,38 +1,464 @@
 statement ok
+DROP DATABASE IF EXISTS test_tag_db
+
+statement ok
+DROP TABLE IF EXISTS default.test_tag_table
+
+statement ok
+DROP STAGE IF EXISTS test_tag_stage
+
+statement ok
+DROP CONNECTION IF EXISTS test_tag_conn
+
+statement ok
 DROP TAG IF EXISTS env_tag
 
 statement ok
 DROP TAG IF EXISTS owner_tag
 
 statement ok
-CREATE TAG env_tag ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'
+DROP TAG IF EXISTS cost_center_tag
 
+## Basic CREATE TAG with ALLOWED_VALUES and COMMENT
+statement ok
+CREATE TAG env_tag ALLOWED_VALUES = ('dev', 'staging', 'prod') COMMENT = 'Environment classification tag'
+
+## CREATE TAG with only COMMENT (no ALLOWED_VALUES = any value allowed)
+statement ok
+CREATE TAG owner_tag COMMENT = 'Data owner information'
+
+## CREATE TAG without ALLOWED_VALUES or COMMENT
+statement ok
+CREATE TAG cost_center_tag
+
+## Error: CREATE TAG that already exists (error code 2750)
 statement error 2750
-CREATE TAG env_tag COMMENT = 'dup'
+CREATE TAG env_tag COMMENT = 'duplicate'
+
+## IF NOT EXISTS should not error
+statement ok
+CREATE TAG IF NOT EXISTS env_tag COMMENT = 'this comment will be ignored'
 
 statement ok
-CREATE TAG IF NOT EXISTS env_tag COMMENT = 'still env'
+DROP TAG IF EXISTS dedup_tag
 
 statement ok
-CREATE TAG owner_tag COMMENT = 'owner info'
+CREATE TAG dedup_tag ALLOWED_VALUES = ('a', 'b', 'a', 'c', 'b')
+
+query TT
+SELECT name, allowed_values FROM system.tags WHERE name = 'dedup_tag'
+----
+dedup_tag ['a', 'b', 'c']
+
+statement ok
+DROP TAG dedup_tag
 
 statement ok
 SHOW TAGS
 
 statement ok
-SHOW TAGS WHERE name LIKE 'env%'
+SHOW TAGS LIKE 'env%'
 
 statement ok
-SHOW TAGS WHERE name = 'env_tag' AND 1 = 0
+SHOW TAGS WHERE name = 'owner_tag'
+
+## SHOW TAGS with WHERE condition returning no results
+query TTTA
+SHOW TAGS WHERE name = 'nonexistent'
+----
+
+
+## SHOW TAGS with complex WHERE condition
+statement ok
+SHOW TAGS WHERE name LIKE '%tag' AND comment IS NOT NULL
+
+## SHOW TAGS with LIMIT
+statement ok
+SHOW TAGS LIMIT 2
 
 query TTT
-SELECT name, allowed_values, comment FROM system.tags WHERE name IN ('env_tag', 'owner_tag') ORDER BY name
+SELECT name, allowed_values, comment FROM system.tags WHERE name IN ('env_tag', 'owner_tag', 'cost_center_tag') ORDER BY name
 ----
-env_tag ['dev', 'prod'] environment tag
-owner_tag NULL owner info
+cost_center_tag NULL (empty)
+env_tag ['dev', 'staging', 'prod'] Environment classification tag
+owner_tag NULL Data owner information
+
+## Error: DROP TAG that does not exist (error code 2751)
+statement error 2751
+DROP TAG nonexistent_tag
+
+## IF EXISTS should not error
+statement ok
+DROP TAG IF EXISTS nonexistent_tag
 
 statement ok
-DROP TAG owner_tag
+CREATE DATABASE test_tag_db
 
+statement ok
+CREATE TABLE default.test_tag_table (id INT, name VARCHAR)
+
+statement ok
+CREATE STAGE test_tag_stage
+
+statement ok
+CREATE CONNECTION test_tag_conn STORAGE_TYPE='s3'
+
+## SET TAG on database
+statement ok
+ALTER DATABASE test_tag_db SET TAG env_tag = 'prod'
+
+## SET multiple tags on database
+statement ok
+ALTER DATABASE test_tag_db SET TAG owner_tag = 'team_alpha', cost_center_tag = 'CC001'
+
+## Error: SET TAG with value not in ALLOWED_VALUES (error code 2752)
+statement error 2752
+ALTER DATABASE test_tag_db SET TAG env_tag = 'invalid_env'
+
+## Error: SET non-existent TAG (error code 2751)
+statement error 2751
+ALTER DATABASE test_tag_db SET TAG nonexistent_tag = 'value'
+
+## IF EXISTS on non-existent database should not error
+statement ok
+ALTER DATABASE IF EXISTS nonexistent_db SET TAG env_tag = 'dev'
+
+## UNSET TAG from database
+statement ok
+ALTER DATABASE test_tag_db UNSET TAG cost_center_tag
+
+## UNSET multiple tags from database
+statement ok
+ALTER DATABASE test_tag_db UNSET TAG env_tag, owner_tag
+
+## Error: UNSET non-existent tag from database (error code 2751)
+statement error 2751
+ALTER DATABASE test_tag_db UNSET TAG nonexistent_tag
+
+## IF EXISTS on non-existent database for UNSET should not error
+## (tag validity is not checked when object doesn't exist)
+statement ok
+ALTER DATABASE IF EXISTS nonexistent_db UNSET TAG env_tag
+
+## IF EXISTS with non-existent tag should still succeed (object doesn't exist)
+statement ok
+ALTER DATABASE IF EXISTS nonexistent_db UNSET TAG nonexistent_tag
+
+## SET TAG on table
+statement ok
+ALTER TABLE default.test_tag_table SET TAG env_tag = 'staging'
+
+## SET multiple tags on table
+statement ok
+ALTER TABLE default.test_tag_table SET TAG owner_tag = 'alice', cost_center_tag = 'CC002'
+
+## Error: SET TAG with value not in ALLOWED_VALUES (error code 2752)
+statement error 2752
+ALTER TABLE default.test_tag_table SET TAG env_tag = 'unknown'
+
+## Error: SET non-existent TAG (error code 2751)
+statement error 2751
+ALTER TABLE default.test_tag_table SET TAG fake_tag = 'value'
+
+## IF EXISTS on non-existent table should not error
+statement ok
+ALTER TABLE IF EXISTS default.nonexistent_table SET TAG env_tag = 'dev'
+
+## UNSET TAG from table
+statement ok
+ALTER TABLE default.test_tag_table UNSET TAG cost_center_tag
+
+## UNSET multiple tags from table
+statement ok
+ALTER TABLE default.test_tag_table UNSET TAG env_tag, owner_tag
+
+## IF EXISTS on non-existent table for UNSET should not error
+statement ok
+ALTER TABLE IF EXISTS default.nonexistent_table UNSET TAG env_tag
+
+## SET TAG on stage
+statement ok
+ALTER STAGE test_tag_stage SET TAG env_tag = 'dev'
+
+## SET multiple tags on stage
+statement ok
+ALTER STAGE test_tag_stage SET TAG owner_tag = 'bob', cost_center_tag = 'CC003'
+
+## Error: SET TAG with value not in ALLOWED_VALUES (error code 2752)
+statement error 2752
+ALTER STAGE test_tag_stage SET TAG env_tag = 'production'
+
+## Error: SET non-existent TAG (error code 2751)
+statement error 2751
+ALTER STAGE test_tag_stage SET TAG missing_tag = 'value'
+
+## IF EXISTS on non-existent stage should not error
+statement ok
+ALTER STAGE IF EXISTS nonexistent_stage SET TAG env_tag = 'dev'
+
+## UNSET TAG from stage
+statement ok
+ALTER STAGE test_tag_stage UNSET TAG cost_center_tag
+
+## UNSET multiple tags from stage
+statement ok
+ALTER STAGE test_tag_stage UNSET TAG env_tag, owner_tag
+
+## IF EXISTS on non-existent stage for UNSET should not error
+statement ok
+ALTER STAGE IF EXISTS nonexistent_stage UNSET TAG env_tag
+
+## SET TAG on connection
+statement ok
+ALTER CONNECTION test_tag_conn SET TAG env_tag = 'prod'
+
+## SET multiple tags on connection
+statement ok
+ALTER CONNECTION test_tag_conn SET TAG owner_tag = 'charlie', cost_center_tag = 'CC004'
+
+## Error: SET TAG with value not in ALLOWED_VALUES (error code 2752)
+statement error 2752
+ALTER CONNECTION test_tag_conn SET TAG env_tag = 'local'
+
+## Error: SET non-existent TAG (error code 2751)
+statement error 2751
+ALTER CONNECTION test_tag_conn SET TAG undefined_tag = 'value'
+
+## IF EXISTS on non-existent connection should not error
+statement ok
+ALTER CONNECTION IF EXISTS nonexistent_conn SET TAG env_tag = 'dev'
+
+## UNSET TAG from connection
+statement ok
+ALTER CONNECTION test_tag_conn UNSET TAG cost_center_tag
+
+## UNSET multiple tags from connection
+statement ok
+ALTER CONNECTION test_tag_conn UNSET TAG env_tag, owner_tag
+
+## IF EXISTS on non-existent connection for UNSET should not error
+statement ok
+ALTER CONNECTION IF EXISTS nonexistent_conn UNSET TAG env_tag
+
+## Set tags on objects to create references
+statement ok
+ALTER DATABASE test_tag_db SET TAG env_tag = 'prod'
+
+statement ok
+ALTER TABLE default.test_tag_table SET TAG env_tag = 'staging'
+
+statement ok
+ALTER STAGE test_tag_stage SET TAG env_tag = 'dev'
+
+statement ok
+ALTER CONNECTION test_tag_conn SET TAG env_tag = 'prod'
+
+## Error: DROP TAG that has references (error code 2753)
+statement error 2753
+DROP TAG env_tag
+
+## Drop objects to remove references
+statement ok
+DROP CONNECTION test_tag_conn
+
+## Still has references from other objects
+statement error 2753
+DROP TAG env_tag
+
+statement ok
+DROP STAGE test_tag_stage
+
+## Still has references from database and table
+statement error 2753
+DROP TAG env_tag
+
+statement ok
+DROP TABLE default.test_tag_table
+
+## Still has reference from database
+statement error 2753
+DROP TAG env_tag
+
+statement ok
+DROP DATABASE test_tag_db
+
+## Now should succeed after all references are removed
 statement ok
 DROP TAG env_tag
+
+## Recreate env_tag for this test
+statement ok
+CREATE TAG env_tag ALLOWED_VALUES = ('dev', 'staging', 'prod')
+
+## Create a table and set tag
+statement ok
+CREATE TABLE default.auto_cleanup_test (id INT)
+
+statement ok
+ALTER TABLE default.auto_cleanup_test SET TAG env_tag = 'dev'
+
+## Verify tag is set (DROP TAG should fail)
+statement error 2753
+DROP TAG env_tag
+
+## Drop the table - should automatically cleanup tag references
+statement ok
+DROP TABLE default.auto_cleanup_test
+
+## Now DROP TAG should succeed
+statement ok
+DROP TAG env_tag
+
+statement ok
+DROP TAG IF EXISTS owner_tag
+
+statement ok
+DROP TAG IF EXISTS cost_center_tag
+
+statement ok
+DROP DATABASE IF EXISTS test_tag_db
+
+statement ok
+DROP TABLE IF EXISTS default.test_tag_table
+
+statement ok
+DROP STAGE IF EXISTS test_tag_stage
+
+statement ok
+DROP CONNECTION IF EXISTS test_tag_conn
+
+## ============================================
+## CREATE OR REPLACE should cleanup tag references
+## ============================================
+
+## --- Test CREATE OR REPLACE DATABASE ---
+statement ok
+DROP TAG IF EXISTS db_replace_tag
+
+statement ok
+DROP DATABASE IF EXISTS db_replace_test
+
+statement ok
+CREATE TAG db_replace_tag
+
+statement ok
+CREATE DATABASE db_replace_test
+
+statement ok
+ALTER DATABASE db_replace_test SET TAG db_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG db_replace_tag
+
+## CREATE OR REPLACE should cleanup old tag references
+statement ok
+CREATE OR REPLACE DATABASE db_replace_test
+
+## Now DROP TAG should succeed (old db_id's tag ref was cleaned up)
+statement ok
+DROP TAG db_replace_tag
+
+statement ok
+DROP DATABASE IF EXISTS db_replace_test
+
+## --- Test CREATE OR REPLACE TABLE ---
+statement ok
+DROP TAG IF EXISTS table_replace_tag
+
+statement ok
+DROP TABLE IF EXISTS default.table_replace_test
+
+statement ok
+CREATE TAG table_replace_tag
+
+statement ok
+CREATE TABLE default.table_replace_test (id INT)
+
+statement ok
+ALTER TABLE default.table_replace_test SET TAG table_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG table_replace_tag
+
+## CREATE OR REPLACE should cleanup old tag references
+statement ok
+CREATE OR REPLACE TABLE default.table_replace_test (id INT, name VARCHAR)
+
+## Now DROP TAG should succeed (old table_id's tag ref was cleaned up)
+statement ok
+DROP TAG table_replace_tag
+
+statement ok
+DROP TABLE IF EXISTS default.table_replace_test
+
+## --- Test CREATE OR REPLACE STAGE ---
+statement ok
+DROP TAG IF EXISTS stage_replace_tag
+
+statement ok
+DROP STAGE IF EXISTS stage_replace_test
+
+statement ok
+CREATE TAG stage_replace_tag
+
+statement ok
+CREATE STAGE stage_replace_test
+
+statement ok
+ALTER STAGE stage_replace_test SET TAG stage_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG stage_replace_tag
+
+## CREATE OR REPLACE STAGE - tag ref uses name, so it persists
+statement ok
+CREATE OR REPLACE STAGE stage_replace_test
+
+## Tag still has reference (name-based), DROP should still fail
+statement error 2753
+DROP TAG stage_replace_tag
+
+## Must explicitly drop stage to remove tag reference
+statement ok
+DROP STAGE stage_replace_test
+
+statement ok
+DROP TAG stage_replace_tag
+
+## --- Test CREATE OR REPLACE CONNECTION ---
+statement ok
+DROP TAG IF EXISTS conn_replace_tag
+
+statement ok
+DROP CONNECTION IF EXISTS conn_replace_test
+
+statement ok
+CREATE TAG conn_replace_tag
+
+statement ok
+CREATE CONNECTION conn_replace_test STORAGE_TYPE='s3'
+
+statement ok
+ALTER CONNECTION conn_replace_test SET TAG conn_replace_tag = 'v1'
+
+## Tag has reference, DROP should fail
+statement error 2753
+DROP TAG conn_replace_tag
+
+## CREATE OR REPLACE CONNECTION - tag ref uses name, so it persists
+statement ok
+CREATE OR REPLACE CONNECTION conn_replace_test STORAGE_TYPE='s3'
+
+## Tag still has reference (name-based), DROP should still fail
+statement error 2753
+DROP TAG conn_replace_tag
+
+## Must explicitly drop connection to remove tag reference
+statement ok
+DROP CONNECTION conn_replace_test
+
+statement ok
+DROP TAG conn_replace_tag

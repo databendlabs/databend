@@ -103,6 +103,17 @@ pub enum TaggableObject {
     Connection { name: String },
 }
 
+impl std::fmt::Display for TaggableObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaggableObject::Database { db_id } => write!(f, "database(id={})", db_id),
+            TaggableObject::Table { table_id } => write!(f, "table(id={})", table_id),
+            TaggableObject::Stage { name } => write!(f, "stage({})", name),
+            TaggableObject::Connection { name } => write!(f, "connection({})", name),
+        }
+    }
+}
+
 impl TaggableObject {
     pub fn type_str(&self) -> &'static str {
         match self {

@@ -14,6 +14,9 @@
 
 //! Supporting utilities for tests.
 
+use databend_common_meta_api::deserialize_struct;
+use databend_common_meta_api::kv_app_error::KVAppError;
+use databend_common_meta_api::serialization_util::deserialize_u64;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::MetaAPIError;
@@ -22,9 +25,6 @@ use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_proto_conv::FromToProto;
-
-use crate::kv_app_error::KVAppError;
-use crate::serialization_util::deserialize_u64;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
@@ -36,7 +36,7 @@ where
 {
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
-        let s = crate::deserialize_struct(&res.data)?;
+        let s = deserialize_struct(&res.data)?;
         return Ok(s);
     };
 
