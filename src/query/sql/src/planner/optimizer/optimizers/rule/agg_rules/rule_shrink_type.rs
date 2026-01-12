@@ -53,10 +53,10 @@ impl RuleShrinkType {
         Self {
             id: RuleID::ShrinkGroupByType,
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Aggregate,
-                    children: vec![Matcher::Leaf],
-                },
+                // Matcher::MatchOp {
+                //     op_type: RelOp::Aggregate,
+                //     children: vec![Matcher::Leaf],
+                // },
                 Matcher::MatchOp {
                     op_type: RelOp::Join,
                     children: vec![Matcher::Leaf, Matcher::Leaf],
@@ -66,6 +66,7 @@ impl RuleShrinkType {
         }
     }
 
+    #[allow(unused)]
     fn apply_aggregate(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
         if agg.group_items.is_empty()
@@ -359,7 +360,7 @@ impl Rule for RuleShrinkType {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         match s_expr.plan().rel_op() {
-            RelOp::Aggregate => self.apply_aggregate(s_expr, state),
+            // RelOp::Aggregate => self.apply_aggregate(s_expr, state),
             RelOp::Join => self.apply_join(s_expr, state),
             _ => Ok(()),
         }
