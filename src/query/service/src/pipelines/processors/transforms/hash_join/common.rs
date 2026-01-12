@@ -198,3 +198,14 @@ pub fn wrap_true_validity(
         NullableColumn::new_column(col, validity).into()
     }
 }
+
+pub fn wrap_nullable_block(input: &DataBlock) -> DataBlock {
+    let input_num_rows = input.num_rows();
+    let true_validity = Bitmap::new_constant(true, input_num_rows);
+    let nullable_columns = input
+        .columns()
+        .iter()
+        .map(|c| wrap_true_validity(c, input_num_rows, &true_validity))
+        .collect::<Vec<_>>();
+    DataBlock::new(nullable_columns, input_num_rows)
+}

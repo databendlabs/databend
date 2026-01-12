@@ -23,6 +23,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_sql::IndexType;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -112,18 +113,18 @@ impl HashJoinCacheState {
 pub struct NewHashJoinCacheState {
     idx: usize,
     memory_state: Arc<BasicHashJoinState>,
-    column_indexes: Vec<usize>,
+    column_offsets: Vec<usize>,
 }
 
 impl NewHashJoinCacheState {
     pub fn new(
-        column_indexes: Vec<usize>,
+        column_offsets: Vec<IndexType>,
         memory_state: Arc<BasicHashJoinState>,
     ) -> NewHashJoinCacheState {
         NewHashJoinCacheState {
             idx: 0,
             memory_state,
-            column_indexes,
+            column_offsets,
         }
     }
     fn next_data_block(&mut self) -> Option<DataBlock> {
@@ -131,10 +132,10 @@ impl NewHashJoinCacheState {
             return None;
         }
 
-        let mut columns = Vec::with_capacity(self.column_indexes.len());
+        let mut columns = Vec::with_capacity(self.column_offsets.len());
         let num_rows = self.memory_state.chunks[self.idx].num_rows();
-        for column_index in self.column_indexes.iter() {
-            let column = self.memory_state.chunks[self.idx].get_by_offset(*column_index);
+        for offset in self.column_offsets.iter() {
+            let column = self.memory_state.chunks[self.idx].get_by_offset(*offset);
             columns.push(column.clone());
         }
 

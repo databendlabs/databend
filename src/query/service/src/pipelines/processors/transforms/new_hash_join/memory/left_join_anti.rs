@@ -14,10 +14,11 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::hints::assume;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -27,22 +28,21 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::with_join_hash_method;
 
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::Join;
+use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state::BasicHashJoinState;
+use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
 
-pub struct InnerHashJoin {
+pub struct AntiLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
 
     pub(crate) desc: Arc<HashJoinDesc>,
@@ -51,7 +51,7 @@ pub struct InnerHashJoin {
     pub(crate) performance_context: PerformanceContext,
 }
 
-impl InnerHashJoin {
+impl AntiLeftHashJoin {
     pub fn create(
         ctx: &QueryContext,
         function_ctx: FunctionContext,
@@ -72,7 +72,7 @@ impl InnerHashJoin {
             state.clone(),
         )?;
 
-        Ok(InnerHashJoin {
+        Ok(AntiLeftHashJoin {
             desc,
             basic_hash_join,
             function_ctx,
@@ -82,7 +82,7 @@ impl InnerHashJoin {
     }
 }
 
-impl Join for InnerHashJoin {
+impl Join for AntiLeftHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         self.basic_hash_join.add_block(data)
     }
@@ -91,20 +91,14 @@ impl Join for InnerHashJoin {
         self.basic_hash_join.final_build::<false>()
     }
 
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        let locked = self.basic_state.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.basic_state.packets.as_mut().push(packet);
-    }
-
-    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(packets)
-    }
-
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
-        if data.is_empty() || *self.basic_state.build_rows == 0 {
+        if data.is_empty() {
             return Ok(Box::new(EmptyJoinStream));
+        }
+
+        if *self.basic_state.build_rows == 0 {
+            let result_block = data.project(&self.desc.probe_projections);
+            return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
         }
 
         self.basic_hash_join.finalize_chunks();
@@ -120,86 +114,146 @@ impl Join for InnerHashJoin {
         self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.desc.probe_projections);
 
-        let joined_stream =
-            with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
-                HashJoinHashTable::T(table) => {
-                    let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
-                    probe_hash_statistics.clear(probe_block.num_rows());
+        let join_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
+            HashJoinHashTable::T(table) => {
+                let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
+                probe_hash_statistics.clear(probe_block.num_rows());
 
-                    let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
-                    let probe_keys_stream = table.probe_matched(probe_data)?;
-
-                    Ok(InnerHashJoinStream::create(
-                        probe_block,
-                        self.basic_state.clone(),
-                        probe_keys_stream,
-                        self.desc.clone(),
-                        &mut self.performance_context.probe_result,
-                    ))
-                }
-                HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the hash table is uninitialized.",
-                )),
-            })?;
+                let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
+                table.probe(probe_data)
+            }
+            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the hash table is uninitialized.",
+            )),
+        })?;
 
         match &mut self.performance_context.filter_executor {
-            None => Ok(joined_stream),
-            Some(filter_executor) => Ok(InnerHashJoinFilterStream::create(
-                joined_stream,
+            None => Ok(LeftAntiHashJoinStream::create(
+                probe_block,
+                join_stream,
+                &mut self.performance_context.probe_result,
+            )),
+            Some(filter_executor) => Ok(LeftAntiFilterHashJoinStream::create(
+                probe_block,
+                self.basic_state.clone(),
+                join_stream,
+                self.desc.clone(),
+                &mut self.performance_context.probe_result,
                 filter_executor,
             )),
         }
     }
 }
 
-struct InnerHashJoinStream<'a> {
-    desc: Arc<HashJoinDesc>,
-    probe_data_block: DataBlock,
-    join_state: Arc<BasicHashJoinState>,
+struct LeftAntiHashJoinStream<'a> {
+    probe_data_block: Option<DataBlock>,
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
 }
 
-unsafe impl<'a> Send for InnerHashJoinStream<'a> {}
-unsafe impl<'a> Sync for InnerHashJoinStream<'a> {}
+unsafe impl<'a> Send for LeftAntiHashJoinStream<'a> {}
+unsafe impl<'a> Sync for LeftAntiHashJoinStream<'a> {}
 
-impl<'a> InnerHashJoinStream<'a> {
+impl<'a> LeftAntiHashJoinStream<'a> {
     pub fn create(
         probe_data_block: DataBlock,
-        join_state: Arc<BasicHashJoinState>,
         probe_keys_stream: Box<dyn ProbeStream + 'a>,
-        desc: Arc<HashJoinDesc>,
         probed_rows: &'a mut ProbedRows,
     ) -> Box<dyn JoinStream + 'a> {
-        Box::new(InnerHashJoinStream {
-            desc,
-            join_state,
+        Box::new(LeftAntiHashJoinStream {
             probed_rows,
-            probe_data_block,
+            probe_data_block: Some(probe_data_block),
             probe_keys_stream,
         })
     }
 }
 
-impl<'a> JoinStream for InnerHashJoinStream<'a> {
+impl<'a> JoinStream for LeftAntiHashJoinStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
+        let Some(probe_data_block) = self.probe_data_block.take() else {
+            return Ok(None);
+        };
+
+        let num_rows = probe_data_block.num_rows();
+        let mut selected = vec![false; num_rows];
+
         loop {
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
 
             if self.probed_rows.is_empty() {
-                return Ok(None);
+                let bitmap = Bitmap::from_trusted_len_iter(selected.into_iter());
+                return Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?));
+            }
+
+            for idx in &self.probed_rows.unmatched {
+                let idx = *idx as usize;
+                assume(idx < selected.len());
+                selected[idx] = true;
+            }
+        }
+    }
+}
+
+struct LeftAntiFilterHashJoinStream<'a> {
+    desc: Arc<HashJoinDesc>,
+    probe_data_block: Option<DataBlock>,
+    join_state: Arc<BasicHashJoinState>,
+    probe_keys_stream: Box<dyn ProbeStream + 'a>,
+    probed_rows: &'a mut ProbedRows,
+    filter_executor: &'a mut FilterExecutor,
+}
+
+unsafe impl<'a> Send for LeftAntiFilterHashJoinStream<'a> {}
+unsafe impl<'a> Sync for LeftAntiFilterHashJoinStream<'a> {}
+
+impl<'a> LeftAntiFilterHashJoinStream<'a> {
+    pub fn create(
+        probe_data_block: DataBlock,
+        join_state: Arc<BasicHashJoinState>,
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        desc: Arc<HashJoinDesc>,
+        probed_rows: &'a mut ProbedRows,
+        filter_executor: &'a mut FilterExecutor,
+    ) -> Box<dyn JoinStream + 'a> {
+        Box::new(LeftAntiFilterHashJoinStream {
+            desc,
+            join_state,
+            probed_rows,
+            filter_executor,
+            probe_keys_stream,
+            probe_data_block: Some(probe_data_block),
+        })
+    }
+}
+
+impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        let Some(probe_data_block) = self.probe_data_block.take() else {
+            return Ok(None);
+        };
+
+        let num_rows = probe_data_block.num_rows();
+        let mut selected = vec![true; num_rows];
+
+        loop {
+            self.probed_rows.clear();
+            let max_rows = self.probed_rows.matched_probe.capacity();
+            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
+
+            if self.probed_rows.is_empty() {
+                break;
             }
 
             if self.probed_rows.is_all_unmatched() {
                 continue;
             }
 
-            let probe_block = match self.probe_data_block.num_columns() {
+            let probe_block = match probe_data_block.num_columns() {
                 0 => None,
                 _ => Some(DataBlock::take(
-                    &self.probe_data_block,
+                    &probe_data_block,
                     &self.probed_rows.matched_probe,
                 )?),
             };
@@ -217,51 +271,35 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                 }
             };
 
-            return Ok(Some(final_result_block(
+            let result_block = final_result_block(
                 &self.desc,
                 probe_block,
                 build_block,
                 self.probed_rows.matched_build.len(),
-            )));
+            );
+
+            let selected_rows = self.filter_executor.select(&result_block)?;
+
+            if selected_rows == result_block.num_rows() {
+                for probe_idx in &self.probed_rows.matched_probe {
+                    assume((*probe_idx as usize) < selected.len());
+                    selected[*probe_idx as usize] = false;
+                }
+            } else if selected_rows != 0 {
+                let selection = self.filter_executor.true_selection();
+                for idx in selection[..selected_rows].iter() {
+                    assume((*idx as usize) < self.probed_rows.matched_probe.len());
+                    let idx = self.probed_rows.matched_probe[*idx as usize];
+                    assume((idx as usize) < selected.len());
+                    selected[idx as usize] = false;
+                }
+            }
         }
-    }
-}
 
-pub struct InnerHashJoinFilterStream<'a> {
-    inner: Box<dyn JoinStream + 'a>,
-    filter_executor: &'a mut FilterExecutor,
-}
-
-impl<'a> InnerHashJoinFilterStream<'a> {
-    pub fn create(
-        inner: Box<dyn JoinStream + 'a>,
-        filter_executor: &'a mut FilterExecutor,
-    ) -> Box<dyn JoinStream + 'a> {
-        Box::new(InnerHashJoinFilterStream {
-            inner,
-            filter_executor,
-        })
-    }
-}
-
-impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        loop {
-            let Some(data_block) = self.inner.next()? else {
-                return Ok(None);
-            };
-
-            if data_block.is_empty() {
-                continue;
-            }
-
-            let data_block = self.filter_executor.filter(data_block)?;
-
-            if data_block.is_empty() {
-                continue;
-            }
-
-            return Ok(Some(data_block));
+        let bitmap = Bitmap::from_trusted_len_iter(selected.into_iter());
+        match bitmap.true_count() {
+            0 => Ok(None),
+            _ => Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?)),
         }
     }
 }
