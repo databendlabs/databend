@@ -40,6 +40,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::tag_api::TagApi;
+use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -276,10 +277,18 @@ async fn collect_tag_references(
         }
         "STAGE" => {
             let stage_name = object_name.trim();
+            // Load stage info first (also validates stage exists)
+            let stage_info = UserApiProvider::instance()
+                .get_stage(&tenant, stage_name)
+                .await?;
             // Check stage visibility
             if ctx.get_settings().get_enable_experimental_rbac_check()? {
                 let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-                if !visibility_checker.check_stage_visibility(stage_name) {
+                let is_visible = stage_info.is_temporary
+                    || visibility_checker.check_stage_visibility(&stage_info.stage_name)
+                    || (stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == ctx.get_current_user()?.name);
+                if !is_visible {
                     return Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege READ is required on stage '{}' for user '{}'",
                         stage_name,
@@ -287,10 +296,6 @@ async fn collect_tag_references(
                     )));
                 }
             }
-            // Validate stage exists
-            UserApiProvider::instance()
-                .get_stage(&tenant, stage_name)
-                .await?;
             (
                 TaggableObject::Stage {
                     name: stage_name.to_string(),
