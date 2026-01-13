@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
+use base64::Engine as _;
+use base64::engine::general_purpose;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::array::ArrayColumn;
@@ -20,6 +24,7 @@ use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
@@ -33,6 +38,8 @@ pub struct FieldEncoderJSON {
     pub simple: FieldEncoderValues,
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
+    pub binary_format: BinaryDisplayFormat,
+    pub binary_utf8_lossy: bool,
 }
 
 impl FieldEncoderJSON {
@@ -52,9 +59,13 @@ impl FieldEncoderJSON {
                 },
                 escape_char: 0,
                 quote_char: 0,
+                binary_format: options.binary_format,
+                binary_utf8_lossy: options.binary_utf8_lossy,
             },
             quote_denormals: false,
             escape_forward_slashes: true,
+            binary_format: options.binary_format,
+            binary_utf8_lossy: options.binary_utf8_lossy,
         }
     }
 }
@@ -66,7 +77,8 @@ impl FieldEncoderJSON {
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                self.write_string(buf, out_buf);
+                let rendered = self.encode_binary(buf);
+                self.write_string(rendered.as_bytes(), out_buf);
             }
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
@@ -183,6 +195,20 @@ impl FieldEncoderJSON {
             self.write_field(inner, row_index, out_buf);
         }
         out_buf.push(b'}');
+    }
+
+    fn encode_binary<'a>(&self, buf: &'a [u8]) -> Cow<'a, str> {
+        match self.binary_format {
+            BinaryDisplayFormat::Hex => Cow::Owned(hex::encode_upper(buf)),
+            BinaryDisplayFormat::Base64 => Cow::Owned(general_purpose::STANDARD.encode(buf)),
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(buf) {
+                Ok(s) => Cow::Borrowed(s),
+                Err(_) if self.binary_utf8_lossy => {
+                    Cow::Owned(String::from_utf8_lossy(buf).into_owned())
+                }
+                Err(_) => Cow::Owned(hex::encode_upper(buf)),
+            },
+        }
     }
 
     fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {

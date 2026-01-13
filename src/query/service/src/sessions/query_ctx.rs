@@ -1219,13 +1219,18 @@ impl TableContext for QueryContext {
         let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
             ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
         })?;
-        let geometry_format = self.get_settings().get_geometry_output_format()?;
-        let format_null_as_str = self.get_settings().get_format_null_as_str()?;
-        let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
+        let settings = self.get_settings();
+        let geometry_format = settings.get_geometry_output_format()?;
+        let binary_format = settings.get_binary_output_format()?;
+        let binary_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
+        let format_null_as_str = settings.get_format_null_as_str()?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             jiff_timezone,
             geometry_format,
+            binary_format,
+            binary_utf8_lossy,
             enable_dst_hour_fix,
             format_null_as_str,
         };
@@ -1252,6 +1257,7 @@ impl TableContext for QueryContext {
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
+        let binary_input_format = settings.get_binary_input_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let week_start = settings.get_week_start()? as u8;
@@ -1267,6 +1273,7 @@ impl TableContext for QueryContext {
             enable_selector_executor: settings.get_enable_selector_executor()?,
 
             geometry_output_format,
+            binary_input_format,
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
             random_function_seed,

@@ -49,6 +49,8 @@ impl JSONOutputFormat {
                 timezone: options.timezone,
                 jiff_timezone: options.jiff_timezone.clone(),
                 geometry_format: options.geometry_format,
+                binary_format: options.binary_format,
+                binary_utf8_lossy: options.binary_utf8_lossy,
                 enable_dst_hour_fix: options.enable_dst_hour_fix,
                 format_null_as_str: true,
             },
@@ -109,7 +111,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::TimestampTz(v) => serde_json::to_value(v.to_string()).unwrap(),
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
-        ScalarRef::Binary(x) => JsonValue::String(hex::encode_upper(x)),
+        ScalarRef::Binary(x) => JsonValue::String(format.format_binary(x).into_owned()),
         ScalarRef::Opaque(x) => hex::encode_upper(x.to_le_bytes()).into(),
         ScalarRef::String(x) => JsonValue::String(x.to_string()),
         ScalarRef::Array(x) => {

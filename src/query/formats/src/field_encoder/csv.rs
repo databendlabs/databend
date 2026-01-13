@@ -26,6 +26,7 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use geozero::ToWkt;
@@ -99,6 +100,8 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
+                binary_format: BinaryDisplayFormat::Hex,
+                binary_utf8_lossy: false,
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -123,6 +126,8 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
+                binary_format: BinaryDisplayFormat::Hex,
+                binary_utf8_lossy: false,
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
