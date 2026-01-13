@@ -40,6 +40,16 @@ impl TableRefHandler for RealTableRefHandler {
         ctx: Arc<dyn TableContext>,
         plan: &CreateTableRefPlan,
     ) -> Result<()> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_table_ref()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+            ));
+        }
+
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
