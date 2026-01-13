@@ -124,6 +124,7 @@ impl HttpClient {
             .default_headers(header)
             .http1_only()
             .pool_max_idle_per_host(16)
+            .tcp_keepalive(Duration::from_secs(60))
             .build()?;
 
         let url = format!("http://127.0.0.1:{}/v1/session/login", port);
