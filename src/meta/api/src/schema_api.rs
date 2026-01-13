@@ -66,6 +66,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -348,7 +349,7 @@ pub async fn construct_drop_table_txn_operations(
     );
     let obj_tag_dir = DirName::new(obj_tag_prefix);
     let tag_entries: Vec<_> = kv_api
-        .list_pb(&obj_tag_dir, None)
+        .list_pb(ListOptions::unlimited(&obj_tag_dir))
         .await?
         .try_collect()
         .await?;

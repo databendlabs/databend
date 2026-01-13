@@ -18,6 +18,7 @@ use std::time::Duration;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
@@ -72,7 +73,10 @@ impl ResultCacheMetaManager {
 
     #[async_backtrace::framed]
     pub async fn list(&self, prefix: &str) -> Result<Vec<ResultCacheValue>> {
-        let result = self.inner.list_kv_collect(prefix, None).await?;
+        let result = self
+            .inner
+            .list_kv_collect(ListOptions::unlimited(prefix))
+            .await?;
 
         let mut r = vec![];
         for (_key, val) in result {

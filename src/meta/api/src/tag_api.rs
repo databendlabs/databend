@@ -52,6 +52,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -188,7 +189,7 @@ where
 
             // Transaction failed. Check if it's due to references or concurrent modification.
             let refs: Vec<String> = self
-                .list_pb(&refs_dir, None)
+                .list_pb(ListOptions::unlimited(&refs_dir))
                 .await?
                 .map_ok(|entry| entry.key.name().object.to_string())
                 .try_collect()
@@ -456,7 +457,7 @@ where
         let obj_ref_key =
             ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
-        let stream = self.list_pb(&refs_dir, None).await?;
+        let stream = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
         Ok(stream
             .map_ok(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
@@ -482,7 +483,7 @@ where
             2,
         );
         let refs = self
-            .list_pb(&refs_dir, None)
+            .list_pb(ListOptions::unlimited(&refs_dir))
             .await?
             .map_ok(|entry| {
                 let object = entry.key.name().object.clone();

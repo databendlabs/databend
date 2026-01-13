@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
@@ -88,7 +89,9 @@ impl KvApiCommand {
                 serde_json::to_string_pretty(&res)?
             }
             KvApiCommand::List(prefix) => {
-                let res = client.list_kv_collect(prefix.as_str(), None).await?;
+                let res = client
+                    .list_kv_collect(ListOptions::unlimited(prefix.as_str()))
+                    .await?;
                 serde_json::to_string_pretty(&res)?
             }
         };

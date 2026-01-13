@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
@@ -267,7 +268,10 @@ impl WorkloadApi for WorkloadMgr {
     async fn get_all(&self) -> Result<Vec<WorkloadGroup>> {
         let list_reply = self
             .metastore
-            .list_kv_collect(&format!("{}/", self.workload_key_prefix), None)
+            .list_kv_collect(ListOptions::unlimited(&format!(
+                "{}/",
+                self.workload_key_prefix
+            )))
             .await?;
 
         let mut workload_groups = Vec::with_capacity(list_reply.len());

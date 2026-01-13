@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -75,7 +76,7 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("", None)
+        .list_kv(ListOptions::unlimited(""))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
@@ -151,7 +152,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("", None)
+        .list_kv(ListOptions::unlimited(""))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
@@ -165,7 +166,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("a", None)
+        .list_kv(ListOptions::unlimited("a"))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
@@ -191,7 +192,7 @@ async fn test_list_kv_with_limit() -> anyhow::Result<()> {
     // List all with no limit
     let got = sm
         .kv_api()
-        .list_kv("key/", None)
+        .list_kv(ListOptions::unlimited("key/"))
         .await?
         .map_ok(|item| item.key)
         .try_collect::<Vec<_>>()
@@ -201,7 +202,7 @@ async fn test_list_kv_with_limit() -> anyhow::Result<()> {
     // List with limit 3
     let got = sm
         .kv_api()
-        .list_kv("key/", Some(3))
+        .list_kv(ListOptions::limited("key/", 3))
         .await?
         .map_ok(|item| item.key)
         .try_collect::<Vec<_>>()
@@ -211,7 +212,7 @@ async fn test_list_kv_with_limit() -> anyhow::Result<()> {
     // List with limit 0
     let got = sm
         .kv_api()
-        .list_kv("key/", Some(0))
+        .list_kv(ListOptions::limited("key/", 0))
         .await?
         .map_ok(|item| item.key)
         .try_collect::<Vec<_>>()
@@ -221,7 +222,7 @@ async fn test_list_kv_with_limit() -> anyhow::Result<()> {
     // List with limit larger than result set
     let got = sm
         .kv_api()
-        .list_kv("key/", Some(100))
+        .list_kv(ListOptions::limited("key/", 100))
         .await?
         .map_ok(|item| item.key)
         .try_collect::<Vec<_>>()

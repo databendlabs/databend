@@ -32,6 +32,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
@@ -156,7 +157,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             ));
 
             // List all table-policy references
-            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix, None).await?;
+            let table_policy_refs = self
+                .list_pb_vec(ListOptions::unlimited(&table_policy_ref_prefix))
+                .await?;
 
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {

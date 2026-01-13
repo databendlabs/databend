@@ -49,6 +49,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -583,7 +584,7 @@ where
         let name_ident = DatabaseIdHistoryIdent::new(&req.tenant, "dummy");
         let dir_name = DirName::new(name_ident);
 
-        let name_idlists = self.list_pb_vec(&dir_name, None).await?;
+        let name_idlists = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
         let mut dbs = BTreeMap::new();
 
@@ -647,7 +648,7 @@ where
         let name_key = DatabaseNameIdent::new(req.tenant(), "dummy");
         let dir = DirName::new(name_key);
 
-        let name_seq_ids = self.list_pb_vec(&dir, None).await?;
+        let name_seq_ids = self.list_pb_vec(ListOptions::unlimited(&dir)).await?;
 
         let id_idents = name_seq_ids
             .iter()

@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnRequest;
@@ -60,7 +61,7 @@ where
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
         let dir = req.lock_key.gen_prefix();
-        let strm = self.list_pb(&dir, None).await?;
+        let strm = self.list_pb(ListOptions::unlimited(&dir)).await?;
 
         let list = strm
             .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
@@ -182,7 +183,7 @@ where
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
         for dir in &req.prefixes {
-            let strm = self.list_pb(dir, None).await?;
+            let strm = self.list_pb(ListOptions::unlimited(dir)).await?;
             let locks = strm
                 .map_ok(|itm| LockInfo {
                     table_id: itm.key.table_id(),

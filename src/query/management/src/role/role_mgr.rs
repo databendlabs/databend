@@ -44,6 +44,7 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
@@ -251,7 +252,7 @@ impl RoleApi for RoleMgr {
         let role_prefix = self.role_prefix();
         Ok(self
             .kv_api
-            .list_kv_collect(role_prefix.as_str(), None)
+            .list_kv_collect(ListOptions::unlimited(role_prefix.as_str()))
             .await?)
     }
 
@@ -292,7 +293,7 @@ impl RoleApi for RoleMgr {
             kvs
         } else {
             self.kv_api
-                .list_kv_collect(object_owner_prefix.as_str(), None)
+                .list_kv_collect(ListOptions::unlimited(object_owner_prefix.as_str()))
                 .await?
         };
 
@@ -325,7 +326,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let udfs = values.try_collect().await?;
         Ok(udfs)
     }
@@ -339,7 +343,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let stages = values.try_collect().await?;
         Ok(stages)
     }
@@ -353,7 +360,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let seqs = values.try_collect().await?;
         Ok(seqs)
     }
@@ -367,7 +377,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let seqs = values.try_collect().await?;
         Ok(seqs)
     }
@@ -383,7 +396,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let conns = values.try_collect().await?;
         Ok(conns)
     }
@@ -399,7 +415,10 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let ws = values.try_collect().await?;
         Ok(ws)
     }
