@@ -258,38 +258,6 @@ pub enum ColumnVec {
     Opaque(OpaqueColumnVec),
 }
 
-pub struct ColumnViewVec {
-    data_type: DataType,
-    data: Box<dyn Any>, // Vec<ColumnView<T>>
-}
-
-impl ColumnViewVec {
-    pub fn new(data_type: DataType, entries: &[BlockEntry]) -> Result<Self> {
-        debug_assert!(entries.iter().all(|entry| entry.data_type() == data_type));
-        match data_type {
-            DataType::String => {
-                let data = entries
-                    .iter()
-                    .map(|entry| entry.downcast::<StringType>())
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(Self {
-                    data_type,
-                    data: Box::new(data) as _,
-                })
-            }
-            _ => todo!(),
-        }
-    }
-
-    pub fn data_type(&self) -> &DataType {
-        &self.data_type
-    }
-
-    pub fn downcast_ref<A: AccessType>(&self) -> Option<&Vec<ColumnView<A>>> {
-        self.data.downcast_ref::<Vec<ColumnView<A>>>()
-    }
-}
-
 #[allow(unused, dead_code)]
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum ColumnBuilder {
