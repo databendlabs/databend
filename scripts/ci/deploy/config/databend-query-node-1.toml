@@ -94,6 +94,10 @@ limit = 12 # 12 files, 1 file per hour
 [log.query]
 on = true
 
+[log.profile]
+on = true
+
+
 [log.structlog]
 on = true
 dir = "./.databend/structlog_1"
