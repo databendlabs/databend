@@ -103,14 +103,7 @@ impl StageApi for StageMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_stage(&self, name: &str) -> Result<StageInfo> {
-        let (_, stage) = self.get_stage_with_seq(name).await?;
-        Ok(stage)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn get_stage_with_seq(&self, name: &str) -> Result<(u64, StageInfo)> {
+    async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)> {
         let ident = self.stage_ident(name);
         let res = self.kv_api.get_pb(&ident).await?;
         let seq_value = res

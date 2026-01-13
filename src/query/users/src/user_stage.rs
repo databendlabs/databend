@@ -39,7 +39,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_stage(&self, tenant: &Tenant, stage_name: &str) -> Result<StageInfo> {
         let stage_api_provider = self.stage_api(tenant);
-        stage_api_provider.get_stage(stage_name).await
+        stage_api_provider.get_stage(stage_name).await.map(|t| t.1)
     }
 
     #[async_backtrace::framed]
@@ -49,7 +49,7 @@ impl UserApiProvider {
         stage_name: &str,
     ) -> Result<(u64, StageInfo)> {
         let stage_api_provider = self.stage_api(tenant);
-        stage_api_provider.get_stage_with_seq(stage_name).await
+        stage_api_provider.get_stage(stage_name).await
     }
 
     #[async_backtrace::framed]
