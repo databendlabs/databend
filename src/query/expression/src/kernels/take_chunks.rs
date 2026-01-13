@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
@@ -352,45 +351,17 @@ impl Column {
                     Column::Vector(builder.build())
                 }
             }),
-            Column::Opaque(first) => match first.size() {
-                1 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<1>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                2 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<2>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                3 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<3>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                4 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<4>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                5 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<5>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                6 => {
-                    let builder = Vec::with_capacity(result_size);
-                    Self::take_block_value_types::<OpaqueType<6>>(
-                        columns, &data_type, builder, indices,
-                    )
-                }
-                _ => unreachable!("Unsupported Opaque size: {}", first.size()),
-            },
+            Column::Opaque(first) => {
+                with_opaque_size!(|N| match first.size() {
+                    N => {
+                        let builder = Vec::with_capacity(result_size);
+                        Self::take_block_value_types::<OpaqueType<N>>(
+                            columns, &data_type, builder, indices,
+                        )
+                    }
+                    _ => unreachable!("Unsupported Opaque size: {}", first.size()),
+                })
+            }
         }
     }
 
