@@ -38,10 +38,10 @@ use crate::ColumnBuilder;
 use crate::ColumnView;
 use crate::Domain;
 use crate::ScalarRef;
-use crate::arrow::buffer_into_mut;
-use crate::types::nullable::NullableColumnBuilder;
-use crate::types::NullableType;
 use crate::TakeIndex;
+use crate::arrow::buffer_into_mut;
+use crate::types::NullableType;
+use crate::types::nullable::NullableColumnBuilder;
 
 pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + Copy + PartialEq + Eq + Default + Send + 'static;

@@ -22,22 +22,23 @@ use super::ArgType;
 use super::BuilderMut;
 use super::DataType;
 use super::GenericMap;
+use super::NullableType;
 use super::ReturnType;
 use super::ScalarRef;
 use super::ValueType;
 use super::column_type_error;
 use super::domain_type_error;
+use super::nullable::NullableColumnBuilder;
 use super::scalar_type_error;
 use crate::BlockEntry;
 use crate::Chunk;
 use crate::ChunkIndex;
 use crate::ColumnBuilder;
 use crate::ColumnView;
-use crate::property::Domain;
-use crate::values::{Column, Scalar};
 use crate::TakeIndex;
-use super::nullable::NullableColumnBuilder;
-use super::NullableType;
+use crate::property::Domain;
+use crate::values::Column;
+use crate::values::Scalar;
 
 pub type BinaryColumn = databend_common_column::binary::BinaryColumn;
 pub type BinaryColumnBuilder = databend_common_column::binary::BinaryColumnBuilder;
@@ -203,10 +204,7 @@ impl ReturnType for BinaryType {
     }
 }
 
-pub fn take_binary_from_views<T>(
-    views: &[ColumnView<T>],
-    indices: &ChunkIndex,
-) -> BlockEntry
+pub fn take_binary_from_views<T>(views: &[ColumnView<T>], indices: &ChunkIndex) -> BlockEntry
 where
     T: ArgType<ColumnBuilder = BinaryColumnBuilder>,
     for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
