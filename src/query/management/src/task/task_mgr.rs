@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::With;
@@ -224,7 +225,10 @@ impl TaskMgr {
     #[fastrace::trace]
     pub async fn list_task(&self) -> Result<Vec<Task>, MetaError> {
         let key = DirName::new(TaskIdent::new(&self.tenant, ""));
-        let strm = self.kv_api.list_pb_values(&key, None).await?;
+        let strm = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&key))
+            .await?;
 
         strm.try_collect().await
     }

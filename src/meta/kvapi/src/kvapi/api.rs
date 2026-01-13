@@ -26,6 +26,7 @@ use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 
 use crate::kvapi;
+use crate::kvapi::ListOptions;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
@@ -73,8 +74,7 @@ pub trait KVApi: Send + Sync {
     /// If `limit` is `Some(n)`, at most `n` records will be returned.
     async fn list_kv(
         &self,
-        prefix: &str,
-        limit: Option<u64>,
+        opts: ListOptions<'_, str>,
     ) -> Result<KVStream<Self::Error>, Self::Error>;
 
     /// Run transaction: update one or more records if specified conditions are met.
@@ -95,10 +95,9 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
 
     async fn list_kv(
         &self,
-        prefix: &str,
-        limit: Option<u64>,
+        opts: ListOptions<'_, str>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.deref().list_kv(prefix, limit).await
+        self.deref().list_kv(opts).await
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {

@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -154,7 +155,7 @@ pub(crate) async fn drop_database_meta(
     );
     let obj_tag_dir = DirName::new(obj_tag_prefix);
     let tag_entries: Vec<_> = kv_api
-        .list_pb(&obj_tag_dir, None)
+        .list_pb(ListOptions::unlimited(&obj_tag_dir))
         .await?
         .try_collect()
         .await?;

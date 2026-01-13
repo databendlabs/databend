@@ -15,6 +15,7 @@
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::limit_stream;
@@ -49,17 +50,16 @@ impl kvapi::KVApi for ClientHandle {
     #[fastrace::trace]
     async fn list_kv(
         &self,
-        prefix: &str,
-        limit: Option<u64>,
+        opts: ListOptions<'_, str>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
         let strm = self
             .request(Streamed(ListKVReq {
-                prefix: prefix.to_string(),
+                prefix: opts.prefix.to_string(),
             }))
             .await?;
 
         let strm = strm.map_err(MetaError::from);
-        Ok(limit_stream(strm, limit))
+        Ok(limit_stream(strm, opts.limit))
     }
 
     #[fastrace::trace]

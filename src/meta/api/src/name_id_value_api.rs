@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -292,7 +293,7 @@ where
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(prefix, None).await?;
+            let strm = self.list_pb(ListOptions::unlimited(prefix)).await?;
             let name_ids = strm.try_collect::<Vec<_>>().await?;
 
             let id_idents = name_ids
@@ -406,6 +407,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
+    use databend_common_meta_kvapi::kvapi::ListOptions;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
@@ -450,8 +452,7 @@ mod tests {
 
         async fn list_kv(
             &self,
-            _prefix: &str,
-            _limit: Option<u64>,
+            _opts: ListOptions<'_, str>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             unimplemented!()
         }

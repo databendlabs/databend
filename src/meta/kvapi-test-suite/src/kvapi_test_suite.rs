@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
@@ -383,7 +384,7 @@ impl TestSuite {
 
         info!("--- list should not return expired");
         {
-            let res = kv.list_kv_collect("k", None).await?;
+            let res = kv.list_kv_collect(ListOptions::unlimited("k")).await?;
             let res_vec = res.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
 
             assert_eq!(res_vec, vec!["k2".to_string(),]);
@@ -588,7 +589,9 @@ impl TestSuite {
             kv.upsert_kv(UpsertKV::update("v", b"")).await?;
         }
 
-        let res = kv.list_kv_collect("__users/", None).await?;
+        let res = kv
+            .list_kv_collect(ListOptions::unlimited("__users/"))
+            .await?;
         assert_eq!(
             res.iter()
                 .map(|(_key, val)| val.data.clone())
@@ -614,7 +617,7 @@ impl TestSuite {
 
         // List all with no limit
         let res: Vec<_> = kv
-            .list_kv("__limit_test/", None)
+            .list_kv(ListOptions::unlimited("__limit_test/"))
             .await?
             .map_ok(|item| item.key)
             .try_collect()
@@ -629,7 +632,7 @@ impl TestSuite {
 
         // List with limit 3
         let res: Vec<_> = kv
-            .list_kv("__limit_test/", Some(3))
+            .list_kv(ListOptions::limited("__limit_test/", 3))
             .await?
             .map_ok(|item| item.key)
             .try_collect()
@@ -642,7 +645,7 @@ impl TestSuite {
 
         // List with limit 0
         let res: Vec<_> = kv
-            .list_kv("__limit_test/", Some(0))
+            .list_kv(ListOptions::limited("__limit_test/", 0))
             .await?
             .map_ok(|item| item.key)
             .try_collect()
@@ -651,7 +654,7 @@ impl TestSuite {
 
         // List with limit larger than result set
         let res: Vec<_> = kv
-            .list_kv("__limit_test/", Some(100))
+            .list_kv(ListOptions::limited("__limit_test/", 100))
             .await?
             .map_ok(|item| item.key)
             .try_collect()
@@ -682,7 +685,9 @@ impl TestSuite {
         }
 
         // List all with no limit
-        let res = kv.list_kv_collect("__collect_limit/", None).await?;
+        let res = kv
+            .list_kv_collect(ListOptions::unlimited("__collect_limit/"))
+            .await?;
         let keys: Vec<_> = res.iter().map(|(k, _)| k.as_str()).collect();
         assert_eq!(keys, vec![
             "__collect_limit/0",
@@ -693,7 +698,9 @@ impl TestSuite {
         ]);
 
         // List with limit 3
-        let res = kv.list_kv_collect("__collect_limit/", Some(3)).await?;
+        let res = kv
+            .list_kv_collect(ListOptions::limited("__collect_limit/", 3))
+            .await?;
         let keys: Vec<_> = res.iter().map(|(k, _)| k.as_str()).collect();
         assert_eq!(keys, vec![
             "__collect_limit/0",
@@ -702,7 +709,9 @@ impl TestSuite {
         ]);
 
         // List with limit 0
-        let res = kv.list_kv_collect("__collect_limit/", Some(0)).await?;
+        let res = kv
+            .list_kv_collect(ListOptions::limited("__collect_limit/", 0))
+            .await?;
         assert_eq!(res, vec![]);
 
         Ok(())
@@ -2040,7 +2049,9 @@ impl TestSuite {
 
         info!("--- test list on other node");
         {
-            let res = kv2.list_kv_collect("__users/", None).await?;
+            let res = kv2
+                .list_kv_collect(ListOptions::unlimited("__users/"))
+                .await?;
             assert_eq!(
                 res.iter()
                     .map(|(_key, val)| val.data.clone())

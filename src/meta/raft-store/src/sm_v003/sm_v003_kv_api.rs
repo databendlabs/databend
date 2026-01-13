@@ -17,6 +17,7 @@ use std::io;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::limit_stream;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
@@ -63,9 +64,10 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
 
     async fn list_kv(
         &self,
-        prefix: &str,
-        limit: Option<u64>,
+        opts: ListOptions<'_, str>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
+        let prefix = opts.prefix;
+        let limit = opts.limit;
         let local_now_ms = since_epoch_millis();
 
         // get an unchanging readonly view

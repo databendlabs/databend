@@ -27,6 +27,7 @@ use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::ValueWithName;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
@@ -262,7 +263,10 @@ where
     pub async fn list(&self, limit: Option<u64>) -> Result<Vec<ValueOf<R>>, MetaError> {
         let dir_name = DirName::new(self.ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name, limit).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::new(&dir_name, limit))
+            .await?;
         let values = values.try_collect().await?;
 
         Ok(values)
