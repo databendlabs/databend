@@ -60,21 +60,21 @@ impl SelectBuilder {
         let mut order_bys = String::new();
         let s = self.order_bys.join(",");
         if s.is_empty() {
-            write!(order_bys, "{s}").unwrap();
+            write!(order_bys, "").unwrap();
         } else {
-            write!(order_bys, "ORDER BY {s}").unwrap();
+            write!(order_bys, " ORDER BY {s}").unwrap();
         }
 
         let mut filters = String::new();
         let s = self.filters.join(" and ");
         if !s.is_empty() {
-            write!(filters, "where {s}").unwrap();
+            write!(filters, " where {s}").unwrap();
         } else {
             write!(filters, "").unwrap();
         }
 
         let from = self.from;
-        write!(query, "SELECT {columns} FROM {from} {filters} {order_bys} ").unwrap();
+        write!(query, "SELECT {columns} FROM {from}{filters}{order_bys}").unwrap();
         query
     }
 }

@@ -42,6 +42,7 @@ use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::CopyHistoryFunc;
 use super::LicenseInfoTable;
 use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
@@ -53,7 +54,6 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
-use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
@@ -396,7 +396,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "copy_history".to_string(),
-            (next_id(), Arc::new(CopyHistoryTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<CopyHistoryFunc>::create),
+            ),
         );
 
         TableFunctionFactory {

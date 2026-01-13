@@ -205,7 +205,7 @@ async fn remove_copied_files_for_dropped_table(
             .push(txn_cond_eq_seq(table_id, seq_table_meta.seq));
 
         let copied_file_ident = TableCopiedFileNameIdent {
-            table_id: table_id.table_id,
+            id: table_id.table_id,
             file: "dummy".to_string(),
         };
 

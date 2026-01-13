@@ -19,8 +19,10 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateTableRefPlan;
@@ -220,6 +222,16 @@ impl TableRefHandler for RealTableRefHandler {
 
         // clear the ref snapshot.
         clearup_ref_dir(fuse_table, table_ref.id).await;
+        // Remove the copied files from metaserver.
+        let _ = catalog
+            .remove_table_copied_file_info(table_info, RemoveTableCopiedFileReq {
+                ref_id: TableRefId {
+                    table_id: table_info.ident.table_id,
+                    branch_id: Some(table_ref.id),
+                },
+                batch_size: None,
+            })
+            .await;
         Ok(())
     }
 }

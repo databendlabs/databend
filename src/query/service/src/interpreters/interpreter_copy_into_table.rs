@@ -22,6 +22,7 @@ use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -193,7 +194,7 @@ impl CopyIntoTableInterpreter {
             values_consts: plan.values_consts.clone(),
             required_source_schema,
             stage_table_info: plan.stage_table_info.clone(),
-            table_info,
+            table_info: TableInfoWithBranch::new(&table_info).with_branch(plan.branch_name.clone()),
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
             project_columns,
@@ -380,10 +381,12 @@ impl CopyIntoTableInterpreter {
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let mut to_table = ctx
-            .get_table(
+            .get_table_with_batch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch_name.as_deref(),
+                None,
             )
             .await?;
 
@@ -513,10 +516,12 @@ impl Interpreter for CopyIntoTableInterpreter {
         let plan = &self.plan;
         let to_table = self
             .ctx
-            .get_table(
+            .get_table_with_batch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch_name.as_deref(),
+                None,
             )
             .await?;
 
@@ -572,7 +577,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         }
 
         // Execute hook.
-        {
+        if self.plan.branch_name.is_none() {
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 self.plan.catalog_info.catalog_name().to_string(),

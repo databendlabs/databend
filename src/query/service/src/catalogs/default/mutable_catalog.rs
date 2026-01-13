@@ -101,6 +101,8 @@ use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -115,8 +117,6 @@ use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
@@ -855,20 +855,20 @@ impl Catalog for MutableCatalog {
         &self,
         tenant: &Tenant,
         db_name: &str,
-        table_id: u64,
+        unique_id: u64,
     ) -> Result<ListTableCopiedFileReply> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_table_copied_file_info(table_id).await
+        db.list_table_copied_file_info(unique_id).await
     }
 
     #[async_backtrace::framed]
-    async fn truncate_table(
+    async fn remove_table_copied_file_info(
         &self,
         table_info: &TableInfo,
-        req: TruncateTableReq,
-    ) -> Result<TruncateTableReply> {
+        req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply> {
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.remove_table_copied_file_info(req).await?),
         }
     }
 

@@ -15,13 +15,13 @@
 use std::any::Any;
 
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_sql::plans::ValidationMode;
@@ -43,7 +43,7 @@ pub struct CopyIntoTable {
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
     pub stage_table_info: StageTableInfo,
-    pub table_info: TableInfo,
+    pub table_info: TableInfoWithBranch,
 
     pub project_columns: Option<Vec<ColumnBinding>>,
     pub source: CopyIntoTableSource,
@@ -129,9 +129,11 @@ impl IPhysicalPlan for CopyIntoTable {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let to_table = builder
-            .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+        let to_table = builder.ctx.build_table_by_table_info(
+            &self.table_info.inner,
+            self.table_info.branch.as_deref(),
+            None,
+        )?;
 
         // build_copy_into_table_input
         let source_schema = match &self.source {

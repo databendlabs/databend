@@ -36,6 +36,8 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -45,8 +47,6 @@ use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -335,19 +335,25 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
+    async fn list_table_copied_file_info(
+        &self,
+        unique_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
         let res = self
             .ctx
             .meta
-            .list_table_copied_file_info(table_id)
+            .list_table_copied_file_info(unique_id)
             .await
             .map_err(meta_service_error)?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
-        let res = self.ctx.meta.truncate_table(req).await?;
+    async fn remove_table_copied_file_info(
+        &self,
+        req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply> {
+        let res = self.ctx.meta.remove_table_copied_file_info(req).await?;
         Ok(res)
     }
 }
