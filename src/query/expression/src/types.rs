@@ -198,6 +198,7 @@ impl DataType {
 
     pub fn has_generic(&self) -> bool {
         match self {
+            DataType::Generic(_) => true,
             DataType::Null
             | DataType::EmptyArray
             | DataType::EmptyMap
@@ -214,13 +215,44 @@ impl DataType {
             | DataType::Variant
             | DataType::Geometry
             | DataType::Geography
-            | DataType::Vector(_) => false,
+            | DataType::Vector(_)
+            | DataType::Opaque(_)
+            | DataType::StageLocation => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
-            DataType::Generic(_) => true,
-            DataType::Opaque(_) | DataType::StageLocation => false,
+        }
+    }
+
+    pub fn remove_generics(&self, generics: &[DataType]) -> DataType {
+        match self {
+            DataType::Generic(i) => generics[*i].clone(),
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Boolean
+            | DataType::Binary
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::TimestampTz
+            | DataType::Date
+            | DataType::Interval
+            | DataType::Bitmap
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Geography
+            | DataType::Vector(_)
+            | DataType::Opaque(_)
+            | DataType::StageLocation => self.clone(),
+            DataType::Nullable(ty) => DataType::Nullable(Box::new(ty.remove_generics(generics))),
+            DataType::Array(ty) => DataType::Array(Box::new(ty.remove_generics(generics))),
+            DataType::Map(ty) => DataType::Map(Box::new(ty.remove_generics(generics))),
+            DataType::Tuple(tys) => {
+                DataType::Tuple(tys.iter().map(|ty| ty.remove_generics(generics)).collect())
+            }
         }
     }
 

@@ -538,7 +538,7 @@ EvalScalar
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [and_filters(and_filters(is_not_null(CAST(a.content_object['category_a'] (#6) AS String NULL)), is_not_null(CAST(a.content_object['category_b'] (#7) AS String NULL))), is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#8) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)))], limit: NONE]
+                │       ├── push downs: [filters: [is_not_null(CAST(a.content_object['category_a'] (#6) AS String NULL)) and is_not_null(CAST(a.content_object['category_b'] (#7) AS String NULL)) and is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#8) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                 │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
                 │       └── estimated rows: 1.00
                 └── EvalScalar(Probe)
