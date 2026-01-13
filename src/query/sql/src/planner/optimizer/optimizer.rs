@@ -285,6 +285,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             !opt_ctx.get_planning_agg_index(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
         )
+        .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
+            RuleID::ShrinkGroupByType,
+        ]))
         // Clean up unused CTEs
         .add(CleanupUnusedCTEOptimizer);
 
