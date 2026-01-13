@@ -13711,7 +13711,7 @@ AlterStage(
 ---------- Input ----------
 ALTER STAGE IF EXISTS my_stage SET COMMENT = 'updated', URL = 'fs:///tmp/'
 ---------- Output ---------
-ALTER STAGE IF EXISTS my_stage SET 'fs:///tmp/', COMMENT = 'updated'
+ALTER STAGE IF EXISTS my_stage SET URL = 'fs:///tmp/', COMMENT = 'updated'
 ---------- AST ------------
 AlterStage(
     AlterStageStmt {

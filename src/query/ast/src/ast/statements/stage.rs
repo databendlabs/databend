@@ -108,7 +108,7 @@ impl Display for AlterStageStmt {
                         write!(f, ",")?;
                     }
                     wrote_option = true;
-                    write!(f, " {}", location)?;
+                    write!(f, " URL = {}", location)?;
                 }
                 if let Some(file_format) = &options.file_format {
                     if wrote_option {
