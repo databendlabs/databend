@@ -465,6 +465,7 @@ impl Binder {
                 .await?
             }
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
+            Statement::AlterStage(stmt) => self.bind_alter_stage(stmt).await?,
             Statement::DropStage {
                 stage_name,
                 if_exists,

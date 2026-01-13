@@ -385,6 +385,16 @@ impl AccessLogger {
                     )]),
                 });
             }
+            Plan::AlterStage(plan) => {
+                let object_name = plan.stage_name.clone();
+                let operation_type = DDLOperationType::Alter;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Stage,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
+            }
             Plan::DropStage(plan) => {
                 let object_name = plan.name.clone();
                 let operation_type = DDLOperationType::Drop;

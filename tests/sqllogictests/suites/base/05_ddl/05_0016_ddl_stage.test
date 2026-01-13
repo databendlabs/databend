@@ -82,3 +82,52 @@ DROP STAGE s;
 
 statement ok
 drop table t;
+
+statement ok
+CREATE STAGE alter_stage_internal;
+
+statement ok
+ALTER STAGE alter_stage_internal SET FILE_FORMAT = (TYPE = CSV), COMMENT = 'altered';
+
+query T
+SELECT comment FROM system.stages WHERE name = 'alter_stage_internal';
+----
+altered
+
+query T
+SELECT file_format_options LIKE '%Csv%' FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+statement ok
+ALTER STAGE alter_stage_internal UNSET COMMENT, FILE_FORMAT;
+
+query T
+SELECT comment = '' FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+query T
+SELECT file_format_options LIKE '%Parquet%' FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+statement ok
+CREATE STAGE alter_stage_external url='fs:///';
+
+statement ok
+ALTER STAGE alter_stage_external SET URL = 'fs:///tmp/';
+
+query T
+SELECT stage_params LIKE '%/tmp/%' FROM system.stages WHERE name = 'alter_stage_external';
+----
+1
+
+statement ok
+ALTER STAGE IF EXISTS missing_stage SET COMMENT = 'noop';
+
+statement ok
+DROP STAGE alter_stage_internal;
+
+statement ok
+DROP STAGE alter_stage_external;
