@@ -539,7 +539,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             Filter [or(and(t2.id > 10, t2.value < 50), and(t2.id > 20, t2.qty < 100))]
               Inner Join [t1.id = t2.id]
                 Table 0
-                Filter [or(and(t2.id > 10, t2.value < 50), t2.id > 20)]
+                Filter [or_filters(and_filters(t2.id > 10, t2.value < 50), t2.id > 20)]
                 Table 1
             "#,
             inspired_by: "TPC-DS Query 13 - complex OR conditions with price ranges",
@@ -784,7 +784,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             after_pattern: r#"
             Filter [or(and(t1.a > 10, t1.value < 50), and(t1.a > 20, t1.qty < 100))]
               Inner Join [t1.id = t2.id]
-                Filter [or(t1.a > 10, t1.a > 20)]
+                Filter [or_filters(t1.a > 10, t1.a > 20)]
                   Table 0
                 Table 1
             "#,
@@ -1071,7 +1071,7 @@ fn test_push_down_filter_full_join() -> Result<()> {
             after_pattern: r#"
             Filter [or(and(t1.a > 10, t1.value < 50), and(t1.a > 20, t1.qty < 100))]
               Left Join [t1.id = t2.id]
-                Filter [or(t1.a > 10, t1.a > 20)]
+                Filter [or_filters(t1.a > 10, t1.a > 20)]
                   Table 0
                 Table 1
             "#,
@@ -1181,9 +1181,9 @@ fn test_push_down_complex_or_expressions() -> Result<()> {
     let after_pattern = r#"
     Filter [or(and(t1.a = 1, t2.b = 2), and(t1.a = 2, t2.b = 1))]
       Inner Join [t1.id = t2.id]
-        Filter [or(t1.a = 1, t1.a = 2)]
+        Filter [or_filters(t1.a = 1, t1.a = 2)]
           Table 0
-        Filter [or(t2.b = 2, t2.b = 1)]
+        Filter [or_filters(t2.b = 2, t2.b = 1)]
           Table 1
     "#;
 
