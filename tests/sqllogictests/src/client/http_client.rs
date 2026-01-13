@@ -122,8 +122,7 @@ impl HttpClient {
         let client = ClientBuilder::new()
             .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
-            // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
-            .http2_keep_alive_timeout(Duration::from_secs(15))
+            .http1_only()
             .pool_max_idle_per_host(16)
             .build()?;
 
