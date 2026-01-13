@@ -224,7 +224,7 @@ impl TaskMgr {
     #[fastrace::trace]
     pub async fn list_task(&self) -> Result<Vec<Task>, MetaError> {
         let key = DirName::new(TaskIdent::new(&self.tenant, ""));
-        let strm = self.kv_api.list_pb_values(&key).await?;
+        let strm = self.kv_api.list_pb_values(&key, None).await?;
 
         strm.try_collect().await
     }

@@ -14,6 +14,7 @@
 
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
 
@@ -46,7 +47,9 @@ fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: false,
+            allow_quoted_nulls: false,
             empty_field_as: Default::default(),
+            quoted_empty_field_as: EmptyFieldAs::String,
             binary_format: Default::default(),
             geometry_format: Default::default(),
         })

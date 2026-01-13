@@ -18,7 +18,6 @@
 
 mod binary;
 mod clickhouse;
-pub mod column_from_json;
 mod common_settings;
 mod delimiter;
 mod field_decoder;
@@ -27,7 +26,6 @@ mod file_format_type;
 pub mod output_format;
 
 pub use clickhouse::ClickhouseFormatType;
-pub use column_from_json::column_from_json_value;
 pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
 pub use file_format_type::FileFormatOptionsExt;

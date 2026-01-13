@@ -19,5 +19,3 @@ ORDER BY sum(ws_ext_discount_amt)
 LIMIT 100;
 ----
 36344.80
-
-

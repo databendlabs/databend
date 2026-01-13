@@ -286,7 +286,7 @@ pub fn cast_scalar_to_variant(
         ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp { value: ts }),
         ScalarRef::TimestampTz(ts_tz) => jsonb::Value::TimestampTz(jsonb::TimestampTz {
             value: ts_tz.timestamp(),
-            offset: ts_tz.hours_offset(),
+            offset: ts_tz.seconds_offset(),
         }),
         ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date { value: d }),
         ScalarRef::Interval(i) => {

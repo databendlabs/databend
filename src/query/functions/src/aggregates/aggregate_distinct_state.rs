@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::hash::Hasher;
+use std::marker::PhantomData;
 use std::marker::Send;
 use std::sync::Arc;
 
@@ -25,9 +26,12 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::simple_type::SimpleType;
+use databend_common_expression::types::simple_type::SimpleValueType;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_hashtable::HashSet as CommonHashSet;
@@ -50,17 +54,199 @@ pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()>;
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()>;
     fn batch_add(
         &mut self,
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        skip_null: bool,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>>;
 }
+
+pub trait SimpleAccessType: AccessType {
+    type Simple: SimpleType<Scalar = <Self as AccessType>::Scalar>;
+}
+
+impl<T: SimpleType> SimpleAccessType for SimpleValueType<T> {
+    type Simple = T;
+}
+
+pub trait DistinctAdapter: Send + 'static
+where <Self::Access as AccessType>::Scalar: Copy + Send + HashtableKeyable
+{
+    type Access: SimpleAccessType + ArgType;
+
+    fn downcast_column(columns: &ProjectedBlock) -> ColumnView<Self::Access>;
+    fn upcast_column(values: Buffer<<Self::Access as AccessType>::Scalar>) -> BlockEntry;
+}
+
+pub struct NumberAdapter<T>(PhantomData<T>);
+
+impl<T> DistinctAdapter for NumberAdapter<T>
+where T: Number + HashtableKeyable + Copy + Send
+{
+    type Access = NumberType<T>;
+
+    fn downcast_column(columns: &ProjectedBlock) -> ColumnView<Self::Access> {
+        columns[0].downcast::<Self::Access>().unwrap()
+    }
+
+    fn upcast_column(values: Buffer<<Self::Access as AccessType>::Scalar>) -> BlockEntry {
+        NumberType::<T>::upcast_column(values).into()
+    }
+}
+
+pub struct TimestampAdapter;
+
+impl DistinctAdapter for TimestampAdapter {
+    type Access = TimestampType;
+
+    fn downcast_column(columns: &ProjectedBlock) -> ColumnView<Self::Access> {
+        columns[0].downcast::<Self::Access>().unwrap()
+    }
+
+    fn upcast_column(values: Buffer<<Self::Access as AccessType>::Scalar>) -> BlockEntry {
+        TimestampType::upcast_column(values).into()
+    }
+}
+
+pub struct DateAdapter;
+
+impl DistinctAdapter for DateAdapter {
+    type Access = DateType;
+
+    fn downcast_column(columns: &ProjectedBlock) -> ColumnView<Self::Access> {
+        columns[0].downcast::<Self::Access>().unwrap()
+    }
+
+    fn upcast_column(values: Buffer<<Self::Access as AccessType>::Scalar>) -> BlockEntry {
+        DateType::upcast_column(values).into()
+    }
+}
+
+pub struct AggregateDistinctAdapterState<A: DistinctAdapter>
+where <A::Access as AccessType>::Scalar: Copy + Send + HashtableKeyable
+{
+    set: CommonHashSet<<A::Access as AccessType>::Scalar>,
+    _adapter: PhantomData<A>,
+}
+
+impl<A> DistinctStateFunc for AggregateDistinctAdapterState<A>
+where
+    A: DistinctAdapter,
+    <A::Access as AccessType>::Scalar: Copy + Send + HashtableKeyable,
+{
+    fn new() -> Self {
+        AggregateDistinctAdapterState {
+            set: CommonHashSet::with_capacity(4),
+            _adapter: PhantomData,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.set.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let view = A::downcast_column(&columns);
+        let v = unsafe { view.index_unchecked(row) };
+        let key: <A::Access as AccessType>::Scalar = A::Access::to_owned_scalar(v);
+        let _ = self.set.set_insert(key).is_ok();
+        Ok(())
+    }
+
+    fn batch_add(
+        &mut self,
+        columns: ProjectedBlock,
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        let view = A::downcast_column(&columns);
+        match validity {
+            Some(bitmap) => {
+                for (t, v) in view.iter().zip(bitmap.iter()) {
+                    if v {
+                        let key: <A::Access as AccessType>::Scalar = A::Access::to_owned_scalar(t);
+                        let _ = self.set.set_insert(key).is_ok();
+                    }
+                }
+            }
+            None => {
+                for row in 0..input_rows {
+                    let v = unsafe { view.index_unchecked(row) };
+                    let key: <A::Access as AccessType>::Scalar = A::Access::to_owned_scalar(v);
+                    let _ = self.set.set_insert(key).is_ok();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.set.set_merge(&rhs.set);
+        Ok(())
+    }
+
+    fn build_entries(&mut self, _types: &[DataType]) -> Result<Vec<BlockEntry>> {
+        let values: Buffer<<A::Access as AccessType>::Scalar> =
+            self.set.iter().map(|e| *e.key()).collect();
+        Ok(vec![A::upcast_column(values)])
+    }
+}
+
+impl<A> StateSerde for AggregateDistinctAdapterState<A>
+where
+    A: DistinctAdapter,
+    <A::Access as AccessType>::Scalar: Copy + Send + HashtableKeyable,
+{
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        vec![DataType::Array(Box::new(A::Access::data_type())).into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<ArrayType<A::Access>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for v in state.set.iter() {
+                    builder.put_item(A::Access::to_scalar_ref(v.key()));
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<ArrayType<A::Access>, Self, _>(places, loc, state, filter, |state, data| {
+            for v in A::Access::iter_column(&data) {
+                let key: <A::Access as AccessType>::Scalar = A::Access::to_owned_scalar(v);
+                let _ = state.set.set_insert(key).is_ok();
+            }
+            Ok(())
+        })
+    }
+}
+
+pub type AggregateDistinctNumberState<T> = AggregateDistinctAdapterState<NumberAdapter<T>>;
+pub type AggregateDistinctTimestampState = AggregateDistinctAdapterState<TimestampAdapter>;
+pub type AggregateDistinctDateState = AggregateDistinctAdapterState<DateAdapter>;
 
 pub struct AggregateDistinctState {
     set: HashSet<Vec<u8>>,
@@ -81,15 +267,11 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let values = columns
             .iter()
             .map(|entry| unsafe { entry.index_unchecked(row) }.to_owned())
             .collect::<Vec<_>>();
-
-        if skip_null && values.iter().all(Scalar::is_null) {
-            return Ok(());
-        }
 
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
         values.serialize(&mut buffer)?;
@@ -102,7 +284,6 @@ impl DistinctStateFunc for AggregateDistinctState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        skip_null: bool,
     ) -> Result<()> {
         match validity {
             Some(validity) => {
@@ -110,12 +291,12 @@ impl DistinctStateFunc for AggregateDistinctState {
                     if !b {
                         continue;
                     }
-                    self.add(columns, row, skip_null)?;
+                    self.add(columns, row)?;
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    self.add(columns, row, skip_null)?;
+                    self.add(columns, row)?;
                 }
             }
         }
@@ -204,7 +385,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
@@ -216,7 +397,6 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
@@ -291,118 +471,6 @@ impl StateSerde for AggregateDistinctStringState {
     }
 }
 
-pub struct AggregateDistinctNumberState<T: Number + HashtableKeyable> {
-    set: CommonHashSet<T>,
-}
-
-impl<T> DistinctStateFunc for AggregateDistinctNumberState<T>
-where T: Number + HashtableKeyable
-{
-    fn new() -> Self {
-        AggregateDistinctNumberState {
-            set: CommonHashSet::with_capacity(4),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.set.is_empty()
-    }
-
-    fn len(&self) -> usize {
-        self.set.len()
-    }
-
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
-        let view = columns[0].downcast::<NumberType<T>>().unwrap();
-        let v = unsafe { view.index_unchecked(row) };
-        let _ = self.set.set_insert(v).is_ok();
-        Ok(())
-    }
-
-    fn batch_add(
-        &mut self,
-        columns: ProjectedBlock,
-        validity: Option<&Bitmap>,
-        input_rows: usize,
-        _skip_null: bool,
-    ) -> Result<()> {
-        let view = columns[0].downcast::<NumberType<T>>().unwrap();
-        match validity {
-            Some(bitmap) => {
-                for (t, v) in view.iter().zip(bitmap.iter()) {
-                    if v {
-                        let _ = self.set.set_insert(t).is_ok();
-                    }
-                }
-            }
-            None => {
-                for row in 0..input_rows {
-                    let v = unsafe { view.index_unchecked(row) };
-                    let _ = self.set.set_insert(v).is_ok();
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.set.set_merge(&rhs.set);
-        Ok(())
-    }
-
-    fn build_entries(&mut self, _types: &[DataType]) -> Result<Vec<BlockEntry>> {
-        let values: Buffer<T> = self.set.iter().map(|e| *e.key()).collect();
-        Ok(vec![NumberType::<T>::upcast_column(values).into()])
-    }
-}
-
-impl<T> StateSerde for AggregateDistinctNumberState<T>
-where T: Number + HashtableKeyable
-{
-    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
-        vec![DataType::Array(Box::new(NumberType::<T>::data_type())).into()]
-    }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        batch_serialize1::<ArrayType<NumberType<T>>, Self, _>(
-            places,
-            loc,
-            builders,
-            |state, builder| {
-                for v in state.set.iter() {
-                    builder.put_item(*v.key());
-                }
-                builder.commit_row();
-                Ok(())
-            },
-        )
-    }
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        batch_merge1::<ArrayType<NumberType<T>>, Self, _>(
-            places,
-            loc,
-            state,
-            filter,
-            |state, data| {
-                for v in data.iter() {
-                    let _ = state.set.set_insert(*v);
-                }
-                Ok(())
-            },
-        )
-    }
-}
-
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
     set: StackHashSet<u128>,
@@ -423,7 +491,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
@@ -438,7 +506,6 @@ impl DistinctStateFunc for AggregateUniqStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {

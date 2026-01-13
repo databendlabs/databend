@@ -249,7 +249,10 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
-        Ok(self.kv_api.list_kv_collect(role_prefix.as_str()).await?)
+        Ok(self
+            .kv_api
+            .list_kv_collect(role_prefix.as_str(), None)
+            .await?)
     }
 
     #[async_backtrace::framed]
@@ -289,7 +292,7 @@ impl RoleApi for RoleMgr {
             kvs
         } else {
             self.kv_api
-                .list_kv_collect(object_owner_prefix.as_str())
+                .list_kv_collect(object_owner_prefix.as_str(), None)
                 .await?
         };
 
@@ -322,7 +325,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let udfs = values.try_collect().await?;
         Ok(udfs)
     }
@@ -336,7 +339,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let stages = values.try_collect().await?;
         Ok(stages)
     }
@@ -350,7 +353,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let seqs = values.try_collect().await?;
         Ok(seqs)
     }
@@ -364,7 +367,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let seqs = values.try_collect().await?;
         Ok(seqs)
     }
@@ -380,7 +383,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let conns = values.try_collect().await?;
         Ok(conns)
     }
@@ -396,7 +399,7 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self.kv_api.list_pb_values(&dir_name, None).await?;
         let ws = values.try_collect().await?;
         Ok(ws)
     }

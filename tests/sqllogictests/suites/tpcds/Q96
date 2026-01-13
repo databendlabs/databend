@@ -16,5 +16,3 @@ ORDER BY count(*)
 LIMIT 100;
 ----
 874
-
-

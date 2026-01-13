@@ -277,6 +277,12 @@ pub enum Statement {
     DropRowAccessPolicy(DropRowAccessPolicyStmt),
     DescRowAccessPolicy(DescRowAccessPolicyStmt),
 
+    // Tags
+    CreateTag(CreateTagStmt),
+    DropTag(DropTagStmt),
+    ShowTags(ShowTagsStmt),
+    AlterObjectTag(AlterObjectTagStmt),
+
     // Stages
     CreateStage(CreateStageStmt),
     ShowStages {
@@ -499,6 +505,7 @@ impl Statement {
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
             | Statement::ShowGrantsOfRole(..)
+            | Statement::ShowTags(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -541,6 +548,7 @@ impl Statement {
             | Statement::CreateConnection(..)
             | Statement::CreatePipe(..)
             | Statement::AlterTable(..)
+            | Statement::AlterObjectTag(..)
             | Statement::AlterView(..)
             | Statement::AlterUser(..)
             | Statement::AlterDatabase(..)
@@ -573,6 +581,8 @@ impl Statement {
             | Statement::AlterUDF(..)
             | Statement::CreateRowAccessPolicy(..)
             | Statement::DropRowAccessPolicy(..)
+            | Statement::CreateTag(..)
+            | Statement::DropTag(..)
             | Statement::DropStage { .. }
             | Statement::DropConnection(..)
             | Statement::CreateFileFormat { .. }
@@ -941,6 +951,10 @@ impl Display for Statement {
             Statement::CreateRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTag(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTag(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowTags(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterObjectTag(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {

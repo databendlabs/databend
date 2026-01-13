@@ -1,0 +1,63 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+message TagMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  message AllowedValues {
+    // Ordered list of string values that may be set on this tag.
+    // Matches CREATE TAG ... ALLOWED_VALUES semantics: must be declared before
+    // other parameters, accepts up to 5,000 entries, and when omitted any string
+    // (including empty) is accepted. Propagating tags rely on this order to
+    // resolve conflicts when ON_CONFLICT = ALLOWED_VALUES_SEQUENCE (e.g. `CREATE
+    // TAG my_tag ALLOWED_VALUES 'blue', 'red' PROPAGATE = ON_DEPENDENCY
+    // ON_CONFLICT = ALLOWED_VALUES_SEQUENCE` always picks `'blue'`). A conflict
+    // arises when the same downstream object inherits different values:
+    //
+    //   Tag definition: my_tag ALLOWED_VALUES 'blue', 'red'
+    //   Object A --(my_tag='blue')--> \
+    //                                   -> Object C (final = 'blue')
+    //   Object B --(my_tag='red')-->  /
+    //
+    // We keep a repeated field instead of a map to avoid undefined iteration
+    // order or manually maintained indices. With maps, gaps like `{blue:1, red:3}`
+    // (after deletes/edits) would desync the conflict priority from the declared
+    // order, so we store the sequence directly.
+    repeated string values = 1;
+  }
+
+  optional AllowedValues allowed_values = 1;
+  string comment = 2;
+  string created_on = 3;
+  optional string updated_on = 4;
+  optional string drop_on = 5;
+}
+
+// Value stored for tag-to-object binding (indexed by object).
+// Key format: __fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>
+// The tag_id is part of the key, so only value payload and timestamp stored here.
+message TagRefValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Payload assigned when the tag is set on an object. If the tag defined
+  // `allowed_values`, this must match one of those entries; otherwise any string
+  // (including empty) is permitted.
+  string tag_allowed_value = 1;
+}

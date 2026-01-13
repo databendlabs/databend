@@ -111,6 +111,28 @@ impl Rule for RuleEliminateFilter {
                         true
                     }
                 }
+                ScalarExpr::FunctionCall(func)
+                    if func.func_name == "is_true"
+                        && func.arguments.len() == 1
+                        && matches!(func.arguments[0], ScalarExpr::FunctionCall(_)) =>
+                {
+                    let ScalarExpr::FunctionCall(inner) = &func.arguments[0] else {
+                        return true;
+                    };
+                    if inner.func_name != "eq" || inner.arguments.len() != 2 {
+                        return true;
+                    }
+                    if let (
+                        ScalarExpr::BoundColumnRef(left_col),
+                        ScalarExpr::BoundColumnRef(right_col),
+                    ) = (&inner.arguments[0], &inner.arguments[1])
+                    {
+                        left_col.column.index != right_col.column.index
+                            || left_col.column.data_type.is_nullable()
+                    } else {
+                        true
+                    }
+                }
                 _ => true,
             })
             .collect::<Vec<ScalarExpr>>();

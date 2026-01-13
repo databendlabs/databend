@@ -70,7 +70,7 @@ SELECT (false and NULL NOT IN (0.1, 0.2, 0.3,0.4)) ::BIGINT FROM t1,t0
 
 
 statement ok
-create table cast_array (t Array(String NULL) NULL )
+create or replace table cast_array (t Array(String NULL) NULL )
 
 statement ok
 insert into cast_array values([1,2]), ([1, 555])
@@ -78,15 +78,15 @@ insert into cast_array values([1,2]), ([1, 555])
 query T
 select cast(t as Array(String) Null) from cast_array
 ----
-['1','2']
-['1','555']
+["1","2"]
+["1","555"]
 
 # for issue #17620 https://github.com/databendlabs/databend/issues/17620
 
 query T
 select cast(t as Array(String) Null) from cast_array limit 1
 ----
-['1','2']
+["1","2"]
 
 statement ok
 select cast(NULL as VARCHAR)

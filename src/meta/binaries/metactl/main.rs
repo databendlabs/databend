@@ -338,21 +338,260 @@ return metrics, nil
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
 enum CtlCommand {
+    #[command(verbatim_doc_comment)]
+    /// Show cluster status: node info, replication, voters, etc.
+    ///
+    /// Example:
+    ///   metactl status --grpc-api-address 127.0.0.1:9191
+    ///
+    /// Sample output:
+    ///   BinaryVersion: v1.2.345-nightly-abc1234(rust-1.75-nightly-2024-01-01T12:00:00)
+    ///   DataVersion: V002
+    ///   RaftLogSize: 1234
+    ///   SnapshotKeyCount: 5678
+    ///   Node: id=0 raft=127.0.0.1:28004
+    ///   State: Leader
+    ///   Leader: Node { name: "0", endpoint: 127.0.0.1:28004 }
+    ///   CurrentTerm: 1
+    ///   LastSeq: 100
+    ///   LastLogIndex: 200
+    ///   LastApplied: T1-N0.200
+    ///   Voters:
+    ///     - Node { name: "0", endpoint: 127.0.0.1:28004 }
     Status(StatusArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Export metadata from a running node or a local raft-dir.
+    ///
+    /// Example (from running node to stdout):
+    ///   metactl export --grpc-api-address 127.0.0.1:9191
+    ///
+    /// Example (from running node to file):
+    ///   metactl export --grpc-api-address 127.0.0.1:9191 --db meta.db
+    ///
+    /// Example (from local raft-dir):
+    ///   metactl export --raft-dir .databend/meta
+    ///
+    /// Sample output (JSON lines):
+    ///   ["header",{"DataHeader":{"key":"header","value":{"version":"V002",...}}}]
+    ///   ["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]
+    ///   ["log",{"Logs":{"key":0,"value":{"log_id":...,"payload":"Membership"...}}}]
     Export(ExportArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Import metadata into a new raft-dir from stdin or a file.
+    ///
+    /// Example (from stdin):
+    ///   cat meta.db | metactl import --raft-dir .databend/meta --id 0
+    ///
+    /// Example (from file):
+    ///   metactl import --raft-dir .databend/meta --db meta.db --id 0
+    ///
+    /// Example (with cluster config):
+    ///   metactl import --raft-dir .databend/meta --db meta.db --id 1 \
+    ///     --initial-cluster 1=localhost:28103 \
+    ///     --initial-cluster 2=localhost:28203
     Import(ImportArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Dump state machine keys grouped by prefix.
+    ///
+    /// Useful for understanding the key distribution in the state machine.
+    /// Groups keys by directory prefix and returns counts at each level.
+    ///
+    /// Example:
+    ///   metactl keys-layout --grpc-api-address 127.0.0.1:9191
+    ///   metactl keys-layout --grpc-api-address 127.0.0.1:9191 --depth 1
+    ///
+    /// Sample input keys:
+    ///   databases/1/tables/users/columns/id
+    ///   databases/1/tables/users/columns/name
+    ///   databases/1/tables/orders/columns/id
+    ///   databases/2/tables/products/columns/id
+    ///   system/config/max_connections
+    ///   system/stats/query_count
+    ///
+    /// Sample output (no depth limit):
+    ///   databases/1/tables/orders/columns 1
+    ///   databases/1/tables/orders 1
+    ///   databases/1/tables/users/columns 2
+    ///   databases/1/tables/users 2
+    ///   databases/1/tables 3
+    ///   databases/1 3
+    ///   databases/2/tables/products/columns 1
+    ///   databases/2/tables/products 1
+    ///   databases/2/tables 1
+    ///   databases/2 1
+    ///   databases 4
+    ///   system/config 1
+    ///   system/stats 1
+    ///   system 2
+    ///    6
+    ///
+    /// Sample output (--depth 1):
+    ///   databases 4
+    ///   system 2
+    ///    6
     KeysLayout(KeysLayoutArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Trigger a leader transfer to another node.
+    ///
+    /// Example (transfer to a specific node):
+    ///   metactl transfer-leader --to 2 --admin-api-address 127.0.0.1:28002
+    ///
+    /// Example (transfer to any other voter):
+    ///   metactl transfer-leader --admin-api-address 127.0.0.1:28002
+    ///
+    /// Sample output:
+    ///   triggered leader transfer from 0 to 2.
+    ///   voter ids: [0, 1, 2]
     TransferLeader(TransferLeaderArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Trigger a snapshot creation on the target node.
+    ///
+    /// Example:
+    ///   metactl trigger-snapshot --admin-api-address 127.0.0.1:28002
+    ///
+    /// Sample output:
+    ///   triggered snapshot successfully.
     TriggerSnapshot(TriggerSnapshotArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Enable or disable a feature flag.
+    ///
+    /// Example:
+    ///   metactl set-feature --feature pb-messages --enable true
+    ///   metactl set-feature --feature pb-messages --enable false
+    ///
+    /// Sample output:
+    ///   set-feature: Done; features:
+    ///   {
+    ///     "pb-messages": true
+    ///   }
     SetFeature(SetFeature),
+
+    #[command(verbatim_doc_comment)]
+    /// List all feature flags and their status.
+    ///
+    /// Example:
+    ///   metactl list-features --admin-api-address 127.0.0.1:28002
+    ///
+    /// Sample output:
+    ///   {
+    ///     "pb-messages": true
+    ///   }
     ListFeatures(ListFeatures),
+
+    #[command(verbatim_doc_comment)]
+    /// Benchmark client connection handling (for debugging).
+    ///
+    /// Creates connections in a loop without closing them.
+    /// Useful for testing connection limits and resource usage.
+    ///
+    /// Example:
+    ///   metactl bench-client-num-conn --grpc-api-address 127.0.0.1:9191
+    ///
+    /// Sample output:
+    ///   loop: connect to metasrv 127.0.0.1:9191, get_kv('foo'), do not drop the connection
+    ///   1-th: get_kv(foo): Ok(None)
+    ///   2-th: get_kv(foo): Ok(None)
+    ///   ...
     BenchClientNumConn(BenchArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Watch key changes under a prefix in real-time.
+    ///
+    /// Example:
+    ///   metactl watch --grpc-api-address 127.0.0.1:9191 --prefix __fd_clusters/
+    ///
+    /// Sample output:
+    ///   received-watch-event: WatchResponse { ... }
     Watch(WatchArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Update or insert a key-value pair.
+    ///
+    /// Example:
+    ///   metactl upsert --grpc-api-address 127.0.0.1:9191 --key mykey --value myvalue
+    ///
+    /// Sample output:
+    ///   upsert-result: mykey: None -> Some(SeqV { seq: 123, ... })
     Upsert(UpsertArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Get the value of a key.
+    ///
+    /// Example:
+    ///   metactl get --grpc-api-address 127.0.0.1:9191 --key mykey
+    ///
+    /// Sample output:
+    ///   {"seq":123,"meta":null,"data":[109,121,118,97,108,117,101]}
     Get(GetArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Execute a Lua script with metasrv client bindings.
+    ///
+    /// Provides Lua bindings for interacting with metasrv:
+    /// - metactl.new_grpc_client(address) - create gRPC client
+    /// - metactl.new_admin_client(address) - create admin client
+    ///
+    /// Example (from file):
+    ///   metactl lua --file script.lua
+    ///
+    /// Example (from stdin):
+    ///   echo 'print("hello")' | metactl lua
+    ///
+    /// Sample Lua script:
+    ///   local client = metactl.new_grpc_client("127.0.0.1:9191")
+    ///   local result, err = client:get_kv("mykey")
+    ///   if err then print("error:", err) else print(result) end
     Lua(LuaArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// List all members in the cluster.
+    ///
+    /// Example:
+    ///   metactl member-list --grpc-api-address 127.0.0.1:9191
+    ///
+    /// Sample output:
+    ///   Node { name: "0", endpoint: 127.0.0.1:28004, grpc_api_addr: 127.0.0.1:9191 }
+    ///   Node { name: "1", endpoint: 127.0.0.1:28104, grpc_api_addr: 127.0.0.1:9192 }
     MemberList(MemberListArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Fetch Prometheus metrics from the admin API.
+    ///
+    /// Example:
+    ///   metactl metrics --admin-api-address 127.0.0.1:28002
+    ///
+    /// Sample output:
+    ///   # HELP metasrv_server_last_log_index The last log index.
+    ///   # TYPE metasrv_server_last_log_index gauge
+    ///   metasrv_server_last_log_index 1234
+    ///   # HELP metasrv_server_current_term The current term.
+    ///   ...
     Metrics(MetricsArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Dump the Raft log WAL (Write-Ahead Log) contents.
+    ///
+    /// Shows each record in the WAL with offset, size, and decoded payload.
+    /// Useful for debugging Raft log corruption or understanding log structure.
+    ///
+    /// Sample output:
+    ///
+    ///   RaftLog:
+    ///   ChunkId(00_000_000_000_000_000_000)
+    ///     R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(...)
+    ///     R-00001: [000_000_018, 000_000_046) Size(28): RaftLogState(...)
+    ///     R-00002: [000_000_046, 000_000_125) Size(79): Append(log_id: T0-N0.0, ...)
+    ///     R-00003: [000_000_125, 000_000_175) Size(50): SaveVote(<T1-N0:->)
+    ///     R-00004: [000_000_175, 000_000_225) Size(50): SaveVote(<T1-N0:Q>)
+    ///     R-00005: [000_000_225, 000_000_277) Size(52): Append(log_id: T1-N0.1, payload: blank)
+    ///     R-00006: [000_000_277, 000_000_461) Size(184): Append(log_id: T1-N0.2, ...)
+    ///     R-00007: [000_000_461, 000_000_507) Size(46): Commit(T1-N0.1)
     DumpRaftLogWal(DumpRaftLogWalArgs),
 }
 

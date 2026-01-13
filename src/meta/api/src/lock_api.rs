@@ -60,7 +60,7 @@ where
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
         let dir = req.lock_key.gen_prefix();
-        let strm = self.list_pb(&dir).await?;
+        let strm = self.list_pb(&dir, None).await?;
 
         let list = strm
             .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
@@ -182,7 +182,7 @@ where
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
         for dir in &req.prefixes {
-            let strm = self.list_pb(dir).await?;
+            let strm = self.list_pb(dir, None).await?;
             let locks = strm
                 .map_ok(|itm| LockInfo {
                     table_id: itm.key.table_id(),

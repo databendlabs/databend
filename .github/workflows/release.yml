@@ -199,7 +199,7 @@ jobs:
       - self-hosted
       - X64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -239,7 +239,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -291,7 +291,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -326,7 +326,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -407,7 +407,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -484,7 +484,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -579,7 +579,7 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c8g
+      - 2c
       - aws
     needs:
       - create_release
@@ -611,7 +611,7 @@ jobs:
       - self-hosted
       - X64
       - Linux
-      - 4c16g
+      - 4c
       - aws
     needs:
       - create_release

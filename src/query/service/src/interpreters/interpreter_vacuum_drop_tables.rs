@@ -90,6 +90,11 @@ impl VacuumDropTablesInterpreter {
         let chunk_size = 50;
 
         let mut num_meta_keys_removed = 0;
+
+        // Tag references cleanup is now handled in meta-service layer:
+        // - Table tag refs: cleaned up in remove_data_for_dropped_table (garbage_collection_api.rs)
+        // - Database tag refs: cleaned up in drop_database_meta (database_util.rs)
+
         // first gc drop table ids
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);

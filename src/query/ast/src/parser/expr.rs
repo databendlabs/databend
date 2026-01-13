@@ -2782,17 +2782,25 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
         None => 0,
     };
 
-    let p = i_part.len() as i32 + exp - f_part.len() as i32;
-    if !(-76..=76).contains(&p) {
+    let i_part_len = i_part.len() as i32;
+    let f_part_len = f_part.len() as i32;
+    let mut precision = i_part_len + f_part_len;
+    if exp > f_part_len {
+        precision += exp - f_part_len;
+    } else if i_part_len + exp < 0 {
+        precision -= i_part_len + exp;
+    }
+
+    if precision > 76 {
         Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
-        let mut digits = String::with_capacity(76);
+        let mut digits = String::with_capacity(precision as usize);
         digits.push_str(i_part);
         digits.push_str(f_part);
         if digits.is_empty() {
             digits.push('0')
         }
-        let mut scale = f_part.len() as i32 - exp;
+        let mut scale = f_part_len - exp;
         if scale < 0 {
             // e.g 123.1e3
             for _ in 0..(-scale) {
@@ -2800,13 +2808,6 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
             }
             scale = 0;
         };
-
-        // truncate
-        if digits.len() > 76 {
-            scale -= digits.len() as i32 - 76;
-            digits.truncate(76);
-        }
-
         Ok(Literal::Decimal256 {
             value: i256::from_str_radix(&digits, 10)?,
             precision: 76,

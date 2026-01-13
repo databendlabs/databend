@@ -59,6 +59,7 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    removed_mark_indexes: ColumnSet,
     /// Table column indexes that are lazy materialized.
     table_lazy_columns: HashMap<IndexType, ColumnSet>,
     table_source: HashMap<IndexType, DataSourcePlan>,
@@ -132,6 +133,14 @@ impl Metadata {
 
     pub fn columns(&self) -> &[ColumnEntry] {
         self.columns.as_slice()
+    }
+
+    pub fn add_removed_mark_index(&mut self, index: IndexType) {
+        self.removed_mark_indexes.insert(index);
+    }
+
+    pub fn is_removed_mark_index(&self, index: IndexType) -> bool {
+        self.removed_mark_indexes.contains(&index)
     }
 
     pub fn add_retained_column(&mut self, index: IndexType) {
@@ -339,6 +348,7 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
+        branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_index: bool,
@@ -357,6 +367,7 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
+            branch,
             alias_name: table_alias_name,
             source_of_view,
             source_of_index,
@@ -553,6 +564,7 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
+    branch: Option<String>,
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
@@ -576,27 +588,6 @@ impl Debug for TableEntry {
 }
 
 impl TableEntry {
-    pub fn new(
-        index: IndexType,
-        name: String,
-        alias_name: Option<String>,
-        catalog: String,
-        database: String,
-        table: Arc<dyn Table>,
-    ) -> Self {
-        TableEntry {
-            index,
-            name,
-            catalog,
-            database,
-            table,
-            alias_name,
-            source_of_view: false,
-            source_of_index: false,
-            source_of_stage: false,
-        }
-    }
-
     /// Get the catalog name of this table entry.
     pub fn catalog(&self) -> &str {
         &self.catalog
@@ -610,6 +601,10 @@ impl TableEntry {
     /// Get the name of this table entry.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn branch(&self) -> &Option<String> {
+        &self.branch
     }
 
     /// Get the alias name of this table entry.
@@ -644,6 +639,16 @@ impl TableEntry {
 
     pub fn update_table_index(&mut self, table_index: IndexType) {
         self.index = table_index;
+    }
+
+    pub fn qualified_name(&self) -> String {
+        match &self.branch {
+            None => format!("{}.{}.{}", self.catalog, self.database, self.name),
+            Some(branch) => format!(
+                "{}.{}.{}/{}",
+                self.catalog, self.database, self.name, branch
+            ),
+        }
     }
 }
 

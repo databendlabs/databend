@@ -104,8 +104,7 @@ impl NdJsonDecoder {
                             }
                         }
                         NullAs::FieldDefault => {
-                            self.load_context
-                                .push_default_value(column, column_index, false)?;
+                            self.load_context.push_default_value(column, column_index)?;
                         }
                     },
                     Some(serde_json::Value::Null) => match self.fmt.params.null_field_as {
@@ -124,8 +123,7 @@ impl NdJsonDecoder {
                             }
                         }
                         NullAs::FieldDefault => {
-                            self.load_context
-                                .push_default_value(column, column_index, false)?;
+                            self.load_context.push_default_value(column, column_index)?;
                         }
                     },
                     Some(value) => {

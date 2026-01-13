@@ -16,7 +16,9 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::base::Barrier;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
@@ -25,7 +27,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
-use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -44,6 +45,7 @@ pub struct TransformHashJoin {
     projection: ColumnSet,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
+    instant: Instant,
 }
 
 impl TransformHashJoin {
@@ -78,6 +80,7 @@ impl TransformHashJoin {
                 finished: false,
                 build_data: None,
             }),
+            instant: Instant::now(),
         })))
     }
 }
@@ -97,10 +100,12 @@ impl Processor for TransformHashJoin {
             self.build_port.finish();
             self.probe_port.finish();
 
-            return match &self.stage {
-                Stage::Finished => Ok(Event::Finished),
-                _ => Ok(Event::Async),
-            };
+            if !matches!(self.stage, Stage::Finished) {
+                self.stage = Stage::Finished;
+                self.stage_sync_barrier.reduce_quorum(1);
+            }
+
+            return Ok(Event::Finished);
         }
 
         if !self.joined_port.can_push() {
@@ -196,6 +201,7 @@ impl Processor for TransformHashJoin {
     }
 
     async fn async_process(&mut self) -> Result<()> {
+        let elapsed = self.instant.elapsed();
         let wait_res = self.stage_sync_barrier.wait().await;
 
         self.stage = match &mut self.stage {
@@ -205,7 +211,9 @@ impl Processor for TransformHashJoin {
                     self.join.add_runtime_filter_packet(packet);
                 }
 
+                let rf_build_elapsed = self.instant.elapsed() - elapsed;
                 let _wait_res = self.stage_sync_barrier.wait().await;
+                let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
                     let packet = self.join.build_runtime_filter()?;
@@ -213,18 +221,67 @@ impl Processor for TransformHashJoin {
                 }
 
                 let _wait_res = self.stage_sync_barrier.wait().await;
+                let wait_rf_elapsed = self.instant.elapsed() - before_wait;
 
+                log::info!(
+                    "HashJoin build stage, sync work elapsed: {:?}, build rf elapsed: {:?}, wait other node rf elapsed: {:?}",
+                    elapsed,
+                    rf_build_elapsed,
+                    wait_rf_elapsed
+                );
+
+                self.instant = Instant::now();
                 Stage::BuildFinal(BuildFinalState::new())
             }
-            Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
-            Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
+            Stage::BuildFinal(_) => {
+                let wait_elapsed = self.instant.elapsed() - elapsed;
+                log::info!(
+                    "HashJoin build final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    elapsed,
+                    wait_elapsed
+                );
+
+                self.instant = Instant::now();
+                Stage::Probe(ProbeState::new())
+            }
+            Stage::Probe(_) => {
+                let wait_elapsed = self.instant.elapsed() - elapsed;
+                log::info!(
+                    "HashJoin probe stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    elapsed,
+                    wait_elapsed
+                );
+
+                self.instant = Instant::now();
+                Stage::ProbeFinal(ProbeFinalState::new())
+            }
             Stage::ProbeFinal(state) => match state.finished {
-                true => Stage::Finished,
-                false => Stage::ProbeFinal(ProbeFinalState {
-                    initialize: true,
-                    finished: state.finished,
-                    stream: state.stream.take(),
-                }),
+                true => {
+                    let wait_elapsed = self.instant.elapsed() - elapsed;
+                    log::info!(
+                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        elapsed,
+                        wait_elapsed
+                    );
+
+                    self.instant = Instant::now();
+                    Stage::Finished
+                }
+                false => {
+                    let wait_elapsed = self.instant.elapsed() - elapsed;
+                    log::info!(
+                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        elapsed,
+                        wait_elapsed
+                    );
+
+                    self.instant = Instant::now();
+                    Stage::ProbeFinal(ProbeFinalState {
+                        initialize: true,
+                        finished: state.finished,
+                        stream: state.stream.take(),
+                    })
+                }
             },
             Stage::Finished => Stage::Finished,
         };

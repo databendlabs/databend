@@ -191,6 +191,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (159, "2025-11-18: Add: Grant/OwnershipMaskingPolicyObject and masking policy privileges"),
     (160, "2025-11-27: Add: udf.proto/UserDefinedFunction add update_on field"),
     (161, "2025-12-04: Add: Grant/OwnershipRowAccessPolicyObject and row access policy privileges"),
+    (162, "2025-12-16: Add: tag.proto"),
+    (163, "2025-12-31: Add: SnapshotRef"),
+    (164, "2026-01-22: Update: user.proto/CsvFileFormatParams add allow_quoted_nulls and quoted_empty_field_as, change null_display to optional", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
