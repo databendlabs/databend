@@ -1010,6 +1010,12 @@ impl ChunkIndex {
     pub fn num_rows(&self) -> usize {
         self.total
     }
+
+    pub fn clear(&mut self) {
+        self.rows.clear();
+        self.chunks.clear();
+        self.total = 0
+    }
 }
 
 pub enum Chunk<'a> {
