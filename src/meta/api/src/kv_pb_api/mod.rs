@@ -584,18 +584,17 @@ mod tests {
 
         async fn list_kv(
             &self,
-            prefix: &str,
-            limit: Option<u64>,
+            opts: ListOptions<'_, str>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             let items = self
                 .kvs
                 .iter()
-                .filter(|(k, _)| k.starts_with(prefix))
+                .filter(|(k, _)| k.starts_with(opts.prefix))
                 .map(|(k, v)| Ok(StreamItem::new(k.clone(), Some(v.clone().into()))))
                 .collect::<Vec<_>>();
 
             let strm = futures::stream::iter(items);
-            Ok(limit_stream(strm, limit))
+            Ok(limit_stream(strm, opts.limit))
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
