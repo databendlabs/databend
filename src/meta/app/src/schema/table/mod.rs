@@ -893,7 +893,7 @@ pub struct UpdateTempTableReq {
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
-    pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
+    pub copied_files: Vec<(TableRefId, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
     pub update_temp_tables: Vec<UpdateTempTableReq>,
@@ -1213,7 +1213,7 @@ impl Display for TableIdToName {
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableCopiedFileNameIdent {
-    pub table_id: u64,
+    pub id: u64,
     pub file: String,
 }
 
@@ -1221,8 +1221,8 @@ impl fmt::Display for TableCopiedFileNameIdent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "TableCopiedFileNameIdent{{table_id:{}, file:{}}}",
-            self.table_id, self.file
+            "TableCopiedFileNameIdent{{id:{}, file:{}}}",
+            self.id, self.file
         )
     }
 }
@@ -1236,7 +1236,7 @@ pub struct TableCopiedFileInfo {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableCopiedFileReq {
-    pub table_id: u64,
+    pub ref_id: TableRefId,
     pub files: Vec<String>,
 }
 
@@ -1246,6 +1246,37 @@ pub struct GetTableCopiedFileReply {
 }
 
 pub type ListTableCopiedFileReply = GetTableCopiedFileReply;
+
+/// Identifies a table reference.
+///
+/// A table reference can be either:
+/// - the main branch (`branch_id = None`)
+/// - a derived branch (`branch_id = Some(_)`)
+///
+/// `table_id` always refers to the physical table.
+/// `unique_id()` uniquely identifies the referenced table view:
+/// - main branch: `table_id`
+/// - branch:      `branch_id`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TableRefId {
+    /// Physical table identifier.
+    ///
+    /// This id is shared by the main branch and all derived branches.
+    pub table_id: u64,
+
+    /// Branch identifier.
+    ///
+    /// - `None` means the main branch
+    /// - `Some(id)` means a non-main branch
+    pub branch_id: Option<u64>, // None = main branch
+}
+
+impl TableRefId {
+    /// Returns the effective unique id of this table.
+    pub fn effective_id(&self) -> u64 {
+        self.branch_id.unwrap_or(self.table_id)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
@@ -1260,8 +1291,8 @@ pub struct UpsertTableCopiedFileReq {
 pub struct UpsertTableCopiedFileReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TruncateTableReq {
-    pub table_id: u64,
+pub struct RemoveTableCopiedFileReq {
+    pub ref_id: TableRefId,
     /// Specify the max number copied file to delete in every sub-transaction.
     ///
     /// By default it use `DEFAULT_MGET_SIZE=256`
@@ -1269,7 +1300,7 @@ pub struct TruncateTableReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TruncateTableReply {}
+pub struct RemoveTableCopiedFileReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EmptyProto {}
@@ -1389,13 +1420,13 @@ mod kvapi_key_impl {
             // TODO: file is not escaped!!!
             //       There already are non escaped data stored on disk.
             //       We can not change it anymore.
-            b.push_u64(self.table_id).push_raw(&self.file)
+            b.push_u64(self.id).push_raw(&self.file)
         }
 
         fn decode_key(p: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = p.next_u64()?;
+            let id = p.next_u64()?;
             let file = p.tail_raw()?.to_string();
-            Ok(Self { table_id, file })
+            Ok(Self { id, file })
         }
     }
 
@@ -1406,7 +1437,7 @@ mod kvapi_key_impl {
         type ValueType = TableCopiedFileInfo;
 
         fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
+            Some(TableId::new(self.id).to_string_key())
         }
     }
 
@@ -1461,7 +1492,7 @@ mod tests {
         // test with a key has a file has multi path
         {
             let name = TableCopiedFileNameIdent {
-                table_id: 2,
+                id: 2,
                 file: "/path/to/file".to_owned(),
             };
 
@@ -1471,7 +1502,7 @@ mod tests {
                 format!(
                     "{}/{}/{}",
                     TableCopiedFileNameIdent::PREFIX,
-                    name.table_id,
+                    name.id,
                     name.file,
                 )
             );
@@ -1496,7 +1527,7 @@ mod tests {
             let key = format!("{}/{}/{}", TableCopiedFileNameIdent::PREFIX, 2, "");
             let res = TableCopiedFileNameIdent::from_str_key(&key)?;
             assert_eq!(res, TableCopiedFileNameIdent {
-                table_id: 2,
+                id: 2,
                 file: "".to_string(),
             });
         }

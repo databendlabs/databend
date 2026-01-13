@@ -115,13 +115,23 @@ create stage test_table_ref_insert;
 statement ok
 copy into @test_table_ref_insert from (select 99, 'from_stage') file_format=(type=csv);
 
-statement error 1002
+statement ok
 INSERT INTO t1/dev FROM @test_table_ref_insert file_format=(type='csv')
 
 query I
 SELECT count() FROM fuse_snapshot('test_table_ref_insert','t1/dev');
 ----
-3
+4
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 main1
+2 main2
+10 dev_only
+99 from_stage
+1002 main2_branch_copy
+1100 main_only_branch_copy
 
 query I
 SELECT MIN(CASE WHEN snapshot_location LIKE '%/_ref/%' THEN 1 ELSE 0 END)

@@ -488,12 +488,22 @@ impl AccessLogger {
     }
 
     fn log_copy_into_table(&mut self, plan: &CopyIntoTablePlan) {
-        let modified_object = AccessObject {
-            object_domain: ObjectDomain::Table,
-            object_name: format!(
+        let object_name = match &plan.branch_name {
+            Some(branch) => format!(
+                "{}.{}.{}/{}",
+                plan.catalog_info.name_ident.catalog_name,
+                plan.database_name,
+                plan.table_name,
+                branch
+            ),
+            None => format!(
                 "{}.{}.{}",
                 plan.catalog_info.name_ident.catalog_name, plan.database_name, plan.table_name
             ),
+        };
+        let modified_object = AccessObject {
+            object_domain: ObjectDomain::Table,
+            object_name,
             columns: Some(
                 plan.required_values_schema
                     .fields
@@ -578,12 +588,7 @@ fn extract_metadata_ref(metadata: &MetadataRef) -> Vec<AccessObject> {
             DataSourceInfo::TableSource(_) => {
                 let access_object = AccessObject {
                     object_domain: ObjectDomain::Table,
-                    object_name: format!(
-                        "{}.{}.{}",
-                        table.catalog(),
-                        table.database(),
-                        table.name()
-                    ),
+                    object_name: table.qualified_name(),
                     ..Default::default()
                 };
                 table_to_columns.insert(table.index(), access_object);

@@ -55,21 +55,25 @@ impl Binder {
 
         let query = match &stmt.src {
             CopyIntoLocationSource::Table {
-                catalog,
-                database,
                 table,
                 with_options,
             } => {
-                let (catalog_name, database_name, table_name) =
-                    self.normalize_object_identifier_triple(catalog, database, table);
+                let (catalog_name, database_name, table_name, branch_name) =
+                    self.normalize_table_ref(table);
                 let with_options_str = with_options
                     .as_ref()
                     .map_or(String::new(), |with_options| format!(" {with_options}"));
 
                 let quoted_ident_case_sensitive =
                     self.ctx.get_settings().get_quoted_ident_case_sensitive()?;
+                let branch_suffix = branch_name.map_or(String::new(), |branch| {
+                    format!(
+                        "/{}",
+                        display_ident(&branch, false, quoted_ident_case_sensitive, self.dialect)
+                    )
+                });
                 let subquery = format!(
-                    "SELECT * FROM {}.{}.{}{with_options_str}",
+                    "SELECT * FROM {}.{}.{}{branch_suffix}{with_options_str}",
                     display_ident(
                         &catalog_name,
                         false,

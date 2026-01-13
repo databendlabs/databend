@@ -31,6 +31,7 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
+use crate::ast::TableRef;
 use crate::ast::With;
 use crate::ast::WithOptions;
 use crate::ast::quote::QuotedString;
@@ -38,7 +39,6 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
-use crate::ast::write_dot_separated_list;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -51,9 +51,7 @@ use crate::ast::write_dot_separated_list;
 pub struct CopyIntoTableStmt {
     pub with: Option<With>,
     pub src: CopyIntoTableSource,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub dst: TableRef,
     pub dst_columns: Option<Vec<Identifier>>,
 
     pub hints: Option<Hint>,
@@ -102,14 +100,7 @@ impl Display for CopyIntoTableStmt {
             write!(f, "{} ", hints)?;
         }
 
-        write!(f, " INTO ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(self.database.iter())
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, " INTO {}", self.dst)?;
 
         if let Some(columns) = &self.dst_columns {
             write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))?;
@@ -353,9 +344,7 @@ pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewritten as `(SELECT * FROM table)`
     Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
+        table: Box<TableRef>,
         with_options: Option<WithOptions>,
     },
 }
@@ -367,15 +356,10 @@ impl Display for CopyIntoLocationSource {
                 write!(f, "({query})")
             }
             CopyIntoLocationSource::Table {
-                catalog,
-                database,
                 table,
                 with_options,
             } => {
-                write_dot_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter()).chain(Some(table)),
-                )?;
+                write!(f, "{}", table)?;
                 if let Some(with_options) = with_options {
                     write!(f, " {with_options}")?;
                 }

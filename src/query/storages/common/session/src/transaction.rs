@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -69,7 +70,7 @@ pub struct TxnBuffer {
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
     lvt_check: HashMap<u64, Option<TableLvtCheck>>,
-    copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
+    copied_files: HashMap<TableRefId, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
@@ -112,8 +113,8 @@ impl TxnBuffer {
             self.lvt_check.entry(table_id).or_insert(req.lvt_check);
         }
 
-        for (table_id, file) in std::mem::take(&mut req.copied_files) {
-            self.copied_files.entry(table_id).or_default().push(file);
+        for (ref_id, file) in std::mem::take(&mut req.copied_files) {
+            self.copied_files.entry(ref_id).or_default().push(file);
         }
 
         self.update_stream_metas(&req.update_stream_metas);
@@ -301,9 +302,9 @@ impl TxnManager {
 
     pub fn req(&self) -> UpdateMultiTableMetaReq {
         let mut copied_files = Vec::new();
-        for (tbl_id, v) in &self.txn_buffer.copied_files {
+        for (ref_id, v) in &self.txn_buffer.copied_files {
             for file in v {
-                copied_files.push((*tbl_id, file.clone()));
+                copied_files.push((ref_id.clone(), file.clone()));
             }
         }
         UpdateMultiTableMetaReq {
@@ -357,19 +358,19 @@ impl TxnManager {
 
     pub fn get_table_copied_file_info(
         &self,
-        table_id: u64,
+        ref_id: &TableRefId,
     ) -> BTreeMap<String, TableCopiedFileInfo> {
         let mut ret = BTreeMap::new();
         if !self.is_active() {
             return ret;
         }
-        if is_temp_table_id(table_id) {
-            let temp_table = self.txn_buffer.mutated_temp_tables.get(&table_id);
+        if is_temp_table_id(ref_id.table_id) {
+            let temp_table = self.txn_buffer.mutated_temp_tables.get(&ref_id.table_id);
             if let Some(temp_table) = temp_table {
                 ret.extend(temp_table.copied_files.clone());
             }
         } else {
-            let reqs = self.txn_buffer.copied_files.get(&table_id);
+            let reqs = self.txn_buffer.copied_files.get(ref_id);
             if let Some(reqs) = reqs {
                 for req in reqs {
                     ret.extend(req.file_info.clone().into_iter());
@@ -391,6 +392,7 @@ impl TxnManager {
         self.tables_need_purge
             .insert(table_info.ident.table_id, table_info);
     }
+
     pub fn table_need_purge(&mut self) -> Vec<TableInfo> {
         std::mem::take(&mut self.tables_need_purge)
             .into_values()

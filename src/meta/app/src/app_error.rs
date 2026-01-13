@@ -25,6 +25,7 @@ use crate::principal::procedure_name_ident;
 use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::DictionaryIdentity;
 use crate::schema::SequenceRsc;
+use crate::schema::TableRefId;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
@@ -449,16 +450,21 @@ impl CleanDbIdTableNamesFailed {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DuplicatedUpsertFiles: {table_id:?} , in operation `{context}`")]
+#[error("DuplicatedUpsertFiles: {ref_ids:?} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
-    table_id: Vec<u64>,
+    /// The table reference ids that hit duplicated upsert.
+    ///
+    /// Note `TableRefId` includes both:
+    /// - `table_id`: physical table id
+    /// - `branch_id`: optional derived branch id
+    ref_ids: Vec<TableRefId>,
     context: String,
 }
 
 impl DuplicatedUpsertFiles {
-    pub fn new(table_id: Vec<u64>, context: impl Into<String>) -> Self {
+    pub fn new(ref_ids: Vec<TableRefId>, context: impl Into<String>) -> Self {
         DuplicatedUpsertFiles {
-            table_id,
+            ref_ids,
             context: context.into(),
         }
     }

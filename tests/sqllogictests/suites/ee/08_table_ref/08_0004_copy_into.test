@@ -1,0 +1,198 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+CREATE OR REPLACE DATABASE test_table_ref_copy_into
+
+statement ok
+USE test_table_ref_copy_into
+
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+DROP STAGE IF EXISTS st_copy
+
+statement ok
+CREATE STAGE st_copy FILE_FORMAT = (TYPE = CSV)
+
+statement ok
+CREATE OR REPLACE TABLE t(a INT, b STRING)
+
+statement ok
+ALTER TABLE t CREATE BRANCH dev
+
+## Prepare deterministic stage files.
+statement ok
+copy into @st_copy/data1.csv
+from (select 1, 'one' union all select 2, 'two')
+file_format=(type=csv) single=true include_query_id=false use_raw_path=true overwrite=true
+
+statement ok
+copy into @st_copy/data2.csv
+from (select 3, 'three')
+file_format=(type=csv) single=true include_query_id=false use_raw_path=true overwrite=true
+
+## Sanity check stage content.
+query IT
+select $1::int, $2::string from @st_copy/data1.csv (file_format => 'csv') order by $1;
+----
+1 one
+2 two
+
+query IT
+select $1::int, $2::string from @st_copy/data2.csv (file_format => 'csv') order by $1;
+----
+3 three
+
+## COPY INTO from stage -> write to branch and main should be isolated.
+statement ok
+copy into t/dev from @st_copy files=('data1.csv') file_format=(type=csv) force=false purge=false
+
+query I
+select count(*) from t;
+----
+0
+
+query IT
+select * from t/dev order by a;
+----
+1 one
+2 two
+
+## Copy the same stage file into main should NOT be skipped by branch history.
+statement ok
+copy into t from @st_copy files=('data1.csv') file_format=(type=csv) force=false purge=false
+
+query IT
+select * from t order by a;
+----
+1 one
+2 two
+
+query I
+select count(*) from t/dev;
+----
+2
+
+## Second COPY INTO for the same file should be skipped (no duplication) on the same ref.
+statement ok
+copy into t/dev from @st_copy files=('data1.csv') file_format=(type=csv) force=false purge=false
+
+query I
+select count(*) from t/dev;
+----
+2
+
+statement ok
+copy into t from @st_copy files=('data1.csv') file_format=(type=csv) force=false purge=false
+
+query I
+select count(*) from t;
+----
+2
+
+## Another file should be loadable into both main and branch independently.
+statement ok
+copy into t from @st_copy files=('data2.csv') file_format=(type=csv) force=false purge=false
+
+query IT
+select * from t order by a;
+----
+1 one
+2 two
+3 three
+
+statement ok
+copy into t/dev from @st_copy files=('data2.csv') file_format=(type=csv) force=false purge=false
+
+query I
+select count(*) from t;
+----
+3
+
+query IT
+select * from t/dev order by a;
+----
+1 one
+2 two
+3 three
+
+## Branch snapshots should be stored under ref path, main should not.
+query I
+SELECT MIN(CASE WHEN snapshot_location LIKE '%/_ref/%' THEN 1 ELSE 0 END)
+FROM fuse_snapshot('test_table_ref_copy_into','t/dev');
+----
+1
+
+query I
+SELECT MAX(CASE WHEN snapshot_location LIKE '%/_ref/%' THEN 1 ELSE 0 END)
+FROM fuse_snapshot('test_table_ref_copy_into','t');
+----
+0
+
+## COPY INTO into tag should fail (read-only).
+statement ok
+ALTER TABLE t CREATE TAG tag1
+
+statement error 3905
+copy into t/tag1 from @st_copy files=('data1.csv') file_format=(type=csv)
+
+query I
+select count(*) from t/tag1;
+----
+3
+
+## Column list check on branch.
+statement error (?s)1006(.*)does not have a column with name "c_not_exist"
+copy into t/dev(a, c_not_exist) from @st_copy files=('data1.csv') file_format=(type=csv)
+
+statement ok
+create or replace table t1(a int) ENABLE_SCHEMA_EVOLUTION = true;
+
+statement ok
+create or replace stage s1;
+
+statement ok
+copy into @s1 from (select 1 as a, 2 as b,  3 as c);
+
+statement ok
+copy into @s1 from (select 4 as a, 6 as c);
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev;
+
+statement ok
+copy into t1/dev from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT) force=true;
+
+query
+select * from t1/dev order by a;
+----
+1 2 3
+4 NULL 6
+
+statement ok
+copy into @s1 from (select 4 as a, '7' as d);
+
+statement ok
+copy into @s1 from (select 4 as a, 8 as d);
+
+statement error 1046.*mismatch
+copy into t1/dev from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT);
+
+statement ok
+DROP DATABASE test_table_ref_copy_into

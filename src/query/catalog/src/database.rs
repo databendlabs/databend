@@ -28,6 +28,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -35,8 +37,6 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -268,10 +268,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_copied_file_info(
-        &self,
-        _table_id: u64,
-    ) -> Result<ListTableCopiedFileReply> {
+    async fn list_table_copied_file_info(&self, _ref_id: u64) -> Result<ListTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_table_copied_file_info in {} Database",
             self.name()
@@ -279,9 +276,12 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
+    async fn remove_table_copied_file_info(
+        &self,
+        _req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement truncate_table in {} Database",
+            "UnImplement remove_table_copied_file_info in {} Database",
             self.name()
         )))
     }

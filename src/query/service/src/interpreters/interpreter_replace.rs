@@ -125,6 +125,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
+                None,
                 MutationKind::Replace,
                 LockTableOption::NoLock,
             );
@@ -417,7 +418,7 @@ impl ReplaceInterpreter {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
                     let (physical_plan, _, _) = interpreter
-                        .build_physical_plan(table_info, &copy_plan, table_meta_timestamps)
+                        .build_physical_plan(table_info, None, &copy_plan, table_meta_timestamps)
                         .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan

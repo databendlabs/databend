@@ -274,12 +274,13 @@ impl Interpreter for InsertInterpreter {
                 )?;
 
                 //  Execute the hook operator.
-                if self.plan.branch.is_none() {
+                {
                     let hook_operator = HookOperator::create(
                         self.ctx.clone(),
                         self.plan.catalog.clone(),
                         self.plan.database.clone(),
                         self.plan.table.clone(),
+                        self.plan.branch.clone(),
                         MutationKind::Insert,
                         LockTableOption::LockNoRetry,
                     );
@@ -337,12 +338,13 @@ impl Interpreter for InsertInterpreter {
         )?;
 
         //  Execute the hook operator.
-        if self.plan.branch.is_none() {
+        {
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
+                self.plan.branch.clone(),
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );

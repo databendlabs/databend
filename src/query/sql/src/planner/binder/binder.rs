@@ -23,6 +23,7 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -77,6 +78,8 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
+
+pub type TableRefName = (String, String, String, Option<String>);
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -1018,6 +1021,19 @@ impl Binder {
         }
 
         (catalog_name, database_name)
+    }
+
+    pub fn normalize_table_ref(&self, table_ref: &TableRef) -> TableRefName {
+        let (catalog, database, table) = self.normalize_object_identifier_triple(
+            &table_ref.catalog,
+            &table_ref.database,
+            &table_ref.table,
+        );
+        let branch = table_ref
+            .branch
+            .as_ref()
+            .map(|ident| self.normalize_identifier(ident).name);
+        (catalog, database, table, branch)
     }
 
     /// Normalize [[<catalog>].<database>].<object>
