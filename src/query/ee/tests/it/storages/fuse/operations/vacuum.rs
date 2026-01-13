@@ -860,12 +860,12 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // there should be 6 table ids : create or replace table 6 times
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 6);
 
     // there should be ownerships for 2 db ids and 5 table ids, one of the ownership is revoked by drop table
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 7);
 
     for sql in vacuum_stmts {
@@ -874,16 +874,16 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // After vacuum, 1 table ids left
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 1);
 
     let prefix = "__fd_table_id_to_name";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 1);
 
     // There are ownership objs of  2 dbs and 1 tables
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(prefix, None).await?;
     assert_eq!(items.len(), 3);
 
     // db1.t1 should still be accessible
@@ -904,4 +904,325 @@ async fn new_local_meta() -> MetaStore {
     let config = meta_config.to_meta_grpc_client_conf(version);
     let provider = MetaStoreProvider::new(config);
     provider.create_meta_store().await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_table_clean_tag_refs() -> Result<()> {
+    use databend_common_meta_api::tag_api::TagApi;
+    use databend_common_meta_app::schema::CreateTagReq;
+    use databend_common_meta_app::schema::SetObjectTagsReq;
+    use databend_common_meta_app::schema::TagMeta;
+    use databend_common_meta_app::schema::TagNameIdent;
+    use databend_common_meta_app::schema::TaggableObject;
+
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_tag_refs";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(format!("create table {db_name}.{tbl_name} (a int)").as_str())
+        .await?;
+
+    // 4. Get table and database IDs
+    let tenant = ctx.get_tenant();
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+    let table_id = table.get_id();
+
+    let db = ctx
+        .get_default_catalog()?
+        .get_database(&tenant, db_name)
+        .await?;
+    let db_id = db.get_db_info().database_id.db_id;
+
+    // 5. Create a tag and set it on both table and database
+    let tag_name = "test_env_tag";
+    let tag_ident = TagNameIdent::new(&tenant, tag_name);
+    let create_tag_req = CreateTagReq {
+        name_ident: tag_ident.clone(),
+        meta: TagMeta {
+            allowed_values: Some(vec!["dev".to_string(), "prod".to_string()]),
+            comment: "test tag".to_string(),
+            created_on: chrono::Utc::now(),
+            updated_on: None,
+            drop_on: None,
+        },
+    };
+    let create_result = meta.create_tag(create_tag_req).await?;
+    let tag_id = create_result.unwrap().tag_id;
+
+    // Set tag on table
+    let table_object = TaggableObject::Table { table_id };
+    let set_table_tag_req = SetObjectTagsReq {
+        tenant: tenant.clone(),
+        taggable_object: table_object.clone(),
+        tags: vec![(tag_id, "dev".to_string())],
+    };
+    meta.set_object_tags(set_table_tag_req).await?.unwrap();
+
+    // Set tag on database
+    let db_object = TaggableObject::Database { db_id };
+    let set_db_tag_req = SetObjectTagsReq {
+        tenant: tenant.clone(),
+        taggable_object: db_object.clone(),
+        tags: vec![(tag_id, "prod".to_string())],
+    };
+    meta.set_object_tags(set_db_tag_req).await?.unwrap();
+
+    // 6. Verify tag references exist
+    let table_tags = meta.get_object_tags(&tenant, &table_object).await?;
+    assert_eq!(table_tags.len(), 1);
+    assert_eq!(table_tags[0].tag_id, tag_id);
+    assert_eq!(table_tags[0].tag_value.data.tag_allowed_value, "dev");
+
+    let db_tags = meta.get_object_tags(&tenant, &db_object).await?;
+    assert_eq!(db_tags.len(), 1);
+    assert_eq!(db_tags[0].tag_id, tag_id);
+    assert_eq!(db_tags[0].tag_value.data.tag_allowed_value, "prod");
+
+    // 7. Drop database (this will mark both database and table as dropped)
+    // Database tag refs should be cleaned immediately by DROP DATABASE
+    // Table tag refs should still exist (cleaned by VACUUM later)
+    fixture
+        .execute_command(format!("drop database {db_name}").as_str())
+        .await?;
+
+    // Database tag refs should be cleaned by DROP DATABASE
+    let db_tags = meta.get_object_tags(&tenant, &db_object).await?;
+    assert!(
+        db_tags.is_empty(),
+        "db tag refs should be cleaned by DROP DATABASE"
+    );
+
+    // Table tag refs should still exist after DROP DATABASE
+    // (only cleaned by VACUUM when table is permanently removed)
+    let table_tags = meta.get_object_tags(&tenant, &table_object).await?;
+    assert_eq!(
+        table_tags.len(),
+        1,
+        "table tag refs should still exist after DROP DATABASE"
+    );
+
+    // 8. Vacuum dropped tables
+    fixture.execute_command("vacuum drop table").await?;
+
+    // 9. Verify table tag references are cleaned up after vacuum
+    let table_tags = meta.get_object_tags(&tenant, &table_object).await?;
+    assert!(
+        table_tags.is_empty(),
+        "table tag refs should be cleaned up after vacuum"
+    );
+
+    // 10. Tag definition should still exist (only references are cleaned)
+    let tag = meta.get_tag(&tag_ident).await?;
+    assert!(tag.is_some(), "tag definition should still exist");
+
+    // Cleanup: drop the tag
+    let _ = meta.drop_tag(&tag_ident).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_table_clean_policies() -> Result<()> {
+    use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+    use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
+    use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+    use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // Enable row access policy feature
+    fixture
+        .execute_command("set global enable_experimental_row_access_policy = 1")
+        .await?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_policies";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(
+            format!("create table {db_name}.{tbl_name} (id int, name string, email string)")
+                .as_str(),
+        )
+        .await?;
+
+    // 4. Create masking policies and row access policy
+    fixture
+        .execute_command(
+            "CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() = 'admin' THEN val ELSE '***' END",
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            "CREATE MASKING POLICY name_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() = 'admin' THEN val ELSE 'REDACTED' END",
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            "CREATE ROW ACCESS POLICY row_filter AS (id int) RETURNS boolean -> current_role() = 'admin' OR id > 0",
+        )
+        .await?;
+
+    // 5. Apply policies to table columns
+    fixture
+        .execute_command(
+            format!(
+                "ALTER TABLE {db_name}.{tbl_name} MODIFY COLUMN email SET MASKING POLICY email_mask"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            format!(
+                "ALTER TABLE {db_name}.{tbl_name} MODIFY COLUMN name SET MASKING POLICY name_mask"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            format!("ALTER TABLE {db_name}.{tbl_name} ADD ROW ACCESS POLICY row_filter ON (id)")
+                .as_str(),
+        )
+        .await?;
+
+    // 6. Get table ID and verify policy references exist
+    let tenant = ctx.get_tenant();
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+    let table_id = table.get_id();
+
+    // Get policy IDs from table metadata
+    let table_meta = table.get_table_info().meta.clone();
+
+    // Verify masking policy references exist
+    assert!(
+        !table_meta.column_mask_policy_columns_ids.is_empty(),
+        "masking policy references should exist after applying policies"
+    );
+
+    // Verify row access policy reference exists
+    assert!(
+        table_meta.row_access_policy_columns_ids.is_some(),
+        "row access policy reference should exist after applying policy"
+    );
+
+    let mask_policy_ids: Vec<u64> = table_meta
+        .column_mask_policy_columns_ids
+        .values()
+        .map(|policy_map| policy_map.policy_id)
+        .collect();
+
+    let row_policy_id = table_meta
+        .row_access_policy_columns_ids
+        .as_ref()
+        .unwrap()
+        .policy_id;
+
+    // Verify policy references in meta store
+    for policy_id in &mask_policy_ids {
+        let mask_policy_key =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            });
+        let v = meta.get_pb(&mask_policy_key).await?;
+        assert!(
+            v.is_some(),
+            "masking policy reference should exist in meta store"
+        );
+    }
+
+    let row_policy_key =
+        RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+            policy_id: row_policy_id,
+            table_id,
+        });
+    let v = meta.get_pb(&row_policy_key).await?;
+    assert!(
+        v.is_some(),
+        "row access policy reference should exist in meta store"
+    );
+
+    // 7. Drop database (this will mark both database and table as dropped)
+    fixture
+        .execute_command(format!("drop database {db_name}").as_str())
+        .await?;
+
+    // 8. Vacuum dropped tables
+    fixture.execute_command("vacuum drop table").await?;
+
+    // 9. Ensure that policy references are cleaned up
+    for policy_id in &mask_policy_ids {
+        let mask_policy_key =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            });
+        let v = meta.get_pb(&mask_policy_key).await?;
+        assert!(
+            v.is_none(),
+            "masking policy reference should be cleaned up after vacuum"
+        );
+    }
+
+    let row_policy_key =
+        RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+            policy_id: row_policy_id,
+            table_id,
+        });
+    let v = meta.get_pb(&row_policy_key).await?;
+    assert!(
+        v.is_none(),
+        "row access policy reference should be cleaned up after vacuum"
+    );
+
+    Ok(())
 }

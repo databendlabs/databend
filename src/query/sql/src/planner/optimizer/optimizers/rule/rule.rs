@@ -136,6 +136,7 @@ pub enum RuleID {
     ShrinkGroupByType,
     PushDownPrewhere,
     TryApplyAggIndex,
+    EliminateSelfJoin,
     CommuteJoin,
 
     // Exploration rules
@@ -187,6 +188,7 @@ impl Display for RuleID {
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::ShrinkGroupByType => write!(f, "ShrinkGroupByType"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
+            RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),

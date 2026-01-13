@@ -280,9 +280,9 @@ DROP TABLE t_str
 query TTT rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
-(NULL,18,'1970-01-01')
-(NULL,18,'1970-01-02')
-(NULL,18,'1970-01-03')
+(NULL,18,"1970-01-01")
+(NULL,18,"1970-01-02")
+(NULL,18,"1970-01-03")
 
 query TTT rowsort
 SELECT TRY_CAST('1900-12-30 12:00:00' AS TIMESTAMP) AS "TEMP(Test)(4058757556)(0)",

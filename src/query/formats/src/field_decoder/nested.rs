@@ -56,6 +56,9 @@ use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
+use serde::Deserialize;
+use serde_json::Deserializer;
+use serde_json::value::RawValue;
 
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -209,7 +212,7 @@ impl NestedValues {
         column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        reader.read_quoted_text(&mut column.row_buffer, b'\'')?;
+        self.read_string_inner(reader, &mut column.row_buffer)?;
         column.commit_row();
         Ok(())
     }
@@ -220,7 +223,7 @@ impl NestedValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        reader.read_quoted_text(&mut buf, b'\'')?;
+        self.read_string_inner(reader, &mut buf)?;
         let decoded = decode_binary(&buf, self.common_settings.binary_format)?;
         column.put_slice(&decoded);
         column.commit_row();
@@ -232,7 +235,10 @@ impl NestedValues {
         reader: &mut Cursor<R>,
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
-        reader.read_quoted_text(out_buf, b'\'')?;
+        if reader.read_quoted_text(out_buf, b'"').is_err() {
+            // Read single quoted text, compatible with previous implementations
+            reader.read_quoted_text(out_buf, b'\'')?;
+        }
         Ok(())
     }
 
@@ -320,8 +326,13 @@ impl NestedValues {
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
+        let buf = if let Ok(val) = self.read_json(reader) {
+            val.as_bytes().to_vec()
+        } else {
+            let mut buf = Vec::new();
+            reader.read_quoted_text(&mut buf, b'\'')?;
+            buf
+        };
         match parse_owned_jsonb_with_buf(&buf, &mut column.data) {
             Ok(_) => {
                 column.commit_row();
@@ -343,7 +354,12 @@ impl NestedValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
+        if reader.read_quoted_text(&mut buf, b'"').is_err()
+            && reader.read_quoted_text(&mut buf, b'\'').is_err()
+        {
+            let val = self.read_json(reader)?;
+            buf = val.as_bytes().to_vec();
+        }
         let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
@@ -356,11 +372,25 @@ impl NestedValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
+        if reader.read_quoted_text(&mut buf, b'"').is_err()
+            && reader.read_quoted_text(&mut buf, b'\'').is_err()
+        {
+            let val = self.read_json(reader)?;
+            buf = val.as_bytes().to_vec();
+        }
         let geog = geography_from_ewkt_bytes(&buf)?;
         column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
+    }
+
+    fn read_json<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<String> {
+        let start = reader.position() as usize;
+        let data = reader.get_ref().as_ref();
+        let mut deserializer = Deserializer::from_slice(&data[start..]);
+        let raw: Box<RawValue> = Box::<RawValue>::deserialize(&mut deserializer)?;
+        reader.set_position((start + raw.get().len()) as u64);
+        Ok(raw.to_string())
     }
 
     fn read_nullable<R: AsRef<[u8]>>(

@@ -192,8 +192,8 @@ impl ProcedureMgr {
         let name_id_metas = self.kv_api.list_id_value(&dir).await?;
 
         let procedure_infos = name_id_metas
-            .map(|(k, id, seq_meta)| ProcedureInfo {
-                ident: ProcedureIdIdent::new(&req.tenant, *id),
+            .map(|(k, id_seqv, seq_meta)| ProcedureInfo {
+                ident: ProcedureIdIdent::new(&req.tenant, *id_seqv.data),
                 name_ident: k,
                 meta: seq_meta.data,
             })
@@ -213,8 +213,8 @@ impl ProcedureMgr {
 
         let name_id_metas = self.kv_api.list_id_value(&dir).await?;
         let procedure_infos = name_id_metas
-            .map(|(k, id, seq_meta)| ProcedureInfo {
-                ident: ProcedureIdIdent::new(&self.tenant, *id),
+            .map(|(k, id_seqv, seq_meta)| ProcedureInfo {
+                ident: ProcedureIdIdent::new(&self.tenant, *id_seqv.data),
                 name_ident: k,
                 meta: seq_meta.data,
             })

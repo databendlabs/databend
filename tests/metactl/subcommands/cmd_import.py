@@ -24,7 +24,7 @@ def test_import_subcommand():
 ["raft_log",{"Vote":{"leader_id":{"term":1,"node_id":1},"committed":true}}]
 ["raft_log",{"Committed":{"leader_id":{"term":1,"node_id":1},"index":7}}]
 ["raft_log",{"Purged":null}]
-["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":0,"node_id":0},"index":0},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}]
+["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":0,"node_id":1},"index":0},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}]
 ["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":1,"node_id":1},"index":1},"payload":"Blank"}}]
 ["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":1,"node_id":1},"index":2},"payload":{"Normal":{"time_ms":1753508277701,"cmd":{"AddNode":{"node_id":1,"node":{"name":"1","endpoint":{"addr":"localhost","port":28103},"grpc_api_advertise_address":"127.0.0.1:9191"},"overriding":false}}}}}}]
 ["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":1,"node_id":1},"index":3},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}]

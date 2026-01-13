@@ -38,6 +38,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
@@ -69,6 +70,8 @@ use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
+use crate::plans::CreateTagPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
@@ -108,7 +111,9 @@ use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
@@ -150,6 +155,7 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::SetObjectTagsPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
@@ -170,6 +176,7 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetObjectTagsPlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UnsetWorkloadGroupQuotasPlan;
@@ -261,6 +268,7 @@ pub enum Plan {
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
+    AlterDatabase(Box<AlterDatabasePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
@@ -294,6 +302,8 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
+    CreateTableRef(Box<CreateTableRefPlan>),
+    DropTableRef(Box<DropTableRefPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -368,6 +378,12 @@ pub enum Plan {
     CreateFileFormat(Box<CreateFileFormatPlan>),
     DropFileFormat(Box<DropFileFormatPlan>),
     ShowFileFormats(Box<ShowFileFormatsPlan>),
+
+    // Tags
+    CreateTag(Box<CreateTagPlan>),
+    DropTag(Box<DropTagPlan>),
+    SetObjectTags(Box<SetObjectTagsPlan>),
+    UnsetObjectTags(Box<UnsetObjectTagsPlan>),
 
     // Stages
     CreateStage(Box<CreateStagePlan>),
@@ -472,6 +488,7 @@ pub enum RewriteKind {
     ShowStatistics,
 
     ShowStreams(String),
+    ShowTags,
 
     ShowFunctions,
     ShowUserFunctions,

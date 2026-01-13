@@ -1,0 +1,504 @@
+statement ok
+drop database if exists eliminate_self_join
+
+statement ok
+create database eliminate_self_join
+
+statement ok
+use eliminate_self_join
+
+statement ok
+create table t1(c1 int not null, c2 int not null) as select number, number % 10 from numbers(100)
+
+statement ok
+create table t2(c1 int not null, c2 int not null) as select number, number % 7 from numbers(100)
+
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+Filter
+├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+├── filters: [is_true(sum(c2) (#2) = 1)]
+├── estimated rows: 50.00
+└── AggregateFinal
+    ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+    ├── group by: [c1]
+    ├── aggregate functions: [sum(c2)]
+    ├── estimated rows: 100.00
+    └── AggregatePartial
+        ├── group by: [c1]
+        ├── aggregate functions: [sum(c2)]
+        ├── estimated rows: 100.00
+        └── TableScan
+            ├── table: default.eliminate_self_join.t1
+            ├── scan id: 0
+            ├── output columns: [c1 (#0), c2 (#1)]
+            ├── read rows: 100
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 100.00
+
+
+statement ok
+create table t_nullable(c1 int null, c2 int not null)
+
+statement ok
+insert into t_nullable values (1, 10), (2, 20), (3, 30), (null, 40), (null, 50)
+
+
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) = 10
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+Filter
+├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
+├── estimated rows: 0.30
+└── Filter
+    ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+    ├── filters: [is_true(sum(c2) (#2) = 10)]
+    ├── estimated rows: 1.50
+    └── AggregateFinal
+        ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+        ├── group by: [c1]
+        ├── aggregate functions: [sum(c2)]
+        ├── estimated rows: 3.00
+        └── AggregatePartial
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 3.00
+            └── TableScan
+                ├── table: default.eliminate_self_join.t_nullable
+                ├── scan id: 0
+                ├── output columns: [c1 (#0), c2 (#1)]
+                ├── read rows: 5
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 5.00
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) = 10
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+1 10
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) > 0
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+1 10
+2 20
+3 30
+
+query T
+explain
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) = 10
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) > 0
+) as t4
+on t3.c1 = t4.c1
+----
+HashJoin
+├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+├── join type: INNER
+├── build keys: [t4.c1 (#3)]
+├── probe keys: [t3.c1 (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t4.c1 (#3), probe targets:[t3.c1 (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 1.12
+├── Filter(Build)
+│   ├── output columns: [t_nullable.c1 (#3)]
+│   ├── filters: [is_true(sum(c2) (#5) > 0)]
+│   ├── estimated rows: 1.50
+│   └── AggregateFinal
+│       ├── output columns: [sum(c2) (#5), t_nullable.c1 (#3)]
+│       ├── group by: [c1]
+│       ├── aggregate functions: [sum(c2)]
+│       ├── estimated rows: 3.00
+│       └── AggregatePartial
+│           ├── group by: [c1]
+│           ├── aggregate functions: [sum(c2)]
+│           ├── estimated rows: 3.00
+│           └── TableScan
+│               ├── table: default.eliminate_self_join.t_nullable
+│               ├── scan id: 1
+│               ├── output columns: [c1 (#3), c2 (#4)]
+│               ├── read rows: 5
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 5.00
+└── Filter(Probe)
+    ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+    ├── filters: [is_true(sum(c2) (#2) = 10)]
+    ├── estimated rows: 1.50
+    └── AggregateFinal
+        ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
+        ├── group by: [c1]
+        ├── aggregate functions: [sum(c2)]
+        ├── estimated rows: 3.00
+        └── AggregatePartial
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 3.00
+            └── TableScan
+                ├── table: default.eliminate_self_join.t_nullable
+                ├── scan id: 0
+                ├── output columns: [c1 (#0), c2 (#1)]
+                ├── read rows: 5
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 5.00
+
+query II
+select t3.c1, t3.c2
+from (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) = 10
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t_nullable
+    group by c1
+    having sum(c2) > 0
+) as t4
+on t3.c1 = t4.c1
+----
+1 10
+
+# Test case: operators above Join reference columns from the eliminated table (t4)
+# When t4 is eliminated, t4.c1 and t4.c2 should be mapped to t3.c1 and t3.c2
+query T
+explain
+select t3.c1, t3.c2, t4.c1, t4.c2
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+EvalScalar
+├── output columns: [sum(c2) (#2), t1.c1 (#0), t1.c1 (#3), sum(c2) (#5)]
+├── expressions: [c1 (#0), sum(c2) (#2)]
+├── estimated rows: 50.00
+└── Filter
+    ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+    ├── filters: [is_true(sum(c2) (#2) = 1)]
+    ├── estimated rows: 50.00
+    └── AggregateFinal
+        ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+        ├── group by: [c1]
+        ├── aggregate functions: [sum(c2)]
+        ├── estimated rows: 100.00
+        └── AggregatePartial
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 100.00
+            └── TableScan
+                ├── table: default.eliminate_self_join.t1
+                ├── scan id: 0
+                ├── output columns: [c1 (#0), c2 (#1)]
+                ├── read rows: 100
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 100.00
+
+# Verify execution result: t4.c1 and t4.c2 should equal t3.c1 and t3.c2
+query IIII
+select t3.c1, t3.c2, t4.c1, t4.c2
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+1 1 1 1
+11 1 11 1
+21 1 21 1
+31 1 31 1
+41 1 41 1
+51 1 51 1
+61 1 61 1
+71 1 71 1
+81 1 81 1
+91 1 91 1
+
+# Regression: if the eliminated side has an EvalScalar above the Aggregate that
+# introduces new columns (e.g. `sum(c2)+1`), the elimination rewrite currently
+# must recreate those derived column indices; otherwise parent operators may
+# reference missing columns.
+query T
+explain select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, c2, c2 + 1 as c3
+    from (
+        select c1, sum(c2) as c2
+        from t1
+        group by c1
+    ) as s
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+Sort(Single)
+├── output columns: [sum(c2) (#2), t1.c1 (#0), c3 (#6)]
+├── sort keys: [c1 ASC NULLS LAST]
+├── estimated rows: 50.00
+└── EvalScalar
+    ├── output columns: [sum(c2) (#2), t1.c1 (#0), c3 (#6)]
+    ├── expressions: [sum(c2) (#2) + 1]
+    ├── estimated rows: 50.00
+    └── Filter
+        ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+        ├── filters: [is_true(sum(c2) (#2) = 1)]
+        ├── estimated rows: 50.00
+        └── AggregateFinal
+            ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+            ├── group by: [c1]
+            ├── aggregate functions: [sum(c2)]
+            ├── estimated rows: 100.00
+            └── AggregatePartial
+                ├── group by: [c1]
+                ├── aggregate functions: [sum(c2)]
+                ├── estimated rows: 100.00
+                └── TableScan
+                    ├── table: default.eliminate_self_join.t1
+                    ├── scan id: 0
+                    ├── output columns: [c1 (#0), c2 (#1)]
+                    ├── read rows: 100
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 100.00
+
+
+query III
+select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, c2, c2 + 1 as c3
+    from (
+        select c1, sum(c2) as c2
+        from t1
+        group by c1
+    ) as s
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+1 1 2
+11 1 2
+21 1 2
+31 1 2
+41 1 2
+51 1 2
+61 1 2
+71 1 2
+81 1 2
+91 1 2
+
+query T
+explain
+select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, sum(c2) as c2, max(c2) as c3
+    from t1
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+----
+HashJoin
+├── output columns: [max(c2) (#6), sum(c2) (#2), t1.c1 (#0)]
+├── join type: INNER
+├── build keys: [t3.c1 (#0)]
+├── probe keys: [t4.c1 (#3)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
+├── estimated rows: 50.00
+├── Filter(Build)
+│   ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+│   ├── filters: [is_true(sum(c2) (#2) = 1)]
+│   ├── estimated rows: 50.00
+│   └── AggregateFinal
+│       ├── output columns: [sum(c2) (#2), t1.c1 (#0)]
+│       ├── group by: [c1]
+│       ├── aggregate functions: [sum(c2)]
+│       ├── estimated rows: 100.00
+│       └── AggregatePartial
+│           ├── group by: [c1]
+│           ├── aggregate functions: [sum(c2)]
+│           ├── estimated rows: 100.00
+│           └── TableScan
+│               ├── table: default.eliminate_self_join.t1
+│               ├── scan id: 0
+│               ├── output columns: [c1 (#0), c2 (#1)]
+│               ├── read rows: 100
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│               ├── push downs: [filters: [], limit: NONE]
+│               └── estimated rows: 100.00
+└── AggregateFinal(Probe)
+    ├── output columns: [max(c2) (#6), t1.c1 (#3)]
+    ├── group by: [c1]
+    ├── aggregate functions: [max(c2)]
+    ├── estimated rows: 100.00
+    └── AggregatePartial
+        ├── group by: [c1]
+        ├── aggregate functions: [max(c2)]
+        ├── estimated rows: 100.00
+        └── TableScan
+            ├── table: default.eliminate_self_join.t1
+            ├── scan id: 1
+            ├── output columns: [c1 (#3), c2 (#4)]
+            ├── read rows: 100
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 100.00
+
+query III
+select t3.c1, t3.c2, t4.c3
+from (
+    select c1, sum(c2) as c2
+    from t1
+    group by c1
+    having sum(c2) = 1
+) as t3
+join (
+    select c1, sum(c2) as c2, max(c2) as c3
+    from t1
+    group by c1
+) as t4
+on t3.c1 = t4.c1
+order by t3.c1
+----
+1 1 1
+11 1 1
+21 1 1
+31 1 1
+41 1 1
+51 1 1
+61 1 1
+71 1 1
+81 1 1
+91 1 1
+
+statement ok
+drop database eliminate_self_join

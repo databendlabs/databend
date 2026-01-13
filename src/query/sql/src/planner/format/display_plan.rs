@@ -110,6 +110,8 @@ impl Plan {
             Plan::DropAllTableRowAccessPolicies(_) => {
                 Ok("DropAllTableRowAccessPolicies".to_string())
             }
+            Plan::CreateTableRef(_) => Ok("CreateTableRef".to_string()),
+            Plan::DropTableRef(_) => Ok("DropTableRef".to_string()),
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),
@@ -154,6 +156,12 @@ impl Plan {
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),
             Plan::DropStage(_) => Ok("DropStage".to_string()),
             Plan::RemoveStage(_) => Ok("RemoveStage".to_string()),
+
+            // Tags
+            Plan::CreateTag(_) => Ok("CreateTag".to_string()),
+            Plan::DropTag(_) => Ok("DropTag".to_string()),
+            Plan::SetObjectTags(_) => Ok("SetObjectTags".to_string()),
+            Plan::UnsetObjectTags(_) => Ok("UnsetObjectTags".to_string()),
 
             // FileFormat
             Plan::CreateFileFormat(_) => Ok("CreateFileFormat".to_string()),
@@ -274,6 +282,7 @@ impl Plan {
             Plan::SetWorkloadGroupQuotas(_) => Ok("SetWorkloadGroupQuotas".to_string()),
             Plan::UnsetWorkloadGroupQuotas(_) => Ok("UnsetWorkloadGroupQuotas".to_string()),
             Plan::AlterRole(_) => Ok("AlterRole".to_string()),
+            Plan::AlterDatabase(_) => Ok("AlterDatabase".to_string()),
         }
     }
 }

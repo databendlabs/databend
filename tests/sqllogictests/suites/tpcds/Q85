@@ -60,5 +60,3 @@ ORDER BY SUBSTRING(r_reason_desc,1,20) ,
 LIMIT 100;
 ----
 Did not like the col 94.0 3078.98000000 92.97000000
-
-

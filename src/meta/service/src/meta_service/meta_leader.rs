@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -21,6 +22,7 @@ use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
@@ -103,7 +105,11 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.sto.get_sm_v003();
-                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
+                let res = sm
+                    .kv_api()
+                    .list_kv_collect(&req.prefix, None)
+                    .await
+                    .unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -145,7 +151,7 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
 
             MetaGrpcReadReq::ListKV(req) => {
                 let strm =
-                    kv_api.list_kv(&req.prefix).await.map_err(|e| {
+                    kv_api.list_kv(&req.prefix, None).await.map_err(|e| {
                         MetaOperationError::DataError(MetaDataError::ReadError(
                             MetaDataReadError::new("list_kv", &req.prefix, &e),
                         ))
@@ -178,7 +184,7 @@ impl<'a> MetaLeader<'a> {
         let role = req.role();
         let node_id = req.node_id;
         let endpoint = req.endpoint;
-        let metrics = self.raft.metrics().borrow().clone();
+        let metrics = self.raft.metrics().borrow_watched().clone();
         let membership = metrics.membership_config.membership();
 
         let voters = membership.voter_ids().collect::<BTreeSet<_>>();
@@ -312,6 +318,25 @@ impl<'a> MetaLeader<'a> {
         }
 
         Ok(Ok(()))
+    }
+
+    /// List key-value pairs by prefix.
+    ///
+    /// Returns a stream of `StreamItem` wrapped in tonic's `BoxStream`,
+    /// which has item type `Result<StreamItem, Status>`.
+    pub async fn kv_list(
+        &self,
+        prefix: &str,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .list_kv(prefix, limit)
+            .await?;
+        let strm = strm.map_err(|e| Status::internal(e.to_string()));
+        Ok(strm.boxed())
     }
 }
 

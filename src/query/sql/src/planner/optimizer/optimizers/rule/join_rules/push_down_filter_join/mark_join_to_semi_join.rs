@@ -16,13 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 
-pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
+pub fn convert_mark_to_semi_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
     let mut filter: Filter = s_expr.plan().clone().try_into()?;
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
 
@@ -34,7 +35,9 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
         return Ok((s_expr.clone(), false));
     }
 
-    let mark_index = join.marker_index.unwrap();
+    let Some(mark_index) = join.marker_index else {
+        return Ok((s_expr.clone(), false));
+    };
     let mut find_mark_index = false;
 
     // remove mark index filter
@@ -64,6 +67,8 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
         JoinType::RightMark => JoinType::LeftSemi,
         _ => unreachable!(),
     };
+
+    metadata.write().add_removed_mark_index(mark_index);
 
     // clear is null equal sign
     join.equi_conditions.iter_mut().for_each(|c| {

@@ -270,7 +270,7 @@ SELECT list(number) from numbers_mt(10)
 query TT
 SELECT array_sort(list(id), 'asc'), array_sort(list(var), 'asc') FROM t1;
 ----
-[1,2,3,4,5,6] ['true','10','"abcd"','{"k":"v"}','[1,2,3]','null']
+[1,2,3,4,5,6] [true,10,"abcd",{"k":"v"},[1,2,3],null]
 
 query TT
 SELECT array_sort(list(id), 'asc'), array_sort(list(arr), 'asc') FROM t2;
@@ -469,7 +469,7 @@ select array_agg(x) within group (order by x desc) from t3;
 query TT
 select array_agg(s), array_agg(null) from t3;
 ----
-['abc','def','xyz'] []
+["abc","def","xyz"] []
 
 statement ok
 create table aggavg(shopid string, goodsid string, avgcostvalue decimal(16, 8), sdate_rn uint64, md string)
@@ -530,7 +530,7 @@ select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json
 query TTTTT
 select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d
 ----
-[20.00,10.00,4.23,5.99] ['abc','de','xyz'] [100,200,300] ['{"k":"v"}','null','"uvw"','[1,2,3]'] [['a','b'],[],['x','y'],['z']] ['a','a','a','a']
+[20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
 
 statement ok
 DROP TABLE d

@@ -113,6 +113,10 @@ impl SelectInterpreter {
         DataSchemaRefExt::create(fields)
     }
 
+    pub fn get_result_table_schema(&self) -> Result<TableSchemaRef> {
+        self.bind_context.output_table_schema(self.metadata.clone())
+    }
+
     #[fastrace::trace(name = "SelectInterpreter::build_physical_plan")]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
@@ -303,7 +307,17 @@ impl Interpreter for SelectInterpreter {
             && self.ctx.get_cacheable()
             && self.formatted_ast.is_some()
         {
-            let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
+            let extras = self.ctx.get_cache_key_extras();
+            let key_source = if extras.is_empty() {
+                self.formatted_ast.as_ref().unwrap().clone()
+            } else {
+                format!(
+                    "{}|{}",
+                    self.formatted_ast.as_ref().unwrap(),
+                    extras.join("|")
+                )
+            };
+            let key = gen_result_cache_key(&key_source);
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();
 

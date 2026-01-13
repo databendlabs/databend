@@ -30,6 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
 use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
+use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -265,6 +266,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ]))
         // Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
+        // Eliminate self joins when possible
+        .add(EliminateSelfJoinOptimizer::new(opt_ctx.clone()))
         // After join reorder, Convert some single join to inner join.
         .add(SingleToInnerOptimizer::new())
         // Deduplicate join conditions.

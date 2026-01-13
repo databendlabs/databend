@@ -172,16 +172,13 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    // If role_arn is empty, we should not allow credential chain.
-    let mut allow_credential_chain = Some(!role_arn.is_empty());
-
-    // If we are in history table scope, we allow credential loader to be enabled
-    let in_history_table_scope = ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off);
-    if in_history_table_scope {
-        info!("Allow credential chain for history tables");
-        allow_credential_chain = Some(true);
-    }
+    // Enable credential chain explicitly only in history-table scope.
+    let allow_credential_chain = ThreadTracker::capture_log_settings()
+        .is_some_and(|settings| settings.level == LevelFilter::Off)
+        .then(|| {
+            info!("Allow credential chain for history tables");
+            true
+        });
 
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),

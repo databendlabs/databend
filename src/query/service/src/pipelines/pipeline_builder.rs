@@ -23,6 +23,7 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_settings::Settings;
+use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
@@ -38,7 +39,7 @@ use crate::sessions::QueryContext;
 #[derive(Clone)]
 pub enum HashJoinStateRef {
     OldHashJoinState(Arc<HashJoinState>),
-    NewHashJoinState(Arc<BasicHashJoinState>),
+    NewHashJoinState(Arc<BasicHashJoinState>, HashMap<IndexType, usize>),
 }
 
 pub struct PipelineBuilder {

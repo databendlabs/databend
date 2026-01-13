@@ -14,6 +14,8 @@
 
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
@@ -22,6 +24,8 @@ use databend_common_io::constants::INF_BYTES_LONG;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::display_decimal_128_trimmed;
+use databend_common_io::display_decimal_256_trimmed;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use geozero::ToWkt;
@@ -85,7 +89,7 @@ impl FieldEncoderCSV {
                 common_settings: OutputCommonSettings {
                     true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                     false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                    null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                    null_bytes: params.null_display.as_bytes().to_vec(),
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
@@ -93,7 +97,8 @@ impl FieldEncoderCSV {
                     binary_format: params.binary_format,
                     geometry_format: params.geometry_format,
                 },
-                quote_char: 0, // not used
+                escape_char: 0, // not used
+                quote_char: 0,  // not used
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -116,7 +121,8 @@ impl FieldEncoderCSV {
                     binary_format: Default::default(),
                     geometry_format: Default::default(),
                 },
-                quote_char: 0, // not used
+                escape_char: 0, // not used
+                quote_char: 0,  // not used
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
@@ -168,13 +174,35 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
+            Column::Decimal(c) => self.write_decimal_trimmed(c, row_index, out_buf),
+
             Column::Null { .. }
             | Column::EmptyArray { .. }
             | Column::EmptyMap { .. }
             | Column::Number(_)
-            | Column::Decimal(_)
             | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
         }
+    }
+
+    fn write_decimal_trimmed(
+        &self,
+        column: &DecimalColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) {
+        let scalar = column.index(row_index).unwrap();
+        let data = match scalar {
+            DecimalScalar::Decimal64(v, size) => {
+                display_decimal_128_trimmed(v as i128, size.scale()).to_string()
+            }
+            DecimalScalar::Decimal128(v, size) => {
+                display_decimal_128_trimmed(v, size.scale()).to_string()
+            }
+            DecimalScalar::Decimal256(v, size) => {
+                display_decimal_256_trimmed(v.0, size.scale()).to_string()
+            }
+        };
+        out_buf.extend_from_slice(data.as_bytes());
     }
 
     fn write_nullable(

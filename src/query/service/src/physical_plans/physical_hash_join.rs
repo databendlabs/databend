@@ -66,6 +66,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::sessions::QueryContext;
 
 // Type aliases to simplify complex return types
 type JoinConditionsResult = (
@@ -270,9 +271,19 @@ impl IPhysicalPlan for HashJoin {
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
         if desc.single_to_inner.is_none()
-            && (self.join_type == JoinType::Inner || self.join_type == JoinType::Left)
+            && matches!(
+                self.join_type,
+                JoinType::Inner
+                    | JoinType::Left
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::Right
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti
+            )
             && experimental_new_join
             && !enable_optimization
+            && !self.need_hold_hash_table
         {
             return self.build_new_join_pipeline(builder, desc);
         }
@@ -280,9 +291,9 @@ impl IPhysicalPlan for HashJoin {
         // Create the join state with optimization flags
         let state = self.build_state(builder)?;
 
-        if let Some((build_cache_index, _)) = self.build_side_cache_info {
+        if let Some((build_cache_index, _)) = &self.build_side_cache_info {
             builder.hash_join_states.insert(
-                build_cache_index,
+                *build_cache_index,
                 HashJoinStateRef::OldHashJoinState(state.clone()),
             );
         }
@@ -413,15 +424,18 @@ impl HashJoin {
         {
             let state = factory.create_basic_state(0)?;
 
-            if let Some((build_cache_index, _)) = self.build_side_cache_info {
+            if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
                 builder.hash_join_states.insert(
-                    build_cache_index,
-                    HashJoinStateRef::NewHashJoinState(state.clone()),
+                    *build_cache_index,
+                    HashJoinStateRef::NewHashJoinState(state.clone(), column_map.clone()),
                 );
             }
         }
 
+        let mut sub_query_ctx = QueryContext::create_from(&builder.ctx);
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
         self.build.build_pipeline(builder)?;
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
         let mut build_sinks = builder.main_pipeline.take_sinks();
 
         self.probe.build_pipeline(builder)?;
@@ -440,7 +454,8 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let stage_sync_barrier = Arc::new(Barrier::new(output_len));
+        let barrier = databend_common_base::base::Barrier::new(output_len);
+        let stage_sync_barrier = Arc::new(barrier);
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
         for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {

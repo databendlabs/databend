@@ -47,3 +47,39 @@ insert into t3(a,b) values(1,'a');
 
 statement ok
 drop table if exists t
+
+## count distinct rewrite keeps NULL-filtered semantics
+statement ok
+drop table if exists test_count_distinct_nulls
+
+statement ok
+create table test_count_distinct_nulls(g int, a int, b int)
+
+statement ok
+insert into test_count_distinct_nulls values
+    (1, 1, 1),
+    (1, 1, NULL),
+    (1, NULL, 1),
+    (1, NULL, NULL),
+    (2, 1, 1),
+    (2, 1, 2),
+    (2, NULL, 2)
+
+query II
+select g, count(distinct a, b) as cnt from test_count_distinct_nulls group by g order by g
+----
+1 1
+2 2
+
+query II
+select g, count(*) as cnt from (
+    select g, a, b
+    from test_count_distinct_nulls
+    where a is not null and b is not null
+    group by g, a, b
+) d
+group by g
+order by g
+----
+1 1
+2 2

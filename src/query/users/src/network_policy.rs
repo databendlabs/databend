@@ -154,7 +154,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_network_policies(&self, tenant: &Tenant) -> Result<Vec<NetworkPolicy>> {
         let client = self.network_policy_api(tenant);
-        let network_policies = client.list().await.map_err(|e| {
+        let network_policies = client.list(None).await.map_err(|e| {
             let e = ErrorCode::from(e);
             e.add_message_back(" (while get network policies).")
         })?;

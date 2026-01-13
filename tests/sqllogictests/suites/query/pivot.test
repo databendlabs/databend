@@ -207,8 +207,8 @@ SELECT * FROM cte_0 PIVOT (
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test CTE with material_name column - this was working case
 query T?T
@@ -224,8 +224,8 @@ SELECT * FROM cte_0 PIVOT (
 )
 ORDER BY material_name;
 ----
-material1 ['hero','villain'] ['outdoor','city'] NULL
-material2 ['monster'] NULL ['action']
+material1 ["hero","villain"] ["outdoor","city"] NULL
+material2 ["monster"] NULL ["action"]
 
 # Test materialized CTE (create table) - this was working case
 statement ok
@@ -242,8 +242,8 @@ SELECT * FROM cte_0_materialized PIVOT (
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test multiple levels of CTE nesting
 query T?T
@@ -262,8 +262,8 @@ SELECT * FROM cte_level2 PIVOT (
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test cases for PIVOT ANY ORDER BY functionality
 statement ok

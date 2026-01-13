@@ -38,12 +38,17 @@ use super::interpreter_table_modify_connection::ModifyTableConnectionInterpreter
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
+use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::CreateTagInterpreter;
 use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
+use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::SetObjectTagsInterpreter;
 use crate::interpreters::SetRoleInterpreter;
+use crate::interpreters::UnsetObjectTagsInterpreter;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::access_log::AccessLogger;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
@@ -93,6 +98,8 @@ use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
+use crate::interpreters::interpreter_table_ref_create::CreateTableRefInterpreter;
+use crate::interpreters::interpreter_table_ref_drop::DropTableRefInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
@@ -438,6 +445,14 @@ impl InterpreterFactory {
             Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
                 DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::CreateTableRef(p) => Ok(Arc::new(CreateTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropTableRef(p) => Ok(Arc::new(DropTableRefInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
@@ -571,6 +586,22 @@ impl InterpreterFactory {
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
             Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
+            Plan::CreateTag(plan) => Ok(Arc::new(CreateTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::DropTag(plan) => Ok(Arc::new(DropTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::SetObjectTags(plan) => Ok(Arc::new(SetObjectTagsInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::UnsetObjectTags(plan) => Ok(Arc::new(UnsetObjectTagsInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(
@@ -631,6 +662,9 @@ impl InterpreterFactory {
             )?)),
             Plan::RefreshDatabaseCache(refresh_database_cache) => Ok(Arc::new(
                 RefreshDatabaseCacheInterpreter::try_create(ctx, *refresh_database_cache.clone())?,
+            )),
+            Plan::AlterDatabase(alter_database) => Ok(Arc::new(
+                AlterDatabaseInterpreter::try_create(ctx, *alter_database.clone())?,
             )),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 

@@ -64,10 +64,14 @@ pub trait KvApiExt: KVApi {
     /// List key-value starting with the specified prefix and return a [`Vec`]
     ///
     /// Same as [`Self::list_kv`] but return a [`Vec`] instead of a stream.
-    async fn list_kv_collect(&self, prefix: &str) -> Result<Vec<(String, SeqV)>, Self::Error> {
+    async fn list_kv_collect(
+        &self,
+        prefix: &str,
+        limit: Option<u64>,
+    ) -> Result<Vec<(String, SeqV)>, Self::Error> {
         let now = std::time::Instant::now();
 
-        let strm = self.list_kv(prefix).await?;
+        let strm = self.list_kv(prefix, limit).await?;
 
         debug!("list_kv() took {:?}", now.elapsed());
 

@@ -17,13 +17,13 @@ use std::io;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::limit_stream;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::StreamItem;
-use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedGet;
 use map_api::mvcc::ScopedRange;
@@ -61,7 +61,11 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
         Ok(strm)
     }
 
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+    async fn list_kv(
+        &self,
+        prefix: &str,
+        limit: Option<u64>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = since_epoch_millis();
 
         // get an unchanging readonly view
@@ -84,7 +88,7 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
             .try_filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
             .map_ok(StreamItem::from);
 
-        Ok(strm.boxed())
+        Ok(limit_stream(strm, limit))
     }
 
     async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {

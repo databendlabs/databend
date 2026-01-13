@@ -92,7 +92,10 @@ impl GrpcServer {
             .build_v1()
             .unwrap();
 
-        let builder = Server::builder();
+        // Configure HTTP/2 settings to handle stream reset accumulation.
+        // The default limit (20) can be too low under high concurrency.
+        // Setting to None disables the limit entirely.
+        let builder = Server::builder().http2_max_pending_accept_reset_streams(Some(4096));
 
         let tls_conf = Self::tls_config(&self.conf)
             .await

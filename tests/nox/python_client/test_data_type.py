@@ -1,4 +1,4 @@
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from databend_driver import BlockingDatabendClient
 
@@ -37,6 +37,6 @@ def test_data_types():
 
     # Tuple
     row = conn.query_row("select (10, '20', to_datetime('2024-04-16 12:34:56.789'))")
-    assert row.values() == ((10, "20", datetime(2024, 4, 16, 12, 34, 56, 789000)),), (
+    assert row.values() == ((10, "20", datetime(2024, 4, 16, 12, 34, 56, 789000, tzinfo=timezone.utc)),), (
         f"Tuple: {row.values()}"
     )
