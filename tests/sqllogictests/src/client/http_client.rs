@@ -124,7 +124,7 @@ impl HttpClient {
             .default_headers(header)
             // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
             .http2_keep_alive_timeout(Duration::from_secs(15))
-            .pool_max_idle_per_host(0)
+            .pool_max_idle_per_host(16)
             .build()?;
 
         let url = format!("http://127.0.0.1:{}/v1/session/login", port);
