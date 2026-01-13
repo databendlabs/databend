@@ -14,14 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterStageActionPlan;
 use databend_common_sql::plans::AlterStagePlan;
+use databend_common_storages_fuse::TableContext;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -55,8 +54,11 @@ impl Interpreter for AlterUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-        let mut stage = match user_mgr.get_stage(&tenant, &self.plan.stage_name).await {
-            Ok(stage) => stage,
+        let (stage_seq, mut stage) = match user_mgr
+            .get_stage_with_seq(&tenant, &self.plan.stage_name)
+            .await
+        {
+            Ok(res) => res,
             Err(e) => {
                 if self.plan.if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
                     return Ok(PipelineBuildResult::create());
@@ -99,9 +101,7 @@ impl Interpreter for AlterUserStageInterpreter {
             }
         }
 
-        user_mgr
-            .add_stage(&tenant, stage, &CreateOption::CreateOrReplace)
-            .await?;
+        user_mgr.update_stage(&tenant, stage, stage_seq).await?;
 
         Ok(PipelineBuildResult::create())
     }

@@ -43,6 +43,22 @@ impl UserApiProvider {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_stage_with_seq(
+        &self,
+        tenant: &Tenant,
+        stage_name: &str,
+    ) -> Result<(u64, StageInfo)> {
+        let stage_api_provider = self.stage_api(tenant);
+        stage_api_provider.get_stage_with_seq(stage_name).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn update_stage(&self, tenant: &Tenant, stage: StageInfo, seq: u64) -> Result<()> {
+        let stage_api_provider = self.stage_api(tenant);
+        stage_api_provider.update_stage(stage, seq).await
+    }
+
+    #[async_backtrace::framed]
     pub async fn exists_stage(&self, tenant: &Tenant, stage_name: &str) -> Result<bool> {
         Ok(self
             .get_stage(tenant, stage_name)
