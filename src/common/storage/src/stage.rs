@@ -228,10 +228,9 @@ impl StageFilesInfo {
         pattern: Option<Regex>,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
-        Self::list_files_stream_with_pattern(operator, path, pattern, Some(max_files))
-            .await?
-            .try_collect::<Vec<_>>()
-            .await
+        let strm =
+            Self::list_files_stream_with_pattern(operator, path, pattern, Some(max_files)).await?;
+        strm.try_collect::<Vec<_>>().await
     }
 
     #[async_backtrace::framed]

@@ -616,12 +616,8 @@ impl TestSuite {
         }
 
         // List all with no limit
-        let res: Vec<_> = kv
-            .list_kv(ListOptions::unlimited("__limit_test/"))
-            .await?
-            .map_ok(|item| item.key)
-            .try_collect()
-            .await?;
+        let strm = kv.list_kv(ListOptions::unlimited("__limit_test/")).await?;
+        let res: Vec<_> = strm.map_ok(|item| item.key).try_collect().await?;
         assert_eq!(res, vec![
             "__limit_test/0",
             "__limit_test/1",
@@ -631,12 +627,8 @@ impl TestSuite {
         ]);
 
         // List with limit 3
-        let res: Vec<_> = kv
-            .list_kv(ListOptions::limited("__limit_test/", 3))
-            .await?
-            .map_ok(|item| item.key)
-            .try_collect()
-            .await?;
+        let strm = kv.list_kv(ListOptions::limited("__limit_test/", 3)).await?;
+        let res: Vec<_> = strm.map_ok(|item| item.key).try_collect().await?;
         assert_eq!(res, vec![
             "__limit_test/0",
             "__limit_test/1",
@@ -644,21 +636,15 @@ impl TestSuite {
         ]);
 
         // List with limit 0
-        let res: Vec<_> = kv
-            .list_kv(ListOptions::limited("__limit_test/", 0))
-            .await?
-            .map_ok(|item| item.key)
-            .try_collect()
-            .await?;
+        let strm = kv.list_kv(ListOptions::limited("__limit_test/", 0)).await?;
+        let res: Vec<_> = strm.map_ok(|item| item.key).try_collect().await?;
         assert_eq!(res, Vec::<String>::new());
 
         // List with limit larger than result set
-        let res: Vec<_> = kv
+        let strm = kv
             .list_kv(ListOptions::limited("__limit_test/", 100))
-            .await?
-            .map_ok(|item| item.key)
-            .try_collect()
             .await?;
+        let res: Vec<_> = strm.map_ok(|item| item.key).try_collect().await?;
         assert_eq!(res, vec![
             "__limit_test/0",
             "__limit_test/1",
