@@ -28,6 +28,7 @@ use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
@@ -94,6 +95,15 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<KvListRequest>,
     ) -> Result<Response<Self::KvListStream>, Status> {
+        unimplemented!()
+    }
+
+    type KvGetManyStream = BoxStream<StreamItem>;
+
+    async fn kv_get_many(
+        &self,
+        _request: Request<Streaming<KvGetManyRequest>>,
+    ) -> Result<Response<Self::KvGetManyStream>, Status> {
         unimplemented!()
     }
 

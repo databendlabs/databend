@@ -32,6 +32,7 @@ use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
@@ -278,6 +279,14 @@ impl EstablishedClient {
         request: impl tonic::IntoRequest<KvListRequest>,
     ) -> Result<Response<Streaming<StreamItem>>, Status> {
         self.client.kv_list(request).await.update_client(self)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn kv_get_many(
+        &mut self,
+        request: impl tonic::IntoStreamingRequest<Message = KvGetManyRequest>,
+    ) -> Result<Response<Streaming<StreamItem>>, Status> {
+        self.client.kv_get_many(request).await.update_client(self)
     }
 
     #[async_backtrace::framed]

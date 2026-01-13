@@ -37,6 +37,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -204,6 +205,33 @@ impl MetaHandle {
                             prefix,
                             limit.display()
                         ))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(histogram_label, total);
+                        })
+                        .await
+                };
+                Box::pin(fu)
+            })
+            .await;
+
+        match res {
+            Ok(inner) => inner,
+            Err(stopped) => Err(Status::unavailable(stopped.to_string())),
+        }
+    }
+
+    pub async fn handle_kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let histogram_label = "kv_get_many";
+
+        let res = self
+            .request(move |meta_node| {
+                let fu = async move {
+                    meta_node
+                        .handle_kv_get_many(input)
+                        .log_elapsed_info("KvGetMany")
                         .with_timing(|_output, total, _busy| {
                             request_histogram::record(histogram_label, total);
                         })

@@ -58,6 +58,7 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
@@ -75,6 +76,7 @@ use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::snapshot_db::DBStat;
 use fastrace::func_name;
 use fastrace::prelude::*;
+use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
@@ -1690,6 +1692,25 @@ impl MetaNode {
             .map_err(|e| Status::internal(format!("kv_list error: {}", e)))?;
 
         Ok(strm)
+    }
+
+    /// Handle KvGetMany request. Must be leader to process.
+    ///
+    /// Takes a stream of keys and returns a stream of key-value pairs.
+    /// If this node is not the leader, returns a `Status` error with leader endpoint in metadata.
+    pub async fn handle_kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let leader = match self.assume_leader().await {
+            Ok(leader) => leader,
+            Err(forward) => {
+                let endpoint = self.get_leader_endpoint(forward.leader_id).await;
+                return Err(GrpcHelper::status_forward_to_leader(endpoint.as_ref()));
+            }
+        };
+
+        Ok(leader.kv_get_many(input))
     }
 }
 
