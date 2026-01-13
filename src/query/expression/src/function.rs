@@ -26,6 +26,7 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use jiff::Zoned;
@@ -165,6 +166,7 @@ pub struct FunctionContext {
     pub enable_selector_executor: bool,
 
     pub geometry_output_format: GeometryDataType,
+    pub binary_input_format: BinaryDisplayFormat,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
@@ -183,6 +185,7 @@ impl Default for FunctionContext {
             enable_selector_executor: true,
 
             geometry_output_format: Default::default(),
+            binary_input_format: BinaryDisplayFormat::Utf8,
             parse_datetime_ignore_remainder: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,

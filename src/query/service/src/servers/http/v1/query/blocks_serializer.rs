@@ -140,11 +140,7 @@ impl serde::Serialize for BlocksSerializer {
         if let Some(format) = &self.format {
             let start = Instant::now();
             let mut buf = RefCell::new(Vec::new());
-            let encoder = FieldEncoderValues::create_for_http_handler(
-                format.jiff_timezone.clone(),
-                format.timezone,
-                format.geometry_format,
-            );
+            let encoder = FieldEncoderValues::create_for_http_handler(format);
             for (columns, num_rows) in self.columns.iter() {
                 for i in 0..*num_rows {
                     serialize_seq.serialize_element(&RowSerializer {
@@ -190,7 +186,7 @@ impl RowSerializer<'_> {
             Column::Decimal(c) => Some(c.index(self.row_index).unwrap().to_string()),
             Column::Binary(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
-                Some(hex::encode_upper(v))
+                Some(self.format.format_binary(v).into_owned())
             }
             Column::String(c) => Some(unsafe { c.index_unchecked(self.row_index).to_string() }),
             Column::Date(b) => {

@@ -1244,6 +1244,28 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("binary_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("hex".to_owned()),
+                    desc: "Controls how BINARY columns are rendered (HEX, BASE64 or UTF-8).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                    ])),
+                }),
+                ("binary_input_format", DefaultSettingValue {
+                    value: UserSettingValue::String("utf-8".to_owned()),
+                    desc: "Controls how string literals are interpreted when inserted into BINARY columns (HEX, BASE64 or UTF-8).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                    ])),
+                }),
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",

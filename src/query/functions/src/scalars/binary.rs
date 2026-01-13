@@ -31,9 +31,11 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableType;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::vectorize_1_arg;
+use databend_common_io::prelude::BinaryDisplayFormat;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_hex", &["hex", "hex_encode"]);
@@ -136,9 +138,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
         "to_binary",
         |_, _| FunctionDomain::Full,
-        |val, _| match val {
-            Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
-            Value::Column(col) => Value::Column(col.into()),
+        |val, ctx| match ctx.func_ctx.binary_input_format {
+            BinaryDisplayFormat::Hex => eval_unhex(val, ctx),
+            BinaryDisplayFormat::Base64 => eval_from_base64(val, ctx),
+            BinaryDisplayFormat::Utf8 => eval_utf8_bytes(val),
         },
     );
 
@@ -171,12 +174,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<StringType, BinaryType, _, _>(
         "try_to_binary",
         |_, _| FunctionDomain::Full,
-        |val, _| match val {
-            Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
-            Value::Column(col) => {
-                let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new_unchecked(col.into(), validity))
-            }
+        |val, ctx| match ctx.func_ctx.binary_input_format {
+            BinaryDisplayFormat::Hex => error_to_null(eval_unhex)(val, ctx),
+            BinaryDisplayFormat::Base64 => error_to_null(eval_from_base64)(val, ctx),
+            BinaryDisplayFormat::Utf8 => eval_utf8_bytes_nullable(val),
         },
     );
 
@@ -275,6 +276,23 @@ fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value
             output.commit_row();
         },
     )(val, ctx)
+}
+
+fn eval_utf8_bytes(val: Value<StringType>) -> Value<BinaryType> {
+    match val {
+        Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
+        Value::Column(col) => Value::Column(col.into()),
+    }
+}
+
+fn eval_utf8_bytes_nullable(val: Value<StringType>) -> Value<NullableType<BinaryType>> {
+    match val {
+        Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
+        Value::Column(col) => {
+            let validity = Bitmap::new_constant(true, col.len());
+            Value::Column(NullableColumn::new_unchecked(col.into(), validity))
+        }
+    }
 }
 
 fn eval_unhex(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {

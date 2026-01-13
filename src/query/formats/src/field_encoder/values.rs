@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
+use base64::Engine as _;
+use base64::engine::general_purpose;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
@@ -47,8 +48,9 @@ use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
+use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
-use jiff::tz::TimeZone;
 use jsonb::RawJsonb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
@@ -63,6 +65,8 @@ pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
     pub escape_char: u8,
     pub quote_char: u8,
+    pub binary_format: BinaryDisplayFormat,
+    pub binary_utf8_lossy: bool,
 }
 
 impl FieldEncoderValues {
@@ -81,14 +85,12 @@ impl FieldEncoderValues {
             },
             escape_char: b'"',
             quote_char: b'"',
+            binary_format: BinaryDisplayFormat::Hex,
+            binary_utf8_lossy: false,
         }
     }
 
-    pub fn create_for_http_handler(
-        jiff_timezone: TimeZone,
-        timezone: Tz,
-        geometry_format: GeometryDataType,
-    ) -> Self {
+    pub fn create_for_http_handler(format: &FormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -96,13 +98,15 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                timezone,
-                jiff_timezone,
+                timezone: format.timezone,
+                jiff_timezone: format.jiff_timezone.clone(),
                 binary_format: Default::default(),
-                geometry_format,
+                geometry_format: format.geometry_format,
             },
             escape_char: b'\\',
             quote_char: b'"',
+            binary_format: format.binary_format,
+            binary_utf8_lossy: format.binary_utf8_lossy,
         }
     }
 
@@ -110,11 +114,7 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(
-        jiff_timezone: TimeZone,
-        timezone: Tz,
-        geometry_format: GeometryDataType,
-    ) -> Self {
+    pub fn create_for_mysql_handler(format: &FormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -122,13 +122,15 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                timezone,
-                jiff_timezone,
+                timezone: format.timezone,
+                jiff_timezone: format.jiff_timezone.clone(),
                 binary_format: Default::default(),
-                geometry_format,
+                geometry_format: format.geometry_format,
             },
             escape_char: b'\\',
             quote_char: b'"',
+            binary_format: format.binary_format,
+            binary_utf8_lossy: format.binary_utf8_lossy,
         }
     }
 
@@ -258,7 +260,24 @@ impl FieldEncoderValues {
 
     fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = unsafe { column.index_unchecked(row_index) };
-        out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+        match self.binary_format {
+            BinaryDisplayFormat::Hex => {
+                out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+            }
+            BinaryDisplayFormat::Base64 => {
+                let encoded = general_purpose::STANDARD.encode(v);
+                out_buf.extend_from_slice(encoded.as_bytes());
+            }
+            BinaryDisplayFormat::Utf8 => {
+                if let Ok(text) = std::str::from_utf8(v) {
+                    out_buf.extend_from_slice(text.as_bytes());
+                } else if self.binary_utf8_lossy {
+                    out_buf.extend_from_slice(String::from_utf8_lossy(v).as_bytes());
+                } else {
+                    out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+                }
+            }
+        }
     }
 
     fn write_string(

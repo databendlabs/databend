@@ -3929,6 +3929,7 @@ name = "databend-common-io"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "base64 0.22.1",
  "bincode 2.0.1",
  "borsh",
  "byteorder",
