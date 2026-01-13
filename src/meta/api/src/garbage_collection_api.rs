@@ -22,9 +22,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -206,7 +210,7 @@ async fn remove_copied_files_for_dropped_table(
 
         let dir_name = DirName::new(copied_file_ident);
 
-        let key_stream = kv_api.list_pb_keys(&dir_name).await?;
+        let key_stream = kv_api.list_pb_keys(&dir_name, None).await?;
         let copied_files = key_stream.take(batch_size).try_collect::<Vec<_>>().await?;
 
         if copied_files.is_empty() {
@@ -259,7 +263,7 @@ pub async fn get_history_tables_for_gc(
         table_name: "dummy".to_string(),
     };
     let dir_name = DirName::new(ident);
-    let table_history_kvs = kv_api.list_pb_vec(&dir_name).await?;
+    let table_history_kvs = kv_api.list_pb_vec(&dir_name, None).await?;
 
     let mut args = vec![];
 
@@ -466,7 +470,7 @@ async fn gc_dropped_db_by_id(
 
         let mut num_db_id_table_name_keys_removed = 0;
         let batch_size = 1024;
-        let key_stream = kv_api.list_pb_keys(&dir_name).await?;
+        let key_stream = kv_api.list_pb_keys(&dir_name, None).await?;
         let mut chunks = key_stream.chunks(batch_size);
         while let Some(targets) = chunks.next().await {
             let mut txn = TxnRequest::default();
@@ -511,7 +515,7 @@ async fn gc_dropped_db_by_id(
     };
     let dir_name = DirName::new(table_history_ident);
 
-    let table_history_items = kv_api.list_pb_vec(&dir_name).await?;
+    let table_history_items = kv_api.list_pb_vec(&dir_name, None).await?;
 
     let mut txn = TxnRequest::default();
 
@@ -566,7 +570,7 @@ async fn gc_dropped_db_by_id(
             ObjectTagIdRef::new(taggable_object.clone(), 0),
         );
         let obj_tag_dir = DirName::new(obj_tag_prefix);
-        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir, None).await?;
         while let Some(entry) = tag_stream.try_next().await? {
             let tag_id = entry.key.name().tag_id;
             // Delete object -> tag reference
@@ -740,7 +744,6 @@ async fn remove_data_for_dropped_table(
     //     warn!("{}", err);
     //     return Ok(Err(err));
     // }
-
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping
@@ -762,7 +765,7 @@ async fn remove_data_for_dropped_table(
             tenant,
             auto_increment_key,
         ));
-        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name, None).await?;
 
         while let Some(auto_increment_ident) = auto_increments.try_next().await? {
             txn.if_then.push(txn_op_del(&auto_increment_ident));
@@ -805,7 +808,7 @@ async fn remove_data_for_dropped_table(
             ObjectTagIdRef::new(taggable_object.clone(), 0),
         );
         let obj_tag_dir = DirName::new(obj_tag_prefix);
-        let mut tag_stream = kv_api.list_pb(&obj_tag_dir).await?;
+        let mut tag_stream = kv_api.list_pb(&obj_tag_dir, None).await?;
         while let Some(entry) = tag_stream.try_next().await? {
             let tag_id = entry.key.name().tag_id;
             // Delete object -> tag reference
@@ -821,6 +824,42 @@ async fn remove_data_for_dropped_table(
             txn.if_then.push(txn_op_del(&obj_ref_key));
             txn.if_then.push(txn_op_del(&tag_ref_key));
         }
+    }
+
+    let tb_meta = &seq_meta.data;
+
+    // Clean up policy references for the dropped table.
+    // These records may have been orphaned if the table was dropped via DROP DATABASE.
+
+    // Delete masking policy references
+    {
+        let policy_ids: HashSet<u64> = tb_meta
+            .column_mask_policy_columns_ids
+            .values()
+            .map(|policy_map| policy_map.policy_id)
+            .collect();
+
+        txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
+            txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                MaskPolicyIdTableId {
+                    policy_id,
+                    table_id: table_id.table_id,
+                },
+            ))
+        }));
+    }
+
+    // Delete row access policy reference
+    if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {
+        txn.if_then
+            .push(txn_op_del(&RowAccessPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                RowAccessPolicyIdTableId {
+                    policy_id: policy_map.policy_id,
+                    table_id: table_id.table_id,
+                },
+            )));
     }
 
     Ok(Ok(()))

@@ -327,7 +327,7 @@ async fn collect_policy_reference_rows(
                             policy_id,
                             table_id: 0,
                         });
-                    meta.list_pb_vec(&DirName::new(ident))
+                    meta.list_pb_vec(&DirName::new(ident), None)
                         .await?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)
@@ -341,7 +341,7 @@ async fn collect_policy_reference_rows(
                             table_id: 0,
                         },
                     );
-                    meta.list_pb_vec(&DirName::new(ident))
+                    meta.list_pb_vec(&DirName::new(ident), None)
                         .await?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)

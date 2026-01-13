@@ -28,6 +28,7 @@ use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -85,6 +86,15 @@ impl MetaService for GrpcServiceForTestImpl {
         let itm = StreamItem::new("kv_read_v1".to_string(), None);
         let output = futures::stream::once(async { Ok(itm) });
         Ok(Response::new(Box::pin(output)))
+    }
+
+    type KvListStream = BoxStream<StreamItem>;
+
+    async fn kv_list(
+        &self,
+        _request: Request<KvListRequest>,
+    ) -> Result<Response<Self::KvListStream>, Status> {
+        unimplemented!()
     }
 
     type ExportStream =

@@ -3832,7 +3832,6 @@ dependencies = [
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-formats",
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-vector",
@@ -4188,6 +4187,7 @@ dependencies = [
  "databend-common-meta-types",
  "display-more 0.2.1",
  "fastrace",
+ "futures-util",
  "log",
  "state-machine-api",
  "tokio",
@@ -5809,6 +5809,8 @@ dependencies = [
 name = "databend-storages-common-blocks"
 version = "0.1.0"
 dependencies = [
+ "arrow-array 56.2.0",
+ "bytes",
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",

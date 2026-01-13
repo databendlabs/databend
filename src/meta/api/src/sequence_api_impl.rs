@@ -134,7 +134,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let dir_name = DirName::new(SequenceIdent::new(tenant, "dummy"));
 
         let ident_metas = self
-            .list_pb(&dir_name)
+            .list_pb(&dir_name, None)
             .await?
             .map_ok(|itm| (itm.key, itm.seqv.data))
             .try_collect::<Vec<_>>()

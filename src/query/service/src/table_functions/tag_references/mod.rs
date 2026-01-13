@@ -12,25 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(cursor_split)]
-#![allow(clippy::collapsible_if)]
+mod tag_references_table;
 
-mod binary;
-mod clickhouse;
-mod common_settings;
-mod delimiter;
-mod field_decoder;
-pub mod field_encoder;
-mod file_format_type;
-pub mod output_format;
-
-pub use clickhouse::ClickhouseFormatType;
-pub use delimiter::RecordDelimiter;
-pub use field_decoder::*;
-pub use file_format_type::FileFormatOptionsExt;
-pub use file_format_type::FileFormatTypeExt;
-pub use file_format_type::parse_timezone;
-
-pub use crate::common_settings::InputCommonSettings;
-pub use crate::common_settings::OutputCommonSettings;
+pub use tag_references_table::TagReferencesTable;

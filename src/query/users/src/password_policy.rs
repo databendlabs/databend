@@ -228,7 +228,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_password_policies(&self, tenant: &Tenant) -> Result<Vec<PasswordPolicy>> {
         let client = self.password_policy_api(tenant);
-        let password_policies = client.list().await.map_err(|e| {
+        let password_policies = client.list(None).await.map_err(|e| {
             let e = ErrorCode::from(e);
             e.add_message_back(" (while get password policies).")
         })?;

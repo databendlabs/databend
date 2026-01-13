@@ -583,7 +583,7 @@ where
         let name_ident = DatabaseIdHistoryIdent::new(&req.tenant, "dummy");
         let dir_name = DirName::new(name_ident);
 
-        let name_idlists = self.list_pb_vec(&dir_name).await?;
+        let name_idlists = self.list_pb_vec(&dir_name, None).await?;
 
         let mut dbs = BTreeMap::new();
 
@@ -647,7 +647,7 @@ where
         let name_key = DatabaseNameIdent::new(req.tenant(), "dummy");
         let dir = DirName::new(name_key);
 
-        let name_seq_ids = self.list_pb_vec(&dir).await?;
+        let name_seq_ids = self.list_pb_vec(&dir, None).await?;
 
         let id_idents = name_seq_ids
             .iter()

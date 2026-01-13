@@ -151,7 +151,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         Ok(Plan::DescProcedure(Box::new(DescProcedurePlan {
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
+            name: generate_procedure_name_ident(&tenant, name)?,
         })))
     }
 

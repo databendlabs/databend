@@ -153,7 +153,11 @@ pub(crate) async fn drop_database_meta(
         ObjectTagIdRef::new(taggable_object.clone(), 0),
     );
     let obj_tag_dir = DirName::new(obj_tag_prefix);
-    let tag_entries: Vec<_> = kv_api.list_pb(&obj_tag_dir).await?.try_collect().await?;
+    let tag_entries: Vec<_> = kv_api
+        .list_pb(&obj_tag_dir, None)
+        .await?
+        .try_collect()
+        .await?;
     for entry in tag_entries {
         let tag_id = entry.key.name().tag_id;
         // Delete object -> tag reference
