@@ -656,10 +656,8 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     assert!(is_index_scan, "{}", fuzz_info);
 
     // Get query result
-    let expect: Vec<DataBlock> = execute_sql(ctx.clone(), &query_sql)
-        .await?
-        .try_collect()
-        .await?;
+    let strm = execute_sql(ctx.clone(), &query_sql).await?;
+    let expect: Vec<DataBlock> = strm.try_collect().await?;
 
     // Refresh index
     if num_index_blocks > 0 {
@@ -671,10 +669,8 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     }
 
     // Get index scan query result
-    let actual: Vec<DataBlock> = execute_sql(ctx.clone(), &query_sql)
-        .await?
-        .try_collect()
-        .await?;
+    let strm = execute_sql(ctx.clone(), &query_sql).await?;
+    let actual: Vec<DataBlock> = strm.try_collect().await?;
 
     let expect = expect
         .iter()

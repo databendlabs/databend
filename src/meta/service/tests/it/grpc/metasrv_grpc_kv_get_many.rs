@@ -30,7 +30,10 @@ use crate::tests::service::make_grpc_client;
 fn make_key_stream(
     keys: Vec<&str>,
 ) -> impl futures::Stream<Item = KvGetManyRequest> + Send + 'static {
-    let owned: Vec<_> = keys.into_iter().map(|k| KvGetManyRequest { key: k.to_string() }).collect();
+    let owned: Vec<_> = keys
+        .into_iter()
+        .map(|k| KvGetManyRequest { key: k.to_string() })
+        .collect();
     futures::stream::iter(owned)
 }
 

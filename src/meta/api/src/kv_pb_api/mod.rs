@@ -863,28 +863,19 @@ mod tests {
         let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
 
         // List all with no limit
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::unlimited(&dir))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::unlimited(&dir)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert_eq!(res.len(), 5);
         assert_eq!(res[0].catalog_option, catalog_meta.catalog_option);
 
         // List with limit 3
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::limited(&dir, 3))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 3)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert_eq!(res.len(), 3);
 
         // List with limit 0
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::limited(&dir, 0))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 0)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert!(res.is_empty());
 
         Ok(())

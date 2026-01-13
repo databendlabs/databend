@@ -46,11 +46,8 @@ async fn test_fuse_navigate() -> Result<()> {
         "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
     );
-    fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
 
     // keep the first snapshot of the insertion
     let table = fixture.latest_default_table().await?;
@@ -63,11 +60,8 @@ async fn test_fuse_navigate() -> Result<()> {
 
     // 1.2 second commit
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
-    fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
     // keep the snapshot of the second insertion
     let table = fixture.latest_default_table().await?;
     let second_snapshot = FuseTable::try_from_table(table.as_ref())?
@@ -154,11 +148,8 @@ async fn test_navigate_for_purge() -> Result<()> {
         "insert into {}.{} values (1, (2, 3)), (2, (4, 6)) ",
         db, tbl
     );
-    fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
 
     // keep the first snapshot of the insertion
     let table = fixture.latest_default_table().await?;
@@ -171,11 +162,8 @@ async fn test_navigate_for_purge() -> Result<()> {
 
     // 1.2 second commit
     let qry = format!("insert into {}.{} values (3, (6, 9)) ", db, tbl);
-    fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
     // keep the snapshot of the second insertion
     let table = fixture.latest_default_table().await?;
     let second_snapshot = FuseTable::try_from_table(table.as_ref())?
@@ -187,11 +175,8 @@ async fn test_navigate_for_purge() -> Result<()> {
 
     // 1.3 third commit
     let qry = format!("insert into {}.{} values (4, (8, 12)) ", db, tbl);
-    fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
     let table = fixture.latest_default_table().await?;
     let third_snapshot = FuseTable::try_from_table(table.as_ref())?
         .snapshot_loc()

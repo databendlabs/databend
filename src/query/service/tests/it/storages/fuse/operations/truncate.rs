@@ -168,11 +168,8 @@ async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
         fixture.default_table_name()
     );
     // - full scan should work
-    let result = fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    let result = strm.try_collect::<Vec<DataBlock>>().await?;
 
     // - and the number of rows should be as expected
     assert_eq!(
