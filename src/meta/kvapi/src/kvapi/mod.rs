@@ -31,7 +31,6 @@ mod value_with_name;
 pub(crate) mod testing;
 
 pub use api::ApiBuilder;
-pub use api::AsKVApi;
 pub use api::KVApi;
 pub use api::KVStream;
 pub use api::limit_stream;

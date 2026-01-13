@@ -104,17 +104,3 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
         self.deref().transaction(txn).await
     }
 }
-
-pub trait AsKVApi {
-    type Error: std::error::Error;
-
-    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error>;
-}
-
-impl<T: kvapi::KVApi> kvapi::AsKVApi for T {
-    type Error = T::Error;
-
-    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error> {
-        self
-    }
-}
