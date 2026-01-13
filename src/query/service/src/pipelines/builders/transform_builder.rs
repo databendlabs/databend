@@ -86,8 +86,8 @@ impl PipelineBuilder {
 
     pub(crate) fn dummy_transform_builder(
         &self,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
-        Ok(|input, output| Ok(TransformDummy::create(input, output)))
+    ) -> impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<> {
+        |input, output| Ok(TransformDummy::create(input, output))
     }
 
     pub(crate) fn block_compact_task_builder(
@@ -227,17 +227,18 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
+        output_schema: DataSchemaRef,
+    ) -> impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<> {
         let ctx = self.ctx.clone();
-        Ok(move |transform_input_port, transform_output_port| {
+        move |transform_input_port, transform_output_port| {
             TransformResortAddOn::try_create(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 source_schema.clone(),
-                Arc::new(table.schema().into()),
+                output_schema.clone(),
                 table.clone(),
             )
-        })
+        }
     }
 }

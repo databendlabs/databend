@@ -21,9 +21,12 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::errors;
 use databend_common_meta_types::protobuf::StreamItem;
+use futures_util::Stream;
+use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 
 use crate::kvapi;
+use crate::kvapi::ListOptions;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
@@ -37,6 +40,15 @@ pub trait ApiBuilder<T>: Clone {
 
 /// A stream of key-value records that are returned by stream based API such as mget and list.
 pub type KVStream<E> = BoxStream<'static, Result<StreamItem, E>>;
+
+/// Apply an optional limit to a stream, returning a boxed stream.
+pub fn limit_stream<S, E>(strm: S, limit: Option<u64>) -> KVStream<E>
+where S: Stream<Item = Result<StreamItem, E>> + Send + 'static {
+    match limit {
+        Some(n) => strm.take(n as usize).boxed(),
+        None => strm.boxed(),
+    }
+}
 
 /// API of a key-value store.
 #[async_trait]
@@ -59,7 +71,11 @@ pub trait KVApi: Send + Sync {
     /// List key-value records that are starts with the specified prefix.
     ///
     /// Same as `prefix_list_kv()`, except it returns a stream.
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error>;
+    /// If `limit` is `Some(n)`, at most `n` records will be returned.
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error>;
 
     /// Run transaction: update one or more records if specified conditions are met.
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error>;
@@ -77,8 +93,11 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
         self.deref().get_kv_stream(keys).await
     }
 
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.deref().list_kv(prefix).await
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.deref().list_kv(opts).await
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {

@@ -49,6 +49,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaError;
@@ -57,6 +58,7 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -99,6 +101,7 @@ use watcher::util::try_forward;
 use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
 
+use crate::analysis::request_histogram;
 use crate::api::grpc::grpc_service::try_remove_sender;
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -377,7 +380,12 @@ impl MetaNode {
         mut metrics_rx: WatchReceiver<RaftMetrics>,
     ) -> Result<(), AnyError> {
         const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
+        const HISTOGRAM_REPORT_INTERVAL: Duration = Duration::from_secs(1);
+        const HISTOGRAM_RESET_INTERVAL: Duration = Duration::from_secs(10);
+
         let mut last_leader: Option<u64> = None;
+        let mut last_histogram_report = Instant::now();
+        let mut last_histogram_reset = Instant::now();
 
         loop {
             let loop_start = Instant::now();
@@ -455,6 +463,17 @@ impl MetaNode {
             let metrics_str = crate::metrics::meta_metrics_to_prometheus_string();
             let parsed_metrics = Self::parse_metrics_to_json(&metrics_str);
             info!("metrics: {}", parsed_metrics);
+
+            if last_histogram_report.elapsed() >= HISTOGRAM_REPORT_INTERVAL {
+                let histogram_report = request_histogram::report();
+                info!("request latency: {}", histogram_report);
+                last_histogram_report = Instant::now();
+            }
+
+            if last_histogram_reset.elapsed() >= HISTOGRAM_RESET_INTERVAL {
+                request_histogram::reset();
+                last_histogram_reset = Instant::now();
+            }
 
             let elapsed = loop_start.elapsed();
             if elapsed < RATE_LIMIT_INTERVAL {
@@ -1638,6 +1657,39 @@ impl MetaNode {
 
     pub fn runtime_config(&self) -> &RuntimeConfig {
         &self.runtime_config
+    }
+
+    /// Get the gRPC endpoint for the leader node.
+    async fn get_leader_endpoint(&self, leader_id: Option<NodeId>) -> Option<Endpoint> {
+        let leader_id = leader_id?;
+        let node = self.get_node(&leader_id).await?;
+        let addr = node.grpc_api_advertise_address.as_ref()?;
+        Endpoint::parse(addr).ok()
+    }
+
+    /// Handle KvList request. Must be leader to process.
+    ///
+    /// Returns a stream of key-value pairs matching the prefix.
+    /// If this node is not the leader, returns a `Status` error with leader endpoint in metadata.
+    pub async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let leader = match self.assume_leader().await {
+            Ok(leader) => leader,
+            Err(forward) => {
+                let endpoint = self.get_leader_endpoint(forward.leader_id).await;
+                return Err(GrpcHelper::status_forward_to_leader(endpoint.as_ref()));
+            }
+        };
+
+        let strm = leader
+            .kv_list(&prefix, limit)
+            .await
+            .map_err(|e| Status::internal(format!("kv_list error: {}", e)))?;
+
+        Ok(strm)
     }
 }
 

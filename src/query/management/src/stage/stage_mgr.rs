@@ -34,6 +34,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -116,7 +117,10 @@ impl StageApi for StageMgr {
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let dir_name = DirName::new(self.stage_ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let stages = values.try_collect().await?;
 
         Ok(stages)
@@ -138,7 +142,10 @@ impl StageApi for StageMgr {
             };
 
             // list all stage file keys, and delete them
-            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix).await?;
+            let file_keys = self
+                .kv_api
+                .list_kv_collect(ListOptions::unlimited(&file_key_prefix))
+                .await?;
             let mut dels: Vec<TxnOp> = file_keys
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))
@@ -232,7 +239,10 @@ impl StageApi for StageMgr {
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let files = values.try_collect().await?;
 
         Ok(files)

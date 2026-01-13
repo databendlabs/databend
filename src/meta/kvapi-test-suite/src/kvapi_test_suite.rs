@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
@@ -49,6 +50,7 @@ use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use fastrace::func_name;
 use fastrace::func_path;
+use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use state_machine_api::KVMeta;
@@ -57,7 +59,6 @@ use tokio::time::sleep;
 pub struct TestSuite {}
 
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -81,7 +82,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn test_single_node<KV, B>(&self, builder: &B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -100,6 +100,9 @@ impl TestSuite {
 
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
+        self.kv_list_with_limit(&builder.build().await).await?;
+        self.kv_list_collect_with_limit(&builder.build().await)
+            .await?;
         self.kv_mget(&builder.build().await).await?;
 
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
@@ -132,7 +135,6 @@ impl TestSuite {
 }
 
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
@@ -181,7 +183,6 @@ impl TestSuite {
     }
 
     /// Test the proposed_at time field .
-    #[fastrace::trace]
     pub async fn kv_write_read_proposed_at<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read_proposed_at() start");
         let proposed_at;
@@ -207,7 +208,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
@@ -263,7 +263,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
@@ -307,7 +306,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {} start", func_name!());
 
@@ -386,7 +384,7 @@ impl TestSuite {
 
         info!("--- list should not return expired");
         {
-            let res = kv.list_kv_collect("k").await?;
+            let res = kv.list_kv_collect(ListOptions::unlimited("k")).await?;
             let res_vec = res.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
 
             assert_eq!(res_vec, vec!["k2".to_string(),]);
@@ -409,7 +407,6 @@ impl TestSuite {
     }
 
     /// Test expire time in seconds or milliseconds.
-    #[fastrace::trace]
     pub async fn kv_expire_sec_or_ms<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {} start", func_name!());
 
@@ -482,7 +479,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_upsert_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add with ttl
 
@@ -510,7 +506,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
@@ -578,7 +573,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
@@ -595,7 +589,9 @@ impl TestSuite {
             kv.upsert_kv(UpsertKV::update("v", b"")).await?;
         }
 
-        let res = kv.list_kv_collect("__users/").await?;
+        let res = kv
+            .list_kv_collect(ListOptions::unlimited("__users/"))
+            .await?;
         assert_eq!(
             res.iter()
                 .map(|(_key, val)| val.data.clone())
@@ -608,7 +604,119 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
+    /// Test `list_kv` with limit parameter
+    pub async fn kv_list_with_limit<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_list_with_limit() start");
+
+        // Insert 5 keys
+        for i in 0..5 {
+            let key = format!("__limit_test/{}", i);
+            let val = format!("val_{}", i);
+            kv.upsert_kv(UpsertKV::update(&key, val.as_bytes())).await?;
+        }
+
+        // List all with no limit
+        let res: Vec<_> = kv
+            .list_kv(ListOptions::unlimited("__limit_test/"))
+            .await?
+            .map_ok(|item| item.key)
+            .try_collect()
+            .await?;
+        assert_eq!(res, vec![
+            "__limit_test/0",
+            "__limit_test/1",
+            "__limit_test/2",
+            "__limit_test/3",
+            "__limit_test/4",
+        ]);
+
+        // List with limit 3
+        let res: Vec<_> = kv
+            .list_kv(ListOptions::limited("__limit_test/", 3))
+            .await?
+            .map_ok(|item| item.key)
+            .try_collect()
+            .await?;
+        assert_eq!(res, vec![
+            "__limit_test/0",
+            "__limit_test/1",
+            "__limit_test/2",
+        ]);
+
+        // List with limit 0
+        let res: Vec<_> = kv
+            .list_kv(ListOptions::limited("__limit_test/", 0))
+            .await?
+            .map_ok(|item| item.key)
+            .try_collect()
+            .await?;
+        assert_eq!(res, Vec::<String>::new());
+
+        // List with limit larger than result set
+        let res: Vec<_> = kv
+            .list_kv(ListOptions::limited("__limit_test/", 100))
+            .await?
+            .map_ok(|item| item.key)
+            .try_collect()
+            .await?;
+        assert_eq!(res, vec![
+            "__limit_test/0",
+            "__limit_test/1",
+            "__limit_test/2",
+            "__limit_test/3",
+            "__limit_test/4",
+        ]);
+
+        Ok(())
+    }
+
+    /// Test `list_kv_collect` with limit parameter
+    pub async fn kv_list_collect_with_limit<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_list_collect_with_limit() start");
+
+        // Insert 5 keys
+        for i in 0..5 {
+            let key = format!("__collect_limit/{}", i);
+            let val = format!("val_{}", i);
+            kv.upsert_kv(UpsertKV::update(&key, val.as_bytes())).await?;
+        }
+
+        // List all with no limit
+        let res = kv
+            .list_kv_collect(ListOptions::unlimited("__collect_limit/"))
+            .await?;
+        let keys: Vec<_> = res.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec![
+            "__collect_limit/0",
+            "__collect_limit/1",
+            "__collect_limit/2",
+            "__collect_limit/3",
+            "__collect_limit/4",
+        ]);
+
+        // List with limit 3
+        let res = kv
+            .list_kv_collect(ListOptions::limited("__collect_limit/", 3))
+            .await?;
+        let keys: Vec<_> = res.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec![
+            "__collect_limit/0",
+            "__collect_limit/1",
+            "__collect_limit/2",
+        ]);
+
+        // List with limit 0
+        let res = kv
+            .list_kv_collect(ListOptions::limited("__collect_limit/", 0))
+            .await?;
+        assert_eq!(res, vec![]);
+
+        Ok(())
+    }
+
     pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
@@ -1240,7 +1348,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_transaction_fetch_add_u64<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1357,7 +1464,6 @@ impl TestSuite {
     }
 
     /// Tests match_seq must match the record seq to take place the operation.
-    #[fastrace::trace]
     pub async fn kv_transaction_fetch_add_u64_match_seq<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1465,7 +1571,6 @@ impl TestSuite {
     }
 
     /// Tests match_seq must match the record seq to take place the operation.
-    #[fastrace::trace]
     pub async fn kv_txn_put_sequential<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- {}", func_path!());
 
@@ -1516,7 +1621,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_txn_put_sequential_expire_and_ttl<KV: kvapi::KVApi>(
         &self,
         kv: &KV,
@@ -1570,7 +1674,6 @@ impl TestSuite {
         Ok(())
     }
 
-    #[fastrace::trace]
     pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add a record via transaction with ttl
 
@@ -1899,7 +2002,6 @@ impl TestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl TestSuite {
-    #[fastrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,
@@ -1947,7 +2049,9 @@ impl TestSuite {
 
         info!("--- test list on other node");
         {
-            let res = kv2.list_kv_collect("__users/").await?;
+            let res = kv2
+                .list_kv_collect(ListOptions::unlimited("__users/"))
+                .await?;
             assert_eq!(
                 res.iter()
                     .map(|(_key, val)| val.data.clone())

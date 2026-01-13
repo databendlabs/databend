@@ -77,6 +77,8 @@ pub use database::RenameDatabaseReq;
 pub use database::ShareDbId;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
+pub use database::UpdateDatabaseOptionsReply;
+pub use database::UpdateDatabaseOptionsReq;
 pub use database_id::DatabaseId;
 pub use database_id_history_ident::DatabaseIdHistoryIdent;
 pub use dictionary::*;

@@ -47,7 +47,9 @@ macro_rules! impl_float {
                         if self.is_nan() {
                             buf.extend_from_slice(&settings.nan_bytes);
                         } else {
-                            extend_lexical(self, buf);
+                            let mut buffer = zmij::Buffer::new();
+                            let s = buffer.format_finite(self);
+                            buf.extend_from_slice(s.as_bytes());
                         }
                     }
                 }

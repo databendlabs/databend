@@ -39,6 +39,15 @@ use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
 
+/// Default connection TTL: 20 seconds.
+///
+/// This prevents h2 stream reset accumulation that can lead to
+/// `too_many_internal_resets` errors (ENHANCE_YOUR_CALM).
+/// The h2 library has a default limit of 1024 locally-reset streams
+/// per connection. By refreshing connections periodically, we prevent
+/// hitting this limit.
+pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
+
 #[derive(Debug)]
 pub struct MetaChannelManager {
     version: BuildInfoRef,
@@ -54,6 +63,12 @@ pub struct MetaChannelManager {
     /// The endpoints will be added to a built client item
     /// and will be updated when a error or successful response is received.
     endpoints: Arc<Mutex<Endpoints>>,
+
+    /// Maximum time a connection can live before being refreshed.
+    ///
+    /// This prevents h2 stream reset accumulation that can lead to
+    /// `too_many_internal_resets` errors.
+    connection_ttl: Duration,
 }
 
 impl MetaChannelManager {
@@ -65,6 +80,7 @@ impl MetaChannelManager {
         tls_config: Option<RpcClientTlsConfig>,
         required_features: &'static [FeatureSpec],
         endpoints: Arc<Mutex<Endpoints>>,
+        connection_ttl: Option<Duration>,
     ) -> Self {
         Self {
             version,
@@ -74,6 +90,7 @@ impl MetaChannelManager {
             tls_config,
             required_features,
             endpoints,
+            connection_ttl: connection_ttl.unwrap_or(DEFAULT_CONNECTION_TTL),
         }
     }
 
@@ -187,6 +204,22 @@ impl ItemManager for MetaChannelManager {
         if let Some(e) = ch.take_error() {
             return Err(MetaNetworkError::from(e).into());
         }
+
+        // Check if the connection has exceeded its TTL.
+        // This prevents h2 stream reset accumulation that can lead to
+        // `too_many_internal_resets` errors (ENHANCE_YOUR_CALM).
+        if ch.is_expired(self.connection_ttl) {
+            info!(
+                "Connection {} has exceeded TTL ({:?}), will create a new one",
+                ch, self.connection_ttl
+            );
+            return Err(MetaNetworkError::ConnectionError(ConnectionError::new(
+                AnyError::error("connection TTL exceeded"),
+                "refreshing connection to prevent h2 stream reset accumulation",
+            ))
+            .into());
+        }
+
         Ok(ch)
     }
 }

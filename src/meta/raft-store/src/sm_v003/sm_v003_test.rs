@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -75,7 +76,7 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("")
+        .list_kv(ListOptions::unlimited(""))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
@@ -151,7 +152,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("")
+        .list_kv(ListOptions::unlimited(""))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
@@ -165,13 +166,69 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     let got = sm
         .kv_api()
-        .list_kv("a")
+        .list_kv(ListOptions::unlimited("a"))
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
         .await?
         .without_proposed_at();
     assert_eq!(got, vec![(s("a"), SeqV::new(1, b("a0"))),]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_list_kv_with_limit() -> anyhow::Result<()> {
+    let sm = SMV003::default();
+
+    // Insert 5 keys
+    let mut a = sm.new_applier().await;
+    a.upsert_kv(&UpsertKV::update("key/a", b"a")).await?;
+    a.upsert_kv(&UpsertKV::update("key/b", b"b")).await?;
+    a.upsert_kv(&UpsertKV::update("key/c", b"c")).await?;
+    a.upsert_kv(&UpsertKV::update("key/d", b"d")).await?;
+    a.upsert_kv(&UpsertKV::update("key/e", b"e")).await?;
+    a.commit().await?;
+
+    // List all with no limit
+    let got = sm
+        .kv_api()
+        .list_kv(ListOptions::unlimited("key/"))
+        .await?
+        .map_ok(|item| item.key)
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert_eq!(got, vec!["key/a", "key/b", "key/c", "key/d", "key/e"]);
+
+    // List with limit 3
+    let got = sm
+        .kv_api()
+        .list_kv(ListOptions::limited("key/", 3))
+        .await?
+        .map_ok(|item| item.key)
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert_eq!(got, vec!["key/a", "key/b", "key/c"]);
+
+    // List with limit 0
+    let got = sm
+        .kv_api()
+        .list_kv(ListOptions::limited("key/", 0))
+        .await?
+        .map_ok(|item| item.key)
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert_eq!(got, Vec::<String>::new());
+
+    // List with limit larger than result set
+    let got = sm
+        .kv_api()
+        .list_kv(ListOptions::limited("key/", 100))
+        .await?
+        .map_ok(|item| item.key)
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert_eq!(got, vec!["key/a", "key/b", "key/c", "key/d", "key/e"]);
+
     Ok(())
 }
 

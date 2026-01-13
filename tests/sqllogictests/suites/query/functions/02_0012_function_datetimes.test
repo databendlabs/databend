@@ -1243,7 +1243,7 @@ drop table if exists t_epoch;
 query T
 select EXTRACT(EPOCH FROM to_datetime('1969-12-31 23:59:59.999999'))
 ----
--1.0e-6
+-1e-6
 
 query B
 select EXTRACT(EPOCH FROM now()) = epoch(now())

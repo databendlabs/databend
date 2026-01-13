@@ -40,8 +40,10 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_blocks::write_batch_with_page_limit;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -119,7 +121,7 @@ impl ArrowParquetWriter {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::write called before initialization");
         };
-        writer.inner.write(batch)?;
+        write_batch_with_page_limit(&mut writer.inner, batch, MAX_BATCH_MEMORY_SIZE)?;
         Ok(())
     }
 

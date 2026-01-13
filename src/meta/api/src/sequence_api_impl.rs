@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -134,7 +135,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let dir_name = DirName::new(SequenceIdent::new(tenant, "dummy"));
 
         let ident_metas = self
-            .list_pb(&dir_name)
+            .list_pb(ListOptions::unlimited(&dir_name))
             .await?
             .map_ok(|itm| (itm.key, itm.seqv.data))
             .try_collect::<Vec<_>>()

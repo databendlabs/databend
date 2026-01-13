@@ -26,5 +26,3 @@ ORDER BY count(DISTINCT cs_order_number)
 LIMIT 100;
 ----
 233 1095837.99 -143869.23
-
-

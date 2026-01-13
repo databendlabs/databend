@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -20,6 +21,7 @@ use anyerror::AnyError;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -104,7 +106,11 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.sto.get_sm_v003();
-                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
+                let res = sm
+                    .kv_api()
+                    .list_kv_collect(ListOptions::unlimited(&req.prefix))
+                    .await
+                    .unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -145,8 +151,10 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
             }
 
             MetaGrpcReadReq::ListKV(req) => {
-                let strm =
-                    kv_api.list_kv(&req.prefix).await.map_err(|e| {
+                let strm = kv_api
+                    .list_kv(ListOptions::unlimited(&req.prefix))
+                    .await
+                    .map_err(|e| {
                         MetaOperationError::DataError(MetaDataError::ReadError(
                             MetaDataReadError::new("list_kv", &req.prefix, &e),
                         ))
@@ -313,6 +321,25 @@ impl<'a> MetaLeader<'a> {
         }
 
         Ok(Ok(()))
+    }
+
+    /// List key-value pairs by prefix.
+    ///
+    /// Returns a stream of `StreamItem` wrapped in tonic's `BoxStream`,
+    /// which has item type `Result<StreamItem, Status>`.
+    pub async fn kv_list(
+        &self,
+        prefix: &str,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .list_kv(ListOptions::new(prefix, limit))
+            .await?;
+        let strm = strm.map_err(|e| Status::internal(e.to_string()));
+        Ok(strm.boxed())
     }
 }
 

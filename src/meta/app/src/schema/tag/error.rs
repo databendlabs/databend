@@ -15,19 +15,45 @@
 use databend_common_exception::ErrorCode;
 
 use crate::schema::tag::TagId;
+use crate::schema::tag::TaggableObject;
 use crate::schema::tag::id_ident::Resource as TagIdResource;
 use crate::tenant::Tenant;
 use crate::tenant_key::errors::UnknownError;
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
+    #[error("TAG `{tag_name}` not found.")]
+    TagNotFound { tag_name: String },
+
     #[error(
-        "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
+        "TAG `{tag_name}` is still referenced by {reference_count} object(s): {references_display}. Remove the references before dropping it."
     )]
     TagHasReferences {
         tag_name: String,
         reference_count: usize,
+        references_display: String,
     },
+}
+
+impl TagError {
+    pub fn tag_has_references(tag_name: String, references: Vec<String>) -> Self {
+        let reference_count = references.len();
+        // Show up to 5 references to avoid overly long error messages
+        let references_display = if references.len() <= 5 {
+            references.join(", ")
+        } else {
+            format!(
+                "{}, ... and {} more",
+                references[..5].join(", "),
+                references.len() - 5
+            )
+        };
+        Self::TagHasReferences {
+            tag_name,
+            reference_count,
+            references_display,
+        }
+    }
 }
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -41,15 +67,9 @@ pub enum TagMetaError {
         tag_value: String,
         allowed_values_display: String,
     },
-}
 
-impl TagError {
-    pub fn tag_has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
-        Self::TagHasReferences {
-            tag_name: tag_name.into(),
-            reference_count,
-        }
-    }
+    #[error("{} does not exist.", .0)]
+    ObjectNotFound(TaggableObject),
 }
 
 impl TagMetaError {
@@ -82,12 +102,17 @@ impl TagMetaError {
             allowed_values_display,
         }
     }
+
+    pub fn object_not_found(object: TaggableObject) -> Self {
+        Self::ObjectNotFound(object)
+    }
 }
 
 impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
+            TagError::TagNotFound { .. } => ErrorCode::UnknownTag(s),
             TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
         }
     }
@@ -99,6 +124,12 @@ impl From<TagMetaError> for ErrorCode {
         match err {
             TagMetaError::UnknownTagId(err) => ErrorCode::from(err),
             TagMetaError::NotAllowedValue { .. } => ErrorCode::NotAllowedTagValue(s),
+            TagMetaError::ObjectNotFound(ref obj) => match obj {
+                TaggableObject::Connection { .. } => ErrorCode::UnknownConnection(s),
+                TaggableObject::Stage { .. } => ErrorCode::UnknownStage(s),
+                TaggableObject::Database { .. } => ErrorCode::UnknownDatabase(s),
+                TaggableObject::Table { .. } => ErrorCode::UnknownTable(s),
+            },
         }
     }
 }

@@ -16,8 +16,12 @@ use std::collections::HashSet;
 
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::principal::connection_ident::ConnectionIdent;
+use databend_common_meta_app::principal::user_stage_ident::StageIdent;
 use databend_common_meta_app::schema::CreateTagReply;
 use databend_common_meta_app::schema::CreateTagReq;
+use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::GetTagReply;
 use databend_common_meta_app::schema::ObjectTagIdRef;
@@ -25,6 +29,8 @@ use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
@@ -44,12 +50,19 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
+use log::warn;
+use seq_marked::SeqValue;
 
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
@@ -59,9 +72,23 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_core_util::txn_delete_exact;
 use crate::txn_op_builder_util::txn_op_del;
 use crate::txn_op_builder_util::txn_op_put_pb;
+
+/// Returns the meta-service key for a taggable object.
+///
+/// The key is used to check if the object exists (seq >= 1) before setting tags.
+/// This prevents orphaned tag references when the object is dropped concurrently.
+fn get_object_key(tenant: &Tenant, object: &TaggableObject) -> String {
+    match object {
+        TaggableObject::Connection { name } => {
+            ConnectionIdent::new(tenant.clone(), name).to_string_key()
+        }
+        TaggableObject::Stage { name } => StageIdent::new(tenant.clone(), name).to_string_key(),
+        TaggableObject::Database { db_id } => DatabaseId::new(*db_id).to_string_key(),
+        TaggableObject::Table { table_id } => TableId::new(*table_id).to_string_key(),
+    }
+}
 
 impl<T> TagApi for T
 where
@@ -114,6 +141,11 @@ where
         }
     }
 
+    /// Hard-delete a tag by removing all its keys.
+    ///
+    /// Returns `Err(TagError::TagHasReferences)` if the tag is still referenced by objects.
+    /// Since tags do not support UNDROP, we must prevent deletion when references exist
+    /// to avoid orphaned tag-object mappings.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn drop_tag(
@@ -131,34 +163,44 @@ where
             };
 
             let tag_id = *id_seqv.data;
+            let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
+            let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
+
+            // Build the prefix for tag references: __fd_tag_id_object_ref/<tenant>/<tag_id>/
             let refs_dir = DirName::new_with_level(
                 TagIdObjectRefIdent::new_generic(tenant.clone(), TagIdObjectRef::prefix(tag_id)),
                 2,
             );
+
+            // Hard delete: remove all keys
             let mut txn = TxnRequest::default();
-            let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
-            let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
-
-            txn_delete_exact(&mut txn, name_ident, id_seqv.seq);
-            txn_delete_exact(&mut txn, &tag_meta_key, meta_seqv.seq);
-            txn.if_then.push(txn_op_del(&id_to_name_key));
-
-            // Ensure no references were added during the transaction
+            txn.condition.push(txn_cond_eq_seq(name_ident, id_seqv.seq));
+            // Ensure no references exist before deletion
             txn.condition
                 .push(txn_cond_eq_keys_with_prefix(&refs_dir, 0));
+            txn.if_then.push(txn_op_del(name_ident)); // name -> id
+            txn.if_then.push(txn_op_del(&tag_meta_key)); // id -> meta
+            txn.if_then.push(txn_op_del(&id_to_name_key)); // id -> name
 
             let (success, _) = send_txn(self, txn).await?;
             if success {
                 return Ok(Ok(Some((id_seqv, meta_seqv))));
-            } else {
-                let reference_count = self.list_pb_vec(&refs_dir).await?.len();
-                if reference_count > 0 {
-                    return Ok(Err(TagError::tag_has_references(
-                        name_ident.tag_name().to_string(),
-                        reference_count,
-                    )));
-                }
             }
+
+            // Transaction failed. Check if it's due to references or concurrent modification.
+            let refs: Vec<String> = self
+                .list_pb(ListOptions::unlimited(&refs_dir))
+                .await?
+                .map_ok(|entry| entry.key.name().object.to_string())
+                .try_collect()
+                .await?;
+            if !refs.is_empty() {
+                return Ok(Err(TagError::tag_has_references(
+                    name_ident.tag_name().to_string(),
+                    refs,
+                )));
+            }
+            // No references, must be concurrent modification. Retry.
         }
     }
 
@@ -176,6 +218,7 @@ where
         }
     }
 
+    /// List all tags for a tenant.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn list_tags(&self, tenant: &Tenant) -> Result<Vec<TagInfo>, MetaError> {
@@ -200,12 +243,30 @@ where
     /// Attach multiple tags to an object in a single transaction.
     /// Validates tag existence and allowed_values constraints.
     ///
+    /// # Optimistic Locking
+    ///
     /// The txn uses optimistic locking:
     /// - We must re-fetch `TagMeta` and verify values on every retry so each attempt uses the
     ///   latest `allowed_values`.
     /// - The generated conditions include `tag_meta.seq`, ensuring no concurrent update sneaks in
     ///   between validation and commit. If any `TagMeta` changes, the txn fails and the loop
     ///   re-executes the entire validation/write process.
+    ///
+    /// # Concurrency Safety with DROP
+    ///
+    /// Two mechanisms prevent orphaned tag references when DROP runs concurrently:
+    ///
+    /// 1. **Transaction condition**: The txn includes `seq >= 1` for the object key.
+    ///    - For Stage/Connection: hard delete sets seq=0, failing the condition.
+    ///
+    /// 2. **Soft-delete check**: For Database/Table which use soft delete (drop_on field):
+    ///    - When txn fails, we check if `drop_on` is set in the object's meta.
+    ///    - If soft-deleted, we reject the SET TAG operation with ObjectNotFound.
+    ///    - This prevents writing tag refs to objects that are logically deleted.
+    ///
+    /// The meta-api layer handles tag cleanup during DROP operations (in `drop_database_meta`
+    /// and `construct_drop_table_txn_operations`), ensuring existing tag refs are removed
+    /// atomically with the drop operation.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn set_object_tags(
@@ -218,7 +279,10 @@ where
             return Ok(Ok(()));
         }
 
-        // Batch fetch all tag metadata to validate allowed_values
+        // Build the object existence check key.
+        let object_key = get_object_key(&req.tenant, &req.taggable_object);
+
+        // Build tag meta keys for batch fetching
         let tag_meta_keys: Vec<TagIdIdent> = req
             .tags
             .iter()
@@ -230,14 +294,22 @@ where
         loop {
             trials.next().unwrap()?.await;
 
-            // Each retry must refetch tag meta because the txn conditions compare the latest seq.
-            // If another session updated tag meta (e.g. allowed_values), our previous snapshot is stale.
+            // Fetch tag metadata to validate allowed_values
             let tag_metas = self
                 .get_pb_values_vec::<TagIdIdent, _>(tag_meta_keys.clone())
                 .await?;
 
-            let mut txn_conditions = Vec::with_capacity(req.tags.len());
+            // +1 for the object existence condition
+            let mut txn_conditions = Vec::with_capacity(1 + req.tags.len());
             let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
+
+            // Condition: object must exist (seq >= 1).
+            // This ensures that if the object is dropped concurrently, the transaction fails.
+            txn_conditions.push(TxnCondition::match_seq(
+                object_key.clone(),
+                ConditionResult::Ge,
+                1,
+            ));
 
             for (((tag_id, tag_value), meta_opt), tag_meta_key) in req
                 .tags
@@ -245,13 +317,11 @@ where
                 .zip(tag_metas.into_iter())
                 .zip(tag_meta_keys.iter())
             {
-                // Verify tag exists
+                // Verify tag exists and validate allowed_values
                 let Some(meta_seqv) = meta_opt else {
                     return Ok(Err(TagMetaError::not_found(&req.tenant, *tag_id)));
                 };
                 if let Some(allowed_values) = meta_seqv.data.allowed_values.as_ref() {
-                    // Preserve Vec order for ON_CONFLICT semantics but use a HashSet
-                    // for O(1) membership checks when validating bindings.
                     let allowed_lookup: HashSet<&str> =
                         allowed_values.iter().map(|value| value.as_str()).collect();
                     if !allowed_lookup.contains(tag_value.as_str()) {
@@ -262,8 +332,8 @@ where
                         )));
                     }
                 }
-                // Add condition to ensure tag meta hasn't been modified
-                // object set value must be occurs in allowed_values if it's not none.
+
+                // Condition: tag meta hasn't been modified (allowed_values unchanged)
                 txn_conditions.push(txn_cond_eq_seq(tag_meta_key, meta_seqv.seq));
 
                 let obj_ref_key = ObjectTagIdRefIdent::new_generic(
@@ -288,10 +358,56 @@ where
             let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;
             if succ {
                 return Ok(Ok(()));
-            } else {
-                // Transaction failed because tag meta was modified concurrently; re-loop to read latest seq.
-                debug!(req :? =(&req), tag_ids :? = Vec::from_iter(req.tags.iter().map(|(tag_id, _)| *tag_id)); "set_object_tags retry due to concurrent tag meta modification");
             }
+
+            // Transaction failed. Check why and decide whether to retry or return error.
+            // 1. Object was dropped (hard delete: seq=0, or soft delete: drop_on is Some) → return ObjectNotFound
+            // 2. Tag was modified/deleted → retry will re-fetch and re-validate
+            let object_seqv = self.get_kv(&object_key).await?;
+            if object_seqv.seq() == 0 {
+                return Ok(Err(TagMetaError::object_not_found(
+                    req.taggable_object.clone(),
+                )));
+            }
+
+            // For Database and Table, also check if soft-deleted (drop_on is Some).
+            // This prevents orphaned tag references when DROP runs concurrently.
+            match &req.taggable_object {
+                TaggableObject::Database { db_id } => {
+                    let db_id_key = DatabaseId::new(*db_id);
+                    if let Some(db_meta_seqv) = self.get_pb(&db_id_key).await? {
+                        let db_meta: DatabaseMeta = db_meta_seqv.data;
+                        if db_meta.drop_on.is_some() {
+                            warn!(
+                                "set_object_tags: database {} is soft-deleted, rejecting tag operation",
+                                db_id
+                            );
+                            return Ok(Err(TagMetaError::object_not_found(
+                                req.taggable_object.clone(),
+                            )));
+                        }
+                    }
+                }
+                TaggableObject::Table { table_id } => {
+                    let table_id_key = TableId::new(*table_id);
+                    if let Some(table_meta_seqv) = self.get_pb(&table_id_key).await? {
+                        let table_meta: TableMeta = table_meta_seqv.data;
+                        if table_meta.drop_on.is_some() {
+                            warn!(
+                                "set_object_tags: table {} is soft-deleted, rejecting tag operation",
+                                table_id
+                            );
+                            return Ok(Err(TagMetaError::object_not_found(
+                                req.taggable_object.clone(),
+                            )));
+                        }
+                    }
+                }
+                // Stage and Connection use name-based keys, no soft delete concept
+                TaggableObject::Stage { .. } | TaggableObject::Connection { .. } => {}
+            }
+
+            debug!(req :? =(&req); "set_object_tags retry due to concurrent modification");
         }
     }
 
@@ -341,7 +457,7 @@ where
         let obj_ref_key =
             ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
-        let stream = self.list_pb(&refs_dir).await?;
+        let stream = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
         Ok(stream
             .map_ok(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
@@ -367,7 +483,7 @@ where
             2,
         );
         let refs = self
-            .list_pb(&refs_dir)
+            .list_pb(ListOptions::unlimited(&refs_dir))
             .await?
             .map_ok(|entry| {
                 let object = entry.key.name().object.clone();

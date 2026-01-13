@@ -19,8 +19,10 @@ use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_kvapi::kvapi::limit_stream;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -84,9 +86,12 @@ impl<'a> kvapi::KVApi for MetaKVApi<'a> {
     }
 
     #[fastrace::trace]
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
         let req = ListKVReq {
-            prefix: prefix.to_string(),
+            prefix: opts.prefix.to_string(),
         };
 
         let res = self
@@ -98,9 +103,8 @@ impl<'a> kvapi::KVApi for MetaKVApi<'a> {
 
         // TODO: enable returning endpoint
         let (_endpoint, strm) = res?;
-
         let strm = strm.map_err(MetaAPIError::from);
-        Ok(strm.boxed())
+        Ok(limit_stream(strm, opts.limit))
     }
 
     #[fastrace::trace]
@@ -142,8 +146,11 @@ impl kvapi::KVApi for MetaKVApiOwned {
         self.inner.kv_api().get_kv_stream(keys).await
     }
 
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.inner.kv_api().list_kv(prefix).await
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.inner.kv_api().list_kv(opts).await
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {

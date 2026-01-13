@@ -26,6 +26,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -132,7 +133,10 @@ impl UserApi for UserMgr {
     #[fastrace::trace]
     async fn get_raw_users(&self) -> Result<ListKVReply> {
         let user_prefix = self.user_prefix();
-        Ok(self.kv_api.list_kv_collect(user_prefix.as_str()).await?)
+        Ok(self
+            .kv_api
+            .list_kv_collect(ListOptions::unlimited(user_prefix.as_str()))
+            .await?)
     }
 
     #[async_backtrace::framed]

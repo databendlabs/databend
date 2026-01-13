@@ -75,8 +75,7 @@ impl TsvDecoder {
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            self.load_context
-                .push_default_value(builder, column_index, false)
+            self.load_context.push_default_value(builder, column_index)
         } else {
             // todo(youngsofun): optimize this later after refactor.
             let mut cursor = Cursor::new(col_data);
@@ -89,7 +88,7 @@ impl TsvDecoder {
                     col_data,
                 )
             })?;
-            if let Err(e) = self.field_decoder.read_field(builder, &data) {
+            if let Err(e) = self.field_decoder.read_field(builder, &data, true) {
                 return Err(get_decode_error_by_pos(
                     column_index,
                     &self.load_context.schema,

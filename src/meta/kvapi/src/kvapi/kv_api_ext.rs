@@ -20,6 +20,7 @@ use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::kvapi::KVApi;
+use crate::kvapi::ListOptions;
 
 /// Extend the `KVApi` trait with auto implemented handy methods.
 #[async_trait]
@@ -64,10 +65,13 @@ pub trait KvApiExt: KVApi {
     /// List key-value starting with the specified prefix and return a [`Vec`]
     ///
     /// Same as [`Self::list_kv`] but return a [`Vec`] instead of a stream.
-    async fn list_kv_collect(&self, prefix: &str) -> Result<Vec<(String, SeqV)>, Self::Error> {
+    async fn list_kv_collect(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<Vec<(String, SeqV)>, Self::Error> {
         let now = std::time::Instant::now();
 
-        let strm = self.list_kv(prefix).await?;
+        let strm = self.list_kv(opts).await?;
 
         debug!("list_kv() took {:?}", now.elapsed());
 

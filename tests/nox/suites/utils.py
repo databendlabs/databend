@@ -1,8 +1,11 @@
 import functools
 import difflib
 import pytest
+import os
 
-
+DATABEND_DSL = os.environ.get(
+    "DATABEND_DSN", "databend://root:root@localhost:8000/?sslmode=disable"
+)
 def comparison_output(want):
     def decorator(func):
         @functools.wraps(func)
