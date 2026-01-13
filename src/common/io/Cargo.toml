@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+base64 = { workspace = true }
 bincode = { workspace = true }
 borsh = { workspace = true }
 byteorder = { workspace = true }
@@ -16,7 +17,6 @@ chrono-tz = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-timezone = { workspace = true }
-base64 = { workspace = true }
 enquote = { workspace = true }
 enumflags2 = { workspace = true }
 ethnum = { workspace = true }
