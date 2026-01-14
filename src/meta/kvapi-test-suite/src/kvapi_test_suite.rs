@@ -104,6 +104,8 @@ impl TestSuite {
         self.kv_list_collect_with_limit(&builder.build().await)
             .await?;
         self.kv_mget(&builder.build().await).await?;
+        self.kv_get_many_kv_error_propagation(&builder.build().await)
+            .await?;
 
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
@@ -723,6 +725,71 @@ impl TestSuite {
             Some(SeqV::new(1, b("v1"))),
             None
         ]);
+
+        Ok(())
+    }
+
+    /// Test that `get_many_kv` propagates errors from the input stream and stops immediately.
+    ///
+    /// When an error is encountered in the input stream, the output stream should:
+    /// 1. Return all items processed before the error
+    /// 2. Return the error
+    /// 3. Terminate immediately (no more items after the error)
+    pub async fn kv_get_many_kv_error_propagation<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        use databend_common_meta_kvapi::kvapi::KVStream;
+        use databend_common_meta_types::errors::IncompleteStream;
+        use futures_util::StreamExt;
+
+        info!("--- kvapi::KVApiTestSuite::kv_get_many_kv_error_propagation() start");
+
+        // Insert some test data
+        kv.upsert_kv(UpsertKV::update("err_k1", b"v1")).await?;
+        kv.upsert_kv(UpsertKV::update("err_k2", b"v2")).await?;
+
+        // Create input stream: k1, error, k2
+        // KV::Error has bound `From<IncompleteStream>`, so we can use `.into()`
+        let input: Vec<Result<String, KV::Error>> = vec![
+            Ok("err_k1".to_string()),
+            Err(IncompleteStream::new(10, 5)
+                .context("simulated input error")
+                .into()),
+            Ok("err_k2".to_string()),
+        ];
+        let input_stream = futures_util::stream::iter(input);
+
+        // Call get_many_kv with the error-containing stream
+        let output_stream: KVStream<KV::Error> = kv.get_many_kv(input_stream.boxed()).await?;
+        let results: Vec<_> = output_stream.collect().await;
+
+        // Verify: should have exactly 2 items - Ok(k1), then Err(...)
+        // Stream terminates immediately after error (fail-fast), k2 is never processed
+        assert_eq!(
+            results.len(),
+            2,
+            "stream should terminate after error, got {} items",
+            results.len()
+        );
+
+        // First item should be Ok with k1's value
+        assert!(results[0].is_ok(), "first item should be Ok");
+        let item0 = results[0].as_ref().unwrap();
+        assert_eq!(item0.key, "err_k1");
+
+        // Second item should be the propagated error, then stream ends
+        assert!(
+            results[1].is_err(),
+            "second item should be error propagated from input"
+        );
+        let err = results[1].as_ref().unwrap_err();
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("simulated input error"),
+            "error should contain our message, got: {}",
+            err_str
+        );
 
         Ok(())
     }

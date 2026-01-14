@@ -48,6 +48,15 @@ impl GrpcHelper {
     /// Create a Status error with leader endpoint in metadata.
     /// Similar to `add_response_meta_leader` but for error Status.
     pub fn status_forward_to_leader(endpoint: Option<&Endpoint>) -> tonic::Status {
+        let ctx = "building a status for leader redirection";
+
+        if endpoint.is_none() {
+            log::warn!(
+                "no leader endpoint available for client redirection; when:({})",
+                ctx
+            );
+        }
+
         let mut status = tonic::Status::unavailable("not leader");
         Self::insert_endpoint_to_metadata(
             status.metadata_mut(),
@@ -64,10 +73,6 @@ impl GrpcHelper {
         ctx: &str,
     ) {
         let Some(endpoint) = endpoint else {
-            log::warn!(
-                "no leader endpoint available for client redirection; when:({})",
-                ctx
-            );
             return;
         };
 
