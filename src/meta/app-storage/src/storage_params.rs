@@ -299,6 +299,31 @@ impl StorageParams {
         }
     }
 
+    /// Return the endpoint URL if this storage exposes one.
+    pub fn endpoint(&self) -> Option<String> {
+        fn some_if_not_empty(s: &str) -> Option<String> {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        }
+
+        match self {
+            StorageParams::Azblob(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ftp(cfg) => some_if_not_empty(&cfg.endpoint),
+            StorageParams::Gcs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Http(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ipfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Obs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Oss(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::S3(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Cos(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Webhdfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            _ => None,
+        }
+    }
+
     /// Return true if this storage params contains any embedded credentials.
     pub fn has_credentials(&self) -> bool {
         match self {
@@ -1219,5 +1244,39 @@ mod tests {
         assert!(!StorageParams::Oss(oss.clone()).has_encryption_key());
         oss.server_side_encryption = "KMS".to_string();
         assert!(StorageParams::Oss(oss).has_encryption_key());
+    }
+
+    #[test]
+    fn test_endpoint_for_storages_with_endpoint() {
+        let mut s3 = StorageS3Config::default();
+        s3.endpoint_url = "https://s3.example.com".to_string();
+        assert_eq!(
+            StorageParams::S3(s3).endpoint().as_deref(),
+            Some("https://s3.example.com")
+        );
+
+        let http = StorageParams::Http(StorageHttpConfig {
+            endpoint_url: "https://files.example.com".to_string(),
+            paths: vec![],
+            network_config: None,
+        });
+        assert_eq!(
+            http.endpoint().as_deref(),
+            Some("https://files.example.com")
+        );
+    }
+
+    #[test]
+    fn test_endpoint_none_when_missing() {
+        assert_eq!(
+            StorageParams::Fs(StorageFsConfig::default()).endpoint(),
+            None
+        );
+
+        let ftp = StorageParams::Ftp(StorageFtpConfig {
+            endpoint: "".to_string(),
+            ..Default::default()
+        });
+        assert_eq!(ftp.endpoint(), None);
     }
 }
