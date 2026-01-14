@@ -153,16 +153,18 @@ impl FuseTable {
                 let mut d_alias_vec = Vec::with_capacity(fields.len());
                 let mut d_cols_vec = Vec::with_capacity(fields.len());
                 let mut exprs_vec = Vec::with_capacity(fields.len());
-                for field in fields {
-                    let name = field.name();
-                    a_cols_vec.push(format!("{quote}{name}{quote}"));
-                    d_alias_vec.push(format!("{quote}{name}{quote} as d_{name}"));
-                    d_cols_vec.push(format!("d_{name}"));
+                for (idx, field) in fields.iter().enumerate() {
+                    let quoted = format!("{quote}{}{quote}", field.name());
+                    let d_alias = format!("d_{suffix}_{idx}");
+
+                    a_cols_vec.push(quoted.clone());
+                    d_alias_vec.push(format!("{quoted} as {d_alias}"));
+                    d_cols_vec.push(d_alias.clone());
 
                     if field.data_type().is_nullable_or_null() {
-                        exprs_vec.push(format!("not(equal_null({quote}{name}{quote}, d_{name}))"));
+                        exprs_vec.push(format!("not(equal_null({quoted}, {d_alias}))"));
                     } else {
-                        exprs_vec.push(format!("{quote}{name}{quote} <> d_{name}"));
+                        exprs_vec.push(format!("{quoted} <> {d_alias}"));
                     }
                 }
                 let a_cols = a_cols_vec.join(", ");
