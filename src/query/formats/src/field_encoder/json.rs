@@ -16,6 +16,7 @@ use std::borrow::Cow;
 
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::array::ArrayColumn;
@@ -71,9 +72,14 @@ impl FieldEncoderJSON {
 }
 
 impl FieldEncoderJSON {
-    pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
+    pub(crate) fn write_field(
+        &self,
+        column: &Column,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         match &column {
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
@@ -91,7 +97,8 @@ impl FieldEncoderJSON {
             | Column::Bitmap(..)
             | Column::Interval(..) => {
                 let mut buf = Vec::new();
-                self.simple.write_field(column, row_index, &mut buf, false);
+                self.simple
+                    .write_field(column, row_index, &mut buf, false)?;
                 self.write_string(&buf, out_buf);
             }
 
@@ -108,9 +115,9 @@ impl FieldEncoderJSON {
                 out_buf.extend_from_slice(Ewkb(v.0).to_json().unwrap().as_bytes())
             }
 
-            Column::Array(box c) => self.write_array(c, row_index, out_buf),
-            Column::Map(box c) => self.write_map(c, row_index, out_buf),
-            Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
+            Column::Array(box c) => self.write_array(c, row_index, out_buf)?,
+            Column::Map(box c) => self.write_map(c, row_index, out_buf)?,
+            Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf)?,
             Column::Vector(c) => self.simple.write_vector(c, row_index, out_buf),
 
             Column::Null { .. }
@@ -118,9 +125,10 @@ impl FieldEncoderJSON {
             | Column::EmptyMap { .. }
             | Column::Number(_)
             | Column::Decimal(_)
-            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false)?,
             Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
         }
+        Ok(())
     }
 
     fn write_nullable(
@@ -128,9 +136,10 @@ impl FieldEncoderJSON {
         column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-    ) {
+    ) -> Result<()> {
         if !column.validity.get_bit(row_index) {
-            self.simple.write_null(out_buf)
+            self.simple.write_null(out_buf);
+            Ok(())
         } else {
             self.write_field(&column.column, row_index, out_buf)
         }
@@ -147,7 +156,12 @@ impl FieldEncoderJSON {
         out_buf.push(b'\"');
     }
 
-    fn write_array(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_array(
+        &self,
+        column: &ArrayColumn<AnyType>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
@@ -156,12 +170,18 @@ impl FieldEncoderJSON {
             if i != start {
                 out_buf.push(b',');
             }
-            self.write_field(inner, i, out_buf);
+            self.write_field(inner, i, out_buf)?;
         }
         out_buf.push(b']');
+        Ok(())
     }
 
-    fn write_map(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_map(
+        &self,
+        column: &ArrayColumn<AnyType>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
@@ -172,17 +192,23 @@ impl FieldEncoderJSON {
                     if i != start {
                         out_buf.push(b',');
                     }
-                    self.write_field(&fields[0], i, out_buf);
+                    self.write_field(&fields[0], i, out_buf)?;
                     out_buf.push(b':');
-                    self.write_field(&fields[1], i, out_buf);
+                    self.write_field(&fields[1], i, out_buf)?;
                 }
             }
             _ => unreachable!(),
         }
         out_buf.push(b'}');
+        Ok(())
     }
 
-    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_tuple(
+        &self,
+        columns: &[Column],
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         // write tuple as JSON Object
         out_buf.push(b'{');
         for (i, inner) in columns.iter().enumerate() {
@@ -192,9 +218,10 @@ impl FieldEncoderJSON {
             let key = format!("{}", i + 1);
             self.write_string(key.as_bytes(), out_buf);
             out_buf.push(b':');
-            self.write_field(inner, row_index, out_buf);
+            self.write_field(inner, row_index, out_buf)?;
         }
         out_buf.push(b'}');
+        Ok(())
     }
 
     fn encode_binary<'a>(&self, buf: &'a [u8]) -> Cow<'a, str> {

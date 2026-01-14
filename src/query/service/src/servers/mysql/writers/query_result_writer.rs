@@ -81,7 +81,7 @@ fn write_field<W: AsyncWrite + Unpin>(
     row_index: usize,
 ) -> Result<()> {
     buf.clear();
-    encoder.write_field(column, row_index, buf, false);
+    encoder.write_field(column, row_index, buf, false)?;
     row_writer.write_col(&buf[..])?;
     Ok(())
 }

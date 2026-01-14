@@ -255,13 +255,16 @@ impl serde::Serialize for RowSerializer<'_> {
                 serialize_seq.serialize_element(&None::<String>)?;
                 continue;
             }
-            let string = self.try_direct_as_string(column).unwrap_or_else(|| {
+            let string = if let Some(value) = self.try_direct_as_string(column) {
+                value
+            } else {
                 let mut buf = self.buf.borrow_mut();
                 buf.clear();
                 self.encoder
-                    .write_field(column, self.row_index, buf.deref_mut(), false);
+                    .write_field(column, self.row_index, buf.deref_mut(), false)
+                    .map_err(serde::ser::Error::custom)?;
                 String::from_utf8_lossy(buf.deref_mut()).into_owned()
-            });
+            };
             serialize_seq.serialize_element(&Some(string))?;
         }
         serialize_seq.end()
