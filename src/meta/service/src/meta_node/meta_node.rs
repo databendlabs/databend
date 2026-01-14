@@ -114,7 +114,6 @@ use crate::message::LeaveRequest;
 use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::MetaForwarder;
 use crate::meta_service::MetaKVApi;
-use crate::meta_service::MetaKVApiOwned;
 use crate::meta_service::MetaNodeBuilder;
 use crate::meta_service::RaftServiceImpl;
 use crate::meta_service::errors::grpc_error_to_network_err;
@@ -1651,10 +1650,6 @@ impl MetaNode {
     /// Get a kvapi::KVApi implementation.
     pub fn kv_api(&self) -> MetaKVApi<'_> {
         MetaKVApi::new(self)
-    }
-
-    pub fn kv_api_owned(self: &Arc<Self>) -> MetaKVApiOwned {
-        MetaKVApiOwned::new(self.clone())
     }
 
     pub fn runtime_config(&self) -> &RuntimeConfig {

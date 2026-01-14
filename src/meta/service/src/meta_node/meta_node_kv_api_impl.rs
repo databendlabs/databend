@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi;
@@ -120,40 +118,5 @@ impl<'a> kvapi::KVApi for MetaKVApi<'a> {
                 unreachable!("expect type {}", "AppliedState::transaction",)
             }
         }
-    }
-}
-
-/// A wrapper of MetaNode that implements kvapi::KVApi.
-pub struct MetaKVApiOwned {
-    inner: Arc<MetaNode>,
-}
-
-impl MetaKVApiOwned {
-    pub fn new(inner: Arc<MetaNode>) -> Self {
-        Self { inner }
-    }
-}
-
-#[async_trait]
-impl kvapi::KVApi for MetaKVApiOwned {
-    type Error = MetaAPIError;
-
-    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-        self.inner.kv_api().upsert_kv(act).await
-    }
-
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.inner.kv_api().get_kv_stream(keys).await
-    }
-
-    async fn list_kv(
-        &self,
-        opts: ListOptions<'_, str>,
-    ) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.inner.kv_api().list_kv(opts).await
-    }
-
-    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
-        self.inner.kv_api().transaction(txn).await
     }
 }
