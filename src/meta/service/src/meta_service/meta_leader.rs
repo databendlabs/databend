@@ -32,12 +32,14 @@ use databend_common_meta_types::MetaDataError;
 use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
 use databend_common_metrics::count::Count;
+use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
@@ -340,6 +342,33 @@ impl<'a> MetaLeader<'a> {
             .await?;
         let strm = strm.map_err(|e| Status::internal(e.to_string()));
         Ok(strm.boxed())
+    }
+
+    /// Get multiple key-value pairs by streaming keys.
+    ///
+    /// Processes keys one by one as they arrive, looking up each in the state machine.
+    /// Returns a stream of `StreamItem`.
+    pub fn kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> BoxStream<StreamItem> {
+        let sm = self.sto.get_sm_v003();
+
+        let strm = input.then(move |res| {
+            let sm = sm.clone();
+            async move {
+                let req = res?;
+                let key = req.key;
+                let got = sm
+                    .kv_api()
+                    .get_kv(&key)
+                    .await
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                Ok(StreamItem::from((key, got)))
+            }
+        });
+
+        strm.boxed()
     }
 }
 

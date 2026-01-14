@@ -191,7 +191,7 @@ impl Binder {
                 let full_table_name = format!("{catalog}.{database}.{table_name}");
                 metadata
                     .write()
-                    .add_agg_indexes(full_table_name, agg_indexes);
+                    .add_agg_indices(full_table_name, agg_indexes);
             }
         }
 

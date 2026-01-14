@@ -134,7 +134,7 @@ fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
                 span: None,
                 func_name: "or".to_string(),
                 params: vec![],
-                arguments: vec![acc, arg.clone()],
+                arguments: vec![acc, arg],
             }
             .into()
         },

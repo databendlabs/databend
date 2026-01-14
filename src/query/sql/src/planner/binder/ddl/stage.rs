@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::AlterStageAction;
+use databend_common_ast::ast::AlterStageStmt;
+use databend_common_ast::ast::AlterStageUnsetTarget;
 use databend_common_ast::ast::CreateStageStmt;
 use databend_common_ast::ast::FileFormatOptions;
 use databend_common_ast::ast::UriLocation;
@@ -26,6 +29,10 @@ use super::super::copy_into_table::resolve_stage_location;
 use crate::binder::Binder;
 use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::location::parse_storage_params_from_uri;
+use crate::plans::AlterStageActionPlan;
+use crate::plans::AlterStagePlan;
+use crate::plans::AlterStageSetPlan;
+use crate::plans::AlterStageUnsetPlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;
@@ -111,6 +118,85 @@ impl Binder {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
             stage_info,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_alter_stage(
+        &mut self,
+        stmt: &AlterStageStmt,
+    ) -> Result<Plan> {
+        if stmt.stage_name == "~" {
+            return Err(ErrorCode::StagePermissionDenied(
+                "[SQL-BINDER] User stage (~) is not allowed to be altered",
+            ));
+        }
+
+        let action = match &stmt.action {
+            AlterStageAction::Set(options) => {
+                let mut storage_params = None;
+                if let Some(location) = options.location.as_ref() {
+                    let mut uri = UriLocation {
+                        protocol: location.protocol.clone(),
+                        name: location.name.clone(),
+                        path: location.path.clone(),
+                        connection: location.connection.clone(),
+                    };
+                    let stage_storage = parse_storage_params_from_uri(
+                        &mut uri,
+                        Some(self.ctx.as_ref()),
+                        "when ALTER STAGE",
+                    )
+                    .await?;
+                    let stage_info = StageInfo::new_external_stage(stage_storage.clone(), true)
+                        .with_stage_name(&stmt.stage_name);
+                    init_stage_operator(&stage_info).map_err(|err| {
+                        ErrorCode::InvalidConfig(format!(
+                            "Input storage config for stage is invalid: {err:?}"
+                        ))
+                    })?;
+                    storage_params = Some(stage_storage);
+                }
+
+                let mut set_plan = AlterStageSetPlan {
+                    storage_params,
+                    file_format: None,
+                    comment: options.comment.clone(),
+                };
+                if let Some(file_format) = options.file_format.as_ref() {
+                    if !file_format.is_empty() {
+                        set_plan.file_format =
+                            Some(self.try_resolve_file_format(file_format).await?);
+                    }
+                }
+
+                if set_plan.storage_params.is_none()
+                    && set_plan.file_format.is_none()
+                    && set_plan.comment.is_none()
+                {
+                    return Err(ErrorCode::BadArguments(
+                        "ALTER STAGE requires at least one option when SET is used",
+                    ));
+                }
+
+                AlterStageActionPlan::Set(Box::new(set_plan))
+            }
+            AlterStageAction::Unset(targets) => {
+                let mut unset_plan = AlterStageUnsetPlan::default();
+                for target in targets {
+                    match target {
+                        AlterStageUnsetTarget::FileFormat => unset_plan.file_format = true,
+                        AlterStageUnsetTarget::Comment => unset_plan.comment = true,
+                    }
+                }
+                AlterStageActionPlan::Unset(unset_plan)
+            }
+        };
+
+        Ok(Plan::AlterStage(Box::new(AlterStagePlan {
+            if_exists: stmt.if_exists,
+            stage_name: stmt.stage_name.clone(),
+            action,
         })))
     }
 

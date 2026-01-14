@@ -73,11 +73,8 @@ async fn test_array_cache_of_nested_column_iusse_14502() -> Result<()> {
     let queries = vec![q1, q2];
 
     for x in &queries {
-        let res = fixture
-            .execute_query(x)
-            .await?
-            .try_collect::<Vec<DataBlock>>()
-            .await;
+        let strm = fixture.execute_query(x).await?;
+        let res = strm.try_collect::<Vec<DataBlock>>().await;
         assert!(res.is_ok());
     }
 

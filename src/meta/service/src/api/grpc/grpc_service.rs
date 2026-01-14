@@ -41,6 +41,7 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
@@ -231,6 +232,21 @@ impl MetaServiceImpl {
         let meta_handle = self.try_get_meta_handle()?;
 
         let res = meta_handle.handle_kv_list(prefix, limit).await;
+        network_metrics::incr_request_result(res.is_ok());
+
+        res
+    }
+
+    #[fastrace::trace]
+    async fn handle_kv_get_many(
+        &self,
+        input: Streaming<KvGetManyRequest>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        debug!("{}: Received KvGetMany stream", func_name!());
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let res = meta_handle.handle_kv_get_many(input).await;
         network_metrics::incr_request_result(res.is_ok());
 
         res
@@ -435,6 +451,46 @@ impl MetaService for MetaServiceImpl {
             let strm = strm.map(move |item| {
                 let _g = &guard;
                 network_metrics::incr_stream_sent_item("kv_list");
+                metrics_collector.incr_count();
+                item
+            });
+
+            Ok(Response::new(strm.boxed()))
+        })
+        .await
+    }
+
+    type KvGetManyStream = BoxStream<StreamItem>;
+
+    /// Get multiple key-value pairs by streaming keys.
+    ///
+    /// This RPC requires leadership. If this node is not the leader,
+    /// it returns a `Status::unavailable` error with the leader's endpoint in metadata.
+    /// Clients should retry with the leader directly.
+    async fn kv_get_many(
+        &self,
+        request: Request<Streaming<KvGetManyRequest>>,
+    ) -> Result<Response<Self::KvGetManyStream>, Status> {
+        self.check_token(request.metadata())?;
+
+        let _guard = thread_tracking_guard(&request);
+
+        let root = start_trace_for_remote_request(func_path!(), &request);
+
+        let input = request.into_inner();
+        let req_str = "KvGetMany".to_string();
+
+        ThreadTracker::tracking_future(async move {
+            let guard = InFlightRead::guard();
+
+            let strm = self.handle_kv_get_many(input).in_span(root).await?;
+
+            // MetricsCollector logs metrics when dropped
+            let mut metrics_collector = MetricsCollector::new(req_str);
+
+            let strm = strm.map(move |item| {
+                let _g = &guard;
+                network_metrics::incr_stream_sent_item("kv_get_many");
                 metrics_collector.incr_count();
                 item
             });

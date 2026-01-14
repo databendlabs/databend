@@ -13681,6 +13681,85 @@ CreateStage(
 
 
 ---------- Input ----------
+ALTER STAGE my_stage SET FILE_FORMAT = (TYPE = CSV)
+---------- Output ---------
+ALTER STAGE my_stage SET FILE_FORMAT = (type = CSV)
+---------- AST ------------
+AlterStage(
+    AlterStageStmt {
+        if_exists: false,
+        stage_name: "my_stage",
+        action: Set(
+            AlterStageSetOptions {
+                location: None,
+                file_format: Some(
+                    FileFormatOptions {
+                        options: {
+                            "type": Keyword(
+                                "CSV",
+                            ),
+                        },
+                    },
+                ),
+                comment: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER STAGE IF EXISTS my_stage SET COMMENT = 'updated', URL = 'fs:///tmp/'
+---------- Output ---------
+ALTER STAGE IF EXISTS my_stage SET URL = 'fs:///tmp/', COMMENT = 'updated'
+---------- AST ------------
+AlterStage(
+    AlterStageStmt {
+        if_exists: true,
+        stage_name: "my_stage",
+        action: Set(
+            AlterStageSetOptions {
+                location: Some(
+                    UriLocation {
+                        protocol: "fs",
+                        name: "",
+                        path: "/tmp/",
+                        connection: Connection {
+                            visited_keys: {},
+                            conns: {},
+                        },
+                    },
+                ),
+                file_format: None,
+                comment: Some(
+                    "updated",
+                ),
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER STAGE my_stage UNSET COMMENT, FILE_FORMAT
+---------- Output ---------
+ALTER STAGE my_stage UNSET COMMENT, FILE_FORMAT
+---------- AST ------------
+AlterStage(
+    AlterStageStmt {
+        if_exists: false,
+        stage_name: "my_stage",
+        action: Unset(
+            [
+                Comment,
+                FileFormat,
+            ],
+        ),
+    },
+)
+
+
+---------- Input ----------
 DROP STAGE abc
 ---------- Output ---------
 DROP STAGE abc

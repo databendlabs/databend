@@ -188,9 +188,8 @@ where
             }
 
             // Transaction failed. Check if it's due to references or concurrent modification.
-            let refs: Vec<String> = self
-                .list_pb(ListOptions::unlimited(&refs_dir))
-                .await?
+            let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
+            let refs: Vec<String> = strm
                 .map_ok(|entry| entry.key.name().object.to_string())
                 .try_collect()
                 .await?;
@@ -482,9 +481,8 @@ where
             TagIdObjectRefIdent::new_generic(tenant, TagIdObjectRef::prefix(tag_id)),
             2,
         );
-        let refs = self
-            .list_pb(ListOptions::unlimited(&refs_dir))
-            .await?
+        let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
+        let refs = strm
             .map_ok(|entry| {
                 let object = entry.key.name().object.clone();
                 let value_key = ObjectTagIdRefIdent::new_generic(

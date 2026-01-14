@@ -209,11 +209,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
     // let's check it out
     let qry = format!("select * from {}.{} order by id ", db, tbl);
-    let blocks = fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    let blocks = strm.try_collect::<Vec<DataBlock>>().await?;
 
     let expected = vec![
         "+----------+----------+",

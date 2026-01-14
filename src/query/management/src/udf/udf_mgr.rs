@@ -140,12 +140,11 @@ impl UdfMgr {
     pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = UdfIdent::new(&self.tenant, "dummy");
         let dir = DirName::new(key);
-        let udfs = self
+        let strm = self
             .kv_api
             .list_pb_values(ListOptions::unlimited(&dir))
-            .await?
-            .try_collect::<Vec<_>>()
             .await?;
+        let udfs = strm.try_collect::<Vec<_>>().await?;
 
         Ok(udfs)
     }

@@ -74,10 +74,8 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
 
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::unlimited(""))
-        .await?
+    let strm = sm.kv_api().list_kv(ListOptions::unlimited("")).await?;
+    let got = strm
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
         .await?
@@ -150,10 +148,8 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // prefix_list_kv()
 
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::unlimited(""))
-        .await?
+    let strm = sm.kv_api().list_kv(ListOptions::unlimited("")).await?;
+    let got = strm
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
         .await?
@@ -164,10 +160,8 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
         (s("d"), SeqV::new(5, b("d1"))),
     ]);
 
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::unlimited("a"))
-        .await?
+    let strm = sm.kv_api().list_kv(ListOptions::unlimited("a")).await?;
+    let got = strm
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
         .await?
@@ -190,43 +184,26 @@ async fn test_list_kv_with_limit() -> anyhow::Result<()> {
     a.commit().await?;
 
     // List all with no limit
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::unlimited("key/"))
-        .await?
-        .map_ok(|item| item.key)
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = sm.kv_api().list_kv(ListOptions::unlimited("key/")).await?;
+    let got = strm.map_ok(|item| item.key).try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec!["key/a", "key/b", "key/c", "key/d", "key/e"]);
 
     // List with limit 3
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::limited("key/", 3))
-        .await?
-        .map_ok(|item| item.key)
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = sm.kv_api().list_kv(ListOptions::limited("key/", 3)).await?;
+    let got = strm.map_ok(|item| item.key).try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec!["key/a", "key/b", "key/c"]);
 
     // List with limit 0
-    let got = sm
-        .kv_api()
-        .list_kv(ListOptions::limited("key/", 0))
-        .await?
-        .map_ok(|item| item.key)
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = sm.kv_api().list_kv(ListOptions::limited("key/", 0)).await?;
+    let got = strm.map_ok(|item| item.key).try_collect::<Vec<_>>().await?;
     assert_eq!(got, Vec::<String>::new());
 
     // List with limit larger than result set
-    let got = sm
+    let strm = sm
         .kv_api()
         .list_kv(ListOptions::limited("key/", 100))
-        .await?
-        .map_ok(|item| item.key)
-        .try_collect::<Vec<_>>()
         .await?;
+    let got = strm.map_ok(|item| item.key).try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec!["key/a", "key/b", "key/c", "key/d", "key/e"]);
 
     Ok(())
@@ -272,12 +249,8 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
     let sm = build_sm_with_expire().await?;
 
     // Check internal expire index
-    let got = sm
-        .to_state_machine_snapshot()
-        .range(..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = sm.to_state_machine_snapshot().range(..).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
         (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
@@ -295,30 +268,18 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
     let applier = sm.new_applier().await;
 
     let curr_time_ms = 5000;
-    let got = applier
-        .sm
-        .list_expire_index(curr_time_ms)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = applier.sm.list_expire_index(curr_time_ms).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert!(got.is_empty());
 
     let curr_time_ms = 5001;
-    let got = applier
-        .sm
-        .list_expire_index(curr_time_ms)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = applier.sm.list_expire_index(curr_time_ms).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![(ExpireKey::new(5000, 2), s("b")),]);
 
     let curr_time_ms = 20_001;
-    let got = applier
-        .sm
-        .list_expire_index(curr_time_ms)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = applier.sm.list_expire_index(curr_time_ms).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         (ExpireKey::new(5000, 2), s("b")),
         (ExpireKey::new(15000, 4), s("a")),

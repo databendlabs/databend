@@ -158,7 +158,7 @@ async fn test_add_stage_file() -> Result<()> {
     stage_api
         .add_stage(stage_info.clone(), &CreateOption::Create)
         .await?;
-    let mystage = stage_api.get_stage("mystage").await?;
+    let mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(mystage.number_of_files, 0);
 
     let stage_file = StageFile {
@@ -185,7 +185,7 @@ async fn test_add_stage_file() -> Result<()> {
         catch => panic!("GetKVActionReply{:?}", catch),
     }
 
-    let new_mystage = stage_api.get_stage("mystage").await?;
+    let new_mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(mystage.number_of_files + 1, new_mystage.number_of_files);
     Ok(())
 }
@@ -197,7 +197,7 @@ async fn test_remove_files() -> Result<()> {
     stage_api
         .add_stage(stage_info.clone(), &CreateOption::Create)
         .await?;
-    let mystage = stage_api.get_stage("mystage").await?;
+    let mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(mystage.number_of_files, 0);
 
     stage_api
@@ -222,7 +222,7 @@ async fn test_remove_files() -> Result<()> {
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "test/books.csv".to_string());
 
-    let new_mystage = stage_api.get_stage("mystage").await?;
+    let new_mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(new_mystage.number_of_files, 1);
     Ok(())
 }
