@@ -4139,7 +4139,6 @@ dependencies = [
  "fastrace",
  "fs_extra",
  "futures",
- "futures-async-stream",
  "futures-util",
  "hostname",
  "log",

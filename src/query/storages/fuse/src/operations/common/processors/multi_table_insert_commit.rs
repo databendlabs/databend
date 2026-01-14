@@ -275,8 +275,9 @@ async fn build_update_table_meta_req(
         .await?;
     let table_info = table.get_table_info();
     let snapshot = snapshot_generator.generate_new_snapshot(
-        table_info,
-        fuse_table.cluster_key_id(),
+        &table_info.ident,
+        fuse_table.schema().as_ref(),
+        fuse_table.cluster_key_meta(),
         previous,
         txn_mgr,
         table_meta_timestamps,

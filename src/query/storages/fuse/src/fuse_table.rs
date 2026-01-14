@@ -146,7 +146,6 @@ pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
-    pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
@@ -188,8 +187,7 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
-        let cluster_key_meta = table_info.cluster_key();
-        let (mut operator, table_type) = match table_info.db_type {
+        let (mut operator, table_type) = match table_info.db_type.clone() {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
@@ -280,7 +278,6 @@ impl FuseTable {
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator,
-            cluster_key_meta,
             bloom_index_cols,
             approx_distinct_cols,
             operator,
@@ -497,12 +494,16 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
-    pub fn cluster_key_str(&self) -> Option<&String> {
-        self.cluster_key_meta.as_ref().map(|(_, key)| key)
-    }
-
     pub fn cluster_key_id(&self) -> Option<u32> {
-        self.cluster_key_meta.clone().map(|v| v.0)
+        if let Some(branch) = self.table_branch.as_ref() {
+            branch.cluster_key.as_ref().map(|(seq, _)| *seq)
+        } else {
+            self.table_info
+                .meta
+                .cluster_key
+                .as_ref()
+                .map(|_| self.table_info.meta.cluster_key_seq)
+        }
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
@@ -838,6 +839,12 @@ impl FuseTable {
                 .cluster_type()
                 .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
     }
+
+    pub fn with_branch_info(&self, branch_info: BranchInfo) -> Result<Arc<dyn Table>> {
+        let mut new_table = self.clone();
+        new_table.table_branch = Some(branch_info);
+        Ok(Arc::new(new_table))
+    }
 }
 
 #[async_trait::async_trait]
@@ -887,7 +894,11 @@ impl Table for FuseTable {
     }
 
     fn cluster_key_meta(&self) -> Option<ClusterKey> {
-        self.cluster_key_meta.clone()
+        if let Some(branch) = self.table_branch.as_ref() {
+            branch.cluster_key.clone()
+        } else {
+            self.table_info.cluster_key()
+        }
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -1240,12 +1251,34 @@ impl Table for FuseTable {
 
     fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
         let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
-        let mut new_table = self.clone();
-        new_table.table_branch = Some(BranchInfo {
+        // Resolve schema from the branch head snapshot and cache it in the table instance.
+        //
+        // NOTE:
+        // - This should not update persisted table meta.
+        // - We intentionally keep `table_info.meta.schema` unchanged.
+        let (schema, cluster_key) = GlobalIORuntime::instance().block_on(async {
+            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+            let location = snapshot_ref.loc.clone();
+            let ver = self.snapshot_format_version(Some(location.clone()))?;
+            let params = LoadParams {
+                location,
+                len_hint: None,
+                ver,
+                put_cache: true,
+            };
+            let snapshot = reader.read(&params).await?;
+            Ok::<_, ErrorCode>((
+                Arc::new(snapshot.schema.clone()),
+                snapshot.cluster_key_meta.clone(),
+            ))
+        })?;
+
+        self.with_branch_info(BranchInfo {
             name: branch_name.to_string(),
             info: snapshot_ref.clone(),
-        });
-        Ok(Arc::new(new_table))
+            schema,
+            cluster_key,
+        })
     }
 
     #[async_backtrace::framed]
@@ -1345,7 +1378,10 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
+        if matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && !self.is_read_only()
+            && self.table_branch.is_none()
+        {
             // ignore persistent system tables {
             if let Ok(database_name) = self.table_info.database_name() {
                 if database_name == "persistent_system" {

@@ -237,10 +237,14 @@ impl Display for SnapshotRefType {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BranchInfo {
     pub name: String,
     pub info: SnapshotRef,
+    // Branch schema is derived from its snapshot
+    // and should not be persisted in table meta.
+    pub schema: Arc<TableSchema>,
+    pub cluster_key: Option<(u32, String)>,
 }
 
 impl BranchInfo {
@@ -418,23 +422,6 @@ impl TableInfo {
             )));
         }
         Ok(table_ref)
-    }
-
-    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
-        self.meta
-            .refs
-            .iter()
-            .find(|(_, r)| r.id == id)
-            .map(|(name, info)| BranchInfo {
-                name: name.clone(),
-                info: info.clone(),
-            })
-            .ok_or_else(|| {
-                ErrorCode::UnknownReference(format!(
-                    "Unknown reference '{}' in table {}",
-                    id, self.desc
-                ))
-            })
     }
 }
 

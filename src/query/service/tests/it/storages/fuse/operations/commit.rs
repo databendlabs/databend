@@ -291,6 +291,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 Statistics::default(),
                 new_segments,
                 None,
+                None,
                 TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();

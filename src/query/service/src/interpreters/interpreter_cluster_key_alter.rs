@@ -65,8 +65,8 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         let cluster_key_str = format!("({})", plan.cluster_keys.join(", "));
         // if new cluster_key_str is the same with old one,
         // no need to change
-        if let Some(old_cluster_key_str) = fuse_table.cluster_key_str()
-            && *old_cluster_key_str == cluster_key_str
+        if let Some((_, old_cluster_key_str)) = fuse_table.cluster_key_meta()
+            && old_cluster_key_str == cluster_key_str
         {
             let old_cluster_type = fuse_table.cluster_type();
             if old_cluster_type.is_some_and(|v| v.to_string().to_lowercase() == plan.cluster_type) {

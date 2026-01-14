@@ -230,8 +230,6 @@ impl FuseTable {
         // currently, here are what we can recovery from the snapshot:
 
         // 1. the table schema
-        table_info.meta.schema = Arc::new(snapshot.schema.clone());
-
         // 2. the table option `snapshot_location`
         let loc = self.meta_location_generator.gen_snapshot_location(
             self.get_branch_id(),
@@ -242,9 +240,11 @@ impl FuseTable {
             Some(branch) => {
                 let mut new_branch = branch.clone();
                 new_branch.info.loc = loc;
+                new_branch.schema = Arc::new(snapshot.schema.clone());
                 Some(new_branch)
             }
             None => {
+                table_info.meta.schema = Arc::new(snapshot.schema.clone());
                 table_info
                     .meta
                     .options

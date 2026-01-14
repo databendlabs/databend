@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::plan::ExtendedTableInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -836,7 +836,10 @@ pub(crate) async fn build_select_insert_plan(
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
         input: select_plan,
-        table_info: TableInfoWithBranch::new(new_table.get_table_info()),
+        table_info: ExtendedTableInfo {
+            table_info: new_table.get_table_info().clone(),
+            branch_info: None,
+        },
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),

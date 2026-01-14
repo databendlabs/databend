@@ -252,6 +252,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             summary,
             locations.clone(),
             None,
+            None,
             TestFixture::default_table_meta_timestamps(),
         )?);
 

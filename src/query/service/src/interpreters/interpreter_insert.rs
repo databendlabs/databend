@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::ExtendedTableInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -221,8 +221,10 @@ impl Interpreter for InsertInterpreter {
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
-                    let table_info = TableInfoWithBranch::new(table1.get_table_info())
-                        .with_branch(self.plan.branch.clone());
+                    let table_info = ExtendedTableInfo {
+                        table_info: table1.get_table_info().clone(),
+                        branch_info: table1.get_table_branch().cloned(),
+                    };
                     if table.support_distributed_insert()
                         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {

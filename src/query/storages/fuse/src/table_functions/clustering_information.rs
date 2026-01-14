@@ -165,37 +165,35 @@ impl<'a> ClusteringInformationImpl<'a> {
 
     #[async_backtrace::framed]
     async fn get_linear_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
-        let mut default_cluster_key_id = None;
-        let (cluster_key, exprs) = match (self.table.cluster_key_str(), cluster_key) {
-            (a, Some(b)) => {
-                let (cluster_key, exprs) =
-                    analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
-                let exprs = exprs
-                    .iter()
-                    .map(|k| {
-                        k.project_column_ref(|index| {
-                            Ok(self.table.schema().field(*index).name().to_string())
+        let (default_cluster_key_id, cluster_key, exprs) =
+            match (self.table.cluster_key_meta(), cluster_key) {
+                (a, Some(b)) => {
+                    let (cluster_key, exprs) =
+                        analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
+                    let exprs = exprs
+                        .iter()
+                        .map(|k| {
+                            k.project_column_ref(|index| {
+                                Ok(self.table.schema().field(*index).name().to_string())
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                if a.is_some() && a.unwrap() == &cluster_key {
-                    default_cluster_key_id = self.table.cluster_key_meta.clone().map(|v| v.0);
+                        .collect::<Result<Vec<_>>>()?;
+                    let default_cluster_key_id =
+                        a.filter(|(_, key)| key == &cluster_key).map(|(id, _)| id);
+                    (default_cluster_key_id, cluster_key, exprs)
                 }
-                (cluster_key, exprs)
-            }
-            (Some(a), None) => {
-                let exprs = self.table.linear_cluster_keys(self.ctx.clone());
-                let exprs = exprs
-                    .iter()
-                    .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
-                    .collect();
-                default_cluster_key_id = self.table.cluster_key_meta.clone().map(|v| v.0);
-                (a.clone(), exprs)
-            }
-            _ => {
-                unreachable!("Unclustered table {}", self.table.table_info.desc);
-            }
-        };
+                (Some(a), None) => {
+                    let exprs = self.table.linear_cluster_keys(self.ctx.clone());
+                    let exprs = exprs
+                        .iter()
+                        .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
+                        .collect();
+                    (Some(a.0), a.1, exprs)
+                }
+                _ => {
+                    unreachable!("Unclustered table {}", self.table.table_info.desc);
+                }
+            };
 
         let cluster_type = "linear".to_string();
 

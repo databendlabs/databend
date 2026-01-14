@@ -87,6 +87,7 @@ impl FuseTable {
         target_build_optimization: bool,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<PipeItem> {
+        let schema = self.schema();
         let new_schema: TableSchemaRef = self
             .schema_with_stream()
             .remove_virtual_computed_fields()
@@ -97,12 +98,10 @@ impl FuseTable {
         let ndv_columns_map = self
             .approx_distinct_cols()
             .distinct_column_fields(new_schema.clone(), RangeIndex::supported_table_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(
-            &self.table_info.meta,
-            &self.table_info.meta.schema,
-            true,
-        )?;
-        let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let ngram_args =
+            FuseTable::create_ngram_index_args(&self.table_info.meta.indexes, &schema, true)?;
+        let inverted_index_builders =
+            create_inverted_index_builders(&self.table_info.meta.indexes, &schema);
         let vector_index_builder =
             VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
 

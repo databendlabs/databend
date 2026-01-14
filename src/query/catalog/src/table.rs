@@ -53,6 +53,7 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
+use crate::plan::ExtendedTableInfo;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -82,7 +83,8 @@ pub trait Table: Sync + Send {
     }
 
     fn schema(&self) -> Arc<TableSchema> {
-        self.get_table_info().schema()
+        self.get_table_branch()
+            .map_or_else(|| self.get_table_info().schema(), |v| v.schema.clone())
     }
 
     fn options(&self) -> &BTreeMap<String, String> {
@@ -125,11 +127,9 @@ pub trait Table: Sync + Send {
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
-        let table_info = self.get_table_info().clone();
-        let branch = self.get_table_branch().map(|b| b.name.clone());
-        DataSourceInfo::TableSource(TableInfoWithBranch {
-            inner: table_info,
-            branch,
+        DataSourceInfo::TableSource(ExtendedTableInfo {
+            table_info: self.get_table_info().clone(),
+            branch_info: self.get_table_branch().cloned(),
         })
     }
 
@@ -763,26 +763,6 @@ pub enum DistributionLevel {
     Local,
     Cluster,
     Warehouse,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct TableInfoWithBranch {
-    pub inner: TableInfo,
-    pub branch: Option<String>,
-}
-
-impl TableInfoWithBranch {
-    pub fn new(inner: &TableInfo) -> Self {
-        TableInfoWithBranch {
-            inner: inner.clone(),
-            branch: None,
-        }
-    }
-
-    pub fn with_branch(mut self, branch: Option<String>) -> Self {
-        self.branch = branch;
-        self
-    }
 }
 
 pub fn is_temp_table_by_table_info(table_info: &TableInfo) -> bool {
