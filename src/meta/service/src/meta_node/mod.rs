@@ -19,6 +19,5 @@ pub mod meta_handle;
 #[allow(clippy::module_inception)]
 pub mod meta_node;
 pub mod meta_node_builder;
-pub mod meta_node_kv_api_impl;
 pub mod meta_node_status;
 pub mod meta_worker;

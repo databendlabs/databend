@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod meta_node_kv_api;
 pub(crate) mod meta_node_kv_api_expire;
 pub(crate) mod meta_node_lifecycle;
 pub(crate) mod meta_node_replication;

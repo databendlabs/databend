@@ -955,7 +955,7 @@ async fn assert_get_kv(
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.kv_api().get_kv(key).await?;
+        let got = mn.raft_store.get_sm_v003().kv_api().get_kv(key).await?;
         assert_eq!(
             value.to_string().into_bytes(),
             got.unwrap().data,
