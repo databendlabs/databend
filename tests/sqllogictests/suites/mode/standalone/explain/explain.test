@@ -1849,7 +1849,7 @@ EvalScalar
     │               │                   └── estimated rows: 64.00
     │               └── Filter
     │                   ├── output columns: [0 (#71), x (#75), v (#76), sx (#80), sy (#81)]
-    │                   ├── filters: [((f.x (#75) = p.x (#77) AND abs(f.y (#71) - p.y (#78)) = 1) OR (f.y (#71) = p.y (#78) AND abs(f.x (#75) - p.x (#77)) = 1))]
+    │                   ├── filters: [f.x (#75) = p.x (#77) and abs(f.y (#71) - p.y (#78)) = 1 or f.y (#71) = p.y (#78) and abs(f.x (#75) - p.x (#77)) = 1]
     │                   ├── estimated rows: 0.00
     │                   └── HashJoin
     │                       ├── output columns: [0 (#71), x (#75), v (#76), x (#77), y (#78), sx (#80), sy (#81)]
@@ -1997,7 +1997,7 @@ EvalScalar
         │                       │                   └── estimated rows: 64.00
         │                       └── Filter
         │                           ├── output columns: [0 (#27), x (#31), v (#32), sx (#36), sy (#37)]
-        │                           ├── filters: [((f.x (#31) = p.x (#33) AND abs(f.y (#27) - p.y (#34)) = 1) OR (f.y (#27) = p.y (#34) AND abs(f.x (#31) - p.x (#33)) = 1))]
+        │                           ├── filters: [f.x (#31) = p.x (#33) and abs(f.y (#27) - p.y (#34)) = 1 or f.y (#27) = p.y (#34) and abs(f.x (#31) - p.x (#33)) = 1]
         │                           ├── estimated rows: 0.00
         │                           └── HashJoin
         │                               ├── output columns: [0 (#27), x (#31), v (#32), x (#33), y (#34), sx (#36), sy (#37)]
