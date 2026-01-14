@@ -95,7 +95,8 @@ SELECT comment FROM system.stages WHERE name = 'alter_stage_internal';
 altered
 
 query T
-SELECT file_format_options LIKE '%Csv%' FROM system.stages WHERE name = 'alter_stage_internal';
+SELECT json_extract_path_text(to_string(file_format_options), 'type') = 'Csv'
+FROM system.stages WHERE name = 'alter_stage_internal';
 ----
 1
 
@@ -108,7 +109,8 @@ SELECT comment = '' FROM system.stages WHERE name = 'alter_stage_internal';
 1
 
 query T
-SELECT file_format_options LIKE '%Parquet%' FROM system.stages WHERE name = 'alter_stage_internal';
+SELECT json_extract_path_text(to_string(file_format_options), 'type') = 'Parquet'
+FROM system.stages WHERE name = 'alter_stage_internal';
 ----
 1
 
@@ -119,9 +121,9 @@ statement ok
 ALTER STAGE alter_stage_external SET URL = 'fs:///tmp/';
 
 query T
-SELECT stage_params LIKE '%/tmp/%' FROM system.stages WHERE name = 'alter_stage_external';
+SELECT url FROM system.stages WHERE name = 'alter_stage_external';
 ----
-1
+fs:///tmp/
 
 statement ok
 ALTER STAGE IF EXISTS missing_stage SET COMMENT = 'noop';

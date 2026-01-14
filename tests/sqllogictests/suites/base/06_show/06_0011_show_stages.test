@@ -2,7 +2,13 @@ statement ok
 DROP STAGE if exists test_stage
 
 statement ok
+DROP STAGE if exists test_stage_external
+
+statement ok
 CREATE STAGE test_stage
+
+statement ok
+CREATE STAGE test_stage_external url='s3://test-stage-bucket/demo/' connection=(aws_key_id='ak' aws_secret_key='sk' endpoint_url='https://s3.eu-central-1.amazonaws.com')
 
 statement ok
 SHOW STAGES
@@ -16,8 +22,49 @@ SHOW STAGES like 'test_stage'
 statement ok
 SHOW STAGES where name='test_stage'
 
+query TTTTTII
+SELECT name, stage_type, storage_type, url, endpoint, has_credentials, has_encryption_key
+FROM system.stages WHERE name IN ('test_stage', 'test_stage_external') ORDER BY name;
+----
+test_stage Internal fs fs://_data/ NULL 0 0
+test_stage_external External s3 s3://test-stage-bucket/demo/ https://s3.eu-central-1.amazonaws.com 1 0
+
+query T
+SELECT json_extract_path_text(to_string(storage_params), 'type')
+FROM system.stages WHERE name = 'test_stage';
+----
+Fs
+
+query T
+SELECT json_extract_path_text(to_string(storage_params), 'type')
+FROM system.stages WHERE name = 'test_stage_external';
+----
+S3
+
+query T
+SELECT json_extract_path_text(to_string(file_format_options), 'type')
+FROM system.stages WHERE name = 'test_stage';
+----
+Parquet
+
+query T
+SELECT json_extract_path_text(to_string(storage_params), 'bucket'),
+       json_extract_path_text(to_string(storage_params), 'root')
+FROM system.stages WHERE name = 'test_stage_external';
+----
+test-stage-bucket /demo/
+
+query T
+SELECT url, endpoint, has_credentials
+FROM system.stages WHERE name = 'test_stage_external';
+----
+s3://test-stage-bucket/demo/ https://s3.eu-central-1.amazonaws.com 1
+
 statement ok
 DESC STAGE test_stage
+
+statement ok
+DROP STAGE test_stage_external
 
 statement ok
 DROP STAGE test_stage
