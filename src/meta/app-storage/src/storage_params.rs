@@ -298,6 +298,52 @@ impl StorageParams {
             StorageParams::None => None,
         }
     }
+
+    /// Return true if this storage params contains any embedded credentials.
+    pub fn has_credentials(&self) -> bool {
+        match self {
+            StorageParams::Azblob(cfg) => {
+                !cfg.account_name.is_empty() || !cfg.account_key.is_empty()
+            }
+            StorageParams::Ftp(cfg) => !cfg.username.is_empty() || !cfg.password.is_empty(),
+            StorageParams::Gcs(cfg) => !cfg.credential.is_empty(),
+            StorageParams::Obs(cfg) => {
+                !cfg.access_key_id.is_empty() || !cfg.secret_access_key.is_empty()
+            }
+            StorageParams::Oss(cfg) => {
+                !cfg.access_key_id.is_empty() || !cfg.access_key_secret.is_empty()
+            }
+            StorageParams::S3(cfg) => {
+                !cfg.access_key_id.is_empty()
+                    || !cfg.secret_access_key.is_empty()
+                    || !cfg.security_token.is_empty()
+                    || !cfg.role_arn.is_empty()
+                    || !cfg.external_id.is_empty()
+            }
+            StorageParams::Cos(cfg) => !cfg.secret_id.is_empty() || !cfg.secret_key.is_empty(),
+            StorageParams::Huggingface(cfg) => !cfg.token.is_empty(),
+            StorageParams::Webhdfs(cfg) => !cfg.delegation.is_empty(),
+            StorageParams::Fs(_)
+            | StorageParams::Hdfs(_)
+            | StorageParams::Http(_)
+            | StorageParams::Ipfs(_)
+            | StorageParams::Memory
+            | StorageParams::Moka(_)
+            | StorageParams::None => false,
+        }
+    }
+
+    /// Return true if this storage params has any user-provided encryption key material.
+    pub fn has_encryption_key(&self) -> bool {
+        match self {
+            StorageParams::S3(cfg) => !cfg.master_key.is_empty(),
+            StorageParams::Oss(cfg) => {
+                !cfg.server_side_encryption.is_empty()
+                    || !cfg.server_side_encryption_key_id.is_empty()
+            }
+            _ => false,
+        }
+    }
 }
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
@@ -1091,5 +1137,87 @@ mod tests {
             StorageParams::Moka(StorageMokaConfig::default()).url(),
             None
         );
+    }
+
+    #[test]
+    fn test_has_credentials_matrix() {
+        let mut s3 = StorageS3Config::default();
+        s3.access_key_id = "ak".to_string();
+
+        let mut az = StorageAzblobConfig::default();
+        az.account_key = "key".to_string();
+
+        let mut ftp = StorageFtpConfig::default();
+        ftp.username = "user".to_string();
+
+        let mut gcs = StorageGcsConfig::default();
+        gcs.credential = "cred".to_string();
+
+        let mut obs = StorageObsConfig::default();
+        obs.access_key_id = "ak".to_string();
+
+        let mut oss = StorageOssConfig::default();
+        oss.access_key_secret = "sk".to_string();
+
+        let mut cos = StorageCosConfig::default();
+        cos.secret_id = "id".to_string();
+
+        let mut hf = StorageHuggingfaceConfig::default();
+        hf.token = "token".to_string();
+
+        let mut webhdfs = StorageWebhdfsConfig::default();
+        webhdfs.delegation = "delegation".to_string();
+
+        let cases = vec![
+            (StorageParams::S3(s3), true, "s3"),
+            (StorageParams::Azblob(az), true, "azblob"),
+            (StorageParams::Ftp(ftp), true, "ftp"),
+            (StorageParams::Gcs(gcs), true, "gcs"),
+            (StorageParams::Obs(obs), true, "obs"),
+            (StorageParams::Oss(oss), true, "oss"),
+            (StorageParams::Cos(cos), true, "cos"),
+            (StorageParams::Huggingface(hf), true, "huggingface"),
+            (StorageParams::Webhdfs(webhdfs), true, "webhdfs"),
+            (StorageParams::Fs(StorageFsConfig::default()), false, "fs"),
+            (
+                StorageParams::Http(StorageHttpConfig::default()),
+                false,
+                "http",
+            ),
+            (
+                StorageParams::Ipfs(StorageIpfsConfig::default()),
+                false,
+                "ipfs",
+            ),
+            (
+                StorageParams::Hdfs(StorageHdfsConfig::default()),
+                false,
+                "hdfs",
+            ),
+            (StorageParams::Memory, false, "memory"),
+            (
+                StorageParams::Moka(StorageMokaConfig::default()),
+                false,
+                "moka",
+            ),
+            (StorageParams::None, false, "none"),
+        ];
+
+        for (params, expected, label) in cases {
+            assert_eq!(params.has_credentials(), expected, "case {}", label);
+        }
+    }
+
+    #[test]
+    fn test_has_encryption_key() {
+        let mut s3 = StorageS3Config::default();
+        assert!(!StorageParams::S3(s3.clone()).has_encryption_key());
+        s3.master_key = "mk".to_string();
+        assert!(StorageParams::S3(s3).has_encryption_key());
+
+        let mut oss = StorageOssConfig::default();
+        assert!(!StorageParams::Oss(oss.clone()).has_encryption_key());
+        oss.server_side_encryption = "KMS".to_string();
+        assert!(StorageParams::Oss(oss).has_encryption_key());
     }
 }
