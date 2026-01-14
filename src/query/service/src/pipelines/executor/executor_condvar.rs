@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -37,6 +39,9 @@ impl WorkerCondvar {
 pub struct WorkersCondvar {
     waiting_async_task: AtomicUsize,
     workers_condvar: Vec<WorkerCondvar>,
+    wakeup_count: AtomicUsize,
+    wait_count: AtomicUsize,
+    wait_time_ns: AtomicU64,
 }
 
 impl WorkersCondvar {
@@ -50,6 +55,9 @@ impl WorkersCondvar {
         Arc::new(WorkersCondvar {
             workers_condvar,
             waiting_async_task: AtomicUsize::new(0),
+            wakeup_count: AtomicUsize::new(0),
+            wait_count: AtomicUsize::new(0),
+            wait_time_ns: AtomicU64::new(0),
         })
     }
 
@@ -66,12 +74,15 @@ impl WorkersCondvar {
     }
 
     pub fn wakeup(&self, worker_id: usize) {
+        self.wakeup_count.fetch_add(1, Ordering::Relaxed);
         let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
         *wait_guard = true;
         self.workers_condvar[worker_id].condvar.notify_one();
     }
 
     pub fn wait(&self, worker_id: usize, finished: Arc<AtomicBool>) {
+        self.wait_count.fetch_add(1, Ordering::Relaxed);
+        let start = Instant::now();
         let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
 
         while !*wait_guard && !finished.load(Ordering::SeqCst) {
@@ -81,6 +92,20 @@ impl WorkersCondvar {
         }
 
         *wait_guard = false;
+        self.wait_time_ns
+            .fetch_add(start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    pub fn get_wakeup_count(&self) -> usize {
+        self.wakeup_count.load(Ordering::Relaxed)
+    }
+
+    pub fn get_wait_count(&self) -> usize {
+        self.wait_count.load(Ordering::Relaxed)
+    }
+
+    pub fn get_wait_time_ms(&self) -> u64 {
+        self.wait_time_ns.load(Ordering::Relaxed) / 1_000_000
     }
 }
 

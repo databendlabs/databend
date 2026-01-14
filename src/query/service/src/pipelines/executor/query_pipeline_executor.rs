@@ -259,6 +259,14 @@ impl QueryPipelineExecutor {
             return Err(error);
         }
 
+        info!(
+            query_id = self.settings.query_id,
+            wakeup_count = self.workers_condvar.get_wakeup_count(),
+            wait_count = self.workers_condvar.get_wait_count(),
+            wait_time_ms = self.workers_condvar.get_wait_time_ms();
+            "Pipeline executor finished"
+        );
+
         let profiling = self.fetch_plans_profile(true);
         self.on_finished(ExecutionInfo::create(Ok(()), profiling))?;
         Ok(())
