@@ -134,6 +134,12 @@ impl InFlightRequest {
     where S: Stream<Item = Result<StreamItem, Status>> {
         let metrics_label = self.metrics_label;
         strm.map(move |item| {
+            // Reference guards to keep them alive for stream lifetime.
+            // Rust 2021 closures only capture fields that are used;
+            // without these references, guards would be dropped when track() returns.
+            let _guard = &self._guard;
+            let _thread_guard = &self._thread_guard;
+
             network_metrics::incr_stream_sent_item(metrics_label);
             self.throughput_logger.incr_count();
             item
