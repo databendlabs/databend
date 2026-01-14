@@ -538,6 +538,7 @@ mod tests {
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use futures::TryStreamExt;
+    use futures::stream::BoxStream;
     use prost::Message;
     use seq_marked::SeqValue;
 
@@ -545,7 +546,7 @@ mod tests {
 
     //
     struct FooKV {
-        /// Whether to return without exhausting the input for `get_kv_stream`.
+        /// Whether to return without exhausting the input for `get_many_kv`.
         early_return: Option<usize>,
         kvs: BTreeMap<String, SeqV>,
     }
@@ -558,27 +559,28 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_kv_stream(
+        async fn get_many_kv(
             &self,
-            keys: &[String],
+            keys: BoxStream<'static, String>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            let mut res = Vec::with_capacity(keys.len());
-            for (i, key) in keys.iter().enumerate() {
-                // For testing early return stream.
-                if let Some(early_return) = self.early_return {
-                    if i >= early_return {
-                        break;
+            let kvs = self.kvs.clone();
+            let early_return = self.early_return;
+
+            let strm = keys.enumerate().filter_map(move |(i, key)| {
+                let kvs = kvs.clone();
+                async move {
+                    // For testing early return stream.
+                    if let Some(limit) = early_return {
+                        if i >= limit {
+                            return None;
+                        }
                     }
+
+                    let v = kvs.get(&key).cloned();
+                    let item = StreamItem::new(key, v.map(|v| v.into()));
+                    Some(Ok(item))
                 }
-
-                let k = key.clone();
-                let v = self.kvs.get(key).cloned();
-
-                let item = StreamItem::new(k, v.map(|v| v.into()));
-                res.push(Ok(item));
-            }
-
-            let strm = futures::stream::iter(res);
+            });
             Ok(strm.boxed())
         }
 

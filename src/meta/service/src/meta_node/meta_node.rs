@@ -1699,7 +1699,11 @@ impl MetaNode {
             }
         };
 
-        Ok(leader.kv_get_many(input))
+        let strm = leader
+            .kv_get_many(input)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(strm)
     }
 }
 

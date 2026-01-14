@@ -346,29 +346,24 @@ impl<'a> MetaLeader<'a> {
 
     /// Get multiple key-value pairs by streaming keys.
     ///
-    /// Processes keys one by one as they arrive, looking up each in the state machine.
+    /// Processes keys lazily as they arrive, delegating to `KVApi::get_many_kv`.
     /// Returns a stream of `StreamItem`.
-    pub fn kv_get_many(
+    pub async fn kv_get_many(
         &self,
         input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
-    ) -> BoxStream<StreamItem> {
-        let sm = self.sto.get_sm_v003();
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        // Extract keys from input, filtering out errors
+        let keys = input.filter_map(|res| async { res.ok().map(|r| r.key) });
 
-        let strm = input.then(move |res| {
-            let sm = sm.clone();
-            async move {
-                let req = res?;
-                let key = req.key;
-                let got = sm
-                    .kv_api()
-                    .get_kv(&key)
-                    .await
-                    .map_err(|e| Status::internal(e.to_string()))?;
-                Ok(StreamItem::from((key, got)))
-            }
-        });
-
-        strm.boxed()
+        // Delegate to KVApi
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .get_many_kv(keys.boxed())
+            .await?;
+        let strm = strm.map_err(|e| Status::internal(e.to_string()));
+        Ok(strm.boxed())
     }
 }
 

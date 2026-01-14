@@ -63,10 +63,16 @@ pub trait KVApi: Send + Sync {
     /// Update or insert a key-value record.
     async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error>;
 
-    /// Get key-values by keys.
+    /// Get key-values by streaming keys.
     ///
-    /// 2024-01-06: since: 1.2.287
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error>;
+    /// Processes keys lazily as they arrive from the input stream.
+    ///
+    /// The input uses `BoxStream` instead of `impl Stream` to keep the trait dyn-compatible,
+    /// allowing usage as `dyn KVApi`.
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, String>,
+    ) -> Result<KVStream<Self::Error>, Self::Error>;
 
     /// List key-value records that are starts with the specified prefix.
     ///
@@ -89,8 +95,11 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
         self.deref().upsert_kv(act).await
     }
 
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.deref().get_kv_stream(keys).await
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, String>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.deref().get_many_kv(keys).await
     }
 
     async fn list_kv(

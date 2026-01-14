@@ -14,6 +14,7 @@
 
 use std::future;
 use std::io;
+use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
@@ -26,6 +27,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::StreamItem;
 use futures_util::TryStreamExt;
+use futures_util::stream::BoxStream;
 use map_api::mvcc::ScopedGet;
 use map_api::mvcc::ScopedRange;
 use seq_marked::SeqValue;
@@ -49,17 +51,6 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
 
     async fn upsert_kv(&self, _req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
         unreachable!("write operation SM2KVApi::upsert_kv is disabled")
-    }
-
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        let local_now_ms = since_epoch_millis();
-        let strm = state_machine_snapshot_get_kv_stream(
-            self.sm.to_state_machine_snapshot(),
-            keys.to_vec(),
-            local_now_ms,
-        );
-
-        Ok(strm)
     }
 
     async fn list_kv(
@@ -93,6 +84,18 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
         Ok(limit_stream(strm, limit))
     }
 
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, String>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        let local_now_ms = since_epoch_millis();
+        Ok(state_machine_snapshot_get_many_kv(
+            self.sm.to_state_machine_snapshot(),
+            keys,
+            local_now_ms,
+        ))
+    }
+
     async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         unreachable!("write operation SM2KVApi::transaction is disabled")
     }
@@ -108,22 +111,24 @@ impl SMV003KVApi<'_> {
     }
 }
 
-/// A helper function that get many keys in stream.
-#[futures_async_stream::try_stream(boxed, ok = StreamItem, error = io::Error)]
-async fn state_machine_snapshot_get_kv_stream(
-    state_machine_snapshot: StateMachineSnapshot,
-    keys: Vec<String>,
+/// A helper function that get many keys from a stream of keys.
+fn state_machine_snapshot_get_many_kv(
+    snapshot: StateMachineSnapshot,
+    keys: BoxStream<'static, String>,
     local_now_ms: u64,
-) {
-    for key in keys {
-        let got = state_machine_snapshot
-            .get(UserKey::new(key.clone()))
-            .await?;
+) -> KVStream<io::Error> {
+    use futures_util::StreamExt;
 
-        let seqv = Into::<Option<SeqV>>::into(got);
+    let snapshot = Arc::new(snapshot);
 
-        let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
-
-        yield StreamItem::from((key, non_expired));
-    }
+    keys.then(move |key| {
+        let snapshot = snapshot.clone();
+        async move {
+            let got = snapshot.get(UserKey::new(key.clone())).await?;
+            let seqv: Option<SeqV> = got.into();
+            let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
+            Ok(StreamItem::from((key, non_expired)))
+        }
+    })
+    .boxed()
 }
