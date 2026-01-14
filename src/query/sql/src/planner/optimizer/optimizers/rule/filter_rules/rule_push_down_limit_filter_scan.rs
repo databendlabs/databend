@@ -30,36 +30,28 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Visitor;
 
-/// Input:
-/// (1)    Limit
-///          \
-///          Filter
-///            \
-///            Scan
-/// (2)    Limit
-///          \
-///          EvalScalar
-///            \
-///            Filter
-///              \
-///              Scan
+/// Matches: Limit -> [EvalScalar ->] Filter -> [SecureFilter ->] Scan
 ///
-/// Output:
-/// (1)    Limit
-///          \
-///          Filter
-///            \
-///            Scan(padding order_by and limit)
-/// (2)    Limit
-///          \
-///          EvalScalar
-///            \
-///            Filter
-///              \
-///              Scan(padding order_by and limit)
+/// Push down limit to Scan when filter predicates use inverted_index or vector_index.
+/// SecureFilter (from row access policy) is preserved in the plan tree if present.
 pub struct RulePushDownLimitFilterScan {
     id: RuleID,
     matchers: Vec<Matcher>,
+}
+
+macro_rules! match_op {
+    ($op:ident) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![],
+        }
+    };
+    ($op:ident, $($child:expr),+) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![$($child),+],
+        }
+    };
 }
 
 impl RulePushDownLimitFilterScan {
@@ -67,29 +59,26 @@ impl RulePushDownLimitFilterScan {
         Self {
             id: RuleID::PushDownLimitFilterScan,
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Limit,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Filter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Limit,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Filter,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
-                        }],
-                    }],
-                },
+                // Limit -> Filter -> Scan
+                match_op!(Limit, match_op!(Filter, match_op!(Scan))),
+                // Limit -> Filter -> SecureFilter -> Scan
+                match_op!(
+                    Limit,
+                    match_op!(Filter, match_op!(SecureFilter, match_op!(Scan)))
+                ),
+                // Limit -> EvalScalar -> Filter -> Scan
+                match_op!(
+                    Limit,
+                    match_op!(EvalScalar, match_op!(Filter, match_op!(Scan)))
+                ),
+                // Limit -> EvalScalar -> Filter -> SecureFilter -> Scan
+                match_op!(
+                    Limit,
+                    match_op!(
+                        EvalScalar,
+                        match_op!(Filter, match_op!(SecureFilter, match_op!(Scan)))
+                    )
+                ),
             ],
         }
     }
@@ -102,25 +91,27 @@ impl Rule for RulePushDownLimitFilterScan {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        let child = s_expr.child(0)?;
-        let (eval_scalar, filter, mut scan) = match child.plan() {
-            RelOperator::Filter(filter) => {
-                let grand_child = child.child(0)?;
-                let scan: Scan = grand_child.plan().clone().try_into()?;
-                (None, filter.clone(), scan)
-            }
-            RelOperator::EvalScalar(eval_scalar) => {
-                let child = child.child(0)?;
-                let filter: Filter = child.plan().clone().try_into()?;
-                let grand_child = child.child(0)?;
-                let scan: Scan = grand_child.plan().clone().try_into()?;
-                (Some(eval_scalar.clone()), filter, scan)
+        let limit_child = s_expr.child(0)?;
+
+        let (eval_scalar_expr, filter_expr) = match limit_child.plan() {
+            RelOperator::Filter(_) => (None, limit_child.clone()),
+            RelOperator::EvalScalar(_) => {
+                (Some(limit_child.clone()), limit_child.child(0)?.clone())
             }
             _ => unreachable!(),
         };
 
-        // The following conditions must be met push down filter and limit for index:
-        // 1. Scan must contain `vector_index` or `inverted_index, because we can use the index
+        let filter: Filter = filter_expr.plan().clone().try_into()?;
+        let scan_parent_expr = filter_expr.child(0)?;
+        let scan_expr = match scan_parent_expr.plan() {
+            RelOperator::Scan(_) => scan_parent_expr.clone(),
+            RelOperator::SecureFilter(_) => scan_parent_expr.child(0)?.clone(),
+            _ => unreachable!(),
+        };
+        let mut scan: Scan = scan_expr.plan().clone().try_into()?;
+
+        // The following conditions must be met to push down filter and limit for index:
+        // 1. Scan must contain vector_index or inverted_index, because we can use the index
         //    to determine which rows in the block match, and the topn pruner can use this information
         //    to retain only the matched blocks.
         // 2. The number of `push_down_predicates` in Scan must be the same as the number of `predicates`
@@ -139,16 +130,24 @@ impl Rule for RulePushDownLimitFilterScan {
         }
 
         scan.limit = Some(limit.limit.unwrap() + limit.offset);
-        let new_scan = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+        let new_scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+        let new_scan_parent_expr =
+            if matches!(scan_parent_expr.plan(), RelOperator::SecureFilter(_)) {
+                SExpr::create_unary(
+                    Arc::new(scan_parent_expr.plan().clone()),
+                    Arc::new(new_scan_expr),
+                )
+            } else {
+                new_scan_expr
+            };
 
-        let mut result = if eval_scalar.is_some() {
-            let grandchild = child.child(0)?;
-            let new_filter = grandchild.replace_children(vec![Arc::new(new_scan)]);
-            let new_eval_scalar = child.replace_children(vec![Arc::new(new_filter)]);
-            s_expr.replace_children(vec![Arc::new(new_eval_scalar)])
+        let new_filter_expr = filter_expr.replace_children(vec![Arc::new(new_scan_parent_expr)]);
+        let mut result = if let Some(eval_scalar_expr) = eval_scalar_expr {
+            let new_eval_scalar_expr =
+                eval_scalar_expr.replace_children(vec![Arc::new(new_filter_expr)]);
+            s_expr.replace_children(vec![Arc::new(new_eval_scalar_expr)])
         } else {
-            let new_filter = child.replace_children(vec![Arc::new(new_scan)]);
-            s_expr.replace_children(vec![Arc::new(new_filter)])
+            s_expr.replace_children(vec![Arc::new(new_filter_expr)])
         };
 
         result.set_applied_rule(&self.id);

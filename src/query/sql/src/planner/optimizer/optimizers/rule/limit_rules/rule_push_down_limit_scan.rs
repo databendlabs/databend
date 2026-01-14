@@ -26,15 +26,27 @@ use crate::plans::Limit;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 
-/// Input:  Limit
-///           \
+/// Input:
+/// (1)    Limit
+///          \
 ///          Scan
+/// (2)    Limit
+///          \
+///          SecureFilter
+///            \
+///            Scan
 ///
 /// Output:
-///         Limit
-///           \
-///           Scan(padding limit)
+/// (1)    Limit
+///          \
+///          Scan(padding limit)
+/// (2)    Limit
+///          \
+///          SecureFilter
+///            \
+///            Scan(padding limit)
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -44,13 +56,25 @@ impl RulePushDownLimitScan {
     pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitScan,
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Limit,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            }],
+            matchers: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Limit,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Limit,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::SecureFilter,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Scan,
+                            children: vec![],
+                        }],
+                    }],
+                },
+            ],
         }
     }
 }
@@ -68,11 +92,40 @@ impl Rule for RulePushDownLimitScan {
         count += limit.offset;
 
         let child = s_expr.child(0)?;
-        let mut get: Scan = child.plan().clone().try_into()?;
-        get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        let (mut scan, secure_filter) = match child.plan() {
+            RelOperator::Scan(_) => (child.plan().clone().try_into()?, None),
+            RelOperator::SecureFilter(_) => {
+                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
+                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
+                (scan, Some(secure_filter))
+            }
+            _ => unreachable!(),
+        };
 
-        let mut result = s_expr.replace_children(vec![Arc::new(get)]);
+        // When SecureFilter exists, pushing limit is unsafe if push_down_predicates is empty.
+        // Storage triggers early termination with (limit + no predicates), returning N rows
+        // before SecureFilter can filter them, causing fewer results than expected.
+        let has_predicates = scan
+            .push_down_predicates
+            .as_ref()
+            .map_or(false, |preds| !preds.is_empty());
+
+        if secure_filter.is_some() && !has_predicates {
+            return Ok(());
+        }
+
+        scan.limit = Some(scan.limit.map_or(count, |c| cmp::max(c, count)));
+        let scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+        let child_expr = if let Some(secure_filter) = secure_filter {
+            SExpr::create_unary(
+                Arc::new(RelOperator::SecureFilter(secure_filter)),
+                Arc::new(scan_expr),
+            )
+        } else {
+            scan_expr
+        };
+
+        let mut result = s_expr.replace_children(vec![Arc::new(child_expr)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())
