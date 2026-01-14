@@ -24,14 +24,149 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use crate::BlockReadResult;
 use crate::io::BlockReader;
+use crate::io::read::block::block_reader_merge_io::CachedReader;
 
 impl BlockReader {
+    /// Synchronously read columns from cache.
+    /// Returns CachedReader containing:
+    /// - cached_column_data: columns read from disk cache
+    /// - cached_column_array: columns read from memory cache
+    /// - ranges_to_read: ranges that need async IO (cache miss)
+    pub fn sync_read_columns_data(
+        &self,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> CachedReader {
+        let column_data_cache = CacheManager::instance().get_column_data_cache();
+        let column_array_cache = CacheManager::instance().get_table_data_array_cache();
+        let mut cached_column_data = vec![];
+        let mut cached_column_array = vec![];
+        let mut ranges_to_read = vec![];
+
+        let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
+
+        for (_index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
+
+            if let Some(column_meta) = columns_meta.get(column_id) {
+                let (offset, len) = column_meta.offset_length();
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
+
+                // first, check in memory table data cache
+                if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytesFromMemory,
+                        len as usize,
+                    );
+                    cached_column_array.push((*column_id, cache_array));
+                    continue;
+                }
+
+                // then, check on disk table data cache
+                if let Some(cached_column_raw_data) =
+                    column_data_cache.get_sized(&column_cache_key, len)
+                {
+                    cached_column_data.push((*column_id, cached_column_raw_data));
+                    continue;
+                }
+
+                // cache miss, need async IO
+                ranges_to_read.push((*column_id, offset..(offset + len)));
+            }
+        }
+
+        CachedReader {
+            cached_column_data,
+            cached_column_array,
+            ranges_to_read,
+        }
+    }
+
+    /// Async read columns that had cache miss.
+    /// Takes the CachedReader from sync_read_columns_data and completes the read.
+    #[async_backtrace::framed]
+    pub async fn async_read_columns_data(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        cached_reader: CachedReader,
+    ) -> Result<BlockReadResult> {
+        // Perf
+        {
+            metrics_inc_remote_io_read_parts(1);
+        }
+
+        let ranges = &cached_reader.ranges_to_read;
+
+        // Record metrics for ranges to read
+        for (_, range) in ranges.iter() {
+            let len = range.end - range.start;
+            metrics_inc_remote_io_seeks(1);
+            metrics_inc_remote_io_read_bytes(len);
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytesFromRemote, len as usize);
+        }
+
+        let merge_io_result =
+            MergeIOReader::merge_io_read(settings, self.operator.clone(), location, ranges).await?;
+
+        if self.put_cache {
+            let column_data_cache = CacheManager::instance().get_column_data_cache();
+            let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
+
+            for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+                let column_meta = columns_meta.get(column_id).unwrap();
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
+
+                let chunk_data = merge_io_result
+                    .owner_memory
+                    .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+                let data = chunk_data.slice(range.clone());
+
+                column_data_cache.insert(
+                    column_cache_key.as_ref().to_owned(),
+                    ColumnData::from_merge_io_read_result(data.to_vec()),
+                );
+            }
+        }
+
+        let block_read_res = BlockReadResult::create(
+            merge_io_result,
+            cached_reader.cached_column_data,
+            cached_reader.cached_column_array,
+        );
+
+        self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
+
+        Ok(block_read_res)
+    }
+
+    /// Create BlockReadResult from cache only (when all columns are cached).
+    pub fn build_block_result_from_cache(&self, cached_reader: CachedReader) -> BlockReadResult {
+        use databend_storages_common_io::OwnerMemory;
+
+        let empty_merge_io_result =
+            MergeIOReadResult::create(OwnerMemory::create(vec![]), HashMap::new(), String::new());
+
+        BlockReadResult::create(
+            empty_merge_io_result,
+            cached_reader.cached_column_data,
+            cached_reader.cached_column_array,
+        )
+    }
+
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,

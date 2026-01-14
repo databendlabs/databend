@@ -23,6 +23,7 @@ pub use read::AggIndexReader;
 pub use read::BlockReadResult;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
+pub use read::CachedReader;
 pub use read::CompactSegmentInfoReader;
 pub use read::InvertedIndexReader;
 pub use read::MetaReaders;
