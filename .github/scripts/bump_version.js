@@ -5,7 +5,7 @@ module.exports = async ({ github, context, core }) => {
     return;
   }
 
-  const { TYPE, TAG } = process.env;
+  const { TYPE, TAG, SHA } = process.env;
 
   if (!TYPE) {
     core.setOutput("type", "nightly");
@@ -119,11 +119,17 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
+  // Determine the SHA to use: custom SHA if provided, otherwise context.sha
+  const targetSha = SHA || context.sha;
+
   switch (TYPE) {
     case "":
     case "nightly": {
-      core.setOutput("sha", context.sha);
-      core.info(`Nightly release triggered by (${context.sha})`);
+      core.setOutput("sha", targetSha);
+      core.info(`Nightly release triggered by (${targetSha})${SHA ? " [custom SHA]" : ""}`);
+      if (SHA) {
+        core.info(`Using custom SHA: ${SHA}`);
+      }
 
       const previous = await getPreviousNightlyRelease(github, context);
       if (!previous) {
@@ -149,12 +155,15 @@ module.exports = async ({ github, context, core }) => {
     }
 
     case "stable": {
-      core.setOutput("sha", context.sha);
+      core.setOutput("sha", targetSha);
       if (!TAG) {
         core.setFailed("Stable release must be triggered with a nightly tag");
         return;
       }
-      core.info(`Stable release triggered by ${TAG} (${context.sha})`);
+      core.info(`Stable release triggered by ${TAG} (${targetSha})${SHA ? " [custom SHA]" : ""}`);
+      if (SHA) {
+        core.info(`Using custom SHA: ${SHA}`);
+      }
       const nextTag = getNextStableRelease();
       if (!nextTag) {
         core.setFailed(`No stable release from ${TAG}`);
@@ -185,14 +194,23 @@ module.exports = async ({ github, context, core }) => {
         return;
       }
 
-      const branch = await github.rest.repos.getBranch({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        branch: `backport/${TAG}`,
-      });
-      core.setOutput("sha", branch.data.commit.sha);
+      let patchSha;
+      if (SHA) {
+        // Use custom SHA if provided
+        patchSha = SHA;
+        core.info(`Using custom SHA: ${SHA}`);
+      } else {
+        // Otherwise use the backport branch SHA
+        const branch = await github.rest.repos.getBranch({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          branch: `backport/${TAG}`,
+        });
+        patchSha = branch.data.commit.sha;
+      }
+      core.setOutput("sha", patchSha);
       core.info(
-        `Patch release triggered by ${TAG} (${branch.data.commit.sha})`
+        `Patch release triggered by ${TAG} (${patchSha})${SHA ? " [custom SHA]" : ""}`
       );
 
       const previous = await getPreviousPatchRelease(github, context);

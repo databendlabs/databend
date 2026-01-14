@@ -13,6 +13,13 @@ on:
           Patch release requires a stable version (v1.0.0).
         required: false
         type: string
+      sha:
+        description: |
+          The commit SHA to release from.
+          If not specified, uses the current HEAD of the branch.
+          Example: cc3d1e657cc8731c976d90764589eb9c748dbca9
+        required: false
+        type: string
       type:
         description: Release type, default to nightly
         required: true
@@ -53,6 +60,7 @@ jobs:
         env:
           TYPE: "${{ inputs.type }}"
           TAG: "${{ inputs.tag }}"
+          SHA: "${{ inputs.sha }}"
         with:
           script: |
             const script = require('./.github/scripts/bump_version.js')
