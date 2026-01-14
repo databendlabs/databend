@@ -561,14 +561,15 @@ mod tests {
 
         async fn get_many_kv(
             &self,
-            keys: BoxStream<'static, String>,
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             let kvs = self.kvs.clone();
             let early_return = self.early_return;
 
-            let strm = keys.enumerate().filter_map(move |(i, key)| {
-                let kvs = kvs.clone();
-                async move {
+            // Fail-fast: set keys to None after error to stop iteration
+            let strm = futures::stream::unfold(
+                (Some(keys), kvs, 0usize),
+                move |(keys, kvs, i)| async move {
                     // For testing early return stream.
                     if let Some(limit) = early_return {
                         if i >= limit {
@@ -576,11 +577,18 @@ mod tests {
                         }
                     }
 
-                    let v = kvs.get(&key).cloned();
-                    let item = StreamItem::new(key, v.map(|v| v.into()));
-                    Some(Ok(item))
-                }
-            });
+                    let mut keys = keys?;
+                    let key_result = keys.next().await?;
+                    match key_result {
+                        Err(e) => Some((Err(e), (None, kvs, i + 1))),
+                        Ok(key) => {
+                            let v = kvs.get(&key).cloned();
+                            let item = StreamItem::new(key, v.map(|v| v.into()));
+                            Some((Ok(item), (Some(keys), kvs, i + 1)))
+                        }
+                    }
+                },
+            );
             Ok(strm.boxed())
         }
 

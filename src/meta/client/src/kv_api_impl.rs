@@ -58,15 +58,39 @@ impl kvapi::KVApi for ClientHandle {
     #[fastrace::trace]
     async fn get_many_kv(
         &self,
-        keys: BoxStream<'static, String>,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
         // For remote client, collect keys first then use batch request.
         // This loses the streaming benefit but keeps the implementation simple.
         // Can be optimized later with a streaming gRPC endpoint if needed.
-        let keys: Vec<String> = keys.collect().await;
-        let strm = self.request(Streamed(MGetKVReq { keys })).await?;
+        //
+        // Fail-fast: if an error is in the input stream, return it in the output stream
+        // (not from this function) so callers get partial results before the error.
+        let mut collected = Vec::new();
+        let mut input_error = None;
+
+        let mut keys = keys;
+        while let Some(result) = keys.next().await {
+            match result {
+                Ok(key) => collected.push(key),
+                Err(e) => {
+                    input_error = Some(e);
+                    break; // Stop collecting on first error
+                }
+            }
+        }
+
+        // Make batch request for successfully collected keys
+        let strm = self.request(Streamed(MGetKVReq { keys: collected })).await?;
         let strm = strm.map_err(MetaError::from);
-        Ok(strm.boxed())
+
+        // If there was an input error, append it to the output stream then stop
+        let strm: KVStream<Self::Error> = match input_error {
+            None => strm.boxed(),
+            Some(e) => strm.chain(futures::stream::once(async { Err(e) })).boxed(),
+        };
+
+        Ok(strm)
     }
 
     #[fastrace::trace]

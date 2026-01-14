@@ -66,12 +66,14 @@ pub trait KVApi: Send + Sync {
     /// Get key-values by streaming keys.
     ///
     /// Processes keys lazily as they arrive from the input stream.
+    /// The input stream may contain errors; when an error is encountered,
+    /// it is propagated to the output stream.
     ///
     /// The input uses `BoxStream` instead of `impl Stream` to keep the trait dyn-compatible,
     /// allowing usage as `dyn KVApi`.
     async fn get_many_kv(
         &self,
-        keys: BoxStream<'static, String>,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
     ) -> Result<KVStream<Self::Error>, Self::Error>;
 
     /// List key-value records that are starts with the specified prefix.
@@ -97,7 +99,7 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
 
     async fn get_many_kv(
         &self,
-        keys: BoxStream<'static, String>,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
         self.deref().get_many_kv(keys).await
     }

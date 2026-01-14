@@ -436,14 +436,22 @@ mod tests {
 
         async fn get_many_kv(
             &self,
-            keys: BoxStream<'static, String>,
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             let kvs = self.kvs.clone();
 
-            let strm = keys.map(move |key| {
-                let v = kvs.get(&key).cloned();
-                let item = StreamItem::new(key, v.map(|v| v.into()));
-                Ok(item)
+            // Fail-fast: set keys to None after error to stop iteration
+            let strm = futures::stream::unfold((Some(keys), kvs), |(keys, kvs)| async move {
+                let mut keys = keys?;
+                let key_result = keys.next().await?;
+                match key_result {
+                    Err(e) => Some((Err(e), (None, kvs))),
+                    Ok(key) => {
+                        let v = kvs.get(&key).cloned();
+                        let item = StreamItem::new(key, v.map(|v| v.into()));
+                        Some((Ok(item), (Some(keys), kvs)))
+                    }
+                }
             });
             Ok(strm.boxed())
         }
