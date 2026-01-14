@@ -347,23 +347,29 @@ impl<'a> MetaLeader<'a> {
     /// Get multiple key-value pairs by streaming keys.
     ///
     /// Processes keys lazily as they arrive, delegating to `KVApi::get_many_kv`.
-    /// Returns a stream of `StreamItem`.
+    /// Errors from the input stream are propagated to the output stream.
+    /// Returns a `BoxStream<StreamItem>` (tonic's BoxStream yields `Result<StreamItem, Status>`).
     pub async fn kv_get_many(
         &self,
         input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
     ) -> Result<BoxStream<StreamItem>, io::Error> {
-        // Extract keys from input, filtering out errors
-        let keys = input.filter_map(|res| async { res.ok().map(|r| r.key) });
+        // Convert input stream: extract keys and map Status errors to io::Error
+        let keys = input.map(|res| {
+            res.map(|r| r.key)
+                .map_err(|e| io::Error::other(e.to_string()))
+        });
 
-        // Delegate to KVApi
+        // Delegate to KVApi which handles error propagation
         let strm = self
             .sto
             .get_sm_v003()
             .kv_api()
             .get_many_kv(keys.boxed())
             .await?;
-        let strm = strm.map_err(|e| Status::internal(e.to_string()));
-        Ok(strm.boxed())
+
+        // Convert io::Error to Status for the output stream
+        let strm = strm.map(|res| res.map_err(|e| Status::internal(e.to_string())));
+        Ok(Box::pin(strm))
     }
 }
 

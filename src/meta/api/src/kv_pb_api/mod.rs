@@ -561,26 +561,26 @@ mod tests {
 
         async fn get_many_kv(
             &self,
-            keys: BoxStream<'static, String>,
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+
             let kvs = self.kvs.clone();
             let early_return = self.early_return;
 
-            let strm = keys.enumerate().filter_map(move |(i, key)| {
-                let kvs = kvs.clone();
-                async move {
-                    // For testing early return stream.
-                    if let Some(limit) = early_return {
-                        if i >= limit {
-                            return None;
-                        }
-                    }
-
+            // early_return limits total items for testing
+            let strm = fail_fast(keys)
+                .enumerate()
+                .take_while(move |(i, _)| {
+                    let cont = early_return.is_none_or(|limit| *i < limit);
+                    async move { cont }
+                })
+                .map(move |(_, key_result)| {
+                    let key = key_result?;
                     let v = kvs.get(&key).cloned();
                     let item = StreamItem::new(key, v.map(|v| v.into()));
-                    Some(Ok(item))
-                }
-            });
+                    Ok(item)
+                });
             Ok(strm.boxed())
         }
 

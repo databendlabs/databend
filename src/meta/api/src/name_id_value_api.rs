@@ -436,11 +436,14 @@ mod tests {
 
         async fn get_many_kv(
             &self,
-            keys: BoxStream<'static, String>,
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+
             let kvs = self.kvs.clone();
 
-            let strm = keys.map(move |key| {
+            let strm = fail_fast(keys).map(move |key_result| {
+                let key = key_result?;
                 let v = kvs.get(&key).cloned();
                 let item = StreamItem::new(key, v.map(|v| v.into()));
                 Ok(item)
