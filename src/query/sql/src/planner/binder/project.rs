@@ -632,12 +632,11 @@ impl Binder {
             let metadata = self.metadata.read();
             let table_entry = metadata.table(table_index);
             let table_ref = table_entry.table();
+            let table_schema = table_ref.schema();
             let table_info_ref = table_ref.get_table_info();
 
             // Find the field by name to get column_id
-            let field = table_info_ref
-                .meta
-                .schema
+            let field = table_schema
                 .fields()
                 .iter()
                 .find(|f| f.name == column_binding.column_name);
@@ -651,7 +650,7 @@ impl Binder {
                         (
                             policy_info.policy_id,
                             policy_info.columns_ids.clone(),
-                            table_info_ref.meta.schema.clone(),
+                            table_schema,
                             column_binding.database_name.clone(),
                             column_binding.table_name.clone(),
                         )

@@ -275,6 +275,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
+        fuse_table.cluster_key_meta(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;

@@ -480,6 +480,7 @@ impl CreateTableInterpreter {
         if let Some(cluster_key) = &self.plan.cluster_key {
             table_meta.cluster_key = Some(cluster_key.clone());
             table_meta.cluster_key_seq += 1;
+            table_meta.cluster_key_id = Some(table_meta.cluster_key_seq);
         }
 
         let req = CreateTableReq {

@@ -602,7 +602,7 @@ select info:average_depth from clustering_information('db_09_0008','t10')
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-7
+8
 
 statement ok
 optimize table t10 purge limit 2
@@ -610,7 +610,7 @@ optimize table t10 purge limit 2
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-5
+6
 
 
 

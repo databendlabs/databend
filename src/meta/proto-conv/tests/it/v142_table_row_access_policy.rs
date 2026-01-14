@@ -41,6 +41,7 @@ fn test_decode_v142_table_meta() -> anyhow::Result<()> {
         engine_options: BTreeMap::default(),
         options: BTreeMap::default(),
         cluster_key: None,
+        cluster_key_id: None,
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),

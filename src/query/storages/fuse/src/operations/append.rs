@@ -104,7 +104,7 @@ impl FuseTable {
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.table_info.schema().fields().len();
+            let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 move || {
@@ -163,7 +163,7 @@ impl FuseTable {
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.table_info.schema().fields().len();
+            let num_input_columns = self.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transformer(move || {
@@ -239,7 +239,7 @@ impl FuseTable {
         };
 
         Ok(ClusterStatsGenerator::new(
-            self.cluster_key_meta.as_ref().unwrap().0,
+            self.cluster_key_id().unwrap(),
             cluster_key_index,
             extra_key_num,
             self.get_max_page_size(),

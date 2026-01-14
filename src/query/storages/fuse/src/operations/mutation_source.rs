@@ -191,11 +191,7 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-            Self::create_ngram_index_args(
-                &self.table_info.meta,
-                &self.table_info.meta.schema,
-                false,
-            )?,
+            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
             None,
         )?;
 
@@ -215,7 +211,7 @@ impl FuseTable {
             let range_index = RangeIndex::try_create(
                 func_ctx,
                 &inverse,
-                self.table_info.schema(),
+                self.schema(),
                 StatisticsOfColumns::default(), // TODO default values
             )?;
             pruner.set_inverse_range_index(range_index);
