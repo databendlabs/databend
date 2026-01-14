@@ -26,7 +26,6 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
-use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use geozero::ToWkt;
