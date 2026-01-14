@@ -30,7 +30,7 @@ pub trait KvApiExt: KVApi {
     ///
     /// 2024-01-06: since: 1.2.287
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        let keys = keys.to_vec();
+        let keys: Vec<Result<String, Self::Error>> = keys.iter().map(|k| Ok(k.clone())).collect();
         let strm = futures_util::stream::iter(keys);
         self.get_many_kv(strm.boxed()).await
     }

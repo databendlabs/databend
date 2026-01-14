@@ -86,7 +86,7 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
 
     async fn get_many_kv(
         &self,
-        keys: BoxStream<'static, String>,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = since_epoch_millis();
         Ok(state_machine_snapshot_get_many_kv(
@@ -112,23 +112,29 @@ impl SMV003KVApi<'_> {
 }
 
 /// A helper function that get many keys from a stream of keys.
+///
+/// The input stream may contain errors; errors are propagated to the output stream.
+/// The stream terminates immediately after the first error (fail-fast).
 fn state_machine_snapshot_get_many_kv(
     snapshot: StateMachineSnapshot,
-    keys: BoxStream<'static, String>,
+    keys: BoxStream<'static, Result<String, io::Error>>,
     local_now_ms: u64,
 ) -> KVStream<io::Error> {
+    use databend_common_meta_kvapi::kvapi::fail_fast;
     use futures_util::StreamExt;
 
     let snapshot = Arc::new(snapshot);
 
-    keys.then(move |key| {
-        let snapshot = snapshot.clone();
-        async move {
-            let got = snapshot.get(UserKey::new(key.clone())).await?;
-            let seqv: Option<SeqV> = got.into();
-            let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
-            Ok(StreamItem::from((key, non_expired)))
-        }
-    })
-    .boxed()
+    fail_fast(keys)
+        .then(move |key_result| {
+            let snapshot = snapshot.clone();
+            async move {
+                let key = key_result?;
+                let got = snapshot.get(UserKey::new(key.clone())).await?;
+                let seqv: Option<SeqV> = got.into();
+                let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
+                Ok(StreamItem::from((key, non_expired)))
+            }
+        })
+        .boxed()
 }
