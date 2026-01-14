@@ -122,8 +122,7 @@ impl HttpClient {
         let client = ClientBuilder::new()
             .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
-            .http1_only()
-            .pool_max_idle_per_host(16)
+            .pool_max_idle_per_host(0)
             .tcp_keepalive(Duration::from_secs(60))
             .build()?;
 
