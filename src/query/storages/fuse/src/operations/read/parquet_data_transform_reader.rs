@@ -105,23 +105,25 @@ impl NewReadParquetDataTransform {
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        Ok(ProcessorPtr::create(Box::new(NewReadParquetDataTransform {
-            input,
-            output,
-            func_ctx,
-            block_reader,
-            index_reader,
-            virtual_reader,
-            table_schema,
-            scan_id: table_index,
-            context: ctx,
-            read_settings,
-            stats,
-            unfinished_processors_count,
-            called_on_finish: false,
-            output_data: None,
-            pending_work: None,
-        })))
+        Ok(ProcessorPtr::create(Box::new(
+            NewReadParquetDataTransform {
+                input,
+                output,
+                func_ctx,
+                block_reader,
+                index_reader,
+                virtual_reader,
+                table_schema,
+                scan_id: table_index,
+                context: ctx,
+                read_settings,
+                stats,
+                unfinished_processors_count,
+                called_on_finish: false,
+                output_data: None,
+                pending_work: None,
+            },
+        )))
     }
 
     fn prepare_parts(&mut self, parts: Vec<PartInfoPtr>) -> Result<PendingWork> {
@@ -238,10 +240,11 @@ impl NewReadParquetDataTransform {
                     let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
                     if let Some(index_reader) = index_reader.as_ref() {
-                        let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &fuse_part.location,
-                            index_reader.index_id(),
-                        );
+                        let loc =
+                            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                                &fuse_part.location,
+                                index_reader.index_id(),
+                            );
                         if let Some(data) = index_reader
                             .read_parquet_data_by_merge_io(&settings, &loc)
                             .await
@@ -256,7 +259,11 @@ impl NewReadParquetDataTransform {
                             .as_ref()
                             .and_then(|b| b.virtual_block_meta.as_ref());
                         virtual_reader
-                            .read_parquet_data_by_merge_io(&settings, &virtual_block_meta, fuse_part.nums_rows)
+                            .read_parquet_data_by_merge_io(
+                                &settings,
+                                &virtual_block_meta,
+                                fuse_part.nums_rows,
+                            )
                             .await
                     } else {
                         None
