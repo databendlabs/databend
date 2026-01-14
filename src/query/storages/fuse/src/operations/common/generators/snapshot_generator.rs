@@ -18,8 +18,9 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableIdent;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -37,7 +38,7 @@ pub trait SnapshotGenerator {
 
     async fn fill_default_values(
         &mut self,
-        _schema: TableSchema,
+        _schema: &TableSchema,
         _snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<()> {
         Ok(())
@@ -45,28 +46,31 @@ pub trait SnapshotGenerator {
 
     fn generate_new_snapshot(
         &self,
-        table_info: &TableInfo,
-        cluster_key_id: Option<u32>,
+        table_ident: &TableIdent,
+        table_schema: &TableSchema,
+        cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
         txn_mgr: TxnManagerRef,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
         let mut snapshot = self.do_generate_new_snapshot(
-            table_info,
-            cluster_key_id,
+            table_ident,
+            table_schema,
+            cluster_key_meta,
             &previous,
             table_meta_timestamps,
             table_stats_gen,
         )?;
-        decorate_snapshot(&mut snapshot, txn_mgr, previous, table_info.ident.table_id)?;
+        decorate_snapshot(&mut snapshot, txn_mgr, previous, table_ident.table_id)?;
         Ok(snapshot)
     }
 
     fn do_generate_new_snapshot(
         &self,
-        table_info: &TableInfo,
-        cluster_key_id: Option<u32>,
+        table_ident: &TableIdent,
+        table_schema: &TableSchema,
+        cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,

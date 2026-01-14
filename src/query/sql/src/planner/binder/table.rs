@@ -479,7 +479,7 @@ impl Binder {
                 &mut bind_context,
                 scan_s_expr,
                 policy,
-                &table.table().get_table_info().meta.schema.fields,
+                &table.table().schema().fields,
             )?
         } else {
             scan_s_expr

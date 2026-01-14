@@ -86,7 +86,7 @@ impl IPhysicalPlan for CompactSource {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, &None, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if self.parts.is_empty() {

@@ -108,7 +108,7 @@ pub async fn do_refresh_table_index(
 
     info!("Start refresh {} index {}", index_type, index_name);
 
-    let table_schema = &fuse_table.get_table_info().meta.schema;
+    let table_schema = fuse_table.schema();
 
     // Collect field indices used by index.
     let mut field_indices = Vec::with_capacity(index_schema.fields.len());
@@ -124,8 +124,7 @@ pub async fn do_refresh_table_index(
         fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
 
     let meta_locations = fuse_table.meta_location_generator().clone();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
+    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
 
     if snapshot.segments.is_empty() {
         return Ok(());
@@ -274,7 +273,7 @@ fn build_refresh_index_arg(
     match index_type {
         TableIndexType::Ngram => {
             let index_ngram_args =
-                FuseTable::create_ngram_index_args(table_meta, index_schema, false)?;
+                FuseTable::create_ngram_index_args(&table_meta.indexes, index_schema, false)?;
 
             let existing_names_prefix = index_ngram_args
                 .iter()

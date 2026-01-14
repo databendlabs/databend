@@ -5759,7 +5759,6 @@ dependencies = [
 name = "databend-sqlsmith"
 version = "0.1.0"
 dependencies = [
- "chrono-tz 0.8.6",
  "clap",
  "cookie",
  "databend-common-ast",

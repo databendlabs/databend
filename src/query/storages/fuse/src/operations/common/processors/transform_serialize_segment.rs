@@ -96,12 +96,16 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         segment_builder: B,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let table_meta = &table.table_info.meta;
-        let virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            ctx,
-            &table_meta.schema,
-            &table_meta.virtual_schema,
-        );
+        let virtual_column_accumulator = if table.branch_info.is_none() {
+            let table_meta = &table.table_info.meta;
+            VirtualColumnAccumulator::try_create(
+                ctx,
+                &table_meta.schema,
+                &table_meta.virtual_schema,
+            )
+        } else {
+            None
+        };
 
         let default_cluster_key_id = table.cluster_key_id();
 

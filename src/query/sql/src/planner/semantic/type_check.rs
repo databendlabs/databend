@@ -372,14 +372,13 @@ impl<'a> TypeChecker<'a> {
                                             let table_entry = metadata.tables().get(idx)?;
                                             let table_ref = table_entry.table();
                                             let table_info = table_ref.get_table_info();
+                                            let table_schema = table_ref.schema();
 
                                             if table_info.meta.column_mask_policy_columns_ids.is_empty()
                                             {
                                                 return None;
                                             }
-                                            table_info
-                                                .meta
-                                                .schema
+                                            table_schema
                                                 .fields()
                                                 .iter()
                                                 .find(|f| f.name == column.column_name)
@@ -2883,7 +2882,7 @@ impl<'a> TypeChecker<'a> {
         let table_entry = self.metadata.read().table(table_index).clone();
         let table = table_entry.table();
         let table_info = table.get_table_info();
-        let table_schema = table_info.schema();
+        let table_schema = table.schema();
         let table_indexes = &table_info.meta.indexes;
 
         let mut query_fields = Vec::with_capacity(column_refs.len());
@@ -4836,7 +4835,7 @@ impl<'a> TypeChecker<'a> {
                         let table_entry = self.metadata.read().table(table_index).clone();
                         let table = table_entry.table();
                         let table_info = table.get_table_info();
-                        let table_schema = table_info.schema();
+                        let table_schema = table.schema();
                         let table_indexes = &table_info.meta.indexes;
                         if self
                             .bind_context
@@ -6845,11 +6844,10 @@ impl<'a> TypeChecker<'a> {
                 let table_entry = metadata.table(table_index);
                 let table_ref = table_entry.table();
                 let table_info_ref = table_ref.get_table_info();
+                let table_schema = table_ref.schema();
 
                 // Find the field by name to get column_id
-                if let Some(field) = table_info_ref
-                    .meta
-                    .schema
+                if let Some(field) = table_schema
                     .fields()
                     .iter()
                     .find(|f| f.name == column_binding.column_name)
@@ -6871,7 +6869,7 @@ impl<'a> TypeChecker<'a> {
                         Some((
                             policy_info.policy_id,
                             policy_info.columns_ids.clone(),
-                            table_info_ref.meta.schema.clone(),
+                            table_schema,
                         ))
                     } else {
                         None

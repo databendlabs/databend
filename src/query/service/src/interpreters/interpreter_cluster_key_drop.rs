@@ -14,16 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
-use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
+use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -56,7 +53,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
-            .get_table(&tenant, &plan.database, &plan.table)
+            .get_table_with_batch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
         if table.cluster_key_meta().is_none() {
             return Ok(PipelineBuildResult::create());
@@ -64,21 +61,23 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_info = fuse_table.get_table_info();
-        let mut new_table_meta = table_info.meta.clone();
-        new_table_meta.cluster_key = None;
-        new_table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
-
-        let req = UpdateTableMetaReq {
-            table_id: table_info.ident.table_id,
-            seq: MatchSeq::Exact(table_info.ident.seq),
-            new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
-            lvt_check: None,
-        };
-        catalog.update_single_table_meta(req, table_info).await?;
-
+        commit_table_meta(
+            self.ctx.as_ref(),
+            table.as_ref(),
+            table.get_table_info().meta.clone(),
+            catalog,
+            |snapshot_opt, meta| {
+                if let Some(snapshot) = snapshot_opt {
+                    snapshot.cluster_key_meta = None;
+                }
+                if plan.branch.is_none() {
+                    meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+                    meta.cluster_key = None;
+                    meta.cluster_key_id = None;
+                }
+            },
+        )
+        .await?;
         Ok(PipelineBuildResult::create())
     }
 }

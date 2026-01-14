@@ -93,7 +93,7 @@ impl ReclusterMutator {
         snapshot: &TableSnapshot,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
-        let cluster_key_id = table.cluster_key_meta.clone().unwrap().0;
+        let cluster_key_id = table.cluster_key_id().unwrap();
         let block_thresholds = table.get_block_thresholds();
 
         let avg_depth_threshold = table.get_option(

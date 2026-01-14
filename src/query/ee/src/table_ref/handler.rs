@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -120,6 +121,11 @@ impl TableRefHandler for RealTableRefHandler {
                 Some(seq),
                 ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
             )?;
+            // When creating a branch from an existing snapshot, the new head snapshot
+            // must strictly inherit cluster_key_meta from the base snapshot.
+            // We intentionally do NOT override it with table-level cluster key metadata.
+            // Table-level cluster_key_meta is only used as a fallback when no base snapshot exists.
+            debug_assert_eq!(new_snapshot.cluster_key_meta, snapshot.cluster_key_meta);
             new_snapshot.prev_snapshot_id = None;
             (new_snapshot, snapshot.timestamp)
         } else {
@@ -129,6 +135,7 @@ impl TableRefHandler for RealTableRefHandler {
                 table_info.schema().as_ref().clone(),
                 Default::default(),
                 vec![],
+                fuse_table.cluster_key_meta(),
                 None,
                 ctx.get_table_meta_timestamps(fuse_table, None)?,
             )?;

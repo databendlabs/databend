@@ -537,9 +537,9 @@ impl StreamBlockProperties {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Arc<Self>> {
+        let schema = table.schema();
         // remove virtual computed fields.
-        let mut fields = table
-            .schema()
+        let mut fields = schema
             .fields()
             .iter()
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
@@ -554,7 +554,7 @@ impl StreamBlockProperties {
 
         let source_schema = Arc::new(TableSchema {
             fields,
-            ..table.schema().as_ref().clone()
+            ..schema.as_ref().clone()
         });
 
         let write_settings = table.get_write_settings();
@@ -562,11 +562,8 @@ impl StreamBlockProperties {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(
-            &table.table_info.meta,
-            &table.table_info.meta.schema,
-            true,
-        )?;
+        let ngram_args =
+            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
@@ -576,7 +573,8 @@ impl StreamBlockProperties {
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let inverted_index_builders =
+            create_inverted_index_builders(&table.table_info.meta.indexes, &schema);
         let virtual_column_builder = if table.support_virtual_columns() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {

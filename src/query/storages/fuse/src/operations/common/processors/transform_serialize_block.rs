@@ -131,9 +131,9 @@ impl TransformSerializeBlock {
         with_tid: bool,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
+        let schema = table.schema();
         // remove virtual computed fields.
-        let mut fields = table
-            .schema()
+        let mut fields = schema
             .fields()
             .iter()
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
@@ -147,7 +147,7 @@ impl TransformSerializeBlock {
         }
         let source_schema = Arc::new(TableSchema {
             fields,
-            ..table.schema().as_ref().clone()
+            ..schema.as_ref().clone()
         });
 
         let bloom_columns_map = table
@@ -156,13 +156,11 @@ impl TransformSerializeBlock {
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(
-            &table.table_info.meta,
-            &table.table_info.meta.schema,
-            true,
-        )?;
+        let ngram_args =
+            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let inverted_index_builders =
+            create_inverted_index_builders(&table.table_info.meta.indexes, &schema);
 
         let virtual_column_builder = if table.support_virtual_columns() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()

@@ -157,6 +157,7 @@ pub struct TableMeta {
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
     pub cluster_key: Option<String>,
+    pub cluster_key_id: Option<u32>,
     /// A sequential number that uniquely identifies changes to the cluster key.
     /// This value increments by 1 each time the cluster key is created or modified,
     /// ensuring a unique identifier for each version of the cluster key.
@@ -237,10 +238,14 @@ impl Display for SnapshotRefType {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BranchInfo {
     pub name: String,
     pub info: SnapshotRef,
+    // Branch schema is derived from its snapshot
+    // and should not be persisted in table meta.
+    pub schema: Arc<TableSchema>,
+    pub cluster_key_meta: Option<(u32, String)>,
 }
 
 impl BranchInfo {
@@ -383,10 +388,7 @@ impl TableInfo {
     }
 
     pub fn cluster_key(&self) -> Option<(u32, String)> {
-        self.meta
-            .cluster_key
-            .clone()
-            .map(|k| (self.meta.cluster_key_seq, k))
+        self.meta.cluster_key_id.zip(self.meta.cluster_key.clone())
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
@@ -420,23 +422,6 @@ impl TableInfo {
         }
         Ok(table_ref)
     }
-
-    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
-        self.meta
-            .refs
-            .iter()
-            .find(|(_, r)| r.id == id)
-            .map(|(name, info)| BranchInfo {
-                name: name.clone(),
-                info: info.clone(),
-            })
-            .ok_or_else(|| {
-                ErrorCode::UnknownReference(format!(
-                    "Unknown reference '{}' in table {}",
-                    id, self.desc
-                ))
-            })
-    }
 }
 
 impl Default for TablePartition {
@@ -465,6 +450,7 @@ impl Default for TableMeta {
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
             cluster_key: None,
+            cluster_key_id: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),
