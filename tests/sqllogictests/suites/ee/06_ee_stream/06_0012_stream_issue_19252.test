@@ -1,0 +1,69 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+create or replace database issue_19252;
+
+statement ok
+use issue_19252;
+
+statement ok
+create or replace table t_special(
+    id int,
+    "matching_duration(s)" float,
+    "score (points)" int,
+    "user-name" varchar
+);
+
+query I
+insert into t_special values(1, 1.5, 100, 'alice'), (2, 2.5, 200, 'bob');
+----
+2
+
+statement ok
+create or replace stream s_standard on table t_special append_only = false;
+
+statement ok
+create or replace stream s_append_only on table t_special;
+
+query I
+insert into t_special values(3, 3.5, 300, 'Charlie');
+----
+1
+
+query I
+DELETE FROM t_special WHERE id=2;
+----
+1
+
+query I
+UPDATE t_special SET "matching_duration(s)"=10.5 WHERE id=1;
+----
+1
+
+query IFITTB
+SELECT * exclude(change$row_id) from s_standard order by id, "matching_duration(s)";
+----
+1 1.5 100 alice DELETE 1
+1 10.5 100 alice INSERT 1
+2 2.5 200 bob DELETE 0
+3 3.5 300 Charlie INSERT 0
+
+query IFITTB
+SELECT * exclude(change$row_id) from s_append_only order by id, "matching_duration(s)";
+----
+3 3.5 300 Charlie INSERT 0
+
+statement ok
+drop database issue_19252;
