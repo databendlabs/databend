@@ -435,7 +435,7 @@ impl Binder {
             Statement::ShowStages { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM default.system.stages {} ORDER BY name {}",
+                    "SELECT * FROM default.system.stages {} ORDER BY name {}",
                     show_limit, limit_str,
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
