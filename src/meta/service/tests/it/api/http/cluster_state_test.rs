@@ -21,7 +21,8 @@ use std::time::Duration;
 use databend_common_base::base::Stoppable;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::time::Instant;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
@@ -118,21 +119,26 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     info!("--- write sample data to the cluster ---");
     {
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo2", b"foo2"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo3", b"foo3"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo4", b"foo4"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo5", b"foo5"))
-            .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(
+            UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
+        )))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo2", b"foo2",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo3", b"foo3",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo4", b"foo4",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo5", b"foo5",
+        ))))
+        .await?;
     }
 
     info!("--- trigger snapshot ---");

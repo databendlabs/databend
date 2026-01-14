@@ -113,7 +113,6 @@ use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
 use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::MetaForwarder;
-use crate::meta_service::MetaKVApi;
 use crate::meta_service::MetaNodeBuilder;
 use crate::meta_service::RaftServiceImpl;
 use crate::meta_service::errors::grpc_error_to_network_err;
@@ -1645,11 +1644,6 @@ impl MetaNode {
 
         let sender = Dispatcher::new_watch_stream_sender(key_range.clone(), interested, tx);
         Ok(sender)
-    }
-
-    /// Get a kvapi::KVApi implementation.
-    pub fn kv_api(&self) -> MetaKVApi<'_> {
-        MetaKVApi::new(self)
     }
 
     pub fn runtime_config(&self) -> &RuntimeConfig {

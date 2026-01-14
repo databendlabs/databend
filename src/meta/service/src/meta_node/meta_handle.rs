@@ -23,7 +23,6 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_types::AppliedState;
@@ -139,17 +138,20 @@ impl MetaHandle {
         upsert: UpsertKV,
     ) -> Result<Result<UpsertKVReply, MetaAPIError>, MetaNodeStopped> {
         let histogram_label = request_histogram::label_for_upsert(&upsert);
+        let log_info = format!("UpsertKV: {:?}", upsert);
         self.request(move |meta_node| {
             let fu = async move {
-                meta_node
-                    .kv_api()
-                    .upsert_kv(upsert.clone())
-                    .log_elapsed_info(format!("UpsertKV: {:?}", upsert))
-                    .with_timing(|_output, total, _busy| {
-                        request_histogram::record(&histogram_label, total);
-                    })
-                    .await
-            };
+                let ent = LogEntry::new(Cmd::UpsertKV(upsert));
+                let rst = meta_node.write(ent).await?;
+                match rst {
+                    AppliedState::KV(x) => Ok(x),
+                    _ => unreachable!("expect AppliedState::KV"),
+                }
+            }
+            .log_elapsed_info(log_info)
+            .with_timing(move |_output, total, _busy| {
+                request_histogram::record(&histogram_label, total);
+            });
 
             Box::pin(fu)
         })
