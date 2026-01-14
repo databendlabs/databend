@@ -85,8 +85,8 @@ impl FieldEncoderValues {
             },
             escape_char: b'"',
             quote_char: b'"',
-            binary_format: BinaryDisplayFormat::Hex,
-            binary_utf8_lossy: false,
+            binary_format: options.binary_format,
+            binary_utf8_lossy: options.binary_utf8_lossy,
         }
     }
 
