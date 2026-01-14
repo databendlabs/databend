@@ -1272,7 +1272,7 @@ impl Table for FuseTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_index(&self) -> bool {

@@ -27,7 +27,7 @@ use opendal::Buffer;
 type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 
-#[derive(EnumAsInner)]
+#[derive(EnumAsInner, Clone)]
 pub enum DataItem<'a> {
     RawData(Buffer),
     ColumnArray(&'a Arc<SizedColumnArray>),

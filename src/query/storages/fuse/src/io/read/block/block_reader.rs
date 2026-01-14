@@ -158,6 +158,18 @@ impl BlockReader {
         }))
     }
 
+    pub fn change_projection(&self, projection: Projection) -> Result<Arc<BlockReader>> {
+        Self::create(
+            self.ctx.clone(),
+            self.operator.clone(),
+            self.original_schema.clone(),
+            projection,
+            self.query_internal_columns,
+            self.update_stream_columns,
+            self.put_cache,
+        )
+    }
+
     // Build non duplicate leaf_indices to avoid repeated read column from parquet
     pub(crate) fn build_projection_indices(
         columns: &[ColumnNode],

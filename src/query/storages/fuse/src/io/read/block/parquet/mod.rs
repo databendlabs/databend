@@ -30,6 +30,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use parquet::arrow::arrow_reader::RowSelection;
 
 mod adapter;
 mod deserialize;
@@ -37,31 +38,48 @@ mod deserialize;
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
 
+use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
-    pub(crate) fn deserialize_parquet_chunks(
+    pub fn deserialize_part(
+        &self,
+        part: &FuseBlockPartInfo,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks(
+            part.nums_rows,
+            &part.columns_meta,
+            column_chunks,
+            &part.compression,
+            &part.location,
+            selection,
+        )
+    }
+    pub fn deserialize_parquet_chunks(
         &self,
         num_rows: usize,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
+        selection: Option<RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
-        }
+        let has_selection = selection.is_some();
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
+            selection,
         )?;
+        let num_rows = record_batch.num_rows();
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache {
+        let array_cache = if self.put_cache && !has_selection {
             CacheManager::instance().get_table_data_array_cache()
         } else {
             None

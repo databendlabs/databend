@@ -22,6 +22,9 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::Bitmap;
+use parquet::arrow::arrow_reader::RowSelection;
+use parquet::arrow::arrow_reader::RowSelector;
 use roaring::RoaringTreemap;
 
 use crate::FuseBlockPartInfo;
@@ -140,4 +143,87 @@ pub(crate) fn add_data_block_meta(
         meta = Some(Box::new(internal_column_meta));
     }
     block.add_meta(meta)
+}
+
+pub fn bitmap_to_row_selection(bitmap: &Bitmap) -> RowSelection {
+    let mut selectors = Vec::new();
+    let mut i = 0;
+    while i < bitmap.len() {
+        let current = bitmap.get_bit(i);
+        let mut run = 1;
+        while i + run < bitmap.len() && bitmap.get_bit(i + run) == current {
+            run += 1;
+        }
+
+        selectors.push(if current {
+            RowSelector::select(run)
+        } else {
+            RowSelector::skip(run)
+        });
+        i += run;
+    }
+    RowSelection::from(selectors)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::MutableBitmap;
+
+    use super::*;
+
+    #[test]
+    fn test_bitmap_to_row_selection() {
+        let mut bitmap = MutableBitmap::from_len_zeroed(10);
+        bitmap.set(0, true);
+        bitmap.set(1, true);
+        bitmap.set(2, false);
+        bitmap.set(3, false);
+        bitmap.set(4, true);
+        bitmap.set(5, false);
+        bitmap.set(6, true);
+        bitmap.set(7, true);
+        bitmap.set(8, true);
+        bitmap.set(9, false);
+
+        let bitmap: Bitmap = bitmap.into();
+        let selection = bitmap_to_row_selection(&bitmap);
+        let selectors: Vec<_> = selection.iter().collect();
+
+        // Expected: select(2), skip(2), select(1), skip(1), select(3), skip(1)
+        assert_eq!(selectors.len(), 6);
+        assert_eq!(selectors[0].row_count, 2);
+        assert!(!selectors[0].skip);
+        assert_eq!(selectors[1].row_count, 2);
+        assert!(selectors[1].skip);
+        assert_eq!(selectors[2].row_count, 1);
+        assert!(!selectors[2].skip);
+        assert_eq!(selectors[3].row_count, 1);
+        assert!(selectors[3].skip);
+        assert_eq!(selectors[4].row_count, 3);
+        assert!(!selectors[4].skip);
+        assert_eq!(selectors[5].row_count, 1);
+        assert!(selectors[5].skip);
+    }
+
+    #[test]
+    fn test_bitmap_to_row_selection_all_selected() {
+        let bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
+        let selection = bitmap_to_row_selection(&bitmap);
+        let selectors: Vec<_> = selection.iter().collect();
+
+        assert_eq!(selectors.len(), 1);
+        assert_eq!(selectors[0].row_count, 5);
+        assert!(!selectors[0].skip);
+    }
+
+    #[test]
+    fn test_bitmap_to_row_selection_none_selected() {
+        let bitmap: Bitmap = MutableBitmap::from_len_zeroed(5).into();
+        let selection = bitmap_to_row_selection(&bitmap);
+        let selectors: Vec<_> = selection.iter().collect();
+
+        assert_eq!(selectors.len(), 1);
+        assert_eq!(selectors[0].row_count, 5);
+        assert!(selectors[0].skip);
+    }
 }
