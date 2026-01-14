@@ -24,19 +24,32 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::Sort;
 
-/// Input:  Sort
-///           \
-///          Scan
+/// Matches: Sort -> [EvalScalar ->] [SecureFilter ->] Scan
 ///
-/// Output:
-///         Sort
-///           \
-///           Scan(padding order_by and limit)
+/// Push down order_by and limit from Sort to Scan. SecureFilter (from row access policy)
+/// is preserved in the plan tree if present.
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,
+}
+
+macro_rules! match_op {
+    ($op:ident) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![],
+        }
+    };
+    ($op:ident, $($child:expr),+) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![$($child),+],
+        }
+    };
 }
 
 impl RulePushDownSortScan {
@@ -44,23 +57,17 @@ impl RulePushDownSortScan {
         Self {
             id: RuleID::PushDownSortScan,
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                },
+                // Sort -> Scan
+                match_op!(Sort, match_op!(Scan)),
+                // Sort -> SecureFilter -> Scan
+                match_op!(Sort, match_op!(SecureFilter, match_op!(Scan))),
+                // Sort -> EvalScalar -> Scan
+                match_op!(Sort, match_op!(EvalScalar, match_op!(Scan))),
+                // Sort -> EvalScalar -> SecureFilter -> Scan
+                match_op!(
+                    Sort,
+                    match_op!(EvalScalar, match_op!(SecureFilter, match_op!(Scan)))
+                ),
             ],
         }
     }
@@ -74,31 +81,67 @@ impl Rule for RulePushDownSortScan {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
-        let mut get = match child.plan() {
-            RelOperator::Scan(scan) => scan.clone(),
-            RelOperator::EvalScalar(_) => {
-                let child = child.child(0)?;
-                child.plan().clone().try_into()?
+
+        let (eval_scalar, secure_filter, mut scan) = match child.plan() {
+            RelOperator::Scan(scan) => (None, None, scan.clone()),
+            RelOperator::SecureFilter(_) => {
+                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
+                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
+                (None, Some(secure_filter), scan)
+            }
+            RelOperator::EvalScalar(eval_scalar) => {
+                let grand_child = child.child(0)?;
+                match grand_child.plan() {
+                    RelOperator::Scan(scan) => (Some(eval_scalar.clone()), None, scan.clone()),
+                    RelOperator::SecureFilter(_) => {
+                        let secure_filter: SecureFilter = grand_child.plan().clone().try_into()?;
+                        let scan: Scan = grand_child.child(0)?.plan().clone().try_into()?;
+                        (Some(eval_scalar.clone()), Some(secure_filter), scan)
+                    }
+                    _ => unreachable!(),
+                }
             }
             _ => unreachable!(),
         };
-        if get.order_by.is_none() {
-            get.order_by = Some(sort.items);
-        }
-        if let Some(limit) = sort.limit {
-            get.limit = Some(get.limit.map_or(limit, |c| cmp::max(c, limit)));
+
+        if scan.order_by.is_none() {
+            scan.order_by = Some(sort.items);
         }
 
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        // When SecureFilter exists, pushing limit is unsafe if push_down_predicates is empty.
+        // Storage triggers TopK pruning with (order_by + limit + no predicates), returning N rows
+        // before SecureFilter can filter them, causing fewer results than expected.
+        let can_push_limit = secure_filter.is_none()
+            || scan
+                .push_down_predicates
+                .as_ref()
+                .is_some_and(|preds| !preds.is_empty());
 
-        let mut result = match child.plan() {
-            RelOperator::Scan(_) => s_expr.replace_children(vec![Arc::new(get)]),
-            RelOperator::EvalScalar(_) => {
-                let child = child.replace_children(vec![Arc::new(get)]);
-                s_expr.replace_children(vec![Arc::new(child)])
+        if can_push_limit {
+            if let Some(limit) = sort.limit {
+                scan.limit = Some(scan.limit.map_or(limit, |c| cmp::max(c, limit)));
             }
-            _ => unreachable!(),
+        }
+
+        let scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+        let scan_parent_expr = if let Some(secure_filter) = secure_filter {
+            SExpr::create_unary(
+                Arc::new(RelOperator::SecureFilter(secure_filter)),
+                Arc::new(scan_expr),
+            )
+        } else {
+            scan_expr
         };
+        let new_child_expr = if let Some(eval_scalar) = eval_scalar {
+            SExpr::create_unary(
+                Arc::new(RelOperator::EvalScalar(eval_scalar)),
+                Arc::new(scan_parent_expr),
+            )
+        } else {
+            scan_parent_expr
+        };
+
+        let mut result = s_expr.replace_children(vec![Arc::new(new_child_expr)]);
 
         result.set_applied_rule(&self.id);
         state.add_result(result);
