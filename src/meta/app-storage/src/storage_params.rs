@@ -214,21 +214,106 @@ impl StorageParams {
             ))),
         }
     }
+
+    /// Try to reconstruct the URL that was used when the storage params were created.
+    ///
+    /// This is primarily used for displaying stage/connection information. It best-effort
+    /// recreates the `CreateStageStmt.location` string for bucket-style backends (S3, GCS,
+    /// OSS, OBS, COS, Azblob), file-like backends (FS, WebHDFS, HDFS), as well as HuggingFace
+    /// and IPFS locations. HTTP locations render the expanded glob patterns (if any), so the
+    /// output can differ from the original shorthand. Backends that don't carry enough context
+    /// (Memory, Moka, None) return `None`.
+    pub fn url(&self) -> Option<String> {
+        match self {
+            StorageParams::Azblob(cfg) => bucket_style_url("azblob", &cfg.container, &cfg.root),
+            StorageParams::Fs(cfg) => {
+                Some(format!("fs://{}", normalized_dir_path(&cfg.root, false)))
+            }
+            StorageParams::Ftp(cfg) => {
+                if cfg.endpoint.is_empty() {
+                    None
+                } else {
+                    Some(concat_endpoint_and_root(&cfg.endpoint, &cfg.root))
+                }
+            }
+            StorageParams::Gcs(cfg) => bucket_style_url("gcs", &cfg.bucket, &cfg.root),
+            StorageParams::Hdfs(cfg) => {
+                if cfg.name_node.is_empty() {
+                    None
+                } else {
+                    let host = cfg
+                        .name_node
+                        .strip_prefix("hdfs://")
+                        .unwrap_or(cfg.name_node.as_str())
+                        .trim_end_matches('/');
+                    if host.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "hdfs://{}{}",
+                            host,
+                            normalized_dir_path(&cfg.root, true)
+                        ))
+                    }
+                }
+            }
+            StorageParams::Http(cfg) => {
+                if cfg.paths.is_empty() {
+                    None
+                } else {
+                    Some(render_http_url(cfg))
+                }
+            }
+            StorageParams::Ipfs(cfg) => {
+                let suffix = cfg.root.strip_prefix("/ipfs").unwrap_or(cfg.root.as_str());
+                Some(format!("ipfs://ipfs{}", normalized_dir_path(suffix, true)))
+            }
+            StorageParams::Memory => None,
+            StorageParams::Moka(_) => None,
+            StorageParams::Obs(cfg) => bucket_style_url("obs", &cfg.bucket, &cfg.root),
+            StorageParams::Oss(cfg) => bucket_style_url("oss", &cfg.bucket, &cfg.root),
+            StorageParams::S3(cfg) => bucket_style_url("s3", &cfg.bucket, &cfg.root),
+            StorageParams::Webhdfs(cfg) => {
+                let host = strip_scheme(&cfg.endpoint_url).trim_end_matches('/');
+                if host.is_empty() {
+                    None
+                } else {
+                    Some(format!(
+                        "webhdfs://{}{}",
+                        host,
+                        normalized_dir_path(&cfg.root, true)
+                    ))
+                }
+            }
+            StorageParams::Cos(cfg) => bucket_style_url("cos", &cfg.bucket, &cfg.root),
+            StorageParams::Huggingface(cfg) => {
+                let (owner, repo) = cfg.repo_id.split_once('/')?;
+                Some(format!(
+                    "hf://{}/{}{}",
+                    owner,
+                    repo,
+                    normalized_dir_path(&cfg.root, true)
+                ))
+            }
+            StorageParams::None => None,
+        }
+    }
 }
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
 impl Display for StorageParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            StorageParams::Memory => write!(f, "memory"),
+            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
+            StorageParams::None => write!(f, "none"),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs | root={}", v.root),
-            StorageParams::Ftp(v) => {
-                write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint)
-            }
+            StorageParams::Ftp(v) => write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint),
             StorageParams::Gcs(v) => write!(
                 f,
                 "gcs | bucket={},root={},endpoint={}",
@@ -243,8 +328,6 @@ impl Display for StorageParams {
             StorageParams::Ipfs(c) => {
                 write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
-            StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs | bucket={},root={},endpoint={}",
@@ -281,11 +364,71 @@ impl Display for StorageParams {
                     v.repo_type, v.repo_id, v.root
                 )
             }
-            StorageParams::None => {
-                write!(f, "none",)
-            }
         }
     }
+}
+
+fn normalized_dir_path(root: &str, absolute: bool) -> String {
+    if root.is_empty() {
+        return "/".to_string();
+    }
+    let mut normalized = root.to_string();
+    if absolute && !normalized.starts_with('/') {
+        normalized.insert(0, '/');
+    }
+    if !normalized.ends_with('/') {
+        normalized.push('/');
+    }
+    normalized
+}
+
+fn bucket_style_url(protocol: &str, name: &str, root: &str) -> Option<String> {
+    if name.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "{}://{}{}",
+            protocol,
+            name,
+            normalized_dir_path(root, true)
+        ))
+    }
+}
+
+fn concat_endpoint_and_root(endpoint: &str, root: &str) -> String {
+    let endpoint = endpoint.trim_end_matches('/');
+    format!("{}{}", endpoint, normalized_dir_path(root, true))
+}
+
+fn ensure_path_prefix(path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{}", path)
+    }
+}
+
+fn render_http_url(cfg: &StorageHttpConfig) -> String {
+    let endpoint = cfg.endpoint_url.trim_end_matches('/');
+    if cfg.paths.len() <= 1 {
+        let path = cfg.paths.get(0).map(|p| p.as_str()).unwrap_or("/");
+        format!("{}{}", endpoint, ensure_path_prefix(path))
+    } else {
+        let joined = cfg
+            .paths
+            .iter()
+            .map(|p| ensure_path_prefix(p))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}{{{}}}", endpoint, joined)
+    }
+}
+
+fn strip_scheme(endpoint: &str) -> &str {
+    endpoint
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(endpoint)
 }
 
 /// Config for storage backend azblob.
@@ -767,4 +910,186 @@ pub struct StorageNetworkParams {
     pub connect_timeout: u64,
     pub pool_max_idle_per_host: usize,
     pub max_concurrent_io_requests: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bucket_style_url() {
+        let mut s3 = StorageS3Config::default();
+        s3.bucket = "s3-bucket".to_string();
+        s3.root = "/data/".to_string();
+
+        let mut gcs = StorageGcsConfig::default();
+        gcs.bucket = "gcs-bucket".to_string();
+        gcs.root = "/stage/".to_string();
+
+        let mut oss = StorageOssConfig::default();
+        oss.bucket = "oss-bucket".to_string();
+        oss.root = "/stage/".to_string();
+
+        let mut obs = StorageObsConfig::default();
+        obs.bucket = "obs-bucket".to_string();
+        obs.root = "/stage/".to_string();
+
+        let mut cos = StorageCosConfig::default();
+        cos.bucket = "cos-bucket".to_string();
+        cos.root = "/stage/".to_string();
+
+        let mut azblob = StorageAzblobConfig::default();
+        azblob.container = "az-container".to_string();
+        azblob.root = "/stage/".to_string();
+
+        let cases = vec![
+            ("s3://s3-bucket/data/", StorageParams::S3(s3)),
+            ("gcs://gcs-bucket/stage/", StorageParams::Gcs(gcs)),
+            ("oss://oss-bucket/stage/", StorageParams::Oss(oss)),
+            ("obs://obs-bucket/stage/", StorageParams::Obs(obs)),
+            ("cos://cos-bucket/stage/", StorageParams::Cos(cos)),
+            (
+                "azblob://az-container/stage/",
+                StorageParams::Azblob(azblob),
+            ),
+        ];
+
+        for (expected, params) in cases {
+            assert_eq!(params.url().as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn test_fs_relative_url() {
+        let mut cfg = StorageFsConfig::default();
+        cfg.root = "tmp/data".to_string();
+        let params = StorageParams::Fs(cfg);
+        assert_eq!(params.url().as_deref(), Some("fs://tmp/data/"));
+    }
+
+    #[test]
+    fn test_fs_absolute_url() {
+        let params = StorageParams::Fs(StorageFsConfig {
+            root: "/abs/path/".to_string(),
+        });
+        assert_eq!(params.url().as_deref(), Some("fs:///abs/path/"));
+    }
+
+    #[test]
+    fn test_http_glob_url() {
+        let params = StorageParams::Http(StorageHttpConfig {
+            endpoint_url: "https://example.com/".to_string(),
+            paths: vec![
+                "/tmp-a.csv".to_string(),
+                "/tmp-b.csv".to_string(),
+                "/tmp-c.csv".to_string(),
+            ],
+            network_config: None,
+        });
+        assert_eq!(
+            params.url().as_deref(),
+            Some("https://example.com{/tmp-a.csv,/tmp-b.csv,/tmp-c.csv}")
+        );
+    }
+
+    #[test]
+    fn test_http_single_path_url() {
+        let params = StorageParams::Http(StorageHttpConfig {
+            endpoint_url: "https://example.com".to_string(),
+            paths: vec!["/tmp.csv".to_string()],
+            network_config: None,
+        });
+        assert_eq!(params.url().as_deref(), Some("https://example.com/tmp.csv"));
+    }
+
+    #[test]
+    fn test_hdfs_url() {
+        let params = StorageParams::Hdfs(StorageHdfsConfig {
+            name_node: "hdfs://namenode:8020".to_string(),
+            root: "/data/".to_string(),
+            network_config: None,
+        });
+        assert_eq!(params.url().as_deref(), Some("hdfs://namenode:8020/data/"));
+    }
+
+    #[test]
+    fn test_webhdfs_url() {
+        let params = StorageParams::Webhdfs(StorageWebhdfsConfig {
+            endpoint_url: "https://host:50070".to_string(),
+            root: "/stage/".to_string(),
+            delegation: "".to_string(),
+            disable_list_batch: true,
+            user_name: "".to_string(),
+            network_config: None,
+        });
+        assert_eq!(params.url().as_deref(), Some("webhdfs://host:50070/stage/"));
+    }
+
+    #[test]
+    fn test_ftp_url() {
+        let params = StorageParams::Ftp(StorageFtpConfig {
+            endpoint: "ftps://example.com:21".to_string(),
+            root: "/files/".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            network_config: None,
+        });
+        assert_eq!(
+            params.url().as_deref(),
+            Some("ftps://example.com:21/files/")
+        );
+    }
+
+    #[test]
+    fn test_ftp_missing_endpoint() {
+        let params = StorageParams::Ftp(StorageFtpConfig {
+            endpoint: "".to_string(),
+            root: "/files/".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            network_config: None,
+        });
+        assert_eq!(params.url(), None);
+    }
+
+    #[test]
+    fn test_huggingface_url() {
+        let params = StorageParams::Huggingface(StorageHuggingfaceConfig {
+            repo_id: "org/dataset".to_string(),
+            repo_type: "dataset".to_string(),
+            revision: "main".to_string(),
+            token: "".to_string(),
+            root: "/subset/".to_string(),
+            network_config: None,
+        });
+        assert_eq!(params.url().as_deref(), Some("hf://org/dataset/subset/"));
+    }
+
+    #[test]
+    fn test_ipfs_url() {
+        let params = StorageParams::Ipfs(StorageIpfsConfig {
+            endpoint_url: "https://ipfs.example.com".to_string(),
+            root: "/ipfs/QmHash/".to_string(),
+            network_config: None,
+        });
+        assert_eq!(params.url().as_deref(), Some("ipfs://ipfs/QmHash/"));
+    }
+
+    #[test]
+    fn test_memory_url_none() {
+        assert_eq!(StorageParams::Memory.url(), None);
+    }
+
+    #[test]
+    fn test_none_url_none() {
+        assert_eq!(StorageParams::None.url(), None);
+    }
+
+    #[test]
+    fn test_moka_url_none() {
+        assert_eq!(
+            StorageParams::Moka(StorageMokaConfig::default()).url(),
+            None
+        );
+    }
 }
