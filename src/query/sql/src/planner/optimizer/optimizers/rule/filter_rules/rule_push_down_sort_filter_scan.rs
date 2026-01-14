@@ -30,36 +30,34 @@ use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::Visitor;
 
-/// Input:
-/// (1)    Sort
-///          \
-///          Filter
-///            \
-///            Scan
-/// (2)    Sort
-///          \
-///          EvalScalar
-///            \
-///            Filter
-///              \
-///              Scan
+/// Matches: Sort -> [EvalScalar ->] Filter -> Scan
 ///
-/// Output:
-/// (1)    Sort
-///          \
-///          Filter
-///            \
-///            Scan(padding order_by and limit)
-/// (2)    Sort
-///          \
-///          EvalScalar
-///            \
-///            Filter
-///              \
-///              Scan(padding order_by and limit)
+/// Push down order_by and limit from Sort to Scan when filter predicates
+/// use inverted_index or vector_index.
+///
+/// Note: This rule does NOT match plans with SecureFilter (from row access policy).
+/// When SecureFilter exists, pushing limit to Scan enables TopN pruning based only
+/// on user filter's index match counts, but SecureFilter predicates are not included
+/// in push_down_predicates, so blocks needed after security filtering may be pruned,
+/// causing fewer rows than requested.
 pub struct RulePushDownSortFilterScan {
     id: RuleID,
     matchers: Vec<Matcher>,
+}
+
+macro_rules! match_op {
+    ($op:ident) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![],
+        }
+    };
+    ($op:ident, $($child:expr),+) => {
+        Matcher::MatchOp {
+            op_type: RelOp::$op,
+            children: vec![$($child),+],
+        }
+    };
 }
 
 impl RulePushDownSortFilterScan {
@@ -67,29 +65,13 @@ impl RulePushDownSortFilterScan {
         Self {
             id: RuleID::PushDownSortFilterScan,
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Filter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Filter,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Scan,
-                                children: vec![],
-                            }],
-                        }],
-                    }],
-                },
+                // Sort -> Filter -> Scan
+                match_op!(Sort, match_op!(Filter, match_op!(Scan))),
+                // Sort -> EvalScalar -> Filter -> Scan
+                match_op!(
+                    Sort,
+                    match_op!(EvalScalar, match_op!(Filter, match_op!(Scan)))
+                ),
             ],
         }
     }
@@ -106,22 +88,22 @@ impl Rule for RulePushDownSortFilterScan {
         let child = s_expr.child(0)?;
         let (eval_scalar, filter, mut scan) = match child.plan() {
             RelOperator::Filter(filter) => {
-                let grand_child = child.child(0)?;
-                let scan: Scan = grand_child.plan().clone().try_into()?;
+                let scan_expr = child.child(0)?;
+                let scan: Scan = scan_expr.plan().clone().try_into()?;
                 (None, filter.clone(), scan)
             }
             RelOperator::EvalScalar(eval_scalar) => {
-                let child = child.child(0)?;
-                let filter: Filter = child.plan().clone().try_into()?;
-                let grand_child = child.child(0)?;
-                let scan: Scan = grand_child.plan().clone().try_into()?;
+                let filter_expr = child.child(0)?;
+                let filter: Filter = filter_expr.plan().clone().try_into()?;
+                let scan_expr = filter_expr.child(0)?;
+                let scan: Scan = scan_expr.plan().clone().try_into()?;
                 (Some(eval_scalar.clone()), filter, scan)
             }
             _ => unreachable!(),
         };
 
-        // The following conditions must be met push down filter and sort for index:
-        // 1. Scan must contain `vector_index` or `inverted_index, because we can use the index
+        // The following conditions must be met to push down filter and sort for index:
+        // 1. Scan must contain vector_index or inverted_index, because we can use the index
         //    to determine which rows in the block match, and the topn pruner can use this information
         //    to retain only the matched blocks.
         // 2. The number of `push_down_predicates` in Scan must be the same as the number of `predicates`
@@ -143,10 +125,9 @@ impl Rule for RulePushDownSortFilterScan {
         scan.limit = sort.limit;
 
         let new_scan = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
-
         let mut result = if eval_scalar.is_some() {
-            let grandchild = child.child(0)?;
-            let new_filter = grandchild.replace_children(vec![Arc::new(new_scan)]);
+            let filter_expr = child.child(0)?;
+            let new_filter = filter_expr.replace_children(vec![Arc::new(new_scan)]);
             let new_eval_scalar = child.replace_children(vec![Arc::new(new_filter)]);
             s_expr.replace_children(vec![Arc::new(new_eval_scalar)])
         } else {
