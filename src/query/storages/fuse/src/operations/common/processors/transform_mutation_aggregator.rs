@@ -82,6 +82,7 @@ pub struct TableMutationAggregator {
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
     set_hilbert_level: bool,
+    is_branch: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
@@ -196,7 +197,11 @@ impl TableMutationAggregator {
                     | MutationKind::Recluster
             );
 
-        let virtual_schema = table.table_info.meta.virtual_schema.clone();
+        let virtual_schema = if table.branch_info.is_none() {
+            table.table_info.meta.virtual_schema.clone()
+        } else {
+            None
+        };
         TableMutationAggregator {
             ctx,
             schema: table.schema(),
@@ -220,6 +225,7 @@ impl TableMutationAggregator {
             start_time: Instant::now(),
             table_id: table.get_id(),
             table_meta_timestamps,
+            is_branch: table.branch_info.is_some(),
         }
     }
 
@@ -603,11 +609,16 @@ impl TableMutationAggregator {
             return Ok(());
         }
 
-        let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
-            &self.schema,
-            &self.virtual_schema,
-        );
+        let mut virtual_column_accumulator = if self.is_branch {
+            None
+        } else {
+            VirtualColumnAccumulator::try_create(
+                self.ctx.clone(),
+                &self.schema,
+                &self.virtual_schema,
+            )
+        };
+
         let extended_mutations = std::mem::take(&mut self.extended_mutations);
         for (segment_idx, extended_block_mutations) in extended_mutations.into_iter() {
             for (block_idx, extended_block_meta) in
@@ -672,11 +683,15 @@ impl TableMutationAggregator {
 
     // Assign columnId to the virtual column in the merged blocks and generate a new virtual schema.
     fn accumulate_merged_blocks(&mut self) -> Result<Vec<BlockMetaWithHLL>> {
-        let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            self.ctx.clone(),
-            &self.schema,
-            &self.virtual_schema,
-        );
+        let mut virtual_column_accumulator = if self.is_branch {
+            None
+        } else {
+            VirtualColumnAccumulator::try_create(
+                self.ctx.clone(),
+                &self.schema,
+                &self.virtual_schema,
+            )
+        };
         let extended_merged_blocks = std::mem::take(&mut self.merged_blocks);
         let mut new_merged_blocks = Vec::with_capacity(extended_merged_blocks.len());
         for extended_block_meta in extended_merged_blocks.into_iter() {

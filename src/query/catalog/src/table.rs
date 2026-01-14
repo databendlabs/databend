@@ -53,6 +53,7 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
+use crate::plan::ExtendedTableInfo;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -82,7 +83,8 @@ pub trait Table: Sync + Send {
     }
 
     fn schema(&self) -> Arc<TableSchema> {
-        self.get_table_info().schema()
+        self.get_branch_info()
+            .map_or_else(|| self.get_table_info().schema(), |v| v.schema.clone())
     }
 
     fn options(&self) -> &BTreeMap<String, String> {
@@ -108,7 +110,7 @@ pub trait Table: Sync + Send {
     ///   even for branches created on different tables.
     /// - Therefore, using `branch_id` alone as a cache key namespace is safe.
     fn get_unique_id(&self) -> u64 {
-        self.get_table_branch()
+        self.get_branch_info()
             .map_or(self.get_id(), |v| v.branch_id())
     }
 
@@ -120,16 +122,14 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
-    fn get_table_branch(&self) -> Option<&BranchInfo> {
+    fn get_branch_info(&self) -> Option<&BranchInfo> {
         None
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
-        let table_info = self.get_table_info().clone();
-        let branch = self.get_table_branch().map(|b| b.name.clone());
-        DataSourceInfo::TableSource(TableInfoWithBranch {
-            inner: table_info,
-            branch,
+        DataSourceInfo::TableSource(ExtendedTableInfo {
+            table_info: self.get_table_info().clone(),
+            branch_info: self.get_branch_info().cloned(),
         })
     }
 
@@ -556,7 +556,7 @@ pub trait TableExt: Table {
             ..table_info.clone()
         };
         let table = catalog.get_table_by_info(&table_info)?;
-        if let Some(branch) = self.get_table_branch() {
+        if let Some(branch) = self.get_branch_info() {
             let branch_name = branch.branch_name();
             table.with_branch(branch_name)
         } else {
@@ -567,7 +567,7 @@ pub trait TableExt: Table {
     fn check_mutable(&self) -> Result<()> {
         if self.is_read_only() {
             let branch_info = self
-                .get_table_branch()
+                .get_branch_info()
                 .map(|v| format!(" (tag: {})", v.branch_name()))
                 .unwrap_or_default();
             Err(ErrorCode::InvalidOperation(format!(
@@ -763,26 +763,6 @@ pub enum DistributionLevel {
     Local,
     Cluster,
     Warehouse,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct TableInfoWithBranch {
-    pub inner: TableInfo,
-    pub branch: Option<String>,
-}
-
-impl TableInfoWithBranch {
-    pub fn new(inner: &TableInfo) -> Self {
-        TableInfoWithBranch {
-            inner: inner.clone(),
-            branch: None,
-        }
-    }
-
-    pub fn with_branch(mut self, branch: Option<String>) -> Self {
-        self.branch = branch;
-        self
-    }
 }
 
 pub fn is_temp_table_by_table_info(table_info: &TableInfo) -> bool {

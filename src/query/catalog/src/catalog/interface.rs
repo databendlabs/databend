@@ -296,6 +296,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    async fn get_table_with_batch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        let table = self.get_table(tenant, db_name, table_name).await?;
+        match branch {
+            Some(v) => table.with_branch(v),
+            None => Ok(table),
+        }
+    }
+
     // Get one table identified as dropped by db and table name.
     async fn get_table_history(
         &self,

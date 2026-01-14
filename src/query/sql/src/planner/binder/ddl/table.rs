@@ -1081,16 +1081,37 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table { table, .. } =
-            table_reference
+        let (catalog, database, table, branch) =
+            if let TableReference::Table { table, .. } = table_reference {
+                let branch = table
+                    .branch
+                    .as_ref()
+                    .map(|b| normalize_identifier(b, &self.name_resolution_ctx).name);
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &table.catalog,
+                    &table.database,
+                    &table.table,
+                );
+                (catalog, database, table, branch)
+            } else {
+                return Err(ErrorCode::Internal(
+                    "should not happen, parser should have report error already",
+                ));
+            };
+
+        if branch.is_some()
+            && !matches!(
+                action,
+                AlterTableAction::AddColumn { .. }
+                    | AlterTableAction::ModifyColumn { .. }
+                    | AlterTableAction::DropColumn { .. }
+                    | AlterTableAction::RenameColumn { .. }
+            )
         {
-            debug_assert!(table.branch.is_none());
-            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
-        } else {
-            return Err(ErrorCode::Internal(
-                "should not happen, parser should have report error already",
+            return Err(ErrorCode::SemanticError(
+                "ALTER TABLE <table>/<branch> only supports ADD COLUMN, MODIFY COLUMN, DROP COLUMN, RENAME COLUMN",
             ));
-        };
+        }
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
@@ -1138,7 +1159,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1149,6 +1170,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     schema: new_schema,
                     old_column,
                     new_column,
@@ -1160,7 +1182,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
@@ -1177,6 +1199,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     field,
                     comment,
                     option,
@@ -1280,7 +1303,13 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_batch(
+                                &catalog,
+                                &database,
+                                &table,
+                                branch.as_deref(),
+                                None,
+                            )
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1294,7 +1323,13 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_batch(
+                                &catalog,
+                                &database,
+                                &table,
+                                branch.as_deref(),
+                                None,
+                            )
                             .await?
                             .schema();
 
@@ -1311,6 +1346,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     action: action_in_plan,
                     lock_guard,
                 })))
@@ -1321,6 +1357,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     column,
                 })))
             }

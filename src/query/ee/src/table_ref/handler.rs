@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -129,6 +130,7 @@ impl TableRefHandler for RealTableRefHandler {
                 table_info.schema().as_ref().clone(),
                 Default::default(),
                 vec![],
+                fuse_table.cluster_key_meta(),
                 None,
                 ctx.get_table_meta_timestamps(fuse_table, None)?,
             )?;

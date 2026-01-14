@@ -74,7 +74,7 @@ impl FuseTable {
         num_snapshot_limit: Option<usize>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        debug_assert!(self.table_branch.is_none());
+        debug_assert!(self.branch_info.is_none());
         let mut counter = PurgeCounter::new();
 
         // Step 1: Process snapshot refs (branches and tags) before main purge

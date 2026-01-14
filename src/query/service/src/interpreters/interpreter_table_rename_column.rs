@@ -19,11 +19,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::plans::RenameTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
@@ -60,57 +62,56 @@ impl Interpreter for RenameTableColumnInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await
-            .ok();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let table = catalog
+            .get_table_with_batch(
+                &self.ctx.get_tenant(),
+                db_name,
+                tbl_name,
+                self.plan.branch.as_deref(),
+            )
+            .await?;
 
-        if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
+        // check mutability
+        table.check_mutable()?;
 
-            let table_info = table.get_table_info();
-            let engine = table.engine();
-            if matches!(
-                engine.to_uppercase().as_str(),
-                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
-            ) {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is {} that doesn't support rename column name",
-                    &self.plan.database, &self.plan.table, engine
-                )));
-            }
-            if table_info.db_type != DatabaseType::NormalDB {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
-                )));
-            }
+        let table_info = table.get_table_info();
+        let engine = table.engine();
+        if matches!(
+            engine.to_uppercase().as_str(),
+            VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+        ) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} engine is {} that doesn't support rename column name",
+                &self.plan.database, &self.plan.table, engine
+            )));
+        }
+        if table_info.db_type != DatabaseType::NormalDB {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} doesn't support alter",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let mut new_table_meta = table.get_table_info().meta.clone();
+        let mut new_table_meta = table.get_table_info().meta.clone();
 
-            is_valid_column(&self.plan.new_column)?;
+        is_valid_column(&self.plan.new_column)?;
 
-            let mut schema: DataSchema = table_info.schema().into();
-            let field = schema.field_with_name(self.plan.old_column.as_str())?;
-            if field.computed_expr().is_none() {
-                let index = schema.index_of(self.plan.old_column.as_str())?;
-                schema.rename_field(index, self.plan.new_column.as_str());
-                // Check if old column is referenced by computed columns.
-                check_referenced_computed_columns(
-                    self.ctx.clone(),
-                    Arc::new(schema),
-                    self.plan.old_column.as_str(),
-                )?;
-            }
+        let mut schema: DataSchema = table.schema().into();
+        let field = schema.field_with_name(self.plan.old_column.as_str())?;
+        if field.computed_expr().is_none() {
+            let index = schema.index_of(self.plan.old_column.as_str())?;
+            schema.rename_field(index, self.plan.new_column.as_str());
+            // Check if old column is referenced by computed columns.
+            check_referenced_computed_columns(
+                self.ctx.clone(),
+                Arc::new(schema),
+                self.plan.old_column.as_str(),
+            )?;
+        }
 
-            new_table_meta.schema = Arc::new(self.plan.schema.clone());
-
-            // update table options
+        // update table options
+        if self.plan.branch.is_none() {
             let opts = &mut new_table_meta.options;
             if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
                 let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
@@ -122,16 +123,26 @@ impl Interpreter for RenameTableColumnInterpreter {
                     }
                 }
             }
+            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+                let approx_distinct_cols = value.parse::<ApproxDistinctColumns>()?;
+                if let ApproxDistinctColumns::Specify(mut cols) = approx_distinct_cols {
+                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.old_column) {
+                        // replace the approx distinct columns with new column name.
+                        cols[pos] = self.plan.new_column.clone();
+                        *value = cols.join(",");
+                    }
+                }
+            }
+        }
 
-            commit_table_meta(
-                &self.ctx,
-                table.as_ref(),
-                table_info,
-                new_table_meta,
-                catalog,
-            )
-            .await?;
-        };
+        commit_table_meta(
+            &self.ctx,
+            table.as_ref(),
+            Arc::new(self.plan.schema.clone()),
+            new_table_meta,
+            catalog,
+        )
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }

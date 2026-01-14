@@ -47,7 +47,7 @@ use crate::meta::v2;
 use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
-#[frozen_api("dba4542b")]
+#[frozen_api("0c29517b")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -92,7 +92,6 @@ pub struct TableSnapshot {
     pub segments: Vec<Location>,
 
     /// The metadata of the cluster keys.
-    /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
     // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
@@ -106,6 +105,7 @@ impl TableSnapshot {
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
+        cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -155,7 +155,7 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
-            cluster_key_meta: None,
+            cluster_key_meta,
             table_statistics_location,
         })
     }
@@ -172,6 +172,7 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
+            previous.cluster_key_meta.clone(),
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
