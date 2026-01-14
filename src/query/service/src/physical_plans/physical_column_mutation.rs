@@ -186,7 +186,7 @@ impl IPhysicalPlan for ColumnMutation {
 
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, &None, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         let block_thresholds = table.get_block_thresholds();

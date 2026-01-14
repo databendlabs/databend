@@ -92,7 +92,7 @@ pub async fn do_refresh_virtual_column(
         // no snapshot
         return Ok(());
     };
-    let table_schema = &fuse_table.get_table_info().meta.schema;
+    let table_schema = fuse_table.schema();
 
     // Collect source fields used by virtual columns.
     let mut fields = Vec::new();
@@ -109,7 +109,7 @@ pub async fn do_refresh_virtual_column(
 
     let source_schema = Arc::new(TableSchema {
         fields,
-        ..fuse_table.schema().as_ref().clone()
+        ..table_schema.as_ref().clone()
     });
 
     if !fuse_table.support_virtual_columns() {
@@ -125,8 +125,7 @@ pub async fn do_refresh_virtual_column(
     let block_reader =
         fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
 
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
+    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
 
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod data_source_info;
+mod extended_table_info;
 mod orc;
 mod parquet;
 mod parquet_read_options;
@@ -20,6 +21,7 @@ mod result_scan;
 mod stage;
 
 pub use data_source_info::DataSourceInfo;
+pub use extended_table_info::ExtendedTableInfo;
 pub use orc::OrcTableInfo;
 pub use parquet::FullParquetMeta;
 pub use parquet::ParquetTableInfo;

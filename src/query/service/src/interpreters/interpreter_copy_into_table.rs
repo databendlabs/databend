@@ -404,9 +404,9 @@ impl CopyIntoTableInterpreter {
                 table_info.meta.schema = new_schema;
                 to_table = FuseTable::create_and_refresh_table_info(
                     table_info,
+                    None,
                     ctx.get_settings().get_s3_storage_class()?,
-                )?
-                .into();
+                )?;
             }
 
             let copied_files_meta_req = PipelineBuilder::build_upsert_copied_files_to_meta_req(

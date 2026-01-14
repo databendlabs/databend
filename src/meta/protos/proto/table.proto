@@ -95,6 +95,9 @@ message TableMeta {
   // Keys to sort rows in table.
   optional string cluster_key = 9;
 
+  // The main cluster key id.
+  optional uint32 cluster_key_id = 38;
+
   // The vector of cluster keys.
   repeated string cluster_keys = 4;
 

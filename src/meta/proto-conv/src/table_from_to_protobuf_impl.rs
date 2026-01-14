@@ -206,6 +206,10 @@ impl FromToProto for mt::TableMeta {
         } else {
             p.cluster_keys.len() as u32 - 1
         };
+        let cluster_key_id = p
+            .cluster_key
+            .as_ref()
+            .and_then(|_| p.cluster_key_id.or(Some(cluster_key_seq)));
         let mut constraints = BTreeMap::new();
         for (constraint_name, constraint) in p.constraints {
             constraints.insert(constraint_name, mt::Constraint::from_pb(constraint)?);
@@ -225,6 +229,7 @@ impl FromToProto for mt::TableMeta {
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
             cluster_key: p.cluster_key,
+            cluster_key_id,
             cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
@@ -295,6 +300,7 @@ impl FromToProto for mt::TableMeta {
             cluster_key: self.cluster_key.clone(),
             // cluster_keys is deprecated.
             cluster_keys: vec![],
+            cluster_key_id: self.cluster_key_id,
             cluster_key_seq: Some(self.cluster_key_seq),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,

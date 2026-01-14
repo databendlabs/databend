@@ -230,21 +230,21 @@ impl FuseTable {
         // currently, here are what we can recovery from the snapshot:
 
         // 1. the table schema
-        table_info.meta.schema = Arc::new(snapshot.schema.clone());
-
         // 2. the table option `snapshot_location`
         let loc = self.meta_location_generator.gen_snapshot_location(
             self.get_branch_id(),
             &snapshot.snapshot_id,
             format_version,
         )?;
-        let new_branch = match self.table_branch.as_ref() {
+        let new_branch = match self.branch_info.as_ref() {
             Some(branch) => {
                 let mut new_branch = branch.clone();
                 new_branch.info.loc = loc;
+                new_branch.schema = Arc::new(snapshot.schema.clone());
                 Some(new_branch)
             }
             None => {
+                table_info.meta.schema = Arc::new(snapshot.schema.clone());
                 table_info
                     .meta
                     .options
@@ -271,7 +271,7 @@ impl FuseTable {
 
         // let's instantiate it
         let mut table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
-        table.table_branch = new_branch;
+        table.branch_info = new_branch;
         Ok(table.into())
     }
 
@@ -542,7 +542,14 @@ impl FuseTable {
                 Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
             NavigationPoint::TableRef { typ, name } => {
-                let table_ref = self.table_info.get_table_ref(Some(typ), name)?;
+                let table_ref = self.table_info.get_table_ref(name)?;
+                let ref_type = &table_ref.typ;
+                if ref_type != typ {
+                    return Err(ErrorCode::MismatchedReferenceType(format!(
+                        "'{}' is a {}, please use 'AT({} => {})' instead.",
+                        name, ref_type, ref_type, name,
+                    )));
+                }
                 Ok(Some(table_ref.loc.clone()))
             }
         }

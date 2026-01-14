@@ -1112,7 +1112,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let alter_table = map(
         rule! {
-            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
+            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only_with_branch ~ #alter_table_action
         },
         |(_, _, opt_if_exists, table_reference, action)| {
             Statement::AlterTable(AlterTableStmt {

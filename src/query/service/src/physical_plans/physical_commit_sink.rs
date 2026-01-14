@@ -105,7 +105,7 @@ impl IPhysicalPlan for CommitSink {
 
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, &None, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         builder.main_pipeline.try_resize(1)?;
