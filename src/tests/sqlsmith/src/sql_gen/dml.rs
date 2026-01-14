@@ -639,7 +639,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {
-                                encoder.write_field(column, i, &mut buf, true);
+                                encoder
+                                    .write_field(column, i, &mut buf, true)
+                                    .expect("failed to encode column value");
                             }
                         }
                     }
