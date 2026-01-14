@@ -80,6 +80,64 @@ impl StorageParams {
         }
     }
 
+    /// Return a redacted clone suitable for display/logging.
+    ///
+    /// Sensitive credential fields are masked in the returned config so callers can
+    /// serialize it for user-visible contexts without leaking plaintext secrets.
+    pub fn redacted_for_display(&self) -> Self {
+        let mut clone = self.clone();
+        clone.redact_sensitive_fields();
+        clone
+    }
+
+    fn redact_sensitive_fields(&mut self) {
+        fn mask_if_not_empty(value: &mut String) {
+            if !value.is_empty() {
+                *value = mask_string(value, 3);
+            }
+        }
+
+        match self {
+            StorageParams::Azblob(cfg) => {
+                mask_if_not_empty(&mut cfg.account_key);
+            }
+            StorageParams::Ftp(cfg) => {
+                mask_if_not_empty(&mut cfg.password);
+            }
+            StorageParams::Gcs(cfg) => {
+                mask_if_not_empty(&mut cfg.credential);
+            }
+            StorageParams::Obs(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.secret_access_key);
+            }
+            StorageParams::Oss(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.access_key_secret);
+                mask_if_not_empty(&mut cfg.server_side_encryption);
+                mask_if_not_empty(&mut cfg.server_side_encryption_key_id);
+            }
+            StorageParams::S3(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.secret_access_key);
+                mask_if_not_empty(&mut cfg.security_token);
+                mask_if_not_empty(&mut cfg.master_key);
+                mask_if_not_empty(&mut cfg.external_id);
+            }
+            StorageParams::Cos(cfg) => {
+                mask_if_not_empty(&mut cfg.secret_id);
+                mask_if_not_empty(&mut cfg.secret_key);
+            }
+            StorageParams::Huggingface(cfg) => {
+                mask_if_not_empty(&mut cfg.token);
+            }
+            StorageParams::Webhdfs(cfg) => {
+                mask_if_not_empty(&mut cfg.delegation);
+            }
+            _ => {}
+        }
+    }
+
     /// Whether this storage params is secure.
     ///
     /// Query will forbid this storage config unless `allow_insecure` has been enabled.
@@ -299,6 +357,31 @@ impl StorageParams {
         }
     }
 
+    /// Return the endpoint URL if this storage exposes one.
+    pub fn endpoint(&self) -> Option<String> {
+        fn some_if_not_empty(s: &str) -> Option<String> {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        }
+
+        match self {
+            StorageParams::Azblob(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ftp(cfg) => some_if_not_empty(&cfg.endpoint),
+            StorageParams::Gcs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Http(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ipfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Obs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Oss(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::S3(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Cos(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Webhdfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            _ => None,
+        }
+    }
+
     /// Return true if this storage params contains any embedded credentials.
     pub fn has_credentials(&self) -> bool {
         match self {
@@ -457,7 +540,7 @@ fn ensure_path_prefix(path: &str) -> String {
 fn render_http_url(cfg: &StorageHttpConfig) -> String {
     let endpoint = cfg.endpoint_url.trim_end_matches('/');
     if cfg.paths.len() <= 1 {
-        let path = cfg.paths.get(0).map(|p| p.as_str()).unwrap_or("/");
+        let path = cfg.paths.first().map(|p| p.as_str()).unwrap_or("/");
         format!("{}{}", endpoint, ensure_path_prefix(path))
     } else {
         let joined = cfg
@@ -964,29 +1047,41 @@ mod tests {
 
     #[test]
     fn test_bucket_style_url() {
-        let mut s3 = StorageS3Config::default();
-        s3.bucket = "s3-bucket".to_string();
-        s3.root = "/data/".to_string();
+        let s3 = StorageS3Config {
+            bucket: "s3-bucket".to_string(),
+            root: "/data/".to_string(),
+            ..Default::default()
+        };
 
-        let mut gcs = StorageGcsConfig::default();
-        gcs.bucket = "gcs-bucket".to_string();
-        gcs.root = "/stage/".to_string();
+        let gcs = StorageGcsConfig {
+            bucket: "gcs-bucket".to_string(),
+            root: "/stage/".to_string(),
+            ..Default::default()
+        };
 
-        let mut oss = StorageOssConfig::default();
-        oss.bucket = "oss-bucket".to_string();
-        oss.root = "/stage/".to_string();
+        let oss = StorageOssConfig {
+            bucket: "oss-bucket".to_string(),
+            root: "/stage/".to_string(),
+            ..Default::default()
+        };
 
-        let mut obs = StorageObsConfig::default();
-        obs.bucket = "obs-bucket".to_string();
-        obs.root = "/stage/".to_string();
+        let obs = StorageObsConfig {
+            bucket: "obs-bucket".to_string(),
+            root: "/stage/".to_string(),
+            ..Default::default()
+        };
 
-        let mut cos = StorageCosConfig::default();
-        cos.bucket = "cos-bucket".to_string();
-        cos.root = "/stage/".to_string();
+        let cos = StorageCosConfig {
+            bucket: "cos-bucket".to_string(),
+            root: "/stage/".to_string(),
+            ..Default::default()
+        };
 
-        let mut azblob = StorageAzblobConfig::default();
-        azblob.container = "az-container".to_string();
-        azblob.root = "/stage/".to_string();
+        let azblob = StorageAzblobConfig {
+            container: "az-container".to_string(),
+            root: "/stage/".to_string(),
+            ..Default::default()
+        };
 
         let cases = vec![
             ("s3://s3-bucket/data/", StorageParams::S3(s3)),
@@ -1007,9 +1102,9 @@ mod tests {
 
     #[test]
     fn test_fs_relative_url() {
-        let mut cfg = StorageFsConfig::default();
-        cfg.root = "tmp/data".to_string();
-        let params = StorageParams::Fs(cfg);
+        let params = StorageParams::Fs(StorageFsConfig {
+            root: "tmp/data".to_string(),
+        });
         assert_eq!(params.url().as_deref(), Some("fs://tmp/data/"));
     }
 
@@ -1141,32 +1236,50 @@ mod tests {
 
     #[test]
     fn test_has_credentials_matrix() {
-        let mut s3 = StorageS3Config::default();
-        s3.access_key_id = "ak".to_string();
+        let s3 = StorageS3Config {
+            access_key_id: "ak".to_string(),
+            ..Default::default()
+        };
 
-        let mut az = StorageAzblobConfig::default();
-        az.account_key = "key".to_string();
+        let az = StorageAzblobConfig {
+            account_key: "key".to_string(),
+            ..Default::default()
+        };
 
-        let mut ftp = StorageFtpConfig::default();
-        ftp.username = "user".to_string();
+        let ftp = StorageFtpConfig {
+            username: "user".to_string(),
+            ..Default::default()
+        };
 
-        let mut gcs = StorageGcsConfig::default();
-        gcs.credential = "cred".to_string();
+        let gcs = StorageGcsConfig {
+            credential: "cred".to_string(),
+            ..Default::default()
+        };
 
-        let mut obs = StorageObsConfig::default();
-        obs.access_key_id = "ak".to_string();
+        let obs = StorageObsConfig {
+            access_key_id: "ak".to_string(),
+            ..Default::default()
+        };
 
-        let mut oss = StorageOssConfig::default();
-        oss.access_key_secret = "sk".to_string();
+        let oss = StorageOssConfig {
+            access_key_secret: "sk".to_string(),
+            ..Default::default()
+        };
 
-        let mut cos = StorageCosConfig::default();
-        cos.secret_id = "id".to_string();
+        let cos = StorageCosConfig {
+            secret_id: "id".to_string(),
+            ..Default::default()
+        };
 
-        let mut hf = StorageHuggingfaceConfig::default();
-        hf.token = "token".to_string();
+        let hf = StorageHuggingfaceConfig {
+            token: "token".to_string(),
+            ..Default::default()
+        };
 
-        let mut webhdfs = StorageWebhdfsConfig::default();
-        webhdfs.delegation = "delegation".to_string();
+        let webhdfs = StorageWebhdfsConfig {
+            delegation: "delegation".to_string(),
+            ..Default::default()
+        };
 
         let cases = vec![
             (StorageParams::S3(s3), true, "s3"),
@@ -1219,5 +1332,77 @@ mod tests {
         assert!(!StorageParams::Oss(oss.clone()).has_encryption_key());
         oss.server_side_encryption = "KMS".to_string();
         assert!(StorageParams::Oss(oss).has_encryption_key());
+    }
+
+    #[test]
+    fn test_endpoint_for_storages_with_endpoint() {
+        let s3 = StorageS3Config {
+            endpoint_url: "https://s3.example.com".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            StorageParams::S3(s3).endpoint().as_deref(),
+            Some("https://s3.example.com")
+        );
+
+        let http = StorageParams::Http(StorageHttpConfig {
+            endpoint_url: "https://files.example.com".to_string(),
+            paths: vec![],
+            network_config: None,
+        });
+        assert_eq!(
+            http.endpoint().as_deref(),
+            Some("https://files.example.com")
+        );
+    }
+
+    #[test]
+    fn test_redacted_for_display_masks_secrets() {
+        let original = StorageParams::S3(StorageS3Config {
+            access_key_id: "ACCESS123".to_string(),
+            secret_access_key: "SECRET456".to_string(),
+            security_token: "TOKEN789".to_string(),
+            master_key: "MASTER000".to_string(),
+            ..Default::default()
+        });
+
+        if let StorageParams::S3(redacted) = original.redacted_for_display() {
+            assert_eq!(
+                redacted.access_key_id,
+                mask_string("ACCESS123", 3),
+                "access key should be masked"
+            );
+            assert_eq!(
+                redacted.secret_access_key,
+                mask_string("SECRET456", 3),
+                "secret key should be masked"
+            );
+            assert_eq!(
+                redacted.security_token,
+                mask_string("TOKEN789", 3),
+                "token should be masked"
+            );
+            assert_eq!(
+                redacted.master_key,
+                mask_string("MASTER000", 3),
+                "master key should be masked"
+            );
+        } else {
+            unreachable!("redacted clone must remain S3 variant");
+        }
+    }
+
+    #[test]
+    fn test_endpoint_none_when_missing() {
+        assert_eq!(
+            StorageParams::Fs(StorageFsConfig::default()).endpoint(),
+            None
+        );
+
+        let ftp = StorageParams::Ftp(StorageFtpConfig {
+            endpoint: "".to_string(),
+            ..Default::default()
+        });
+        assert_eq!(ftp.endpoint(), None);
     }
 }
