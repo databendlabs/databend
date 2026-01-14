@@ -16,7 +16,6 @@ pub(crate) mod errors;
 mod forwarder;
 
 pub use crate::meta_node::meta_node_kv_api_impl::MetaKVApi;
-pub use crate::meta_node::meta_node_kv_api_impl::MetaKVApiOwned;
 
 pub mod meta_leader;
 pub mod raft_service_impl;
