@@ -100,8 +100,8 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
-                binary_format: BinaryDisplayFormat::Hex,
-                binary_utf8_lossy: false,
+                binary_format: options_ext.binary_format,
+                binary_utf8_lossy: options_ext.binary_utf8_lossy,
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -126,8 +126,8 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
-                binary_format: BinaryDisplayFormat::Hex,
-                binary_utf8_lossy: false,
+                binary_format: options_ext.binary_format,
+                binary_utf8_lossy: options_ext.binary_utf8_lossy,
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
