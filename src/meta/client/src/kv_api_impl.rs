@@ -60,23 +60,17 @@ impl kvapi::KVApi for ClientHandle {
         &self,
         keys: BoxStream<'static, Result<String, Self::Error>>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
+        use databend_common_meta_kvapi::kvapi::fail_fast;
+
         // For remote client, collect keys first then use batch request.
-        // This loses the streaming benefit but keeps the implementation simple.
-        // Can be optimized later with a streaming gRPC endpoint if needed.
-        //
-        // Fail-fast: if an error is in the input stream, return it in the output stream
-        // (not from this function) so callers get partial results before the error.
+        // fail_fast stops at first error; we save it to append to output stream.
         let mut collected = Vec::new();
         let mut input_error = None;
-
-        let mut keys = keys;
+        let mut keys = std::pin::pin!(fail_fast(keys));
         while let Some(result) = keys.next().await {
             match result {
                 Ok(key) => collected.push(key),
-                Err(e) => {
-                    input_error = Some(e);
-                    break; // Stop collecting on first error
-                }
+                Err(e) => input_error = Some(e),
             }
         }
 
@@ -86,13 +80,11 @@ impl kvapi::KVApi for ClientHandle {
             .await?;
         let strm = strm.map_err(MetaError::from);
 
-        // If there was an input error, append it to the output stream then stop
-        let strm: KVStream<Self::Error> = match input_error {
-            None => strm.boxed(),
-            Some(e) => strm.chain(futures::stream::once(async { Err(e) })).boxed(),
-        };
-
-        Ok(strm)
+        // If there was an input error, append it to the output stream
+        match input_error {
+            None => Ok(strm.boxed()),
+            Some(e) => Ok(strm.chain(futures::stream::once(async { Err(e) })).boxed()),
+        }
     }
 
     #[fastrace::trace]
