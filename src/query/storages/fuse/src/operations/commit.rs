@@ -262,7 +262,7 @@ impl FuseTable {
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
-        let should_write_hint = self.table_branch.is_none();
+        let should_write_hint = self.branch_info.is_none();
         let new_table_meta =
             self.build_new_table_meta(&table_info.meta, &snapshot_location, &snapshot)?;
         // 2. prepare the request
@@ -351,7 +351,9 @@ impl FuseTable {
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
+        let mut latest_schema = self.schema();
         let default_cluster_key_id = self.cluster_key_id();
+        let base_schema = self.schema();
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -369,8 +371,7 @@ impl FuseTable {
                 table_meta_timestamps,
             )?;
 
-            let schema = self.schema();
-            if schema != latest_table_info.schema() {
+            if base_schema != latest_schema {
                 return Err(ErrorCode::StorageOther(
                     "The schema of the table has changed",
                 ));
@@ -381,7 +382,7 @@ impl FuseTable {
                 base_segments,
                 &base_summary,
                 concurrently_appended_segment_locations,
-                schema,
+                latest_schema.clone(),
                 default_cluster_key_id,
             )
             .await?;
@@ -437,6 +438,7 @@ impl FuseTable {
                                         )
                                     })?;
                             latest_table_info = &latest_fuse_table.table_info;
+                            latest_schema = latest_fuse_table.schema();
 
                             // Check if there is only insertion during the operation.
                             if let Some(range_of_newly_append) =

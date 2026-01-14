@@ -23,6 +23,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
+use databend_common_ast::ast::ClusterType;
 use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
@@ -1081,16 +1082,50 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table { table, .. } =
-            table_reference
-        {
-            debug_assert!(table.branch.is_none());
-            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
-        } else {
-            return Err(ErrorCode::Internal(
-                "should not happen, parser should have report error already",
-            ));
-        };
+        let (catalog, database, table, branch) =
+            if let TableReference::Table { table, .. } = table_reference {
+                let branch = table
+                    .branch
+                    .as_ref()
+                    .map(|b| normalize_identifier(b, &self.name_resolution_ctx).name);
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &table.catalog,
+                    &table.database,
+                    &table.table,
+                );
+                (catalog, database, table, branch)
+            } else {
+                return Err(ErrorCode::Internal(
+                    "should not happen, parser should have report error already",
+                ));
+            };
+
+        if branch.is_some() {
+            if !self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_table_ref()
+                .unwrap_or_default()
+            {
+                return Err(ErrorCode::Unimplemented(
+                    "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+                ));
+            }
+
+            if !matches!(
+                action,
+                AlterTableAction::AddColumn { .. }
+                    | AlterTableAction::ModifyColumn { .. }
+                    | AlterTableAction::DropColumn { .. }
+                    | AlterTableAction::RenameColumn { .. }
+                    | AlterTableAction::AlterTableClusterKey { .. }
+                    | AlterTableAction::DropTableClusterKey
+            ) {
+                return Err(ErrorCode::SemanticError(
+                    "ALTER TABLE <table>/<branch> only supports ADD/MODIFY/DROP/RENAME COLUMN, ALTER/DROP CLUSTER KEY",
+                ));
+            }
+        }
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
@@ -1138,7 +1173,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1149,6 +1184,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     schema: new_schema,
                     old_column,
                     new_column,
@@ -1160,7 +1196,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
@@ -1177,6 +1213,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     field,
                     comment,
                     option,
@@ -1280,7 +1317,13 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_batch(
+                                &catalog,
+                                &database,
+                                &table,
+                                branch.as_deref(),
+                                None,
+                            )
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1294,7 +1337,13 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table(&catalog, &database, &table)
+                            .get_table_with_batch(
+                                &catalog,
+                                &database,
+                                &table,
+                                branch.as_deref(),
+                                None,
+                            )
                             .await?
                             .schema();
 
@@ -1311,6 +1360,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     action: action_in_plan,
                     lock_guard,
                 })))
@@ -1321,16 +1371,26 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     column,
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                let schema = self
+                let tbl = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
-                    .await?
-                    .schema();
-                let cluster_keys = self.analyze_cluster_keys(cluster_by, schema).await?;
+                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .await?;
+                // Branch tables currently only support LINEAR cluster key.
+                if tbl.get_branch_info().is_some()
+                    && !matches!(cluster_by.cluster_type, ClusterType::Linear)
+                {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cluster key type '{}' is not supported for table branch. Only LINEAR is supported",
+                        cluster_by.cluster_type,
+                    )));
+                }
+
+                let cluster_keys = self.analyze_cluster_keys(cluster_by, tbl.schema()).await?;
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
                     AlterTableClusterKeyPlan {
@@ -1338,6 +1398,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         cluster_keys,
                         cluster_type: cluster_by.cluster_type.to_string().to_lowercase(),
                     },
@@ -1349,6 +1410,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                 },
             ))),
             AlterTableAction::ReclusterTable {
@@ -2320,7 +2382,7 @@ impl Binder {
         Ok(cluster_keys)
     }
 
-    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+    pub fn valid_cluster_key_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
         matches!(
             inner_type,

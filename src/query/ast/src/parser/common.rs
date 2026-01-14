@@ -286,6 +286,34 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     .parse(i)
 }
 
+/// Parse a table reference for DDL that supports an optional `/branch` suffix.
+///
+/// Examples:
+/// - `table`
+/// - `db.table`
+/// - `catalog.db.table`
+/// - `table/branch`
+/// - `db.table/branch`
+/// - `catalog.db.table/branch`
+pub fn table_reference_only_with_branch(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #table_ref
+        }),
+        |(span, table)| TableReference::Table {
+            span: transform_span(span.tokens),
+            table,
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+    )
+    .parse(i)
+}
+
 pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> {
     map(
         consumed(rule! {

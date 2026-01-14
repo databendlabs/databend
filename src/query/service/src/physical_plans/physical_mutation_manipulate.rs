@@ -129,7 +129,7 @@ impl IPhysicalPlan for MutationManipulate {
 
         let tbl = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, &None, None)?;
 
         let input_schema = self.input.output_schema()?;
         let mut pipe_items = Vec::with_capacity(builder.main_pipeline.output_len());

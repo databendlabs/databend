@@ -527,7 +527,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
             if let Some(fill_and_reorder) = fill_and_reorder {
                 let table = builder.ctx.build_table_by_table_info(
                     &fill_and_reorder.target_table_info,
-                    None,
+                    &None,
                     None,
                 )?;
 
@@ -681,7 +681,7 @@ impl IPhysicalPlan for ChunkAppendData {
         for append_data in self.target_tables.iter() {
             let table = builder.ctx.build_table_by_table_info(
                 &append_data.target_table_info,
-                None,
+                &None,
                 None,
             )?;
             let block_thresholds = table.get_block_thresholds();
@@ -909,7 +909,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
             let table =
                 builder
                     .ctx
-                    .build_table_by_table_info(&target.target_table_info, None, None)?;
+                    .build_table_by_table_info(&target.target_table_info, &None, None)?;
             let block_thresholds = table.get_block_thresholds();
             serialize_segment_builders.push(Box::new(
                 builder.serialize_segment_transform_builder(

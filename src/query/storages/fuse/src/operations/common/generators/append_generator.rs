@@ -24,8 +24,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
-use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_sql::DefaultExprBinder;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -103,7 +104,7 @@ impl SnapshotGenerator for AppendGenerator {
 
     async fn fill_default_values(
         &mut self,
-        schema: TableSchema,
+        schema: &TableSchema,
         previous: &Option<Arc<TableSnapshot>>,
     ) -> Result<()> {
         if let Some(snapshot) = previous {
@@ -121,19 +122,18 @@ impl SnapshotGenerator for AppendGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        table_info: &TableInfo,
-        cluster_key_id: Option<u32>,
+        table_ident: &TableIdent,
+        table_schema: &TableSchema,
+        cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
-        let schema = table_info.schema().as_ref().clone();
-
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
-        if is_column_type_modified(&schema, expected_schema) {
+        if is_column_type_modified(table_schema, expected_schema) {
             return Err(ErrorCode::UnresolvableConflict(format!(
                 "schema was changed during insert, expected:{:?}, actual:{:?}",
-                expected_schema, schema
+                expected_schema, table_schema
             )));
         }
         let mut new_segments = snapshot_merged.merged_segments.clone();
@@ -143,7 +143,7 @@ impl SnapshotGenerator for AppendGenerator {
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
 
-                let leaf_fields = schema.leaf_fields();
+                let leaf_fields = table_schema.leaf_fields();
                 let column_data_types: HashMap<ColumnId, &TableDataType> =
                     HashMap::from_iter(leaf_fields.iter().map(|f| (f.column_id, &f.data_type)));
 
@@ -182,7 +182,7 @@ impl SnapshotGenerator for AppendGenerator {
                                     }
                                 }
                             } else {
-                                warn!("column id:{} not found in schema, while populating min/max values. the schema is {:?}", col_id, schema);
+                                warn!("column id:{} not found in schema, while populating min/max values. the schema is {:?}", col_id, table_schema);
                             }
                         });
                 }
@@ -194,7 +194,11 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
 
-                merge_statistics_mut(&mut new_summary, &summary, cluster_key_id);
+                merge_statistics_mut(
+                    &mut new_summary,
+                    &summary,
+                    cluster_key_meta.as_ref().map(|v| v.0),
+                );
             }
         }
 
@@ -208,11 +212,12 @@ impl SnapshotGenerator for AppendGenerator {
         }
         new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
         TableSnapshot::try_new(
-            Some(table_info.ident.seq),
+            Some(table_ident.seq),
             previous.clone(),
-            schema,
+            table_schema.clone(),
             new_summary,
             new_segments,
+            cluster_key_meta,
             table_statistics_location,
             table_meta_timestamps,
         )
