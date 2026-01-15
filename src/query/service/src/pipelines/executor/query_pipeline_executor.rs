@@ -261,9 +261,11 @@ impl QueryPipelineExecutor {
 
         info!(
             query_id = self.settings.query_id,
-            wakeup_count = self.workers_condvar.get_wakeup_count(),
-            wait_count = self.workers_condvar.get_wait_count(),
-            wait_time_ms = self.workers_condvar.get_wait_time_ms();
+            wakeup_count = self.workers_condvar.get_total_wakeup_count(),
+            wait_count = self.workers_condvar.get_total_wait_count(),
+            wait_time_ms = self.workers_condvar.get_total_wait_time_ms(),
+            max_wait_time_ms = self.workers_condvar.get_max_wait_time_ms(),
+            worker_stats:? = self.workers_condvar.get_all_worker_stats();
             "Pipeline executor finished"
         );
 

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -22,26 +21,50 @@ use std::time::Instant;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
+/// Per-worker statistics (protected by mutex)
+#[derive(Default)]
+struct WorkerCondvarStats {
+    wakeup_count: usize,
+    wait_count: usize,
+    wait_time_ns: u64,
+    max_wait_time_ns: u64,
+}
+
+struct WorkerCondvarState {
+    signaled: bool,
+    stats: WorkerCondvarStats,
+}
+
 struct WorkerCondvar {
-    mutex: Mutex<bool>,
+    mutex: Mutex<WorkerCondvarState>,
     condvar: Condvar,
 }
 
 impl WorkerCondvar {
     pub fn create() -> WorkerCondvar {
         WorkerCondvar {
-            mutex: Mutex::new(false),
+            mutex: Mutex::new(WorkerCondvarState {
+                signaled: false,
+                stats: WorkerCondvarStats::default(),
+            }),
             condvar: Condvar::new(),
         }
     }
 }
 
+/// Statistics for a single worker
+#[derive(Debug, Clone)]
+pub struct WorkerStats {
+    pub worker_id: usize,
+    pub wakeup_count: usize,
+    pub wait_count: usize,
+    pub wait_time_ms: u64,
+    pub max_wait_time_ms: u64,
+}
+
 pub struct WorkersCondvar {
     waiting_async_task: AtomicUsize,
     workers_condvar: Vec<WorkerCondvar>,
-    wakeup_count: AtomicUsize,
-    wait_count: AtomicUsize,
-    wait_time_ns: AtomicU64,
 }
 
 impl WorkersCondvar {
@@ -55,9 +78,6 @@ impl WorkersCondvar {
         Arc::new(WorkersCondvar {
             workers_condvar,
             waiting_async_task: AtomicUsize::new(0),
-            wakeup_count: AtomicUsize::new(0),
-            wait_count: AtomicUsize::new(0),
-            wait_time_ns: AtomicU64::new(0),
         })
     }
 
@@ -74,38 +94,81 @@ impl WorkersCondvar {
     }
 
     pub fn wakeup(&self, worker_id: usize) {
-        self.wakeup_count.fetch_add(1, Ordering::Relaxed);
-        let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
-        *wait_guard = true;
-        self.workers_condvar[worker_id].condvar.notify_one();
+        let worker = &self.workers_condvar[worker_id];
+        let mut state = worker.mutex.lock();
+        state.stats.wakeup_count += 1;
+        state.signaled = true;
+        worker.condvar.notify_one();
     }
 
     pub fn wait(&self, worker_id: usize, finished: Arc<AtomicBool>) {
-        self.wait_count.fetch_add(1, Ordering::Relaxed);
+        let worker = &self.workers_condvar[worker_id];
         let start = Instant::now();
-        let mut wait_guard = self.workers_condvar[worker_id].mutex.lock();
+        let mut state = worker.mutex.lock();
+        state.stats.wait_count += 1;
 
-        while !*wait_guard && !finished.load(Ordering::SeqCst) {
-            self.workers_condvar[worker_id]
-                .condvar
-                .wait(&mut wait_guard);
+        while !state.signaled && !finished.load(Ordering::SeqCst) {
+            worker.condvar.wait(&mut state);
         }
 
-        *wait_guard = false;
-        self.wait_time_ns
-            .fetch_add(start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        state.signaled = false;
+        let elapsed_ns = start.elapsed().as_nanos() as u64;
+        state.stats.wait_time_ns += elapsed_ns;
+        if elapsed_ns > state.stats.max_wait_time_ns {
+            state.stats.max_wait_time_ns = elapsed_ns;
+        }
     }
 
-    pub fn get_wakeup_count(&self) -> usize {
-        self.wakeup_count.load(Ordering::Relaxed)
+    /// Get statistics for a specific worker
+    pub fn get_worker_stats(&self, worker_id: usize) -> WorkerStats {
+        let worker = &self.workers_condvar[worker_id];
+        let state = worker.mutex.lock();
+        WorkerStats {
+            worker_id,
+            wakeup_count: state.stats.wakeup_count,
+            wait_count: state.stats.wait_count,
+            wait_time_ms: state.stats.wait_time_ns / 1_000_000,
+            max_wait_time_ms: state.stats.max_wait_time_ns / 1_000_000,
+        }
     }
 
-    pub fn get_wait_count(&self) -> usize {
-        self.wait_count.load(Ordering::Relaxed)
+    /// Get statistics for all workers
+    pub fn get_all_worker_stats(&self) -> Vec<WorkerStats> {
+        (0..self.workers_condvar.len())
+            .map(|id| self.get_worker_stats(id))
+            .collect()
     }
 
-    pub fn get_wait_time_ms(&self) -> u64 {
-        self.wait_time_ns.load(Ordering::Relaxed) / 1_000_000
+    /// Get aggregated statistics across all workers
+    pub fn get_total_wakeup_count(&self) -> usize {
+        self.workers_condvar
+            .iter()
+            .map(|w| w.mutex.lock().stats.wakeup_count)
+            .sum()
+    }
+
+    pub fn get_total_wait_count(&self) -> usize {
+        self.workers_condvar
+            .iter()
+            .map(|w| w.mutex.lock().stats.wait_count)
+            .sum()
+    }
+
+    pub fn get_total_wait_time_ms(&self) -> u64 {
+        self.workers_condvar
+            .iter()
+            .map(|w| w.mutex.lock().stats.wait_time_ns)
+            .sum::<u64>()
+            / 1_000_000
+    }
+
+    pub fn get_max_wait_time_ms(&self) -> u64 {
+        self.workers_condvar
+            .iter()
+            .map(|w| w.mutex.lock().stats.max_wait_time_ns)
+            .max()
+            .unwrap_or(0)
+            / 1_000_000
     }
 }
 
