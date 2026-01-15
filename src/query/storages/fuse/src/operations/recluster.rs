@@ -15,9 +15,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::tokio::select;
-use databend_common_base::base::tokio::sync::Semaphore;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
@@ -35,6 +32,9 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 use opendal::Operator;
+use tokio::select;
+use tokio::sync::Semaphore;
+use tokio::sync::mpsc;
 
 use crate::FuseTable;
 use crate::SegmentLocation;

@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
@@ -44,6 +43,7 @@ use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
+use tokio;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorWorkerContext;

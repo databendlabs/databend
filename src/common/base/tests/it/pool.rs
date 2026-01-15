@@ -16,10 +16,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use databend_common_base::base::GlobalSequence;
-use databend_common_base::base::tokio;
 use databend_common_base::containers::ItemManager;
 use databend_common_base::containers::Pool;
 use log::info;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pool() -> anyhow::Result<()> {

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +25,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storages_fuse::TableContext;
 use databend_common_version::BUILD_INFO;
 use databend_query::test_kits::*;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {

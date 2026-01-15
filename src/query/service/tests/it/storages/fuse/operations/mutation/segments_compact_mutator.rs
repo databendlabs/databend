@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -64,6 +63,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentB
 use futures_util::TryStreamExt;
 use rand::Rng;
 use rand::thread_rng;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {

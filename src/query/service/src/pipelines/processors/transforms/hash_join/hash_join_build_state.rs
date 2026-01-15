@@ -21,7 +21,6 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
@@ -56,6 +55,7 @@ use itertools::Itertools;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Barrier;
 
 use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;

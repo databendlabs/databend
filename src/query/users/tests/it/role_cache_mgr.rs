@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
@@ -30,6 +29,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_version::BUILD_INFO;
+use tokio;
 
 pub const CATALOG_DEFAULT: &str = "default";
 

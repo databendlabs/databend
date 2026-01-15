@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_management::*;
 use databend_common_meta_app::principal::AuthInfo;
@@ -23,6 +22,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
+use tokio;
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {

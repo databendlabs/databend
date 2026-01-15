@@ -22,7 +22,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::short_sql;
-use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
@@ -51,6 +50,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use tokio::sync::Mutex as TokioMutex;
 
 use super::CloseReason;
 use super::ExecuteState;

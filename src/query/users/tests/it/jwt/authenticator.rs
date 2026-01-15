@@ -14,7 +14,6 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use databend_common_base::base::tokio;
 use databend_common_config::QueryConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
@@ -23,6 +22,7 @@ use databend_common_users::EnsureUser;
 use databend_common_users::JwtAuthenticator;
 use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
+use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

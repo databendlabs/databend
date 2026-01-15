@@ -16,11 +16,6 @@ use std::io;
 use std::net::Shutdown;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncWriteExt;
-use databend_common_base::base::tokio::io::BufWriter;
-use databend_common_base::base::tokio::net::TcpStream;
-use databend_common_base::base::tokio::net::tcp::OwnedReadHalf;
-use databend_common_base::base::tokio::net::tcp::OwnedWriteHalf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
@@ -43,6 +38,11 @@ use rand::RngCore;
 use rustls::ServerConfig;
 use socket2::SockRef;
 use socket2::TcpKeepalive;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
+use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;

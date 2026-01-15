@@ -14,7 +14,6 @@
 
 use std::str::FromStr;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -28,6 +27,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use jsonb::OwnedJsonb;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> Result<()> {

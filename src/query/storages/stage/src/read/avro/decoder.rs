@@ -19,7 +19,6 @@ use apache_avro::Schema;
 use apache_avro::schema::UnionSchema;
 use apache_avro::types::Value;
 use databend_common_base::base::OrderedFloat;
-use databend_common_base::base::uuid;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
@@ -44,6 +43,7 @@ use databend_common_storage::FileParseError;
 use lexical_core::FromLexical;
 use num_bigint::BigInt;
 use num_traits::NumCast;
+use uuid;
 
 use crate::read::avro::avro_to_jsonb::to_jsonb;
 use crate::read::avro::schema_match::MatchedField;

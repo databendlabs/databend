@@ -58,6 +58,7 @@ siphasher = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
 unicase = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }

@@ -20,7 +20,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
@@ -41,6 +40,7 @@ use databend_query::sessions::QueueData;
 use databend_query::sessions::QueueManager;
 use databend_query::test_kits::TestFixture;
 use log::error;
+use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
 struct TestData<const PASSED: bool = false> {

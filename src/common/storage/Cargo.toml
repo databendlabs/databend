@@ -41,6 +41,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 simple_hll = { workspace = true, features = ["serde_borsh"] }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]

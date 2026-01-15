@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
@@ -56,6 +55,7 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
+use uuid::Uuid;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;

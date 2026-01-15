@@ -12,13 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
+use tokio;
 
 use crate::storages::fuse::utils::do_purge_test;
 

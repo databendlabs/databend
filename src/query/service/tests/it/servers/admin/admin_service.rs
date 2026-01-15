@@ -16,11 +16,11 @@ use std::fs::File;
 use std::io::Read;
 
 use databend_common_base::base::get_free_tcp_port;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_query::servers::Server;
 use databend_query::servers::admin::AdminService;
 use databend_query::test_kits::*;
+use tokio;
 
 use crate::tests::tls_constants::*;
 

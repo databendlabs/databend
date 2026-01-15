@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
@@ -37,6 +36,7 @@ use poem::Request;
 use poem::Route;
 use poem::get;
 use pretty_assertions::assert_eq;
+use tokio;
 use tokio_stream::StreamExt;
 
 async fn get_status(ep: &Route) -> InstanceStatus {

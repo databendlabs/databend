@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactionLimits;
@@ -46,6 +45,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 use rand::Rng;
 use rand::thread_rng;
+use tokio;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
