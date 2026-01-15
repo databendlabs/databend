@@ -26,4 +26,5 @@ pub use block_reader_merge_io::BlockReadResult;
 pub use block_reader_merge_io::DataItem;
 pub use block_reader_native::NativeReaderExt;
 pub use block_reader_native::NativeSourceData;
+pub use parquet::RowSelection;
 pub use parquet::column_chunks_to_record_batch;

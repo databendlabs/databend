@@ -234,7 +234,7 @@ impl Processor for DeserializeDataTransform {
                         data_block = virtual_reader.deserialize_virtual_columns(
                             data_block,
                             virtual_data,
-                            row_selection,
+                            row_selection.as_ref().map(|s| s.selection.clone()),
                         )?;
                     }
 

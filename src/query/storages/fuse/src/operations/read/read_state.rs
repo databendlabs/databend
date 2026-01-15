@@ -37,12 +37,11 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use parquet::arrow::arrow_reader::RowSelection;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
-use crate::operations::read::util::bitmap_to_row_selection;
+use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
 
 #[derive(Clone)]
@@ -197,12 +196,12 @@ impl ReadState {
 
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        let row_selection = bitmap_selection.as_ref().map(bitmap_to_row_selection);
+        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
 
         let remain_block = self.remain_reader.deserialize_part(
             part,
             remain_columns_chunks,
-            row_selection.clone(),
+            row_selection.as_ref(),
         )?;
 
         let mut merged_fields = self.pre_reader.data_fields();

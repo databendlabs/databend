@@ -30,13 +30,13 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
-use parquet::arrow::arrow_reader::RowSelection;
-
 mod adapter;
 mod deserialize;
+mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
+pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -47,7 +47,7 @@ impl BlockReader {
         &self,
         part: &FuseBlockPartInfo,
         column_chunks: HashMap<ColumnId, DataItem>,
-        selection: Option<RowSelection>,
+        selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
         self.deserialize_parquet_chunks(
             part.nums_rows,
@@ -58,6 +58,7 @@ impl BlockReader {
             selection,
         )
     }
+
     pub fn deserialize_parquet_chunks(
         &self,
         num_rows: usize,
@@ -65,17 +66,23 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
-        selection: Option<RowSelection>,
+        selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
+        let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
+        // If projection is empty, return a DataBlock with the appropriate row count but no columns
+        if self.projected_schema.fields.is_empty() {
+            return Ok(DataBlock::new(vec![], result_rows));
+        }
+
         let has_selection = selection.is_some();
+        let parquet_selection = selection.map(|s| s.selection.clone());
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
-            selection,
+            parquet_selection,
         )?;
-        let num_rows = record_batch.num_rows();
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
@@ -134,9 +141,9 @@ impl BlockReader {
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
-            entries.push(BlockEntry::new(value, || (data_type, num_rows)));
+            entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
-        Ok(DataBlock::new(entries, num_rows))
+        Ok(DataBlock::new(entries, result_rows))
     }
 }
 

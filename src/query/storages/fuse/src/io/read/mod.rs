@@ -30,6 +30,7 @@ pub use block::BlockReader;
 pub use block::DataItem;
 pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
+pub use block::RowSelection;
 pub use block::column_chunks_to_record_batch;
 pub use bloom::BloomBlockFilterReader;
 pub use inverted_index::InvertedIndexReader;
