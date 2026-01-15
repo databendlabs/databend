@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
@@ -35,6 +34,7 @@ use enum_as_inner::EnumAsInner;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::mpsc::Receiver;
 
 use super::Plan;
 use crate::INSERT_NAME;

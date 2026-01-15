@@ -423,7 +423,7 @@ impl FuseTable {
                                 self.table_info.ident
                             );
 
-                            databend_common_base::base::tokio::time::sleep(d).await;
+                            tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             let latest_fuse_table =
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;

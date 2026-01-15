@@ -12,9 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_query::test_kits::*;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {

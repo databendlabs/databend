@@ -22,7 +22,6 @@ use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -166,6 +165,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]

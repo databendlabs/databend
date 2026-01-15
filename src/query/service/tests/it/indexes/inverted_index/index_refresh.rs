@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -41,6 +40,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use tantivy::schema::IndexRecordOption;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {

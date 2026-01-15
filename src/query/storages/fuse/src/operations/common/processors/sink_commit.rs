@@ -739,7 +739,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                                     name.as_str(),
                                     table_info.ident
                                 );
-                                databend_common_base::base::tokio::time::sleep(d).await;
+                                tokio::time::sleep(d).await;
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }

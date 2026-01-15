@@ -17,12 +17,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use arrow_flight::flight_service_server::FlightServiceServer;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::Notify;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use tokio;
+use tokio::sync::Notify;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;

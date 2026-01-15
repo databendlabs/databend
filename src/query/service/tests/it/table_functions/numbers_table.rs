@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::Result;
@@ -26,6 +25,7 @@ use databend_query::table_functions::generate_numbers_parts;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {

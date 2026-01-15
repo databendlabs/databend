@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use chrono::DateTime;
-use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
@@ -38,6 +37,7 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use futures_util::future;
+use tokio::sync::OwnedSemaphorePermit;
 
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;

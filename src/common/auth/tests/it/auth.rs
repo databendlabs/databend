@@ -15,7 +15,7 @@
 use chrono::Utc;
 use databend_common_auth::RefreshableToken;
 use databend_common_auth::TokenFile;
-use databend_common_base::base::tokio;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn direct_token() {

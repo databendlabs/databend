@@ -18,7 +18,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,6 +29,7 @@ use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
 use log::info;
+use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
 use crate::pruning::PruningContext;

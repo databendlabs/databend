@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::Receiver;
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -47,6 +46,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use tokio::sync::Semaphore;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;

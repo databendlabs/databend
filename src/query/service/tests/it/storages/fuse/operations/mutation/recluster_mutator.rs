@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +47,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use rand::Rng;
 use rand::thread_rng;
+use tokio;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;

@@ -20,7 +20,6 @@ use std::time::Duration;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::escape_for_key;
-use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
@@ -47,6 +46,7 @@ use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::txn_op_response::Response;
 use log::error;
 use log::info;
+use tokio;
 
 use crate::warehouse::WarehouseApi;
 use crate::warehouse::warehouse_api::SelectedNode;

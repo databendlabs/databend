@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_base::base::Profiling;
-use databend_common_base::base::tokio::time::Duration;
 use log::debug;
 use poem::IntoResponse;
 use poem::error::InternalServerError;
 use poem::web::Query;
+use tokio::time::Duration;
 
 use crate::debug::PProfRequest;
 

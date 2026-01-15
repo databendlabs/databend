@@ -23,7 +23,6 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
@@ -41,6 +40,7 @@ use futures::StreamExt;
 use futures::future::Either;
 use log::info;
 use parking_lot::RwLock;
+use tokio;
 
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license_manager::LicenseManager;
@@ -23,6 +22,7 @@ use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::UnixTimeStamp;
+use tokio;
 
 fn build_custom_claims(
     license_type: String,

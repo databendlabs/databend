@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -27,6 +26,7 @@ use databend_query::spillers::SpillerType;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::config_with_spill;
 use databend_storages_common_cache::TempDirManager;
+use tokio;
 
 /// ASCII flow of the test (data view):
 ///

@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use databend_common_ast::ast::UriLocation;
-use databend_common_base::base::tokio;
+use tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;

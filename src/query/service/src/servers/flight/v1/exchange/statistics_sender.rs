@@ -18,8 +18,6 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
@@ -31,6 +29,8 @@ use databend_common_pipeline::core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
+use tokio::sync::oneshot;
+use tokio::time::sleep;
 
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::FlightExchange;

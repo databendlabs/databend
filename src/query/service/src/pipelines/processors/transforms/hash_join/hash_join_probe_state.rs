@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
@@ -43,6 +42,7 @@ use databend_common_sql::ColumnSet;
 use itertools::Itertools;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::sync::Barrier;
 
 use super::ProbeState;
 use super::ProcessState;

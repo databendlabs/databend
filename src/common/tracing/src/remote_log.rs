@@ -33,7 +33,6 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use async_channel::bounded;
 use concurrent_queue::ConcurrentQueue;
-use databend_common_base::base::uuid;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -50,6 +49,7 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
+use uuid;
 
 use crate::Config;
 use crate::GlobalLogger;

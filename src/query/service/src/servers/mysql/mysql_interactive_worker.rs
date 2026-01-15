@@ -19,7 +19,6 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -48,6 +47,7 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::Rng as _;
 use rand::thread_rng;
+use tokio::io::AsyncWrite;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
