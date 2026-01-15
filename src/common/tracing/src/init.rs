@@ -19,8 +19,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
@@ -30,6 +28,8 @@ use opendal::Operator;
 use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::WithTonicConfig;
+use tokio;
+use tokio::sync::RwLock;
 
 use crate::Config;
 use crate::config::LogFormat;

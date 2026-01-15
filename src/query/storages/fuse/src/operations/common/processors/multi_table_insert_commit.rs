@@ -195,7 +195,7 @@ impl AsyncSink for CommitMultiTableInsert {
                         duration.as_millis(),
                         retries,
                     );
-                    databend_common_base::base::tokio::time::sleep(duration).await;
+                    tokio::time::sleep(duration).await;
                     for (tid, seq, meta) in update_failed_tbls {
                         let table = self.tables.get_mut(&tid).unwrap();
                         *table = table

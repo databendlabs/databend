@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
@@ -23,6 +22,7 @@ use parquet::arrow::arrow_reader::ArrowReaderMetadata;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
+use tokio;
 
 use crate::parquet_rs::data::Scenario;
 use crate::parquet_rs::data::make_test_file_page;

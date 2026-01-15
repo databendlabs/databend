@@ -24,7 +24,6 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,7 @@ use hyper::Uri;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::connect::dns::Name;
 use log::info;
+use tokio::task::JoinHandle;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;

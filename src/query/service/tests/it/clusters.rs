@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_cluster_discovery() -> Result<()> {

@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -50,6 +49,7 @@ use opendal::Operator;
 use parquet::format::FileMetaData;
 use sysinfo::System;
 use sysinfo::get_current_pid;
+use tokio;
 use uuid::Uuid;
 
 // NOTE:

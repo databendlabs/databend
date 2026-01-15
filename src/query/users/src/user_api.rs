@@ -17,7 +17,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -52,6 +51,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use log::debug;
+use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;

@@ -496,7 +496,6 @@ mod test {
     use arrow_schema::Field;
     use arrow_schema::Schema;
     use bytes::Bytes;
-    use databend_common_base::base::tokio;
     use opendal::Operator;
     use opendal::services::Memory;
     use parquet::arrow::ArrowWriter;
@@ -504,6 +503,7 @@ mod test {
     use parquet::file::metadata::RowGroupMetaData;
     use parquet::schema::types::*;
     use rand::Rng;
+    use tokio;
 
     use super::*;
 

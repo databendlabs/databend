@@ -14,7 +14,6 @@
 
 use std::collections::VecDeque;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -34,6 +33,7 @@ use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use itertools::Itertools;
 use rand::Rng;
 use rand::rngs::ThreadRng;
+use tokio;
 
 struct TestStream {
     data: VecDeque<DataBlock>,

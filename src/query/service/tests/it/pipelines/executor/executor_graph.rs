@@ -16,10 +16,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
-use databend_common_base::base::tokio::sync::mpsc::Sender;
-use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -40,6 +36,10 @@ use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use petgraph::stable_graph::NodeIndex;
+use tokio;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::channel;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {

@@ -18,7 +18,6 @@ use std::str::FromStr;
 
 use arrow_flight::Empty;
 use arrow_flight::flight_service_client::FlightServiceClient;
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
@@ -26,6 +25,7 @@ use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_query::servers::flight::FlightService;
 use databend_query::test_kits::*;
+use tokio;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;

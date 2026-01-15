@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::error;
 use opensrv_mysql::*;
+use tokio::io::AsyncWrite;
 
 pub struct DFInitResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<InitWriter<'a, W>>,

@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dashmap::DashMap;
-use databend_common_base::base::tokio::task;
-use databend_common_base::base::tokio::time::sleep;
+use tokio::task;
+use tokio::time::sleep;
 
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;

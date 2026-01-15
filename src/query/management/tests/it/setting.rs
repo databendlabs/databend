@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserSetting;
@@ -25,6 +24,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
 use fastrace::func_name;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {

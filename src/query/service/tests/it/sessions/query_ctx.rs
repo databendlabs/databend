@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
@@ -20,6 +19,7 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

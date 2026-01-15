@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -51,6 +50,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
+use tokio;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,

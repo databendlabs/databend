@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,6 +24,7 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> Result<()> {

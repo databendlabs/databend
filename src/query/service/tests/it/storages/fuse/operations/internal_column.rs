@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -44,6 +43,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
+use tokio;
 
 fn expected_data_block(
     parts: &Vec<PartInfoPtr>,

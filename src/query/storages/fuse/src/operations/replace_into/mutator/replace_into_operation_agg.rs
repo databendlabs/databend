@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::Projection;
@@ -55,6 +54,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::io::BlockBuilder;

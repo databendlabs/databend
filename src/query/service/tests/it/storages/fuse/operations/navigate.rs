@@ -15,7 +15,6 @@
 use std::time::Duration;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +25,7 @@ use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_navigate() -> Result<()> {

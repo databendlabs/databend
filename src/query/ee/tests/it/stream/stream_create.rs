@@ -14,11 +14,11 @@
 
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::generate_snapshots;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_stream_create() -> Result<()> {
