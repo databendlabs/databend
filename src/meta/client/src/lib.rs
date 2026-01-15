@@ -167,10 +167,10 @@ use semver::Version;
 /// - 2025-10-16: since 1.2.828
 ///   🖥 server: rename `FetchAddU64` to `FetchIncreaseU64`, add `max_value`.
 ///
-/// - 2026-01-12: since TODO
+/// - 2026-01-12: since 1.2.869
 ///   🖥 server: add `kv_list` gRPC API: in protobuf, with `limit`, return stream.
 ///
-/// - 2026-01-13: since TODO
+/// - 2026-01-13: since 1.2.869
 ///   🖥 server: add `kv_get_many` gRPC API: in protobuf, receive stream, return stream.
 ///
 /// Server feature set:
