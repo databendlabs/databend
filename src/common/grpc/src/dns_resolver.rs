@@ -224,14 +224,6 @@ impl ConnectionFactory {
                     endpoint = endpoint.timeout(timeout);
                 }
 
-                // To avoid too_many_internal_resets
-                endpoint = endpoint
-                    .tcp_nodelay(true)
-                    .http2_adaptive_window(true)
-                    .http2_keep_alive_interval(std::time::Duration::from_secs(30))
-                    .keep_alive_timeout(std::time::Duration::from_secs(10))
-                    .keep_alive_while_idle(true);
-
                 Ok(endpoint)
             }
         }

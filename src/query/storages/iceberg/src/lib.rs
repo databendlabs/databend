@@ -19,7 +19,6 @@
 #![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::collapsible_if, clippy::diverging_sub_expression)]
 
-mod append;
 pub(crate) mod cache;
 mod catalog;
 mod database;
@@ -29,9 +28,6 @@ mod predicate;
 mod statistics;
 pub mod table;
 
-pub use append::IcebergCommitSink;
-pub use append::IcebergDataFileMeta;
-pub use append::IcebergDataFileWriter;
 pub use catalog::ICEBERG_CATALOG;
 pub use catalog::IcebergMutableCatalog;
 pub use catalog::IcebergMutableCreator;

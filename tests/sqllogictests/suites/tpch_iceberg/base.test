@@ -63,13 +63,13 @@ select id, item['name'], item['age'] from t_nested;
 4 NULL NULL
 
 
-query T?T rowsort
-select 't_nested', item, item['name'] from t_nested;
+query ITI rowsort
+select item, item['name'] from t_nested;
 ----
-t_nested ("Alice",30) Alice
-t_nested ("Bob",25) Bob
-t_nested ("Charlie",35) Charlie
-t_nested NULL NULL
+('Alice',30) Alice
+('Bob',25) Bob
+('Charlie',35) Charlie
+NULL NULL
 
 query ITII rowsort
 select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from t_nested;
@@ -81,7 +81,7 @@ select id, item_2['item']['name'], item_2['item']['level'], item_2['level'] from
 
 # test_merge_on_read_deletes: DELETE FROM test_merge_on_read_deletes WHERE letter = 'k' OR number = 3 OR (number > 4 AND number < 7)
 # Tips: `2023-03-30 6 z` is new row
-query ?IT rowsort
+query TIT rowsort
 select * from test_merge_on_read_deletes;
 ----
 2023-03-01 1 a
@@ -95,7 +95,7 @@ select * from test_merge_on_read_deletes;
 2023-03-30 6 z
 
 # test projection
-query ? rowsort
+query T rowsort
 select dt from test_merge_on_read_deletes;
 ----
 2023-03-01
@@ -107,180 +107,3 @@ select dt from test_merge_on_read_deletes;
 2023-03-10
 2023-03-12
 2023-03-30
-
-# ========================================
-# Iceberg Table Write Tests
-# ========================================
-
-statement ok
-drop table if exists t_write_basic;
-
-statement ok
-create table t_write_basic(id int, name string, score double) engine=ICEBERG;
-
-query TTTTT
-desc t_write_basic;
-----
-id INT YES NULL (empty)
-name VARCHAR YES NULL (empty)
-score DOUBLE YES NULL (empty)
-
-statement ok
-insert into t_write_basic values (1, 'alice', 85.5);
-
-query ITR
-select * from t_write_basic;
-----
-1 alice 85.5
-
-# Test multiple inserts
-statement ok
-insert into t_write_basic values (2, 'bob', 90.0), (3, 'charlie', 75.5);
-
-query ITR rowsort
-select * from t_write_basic;
-----
-1 alice 85.5
-2 bob 90.0
-3 charlie 75.5
-
-statement ok
-drop table if exists t_write_types;
-
-statement ok
-create table t_write_types(
-    c_int int,
-    c_bigint bigint,
-    c_double double,
-    c_string string,
-    c_date date,
-    c_bool boolean
-) engine=ICEBERG;
-
-statement ok
-insert into t_write_types values (1, 100, 2.5, 'hello', '2024-01-01', true);
-
-query IIRTB
-select c_int, c_bigint, c_double, c_string, c_bool from t_write_types;
-----
-1 100 2.5 hello 1
-
-statement ok
-drop table if exists t_write_partitioned;
-
-statement ok
-create table t_write_partitioned(id int, category string, amount double) engine=ICEBERG partition by (category);
-
-query TTTTT
-desc t_write_partitioned;
-----
-id INT YES NULL (empty)
-category VARCHAR YES NULL (empty)
-amount DOUBLE YES NULL (empty)
-
-statement ok
-insert into t_write_partitioned values (1, 'A', 100.5);
-
-query ITR
-select * from t_write_partitioned;
-----
-1 A 100.5
-
-# Test insert into partitioned table with multiple partitions
-statement ok
-insert into t_write_partitioned values (2, 'B', 200.0), (3, 'A', 150.5), (2, 'T', 333), (4, 'C', 400.0);
-
-
-query ITR rowsort
-select * from t_write_partitioned;
-----
-1 A 100.5
-2 B 200.0
-2 T 333.0
-3 A 150.5
-4 C 400.0
-
-# ========================================
-# Iceberg Table Write Tests - Two Field Partitioning
-# ========================================
-
-statement ok
-drop table if exists t_write_two_part;
-
-statement ok
-create table t_write_two_part(id int, region string, year int, amount double) engine=ICEBERG partition by (region, year);
-
-query TTTTT
-desc t_write_two_part;
-----
-id INT YES NULL (empty)
-region VARCHAR YES NULL (empty)
-year INT YES NULL (empty)
-amount DOUBLE YES NULL (empty)
-
-# Insert with various partition combinations
-statement ok
-insert into t_write_two_part values 
-    (1, 'US', 2023, 100.5),
-    (2, 'EU', 2023, 200.5),
-    (3, 'US', 2024, 300.5),
-    (4, 'EU', 2024, 400.5),
-    (5, 'ASIA', 2023, 500.5);
-
-query ITIR rowsort
-select * from t_write_two_part;
-----
-1 US 2023 100.5
-2 EU 2023 200.5
-3 US 2024 300.5
-4 EU 2024 400.5
-5 ASIA 2023 500.5
-
-# Test additional insert into existing partitions
-statement ok
-insert into t_write_two_part values 
-    (6, 'US', 2023, 600.5),
-    (7, 'EU', 2024, 700.5);
-
-query ITIR rowsort
-select * from t_write_two_part where region = 'US';
-----
-1 US 2023 100.5
-3 US 2024 300.5
-6 US 2023 600.5
-
-# Test null values in partition columns
-statement ok
-insert into t_write_two_part values 
-    (8, null, 2023, 800.5),
-    (9, 'US', null, 900.5),
-    (10, null, null, 1000.5);
-
-query ITIR rowsort
-select * from t_write_two_part where region is null or year is null;
-----
-10 NULL NULL 1000.5
-8 NULL 2023 800.5
-9 US NULL 900.5
-
-# Verify total count
-query I
-select count(*) from t_write_two_part;
-----
-10
-
-statement ok
-drop table t_write_two_part;
-
-# ========================================
-# Cleanup
-# ========================================
-
-statement ok
-drop table t_write_basic;
-
-statement ok
-drop table t_write_types;
-
-statement ok
-drop table t_write_partitioned;

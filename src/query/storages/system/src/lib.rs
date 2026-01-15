@@ -138,6 +138,6 @@ pub use tasks_table::parse_tasks_to_datablock;
 pub use temp_files_table::TempFilesTable;
 pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;
-pub use util::generate_default_catalog_meta;
+pub use util::generate_catalog_meta;
 pub use virtual_columns_table::VirtualColumnsTable;
 pub use zero_table::ZeroTable;
