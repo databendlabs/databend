@@ -1,4 +1,4 @@
-query
+query TIT
 SELECT metadata$filename, metadata$file_row_number, $1 FROM '@data_s3/avro/' ( FILES => ('map.avro', 'number.avro', 'array.avro', 'nested_record.avro'), FILE_FORMAT => 'avro') order by metadata$filename, metadata$file_row_number
 ----
 testbucket/data/avro/array.avro 0 {"tags":["tall","rich","handsome"]}
@@ -16,7 +16,7 @@ create or replace table t(scores variant, filename string, file_row_number int)
 statement ok
 copy into t from (SELECT $1, metadata$filename, metadata$file_row_number FROM '@data_s3/avro/map.avro') file_format=(type=avro)
 
-query
+query TTI
 select * from t order by filename,file_row_number
 ----
 {"scores":{"math":100}} testbucket/data/avro/map.avro 0
