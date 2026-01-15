@@ -230,3 +230,55 @@ X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
 
 statement ok
 drop database sample_test
+
+statement ok
+set enable_experiment_aggregate = 1;
+
+statement ok
+set force_aggregate_shuffle_mode = 'bucket';
+
+query I
+select count(*) from (select number from numbers(1) group by number);
+----
+1
+
+query I
+select count(*) from (select number from numbers(2) group by number);
+----
+2
+
+query I
+select count(*) from (select number from numbers(2000000) group by number);
+----
+2000000
+
+
+## Aggregation without Exchange source
+query III
+SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+----
+1 0 0
+
+statement ok
+set force_aggregate_shuffle_mode = 'row';
+
+query I
+select count(*) from (select number from numbers(1) group by number);
+----
+1
+
+query I
+select count(*) from (select number from numbers(2) group by number);
+----
+2
+
+query I
+select count(*) from (select number from numbers(2000000) group by number);
+----
+2000000
+
+## Aggregation without Exchange source
+query III
+SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+----
+1 0 0
