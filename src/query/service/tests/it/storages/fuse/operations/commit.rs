@@ -209,11 +209,8 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
     // let's check it out
     let qry = format!("select * from {}.{} order by id ", db, tbl);
-    let blocks = fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    let blocks = strm.try_collect::<Vec<DataBlock>>().await?;
 
     let expected = vec![
         "+----------+----------+",
@@ -505,6 +502,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_cache_key_extra(&self, extra: String) {
+        self.ctx.add_cache_key_extra(extra)
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        self.ctx.get_cache_key_extras()
+    }
+
     fn get_cacheable(&self) -> bool {
         todo!()
     }
@@ -725,6 +730,7 @@ impl TableContext for CtxDelegation {
         _catalog: &str,
         _database: &str,
         _table: &str,
+        _branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         todo!()

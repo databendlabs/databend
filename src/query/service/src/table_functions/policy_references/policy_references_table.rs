@@ -50,6 +50,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::processor::ProcessorPtr;
@@ -327,7 +328,7 @@ async fn collect_policy_reference_rows(
                             policy_id,
                             table_id: 0,
                         });
-                    meta.list_pb_vec(&DirName::new(ident))
+                    meta.list_pb_vec(ListOptions::unlimited(&DirName::new(ident)))
                         .await?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)
@@ -341,7 +342,7 @@ async fn collect_policy_reference_rows(
                             table_id: 0,
                         },
                     );
-                    meta.list_pb_vec(&DirName::new(ident))
+                    meta.list_pb_vec(ListOptions::unlimited(&DirName::new(ident)))
                         .await?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)

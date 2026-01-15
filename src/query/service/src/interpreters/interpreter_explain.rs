@@ -346,7 +346,13 @@ impl ExplainInterpreter {
             && self.ctx.get_cacheable()
             && formatted_ast.is_some()
         {
-            let key = gen_result_cache_key(formatted_ast.as_ref().unwrap());
+            let extras = self.ctx.get_cache_key_extras();
+            let key_source = if extras.is_empty() {
+                formatted_ast.as_ref().unwrap().clone()
+            } else {
+                format!("{}|{}", formatted_ast.as_ref().unwrap(), extras.join("|"))
+            };
+            let key = gen_result_cache_key(&key_source);
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),

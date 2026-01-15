@@ -151,23 +151,21 @@ async fn test_refresh_agg_index() -> Result<()> {
             indexes[0].clone()
         };
 
-        let data_blocks: Vec<DataBlock> = fixture
+        let strm = fixture
             .execute_query(&format!(
                 "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 and _block_name = '{}' GROUP BY b",
                 block_name_prefix.join(&new_block).to_str().unwrap()
             ))
-            .await?
-            .try_collect()
             .await?;
+        let data_blocks: Vec<DataBlock> = strm.try_collect().await?;
 
-        let agg_data_blocks: Vec<DataBlock> = fixture
+        let strm = fixture
             .execute_query(&format!(
                 "SELECT * FROM 'fs://{}'",
                 agg_index_path.join(&new_agg_index).to_str().unwrap()
             ))
-            .await?
-            .try_collect()
             .await?;
+        let agg_data_blocks: Vec<DataBlock> = strm.try_collect().await?;
 
         assert_two_blocks_sorted_eq_with_name(
             "refresh index again",

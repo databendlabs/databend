@@ -34,6 +34,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -102,13 +103,13 @@ impl StageApi for StageMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_stage(&self, name: &str) -> Result<StageInfo> {
+    async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)> {
         let ident = self.stage_ident(name);
         let res = self.kv_api.get_pb(&ident).await?;
         let seq_value = res
             .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
-        Ok(seq_value.data)
+        Ok((seq_value.seq, seq_value.data))
     }
 
     #[async_backtrace::framed]
@@ -116,7 +117,10 @@ impl StageApi for StageMgr {
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let dir_name = DirName::new(self.stage_ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let stages = values.try_collect().await?;
 
         Ok(stages)
@@ -138,7 +142,10 @@ impl StageApi for StageMgr {
             };
 
             // list all stage file keys, and delete them
-            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix).await?;
+            let file_keys = self
+                .kv_api
+                .list_kv_collect(ListOptions::unlimited(&file_key_prefix))
+                .await?;
             let mut dels: Vec<TxnOp> = file_keys
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))
@@ -163,6 +170,27 @@ impl StageApi for StageMgr {
         Err(ErrorCode::TxnRetryMaxTimes(
             TxnRetryMaxTimes::new("drop_stage", TXN_MAX_RETRY_TIMES).to_string(),
         ))
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn update_stage(&self, stage: StageInfo, seq: u64) -> Result<()> {
+        let ident = self.stage_ident(&stage.stage_name);
+        let txn_req = TxnRequest::new(vec![txn_cond_eq_seq(&ident, seq)], vec![txn_op_put(
+            &ident,
+            serialize_struct(&stage, ErrorCode::IllegalUserStageFormat, || "")?,
+        )]);
+        let tx_reply = self.kv_api.transaction(txn_req).await?;
+        let (succ, _) = unpack_txn_reply(tx_reply);
+
+        if succ {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownStage(format!(
+                "Stage '{}' was modified concurrently, please retry.",
+                stage.stage_name
+            )))
+        }
     }
 
     #[async_backtrace::framed]
@@ -232,7 +260,10 @@ impl StageApi for StageMgr {
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await?;
         let files = values.try_collect().await?;
 
         Ok(files)

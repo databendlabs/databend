@@ -16,8 +16,11 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use chrono::Utc;
+use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::TxnReply;
@@ -29,6 +32,8 @@ use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -72,49 +77,20 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
         );
 
         self.inspect(|response| {
-            let forwarded_leader = GrpcHelper::get_response_meta_leader(response);
+            let Some(leader) = GrpcHelper::parse_leader_from_metadata(response.metadata()) else {
+                return;
+            };
 
-            // `leader` is set iff the request is forwarded by a follower to a leader
-            if let Some(leader) = forwarded_leader {
-                // TODO: here there is a lock?
-                info!(
-                    "{client} update_client: received forward_to_leader({}) for further RPC, endpoints: {}",
-                    leader,
-                    &*client.endpoints.lock(),
-                );
-
-                let update_leader_res = {
-                    let mut endpoints = client.endpoints.lock();
-                    let set_res = endpoints.set_current(Some(leader.to_string()));
-
-                    if let Err(ref e) = set_res {
-                        error!("fail to update leader: {:?}; endpoints: {}", e, endpoints);
-                    }
-
-                    set_res
-                };
-
-                match update_leader_res {
-                    Ok(prev) => {
-                        info!(
-                            "{client} update_client: switch to use leader({}) for further RPC, previous: {}",
-                            leader, prev.display(),
-                        );
-                    }
-                    Err(e) => {
-                        error!(
-                            "{client} update_client: failed to update leader: {:?}, error: {}",
-                            leader,
-                            e,
-                        );
-                    }
-                }
-            }
+            client.try_set_leader(&leader, "response");
         })
-            .inspect_err(|status| {
-                warn!("{client} update_client: set received error: {:?}", status);
-                client.set_error(status.clone());
-            })
+        .inspect_err(|status| {
+            if let Some(leader) = GrpcHelper::parse_leader_from_metadata(status.metadata()) {
+                client.try_set_leader(&leader, "error status");
+            }
+
+            warn!("{client} update_client: received error: {:?}", status);
+            client.set_error(status.clone());
+        })
     }
 }
 
@@ -149,8 +125,11 @@ pub struct EstablishedClient {
     /// A unique identifier for the client, used to distinguish between different clients.
     uniq: u64,
 
-    /// The timestamp when this client was created.
+    /// The timestamp when this client was created (human-readable for logging).
     created_at: String,
+
+    /// The instant when this client was created (for TTL checking).
+    created_instant: Instant,
 }
 
 impl fmt::Display for EstablishedClient {
@@ -182,6 +161,7 @@ impl EstablishedClient {
         // Get current timestamp in human-readable string
         let utc_time = Utc::now();
         let created_at = utc_time.format("%Y-%m-%d-%H:%M:%S-UTC").to_string();
+        let created_instant = Instant::now();
 
         let endpoints_string = format!("{}", &*endpoints.lock());
 
@@ -195,6 +175,7 @@ impl EstablishedClient {
             error: Arc::new(Mutex::new(None)),
             uniq,
             created_at,
+            created_instant,
         };
 
         info!("Created: {client}, features={:?}", client.features);
@@ -236,6 +217,36 @@ impl EstablishedClient {
         *self.error.lock() = Some(error);
     }
 
+    /// Check if this client has exceeded its TTL (time-to-live).
+    ///
+    /// Returns `true` if the client has been alive longer than the specified TTL.
+    /// This is used to force reconnection periodically to prevent h2 stream reset
+    /// accumulation that can lead to `too_many_internal_resets` errors.
+    pub(crate) fn is_expired(&self, ttl: Duration) -> bool {
+        self.created_instant.elapsed() > ttl
+    }
+
+    /// Try to update the current endpoint to the leader.
+    fn try_set_leader(&self, leader: &Endpoint, ctx: &str) {
+        info!(
+            "{self} update_client: received leader({leader}) from {ctx}, endpoints: {}",
+            &*self.endpoints.lock(),
+        );
+
+        let mut endpoints = self.endpoints.lock();
+        match endpoints.set_current(Some(leader.to_string())) {
+            Ok(prev) => {
+                info!(
+                    "{self} update_client: switched to leader({leader}), previous: {}",
+                    prev.display()
+                );
+            }
+            Err(e) => {
+                error!("{self} update_client: failed to set leader({leader}): {e}");
+            }
+        }
+    }
+
     pub(crate) fn take_error(&self) -> Option<Status> {
         self.error.lock().take()
     }
@@ -260,6 +271,22 @@ impl EstablishedClient {
     ) -> Result<Response<Streaming<StreamItem>>, Status> {
         let resp = self.client.kv_read_v1(request).await;
         resp.update_client(self)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn kv_list(
+        &mut self,
+        request: impl tonic::IntoRequest<KvListRequest>,
+    ) -> Result<Response<Streaming<StreamItem>>, Status> {
+        self.client.kv_list(request).await.update_client(self)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn kv_get_many(
+        &mut self,
+        request: impl tonic::IntoStreamingRequest<Message = KvGetManyRequest>,
+    ) -> Result<Response<Streaming<StreamItem>>, Status> {
+        self.client.kv_get_many(request).await.update_client(self)
     }
 
     #[async_backtrace::framed]

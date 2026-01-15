@@ -21,6 +21,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -72,7 +73,7 @@ impl SettingMgr {
     #[fastrace::trace]
     pub async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let prefix = self.setting_prefix();
-        let mut strm = self.kv_api.list_kv(&prefix).await?;
+        let mut strm = self.kv_api.list_kv(ListOptions::unlimited(&prefix)).await?;
 
         let mut settings = Vec::new();
         while let Some(item) = strm.try_next().await? {

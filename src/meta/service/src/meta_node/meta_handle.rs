@@ -23,7 +23,6 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_types::AppliedState;
@@ -37,6 +36,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -45,15 +45,17 @@ use databend_common_meta_types::raft_types::Fatal;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::Wait;
+use databend_common_meta_types::raft_types::WatchReceiver;
 use databend_common_meta_types::sys_data::SysData;
+use display_more::DisplayOptionExt;
 use futures::Stream;
 use futures::stream::BoxStream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::sync::watch;
 use tonic::Status;
 
 use crate::analysis::count_prefix::count_prefix;
+use crate::analysis::request_histogram;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_node::errors::MetaNodeStopped;
@@ -135,14 +137,21 @@ impl MetaHandle {
         &self,
         upsert: UpsertKV,
     ) -> Result<Result<UpsertKVReply, MetaAPIError>, MetaNodeStopped> {
+        let histogram_label = request_histogram::label_for_upsert(&upsert);
+        let log_info = format!("UpsertKV: {:?}", upsert);
         self.request(move |meta_node| {
             let fu = async move {
-                meta_node
-                    .kv_api()
-                    .upsert_kv(upsert.clone())
-                    .log_elapsed_info(format!("UpsertKV: {:?}", upsert))
-                    .await
-            };
+                let ent = LogEntry::new(Cmd::UpsertKV(upsert));
+                let rst = meta_node.write(ent).await?;
+                match rst {
+                    AppliedState::KV(x) => Ok(x),
+                    _ => unreachable!("expect AppliedState::KV"),
+                }
+            }
+            .log_elapsed_info(log_info)
+            .with_timing(move |_output, total, _busy| {
+                request_histogram::record(&histogram_label, total);
+            });
 
             Box::pin(fu)
         })
@@ -164,11 +173,15 @@ impl MetaHandle {
     > {
         self.request(move |meta_node| {
             let req = ForwardRequest::new(1, req);
+            let histogram_label = request_histogram::label_for_read(&req.body);
 
             let fu = async move {
                 meta_node
                     .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
                     .log_elapsed_info(format!("ReadRequest: {:?}", req))
+                    .with_timing(|_output, total, _busy| {
+                        request_histogram::record(&histogram_label, total);
+                    })
                     .await
             };
 
@@ -177,10 +190,70 @@ impl MetaHandle {
         .await
     }
 
+    pub async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let histogram_label = "kv_list";
+
+        let res = self
+            .request(move |meta_node| {
+                let fu = async move {
+                    meta_node
+                        .handle_kv_list(prefix.clone(), limit)
+                        .log_elapsed_info(format!(
+                            "KvList: prefix={}, limit={}",
+                            prefix,
+                            limit.display()
+                        ))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(histogram_label, total);
+                        })
+                        .await
+                };
+                Box::pin(fu)
+            })
+            .await;
+
+        match res {
+            Ok(inner) => inner,
+            Err(stopped) => Err(Status::unavailable(stopped.to_string())),
+        }
+    }
+
+    pub async fn handle_kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let histogram_label = "kv_get_many";
+
+        let res = self
+            .request(move |meta_node| {
+                let fu = async move {
+                    meta_node
+                        .handle_kv_get_many(input)
+                        .log_elapsed_info("KvGetMany")
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(histogram_label, total);
+                        })
+                        .await
+                };
+                Box::pin(fu)
+            })
+            .await;
+
+        match res {
+            Ok(inner) => inner,
+            Err(stopped) => Err(Status::unavailable(stopped.to_string())),
+        }
+    }
+
     pub async fn handle_transaction(
         &self,
         txn: TxnRequest,
     ) -> Result<Result<(Option<Endpoint>, TxnReply), MetaAPIError>, MetaNodeStopped> {
+        let histogram_label = request_histogram::label_for_txn(&txn);
         self.request(move |meta_node| {
             let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
             let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
@@ -189,6 +262,9 @@ impl MetaHandle {
                 let res = meta_node
                     .handle_forwardable_request(forward_req)
                     .log_elapsed_info(format!("TxnRequest: {:?}", txn))
+                    .with_timing(|_output, total, _busy| {
+                        request_histogram::record(&histogram_label, total);
+                    })
                     .await;
 
                 res.map(|(ep, forward_resp)| {
@@ -211,6 +287,7 @@ impl MetaHandle {
         entry: LogEntry,
     ) -> Result<Result<AppliedState, MetaAPIError>, MetaNodeStopped> {
         let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(entry.clone()));
+        let histogram_label = request_histogram::label_for_write(&entry);
 
         let res = self
             .request(move |meta_node| {
@@ -218,6 +295,9 @@ impl MetaHandle {
                     meta_node
                         .handle_forwardable_request(forward_req)
                         .log_elapsed_info(format!("WriteRequest: {:?}", entry))
+                        .with_timing(|_output, total, _busy| {
+                            request_histogram::record(&histogram_label, total);
+                        })
                         .await
                 };
                 Box::pin(fu)
@@ -330,9 +410,7 @@ impl MetaHandle {
         .await
     }
 
-    pub async fn handle_raft_metrics(
-        &self,
-    ) -> Result<watch::Receiver<RaftMetrics>, MetaNodeStopped> {
+    pub async fn handle_raft_metrics(&self) -> Result<WatchReceiver<RaftMetrics>, MetaNodeStopped> {
         self.request(move |meta_node| {
             let fu = async move { meta_node.raft.metrics() };
 

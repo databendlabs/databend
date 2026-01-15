@@ -24,6 +24,7 @@ use databend_common_sql::plans::CopyIntoTablePlan;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::TagSetObject;
 use log::info;
 
 use crate::interpreters::access_log::log_entry::AccessLogEntry;
@@ -384,6 +385,16 @@ impl AccessLogger {
                     )]),
                 });
             }
+            Plan::AlterStage(plan) => {
+                let object_name = plan.stage_name.clone();
+                let operation_type = DDLOperationType::Alter;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Stage,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
+            }
             Plan::DropStage(plan) => {
                 let object_name = plan.name.clone();
                 let operation_type = DDLOperationType::Drop;
@@ -394,9 +405,36 @@ impl AccessLogger {
                     ..Default::default()
                 });
             }
+            Plan::SetObjectTags(plan) => {
+                self.log_tag_object_modify(&plan.object);
+            }
+            Plan::UnsetObjectTags(plan) => {
+                self.log_tag_object_modify(&plan.object);
+            }
 
             _ => {}
         }
+    }
+
+    fn log_tag_object_modify(&mut self, object: &TagSetObject) {
+        let (object_domain, object_name) = match object {
+            TagSetObject::Database(target) => (
+                ObjectDomain::Database,
+                format!("{}.{}", target.catalog, target.database),
+            ),
+            TagSetObject::Table(target) => (
+                ObjectDomain::Table,
+                format!("{}.{}.{}", target.catalog, target.database, target.table),
+            ),
+            TagSetObject::Stage(target) => (ObjectDomain::Stage, target.stage_name.clone()),
+            TagSetObject::Connection(_) => return,
+        };
+        self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+            object_domain,
+            object_name,
+            operation_type: DDLOperationType::Alter,
+            ..Default::default()
+        });
     }
 
     fn log_query(&mut self, metadata: &MetadataRef) {

@@ -47,6 +47,7 @@ use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
@@ -247,7 +248,7 @@ where
                 DirName::new_with_level(ident, 2)
             }
         };
-        let list_res = self.list_pb_vec(&dir).await?;
+        let list_res = self.list_pb_vec(ListOptions::unlimited(&dir)).await?;
         let mut table_indexes = HashMap::new();
         for (k, v) in list_res {
             let table_id = k.name().table_id;
@@ -482,7 +483,7 @@ where
                 DirName::new_with_level(ident, 3)
             }
         };
-        let list_res = self.list_pb_vec(&dir).await?;
+        let list_res = self.list_pb_vec(ListOptions::unlimited(&dir)).await?;
         let mut table_indexes = HashMap::new();
         for (k, v) in list_res {
             let table_id = k.name().table_id;

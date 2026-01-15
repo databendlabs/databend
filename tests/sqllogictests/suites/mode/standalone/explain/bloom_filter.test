@@ -37,7 +37,7 @@ EvalScalar
         ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
-query T
+query I
 select 1 from bloom_test_t where c1 = 5
 ----
 1
@@ -64,26 +64,26 @@ select 1 from bloom_test_t where c1 = 5
 # 1. filter using another column (c2), of the same block, where there is one row matched
 
 # 1.1 check that filtering on column c2 does work as expected
-query T
+query I
 select 1 from bloom_test_t where c2 = 6
 ----
 1
 
 # 1.2 check that if incorrect filtering is applied, an empty result set will be returned
-query T
+query I
 select count(*) from bloom_test_t where c1 = 6
 ----
 0
 
 # 2. filtering on column c2, of the same block, where there is no row matched
 # 2.1 check that an empty result set returned
-query T
+query I
 select count(*) from bloom_test_t where c2 = 5
 ----
 0
 
 # 2.2 check that if incorrect filtering is applied, a non-empty result set will be returned
-query T
+query I
 select count(*) from bloom_test_t where c1 = 5
 ----
 1
@@ -342,7 +342,7 @@ EvalScalar
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
+        ├── push downs: [filters: [bloom_test_nullable_t.c1 (#0) = 5 and bloom_test_nullable_t.c2 (#1) > 1], limit: NONE]
         └── estimated rows: 6.00
 
 query T
@@ -386,7 +386,7 @@ explain select * from bloom_test_nullable_t2 where ((c2) in ('1') is null);
 Filter
 ├── output columns: [bloom_test_nullable_t2.c0 (#0), bloom_test_nullable_t2.c1 (#1), bloom_test_nullable_t2.c2 (#2)]
 ├── filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')]
-├── estimated rows: 1.60
+├── estimated rows: 0.40
 └── TableScan
     ├── table: default.default.bloom_test_nullable_t2
     ├── scan id: 0
@@ -404,8 +404,8 @@ explain select * from bloom_test_nullable_t2 where (not (not c0))
 ----
 Filter
 ├── output columns: [bloom_test_nullable_t2.c0 (#0), bloom_test_nullable_t2.c1 (#1), bloom_test_nullable_t2.c2 (#2)]
-├── filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))]
-├── estimated rows: 2.00
+├── filters: [is_true(bloom_test_nullable_t2.c0 (#0))]
+├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.bloom_test_nullable_t2
     ├── scan id: 0
@@ -415,5 +415,5 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))], limit: NONE]
+    ├── push downs: [filters: [is_true(bloom_test_nullable_t2.c0 (#0))], limit: NONE]
     └── estimated rows: 2.00

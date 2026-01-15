@@ -78,6 +78,7 @@ pub struct InitFlag;
 #[derive(Debug, Clone, derive_more::From)]
 pub enum Request {
     /// Get multiple KV, returning a stream.
+    // TODO: Add a new variant to support real stream input + stream output get-many
     StreamMGet(Streamed<MGetKVReq>),
 
     /// List KVs by key prefix, returning a stream.

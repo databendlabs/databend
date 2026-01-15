@@ -84,8 +84,8 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
-├── estimated rows: 0.60
+├── filters: [is_true(2 (#2)) or t.number (#0) > 1]
+├── estimated rows: 0.50
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -327,7 +327,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10)], limit: NONE]
+│       ├── push downs: [filters: [numbers.number (#1) = 0 and numbers.number (#1) < 10], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]

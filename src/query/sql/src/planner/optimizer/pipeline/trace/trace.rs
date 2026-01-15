@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::time::Duration;
 
 use databend_common_exception::Result;
@@ -286,10 +287,12 @@ impl OptimizerTraceCollector {
                         (0, 0)
                     };
 
-                summary.push_str(&format!(
-                    "[{}] {}: {} ({:.2?})\n",
+                writeln!(
+                    summary,
+                    "[{}] {}: {} ({:.2?})",
                     status_symbol, optimizer.index, optimizer.name, optimizer.time
-                ));
+                )
+                .unwrap();
 
                 if total_rules > 0 {
                     let applied_percentage = if total_rules > 0 {
@@ -298,10 +301,12 @@ impl OptimizerTraceCollector {
                         0
                     };
 
-                    summary.push_str(&format!(
-                        "  └── Rules: {}/{} Applied ({}%)\n",
+                    writeln!(
+                        summary,
+                        "  └── Rules: {}/{} Applied ({}%)",
                         applied_rules, total_rules, applied_percentage
-                    ));
+                    )
+                    .unwrap();
 
                     // Add detailed rules summary if available
                     if let Some(optimizer_rules) = rules.get(&optimizer.name) {
@@ -312,7 +317,7 @@ impl OptimizerTraceCollector {
                             // Add indentation to rules summary
                             for line in rules_summary.lines() {
                                 if !line.trim().is_empty() {
-                                    summary.push_str(&format!("  {}\n", line));
+                                    writeln!(summary, "  {}", line).unwrap();
                                 }
                             }
                         }
@@ -340,16 +345,18 @@ impl OptimizerTraceCollector {
                 let mut detail = String::new();
 
                 // Add basic optimizer information
-                detail.push_str(&format!(
+                write!(
+                    detail,
                     "[{}] {}: {} ({:.2?})\n\n",
                     status_symbol, optimizer.index, optimizer.name, optimizer.time
-                ));
+                )
+                .unwrap();
 
                 // Add expression changes if any
                 if optimizer.had_effect && !optimizer.diff.is_empty() {
                     detail.push_str("  Changes:\n");
                     for line in optimizer.diff.lines() {
-                        detail.push_str(&format!("    {}\n", line));
+                        writeln!(detail, "    {}", line).unwrap();
                     }
                     detail.push('\n');
                 }
@@ -389,15 +396,17 @@ impl OptimizerTraceCollector {
             return report;
         }
 
-        report.push_str(&format!("[{}]  Rules Summary:\n", optimizer.name));
+        writeln!(report, "[{}]  Rules Summary:", optimizer.name).unwrap();
 
         // List all rules with their status
         for rule in &all_rules {
             let status_symbol = if rule.had_effect { "✓" } else { "✗" };
-            report.push_str(&format!(
-                "    [{}] {}.{}: {} ({:.2?})\n",
+            writeln!(
+                report,
+                "    [{}] {}.{}: {} ({:.2?})",
                 status_symbol, optimizer.index, rule.sequence, rule.name, rule.time
-            ));
+            )
+            .unwrap();
         }
         report.push('\n');
 
@@ -418,17 +427,21 @@ impl OptimizerTraceCollector {
         };
 
         // Add statistics to report
-        report.push_str(&format!(
-            "  Total Applied Rules: {}/{} ({}%)\n",
+        writeln!(
+            report,
+            "  Total Applied Rules: {}/{} ({}%)",
             applied_rules, total_rules, applied_percentage
-        ));
+        )
+        .unwrap();
 
-        report.push_str(&format!(
+        write!(
+            report,
             "  Total Non-Applied Rules: {}/{} ({}%)\n\n",
             total_rules - applied_rules,
             total_rules,
             non_applied_percentage
-        ));
+        )
+        .unwrap();
 
         report
     }
@@ -454,16 +467,18 @@ impl OptimizerTraceCollector {
         for rule in applied_rules {
             // Always use checkmark since we only show rules that had an effect
             let status_symbol = "✓";
-            report.push_str(&format!(
-                "    [{}] {}.{}: {}.{} ({:.2?})\n",
+            writeln!(
+                report,
+                "    [{}] {}.{}: {}.{} ({:.2?})",
                 status_symbol, optimizer.index, rule.sequence, optimizer.name, rule.name, rule.time
-            ));
+            )
+            .unwrap();
 
             // Add expression changes if available
             if !rule.diff.is_empty() {
                 report.push_str("      Changes:\n");
                 for line in rule.diff.lines() {
-                    report.push_str(&format!("        {}\n", line));
+                    writeln!(report, "        {}", line).unwrap();
                 }
             }
 

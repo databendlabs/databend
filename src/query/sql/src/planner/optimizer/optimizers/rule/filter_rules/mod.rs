@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod rule_eliminate_filter;
-mod rule_filter_flatten_or;
 mod rule_filter_nulls;
 mod rule_merge_filter;
 mod rule_merge_filter_into_mutation;
@@ -32,7 +31,6 @@ mod rule_push_down_sort_filter_scan;
 mod rule_push_down_sort_scan;
 
 pub use rule_eliminate_filter::RuleEliminateFilter;
-pub use rule_filter_flatten_or::RuleFilterFlattenOr;
 pub use rule_filter_nulls::RuleFilterNulls;
 pub use rule_merge_filter::RuleMergeFilter;
 pub use rule_merge_filter_into_mutation::RuleMergeFilterIntoMutation;

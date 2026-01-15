@@ -117,11 +117,8 @@ mod tests {
         );
         assert_eq!(d.last_applied(), Some(log_id(3, 3, 3)));
 
-        let got = d
-            .range(UserKey::default().., u64::MAX)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        let strm = d.range(UserKey::default().., u64::MAX).await?;
+        let got = strm.try_collect::<Vec<_>>().await?;
         assert_eq!(got, vec![
             //
             (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
@@ -131,11 +128,8 @@ mod tests {
             (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
         ]);
 
-        let got = d
-            .range(ExpireKey::default().., u64::MAX)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        let strm = d.range(ExpireKey::default().., u64::MAX).await?;
+        let got = strm.try_collect::<Vec<_>>().await?;
         assert_eq!(got, vec![]);
 
         Ok(())
@@ -154,11 +148,8 @@ mod tests {
 
         let d = immutable_levels.newest().unwrap().deref();
 
-        let got = d
-            .range(UserKey::default().., u64::MAX)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        let strm = d.range(UserKey::default().., u64::MAX).await?;
+        let got = strm.try_collect::<Vec<_>>().await?;
 
         assert_eq!(got, vec![
             //
@@ -176,11 +167,8 @@ mod tests {
             ),
         ]);
 
-        let got = d
-            .range(ExpireKey::default().., u64::MAX)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        let strm = d.range(ExpireKey::default().., u64::MAX).await?;
+        let got = strm.try_collect::<Vec<_>>().await?;
         assert_eq!(got, vec![
             //
             (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),

@@ -20,6 +20,7 @@ use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
@@ -85,7 +86,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
             break;
         }
 
-        info!("st: {:?}", rx0.borrow());
+        info!("st: {:?}", rx0.borrow_watched());
     }
     assert!(rx0.changed().await.is_err());
     Ok(())
@@ -916,7 +917,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     let leader_id = meta_nodes[0].get_leader().await?.unwrap();
     let leader = meta_nodes[leader_id as usize].clone();
 
-    let last_applied = leader.raft.metrics().borrow().last_applied;
+    let last_applied = leader.raft.metrics().borrow_watched().last_applied;
     info!("leader: last_applied={:?}", last_applied);
     {
         leader
@@ -954,7 +955,7 @@ async fn assert_get_kv(
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.kv_api().get_kv(key).await?;
+        let got = mn.raft_store.get_sm_v003().kv_api().get_kv(key).await?;
         assert_eq!(
             value.to_string().into_bytes(),
             got.unwrap().data,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::io;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -20,7 +21,9 @@ use anyerror::AnyError;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
@@ -29,12 +32,14 @@ use databend_common_meta_types::MetaDataError;
 use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
 use databend_common_metrics::count::Count;
+use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
@@ -103,7 +108,11 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.sto.get_sm_v003();
-                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
+                let res = sm
+                    .kv_api()
+                    .list_kv_collect(ListOptions::unlimited(&req.prefix))
+                    .await
+                    .unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -144,8 +153,10 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
             }
 
             MetaGrpcReadReq::ListKV(req) => {
-                let strm =
-                    kv_api.list_kv(&req.prefix).await.map_err(|e| {
+                let strm = kv_api
+                    .list_kv(ListOptions::unlimited(&req.prefix))
+                    .await
+                    .map_err(|e| {
                         MetaOperationError::DataError(MetaDataError::ReadError(
                             MetaDataReadError::new("list_kv", &req.prefix, &e),
                         ))
@@ -178,7 +189,7 @@ impl<'a> MetaLeader<'a> {
         let role = req.role();
         let node_id = req.node_id;
         let endpoint = req.endpoint;
-        let metrics = self.raft.metrics().borrow().clone();
+        let metrics = self.raft.metrics().borrow_watched().clone();
         let membership = metrics.membership_config.membership();
 
         let voters = membership.voter_ids().collect::<BTreeSet<_>>();
@@ -312,6 +323,53 @@ impl<'a> MetaLeader<'a> {
         }
 
         Ok(Ok(()))
+    }
+
+    /// List key-value pairs by prefix.
+    ///
+    /// Returns a stream of `StreamItem` wrapped in tonic's `BoxStream`,
+    /// which has item type `Result<StreamItem, Status>`.
+    pub async fn kv_list(
+        &self,
+        prefix: &str,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .list_kv(ListOptions::new(prefix, limit))
+            .await?;
+        let strm = strm.map_err(|e| Status::internal(e.to_string()));
+        Ok(strm.boxed())
+    }
+
+    /// Get multiple key-value pairs by streaming keys.
+    ///
+    /// Processes keys lazily as they arrive, delegating to `KVApi::get_many_kv`.
+    /// Errors from the input stream are propagated to the output stream.
+    /// Returns a `BoxStream<StreamItem>` (tonic's BoxStream yields `Result<StreamItem, Status>`).
+    pub async fn kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        // Convert input stream: extract keys and map Status errors to io::Error
+        let keys = input.map(|res| {
+            res.map(|r| r.key)
+                .map_err(|e| io::Error::other(e.to_string()))
+        });
+
+        // Delegate to KVApi which handles error propagation
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .get_many_kv(keys.boxed())
+            .await?;
+
+        // Convert io::Error to Status for the output stream
+        let strm = strm.map(|res| res.map_err(|e| Status::internal(e.to_string())));
+        Ok(Box::pin(strm))
     }
 }
 

@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_sled_store::openraft::storage::EntryResponder;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
-use databend_common_meta_types::AppliedState;
-use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
-use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::snapshot_db::DB;
+use futures::Stream;
 use log::debug;
 use log::error;
 use log::info;
@@ -35,7 +36,7 @@ use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 
 impl RaftSnapshotBuilder<TypeConfig> for MetaRaftStateMachine {
     #[fastrace::trace]
-    async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
+    async fn build_snapshot(&mut self) -> Result<Snapshot, io::Error> {
         self.do_build_snapshot().await
     }
 }
@@ -43,7 +44,7 @@ impl RaftSnapshotBuilder<TypeConfig> for MetaRaftStateMachine {
 impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     type SnapshotBuilder = MetaRaftStateMachine;
 
-    async fn applied_state(&mut self) -> Result<(Option<LogId>, StoredMembership), StorageError> {
+    async fn applied_state(&mut self) -> Result<(Option<LogId>, StoredMembership), io::Error> {
         let sm = self.get_inner();
         let last_applied = *sm.sys_data().last_applied_ref();
         let last_membership = sm.sys_data().last_membership_ref().clone();
@@ -57,15 +58,10 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     }
 
     #[fastrace::trace]
-    async fn apply<I>(&mut self, entries: I) -> Result<Vec<AppliedState>, StorageError>
-    where
-        I: IntoIterator<Item = Entry> + OptionalSend,
-        I::IntoIter: OptionalSend,
+    async fn apply<Strm>(&mut self, entries: Strm) -> Result<(), io::Error>
+    where Strm: Stream<Item = Result<EntryResponder<TypeConfig>, io::Error>> + Unpin + OptionalSend
     {
-        let sm = self.get_inner();
-        let res = sm.apply_entries(entries).await?;
-
-        Ok(res)
+        self.get_inner().apply_entries(entries).await
     }
 
     async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
@@ -73,8 +69,9 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     }
 
     // This method is not used
+    #[allow(clippy::diverging_sub_expression)]
     #[fastrace::trace]
-    async fn begin_receiving_snapshot(&mut self) -> Result<DB, StorageError> {
+    async fn begin_receiving_snapshot(&mut self) -> Result<DB, io::Error> {
         unreachable!(
             "begin_receiving_snapshot is only required when using OpenRaft Chunked snapshot transmit"
         );
@@ -85,7 +82,7 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
         &mut self,
         meta: &SnapshotMeta,
         snapshot: DB,
-    ) -> Result<(), StorageError> {
+    ) -> Result<(), io::Error> {
         let data_size = snapshot.file_size();
 
         info!(
@@ -94,21 +91,17 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
             "decoding snapshot for installation"
         );
 
-        let sig = meta.signature();
-
         let ss_store = SnapshotStoreV004::new(self.config.as_ref().clone());
         let (storage_path, rel_path) = ss_store
             .snapshot_config()
-            .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())
-            .map_err(|e| StorageError::write_snapshot(Some(sig.clone()), &e))?;
+            .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())?;
 
         let db = DB::open_snapshot(
             storage_path,
             rel_path,
             meta.snapshot_id.clone(),
             self.config.to_rotbl_config(),
-        )
-        .map_err(|e| StorageError::read_snapshot(Some(sig.clone()), &e))?;
+        )?;
 
         info!("snapshot meta: {:?}", meta);
 
@@ -126,7 +119,7 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     }
 
     #[fastrace::trace]
-    async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
+    async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, io::Error> {
         info!(id = self.id; "get snapshot start");
 
         let r = self.get_inner();

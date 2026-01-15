@@ -23,6 +23,7 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -223,7 +224,7 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     assert_eq!(resp.vote, Vote::new_committed(10, 2));
 
     let meta_node = tc0.meta_node.as_ref().unwrap();
-    let m = meta_node.raft.metrics().borrow().clone();
+    let m = meta_node.raft.metrics().borrow_watched().clone();
 
     assert_eq!(Some(last_log_id), m.snapshot);
 
@@ -312,7 +313,7 @@ async fn test_raft_service_install_snapshot_v004() -> anyhow::Result<()> {
     assert_eq!(vote, Vote::new_committed(10, 2));
 
     let meta_node = tc0.meta_node.as_ref().unwrap();
-    let m = meta_node.raft.metrics().borrow().clone();
+    let m = meta_node.raft.metrics().borrow_watched().clone();
 
     assert_eq!(Some(last_log_id), m.snapshot);
 

@@ -1,0 +1,203 @@
+# Test database-level default connection options
+
+# First create the required connection
+statement ok
+DROP CONNECTION IF EXISTS my_s3_connection
+
+statement ok
+CREATE CONNECTION IF NOT EXISTS my_s3_connection STORAGE_TYPE = 'fs'
+
+statement ok
+DROP DATABASE IF EXISTS test_db_options
+
+statement ok
+CREATE DATABASE test_db_options OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_s3_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/data/'
+)
+
+query I
+show create database test_db_options
+----
+test_db_options CREATE DATABASE `test_db_options` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_s3_connection', DEFAULT_STORAGE_PATH='fs:///tmp/test-bucket/data/')
+
+# Test ALTER DATABASE SET OPTIONS with valid paired options
+statement ok
+ALTER DATABASE test_db_options SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_s3_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/updated-bucket/path/'
+)
+
+# Test ALTER DATABASE with invalid DEFAULT_STORAGE_CONNECTION which does not exist
+# ERROR HY000 (1105): BadArguments. Code: 1006, Text = Connection 'only_connection' does not exist. Please create the connection first using CREATE CONNECTION.
+statement error 1006
+ALTER DATABASE test_db_options SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'only_connection'
+)
+
+# Cleanup
+statement ok
+DROP DATABASE test_db_options
+
+# Test CREATE DATABASE with both ENGINE and OPTIONS
+# Create another connection for this test
+statement ok
+DROP CONNECTION IF EXISTS my_connection
+
+statement ok
+CREATE CONNECTION IF NOT EXISTS my_connection STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE OR REPLACE DATABASE test_db_mixed ENGINE = DEFAULT OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/mixed_path/'
+)
+
+query I
+show create database test_db_mixed
+----
+test_db_mixed CREATE DATABASE `test_db_mixed` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_connection', DEFAULT_STORAGE_PATH='fs:///tmp/mixed_path/')
+
+statement ok
+DROP DATABASE test_db_mixed
+
+
+# Test invalid database option - should fail
+# ERROR HY000 (1105): InvalidArgument. Code: 2004, Text = Invalid database option 'invalid_option'. Valid options are: DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH.
+statement error 2004
+CREATE DATABASE test_db_invalid OPTIONS (
+    invalid_option = 'test'
+)
+
+# Test mismatched connection and path protocols - should fail
+statement error 1006
+CREATE DATABASE test_db_path_mismatch OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 's3://test-bucket/mismatch/'
+)
+
+# Test invalid path format - should fail
+statement error 1006
+CREATE DATABASE test_db_invalid_url OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 'not a valid url'
+)
+
+# Test mixed invalid database options
+# ERROR HY000 (1105): InvalidArgument. Code: 2004, Text = Invalid database option 'conn'. Valid options are: DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH.
+statement error 2004
+CREATE DATABASE test_db_invalid2 OPTIONS (
+    conn = 'test',
+    path = 'fs:///tmp/path',
+    DEFAULT_STORAGE_CONNECTION = 'my_conn',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/bucket/path'
+)
+
+# ALTER DATABASE IF EXISTS should be a no-op for missing database
+statement ok
+ALTER DATABASE IF EXISTS missing_db SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/if_exists_check/'
+)
+
+# Test incomplete options - DEFAULT_STORAGE_CONNECTION without DEFAULT_STORAGE_PATH
+# ERROR HY000 (1105): BadArguments. Code: 1006, Text = DEFAULT_STORAGE_CONNECTION requires DEFAULT_STORAGE_PATH to be specified.
+statement error 1006
+CREATE DATABASE test_db_incomplete1 OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_conn'
+)
+
+# Test incomplete options - DEFAULT_STORAGE_PATH without DEFAULT_STORAGE_CONNECTION
+statement error 1006
+CREATE DATABASE test_db_incomplete2 OPTIONS (
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/bucket/path'
+)
+
+# Test ALTER DATABASE options
+# Create connection for this test
+statement ok
+CREATE CONNECTION IF NOT EXISTS temp_test STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE OR REPLACE DATABASE temp_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'temp_test', DEFAULT_STORAGE_PATH = 'fs:///tmp/test_db/')
+
+# ALTER with single option should now succeed (the other option already exists in database)
+statement ok
+ALTER DATABASE temp_db SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'temp_test'
+)
+
+statement ok
+CREATE OR REPLACE DATABASE temp_db
+
+# ALTER with single option should now fail (the other option does not exist in database)
+# ERROR HY000 (1105): BadArguments. Code: 1006, Text = DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together.
+statement error 1006
+ALTER DATABASE temp_db SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'temp_test'
+)
+
+statement ok
+DROP DATABASE temp_db
+
+# Test ALTER DATABASE can modify single option (the other already exists in database)
+statement ok
+CREATE CONNECTION IF NOT EXISTS alter_test_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE OR REPLACE DATABASE test_alter_single OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'alter_test_conn',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/original_path/'
+)
+
+# Alter only connection - should succeed now
+statement ok
+ALTER DATABASE test_alter_single SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'alter_test_conn'
+)
+
+# Alter only path - should succeed now
+statement ok
+ALTER DATABASE test_alter_single SET OPTIONS (
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/new_path/'
+)
+
+# Test with non-existent connection
+statement ok
+DROP DATABASE IF EXISTS test_db_nonexistent_conn
+
+statement error 1006
+CREATE DATABASE test_db_nonexistent_conn OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'nonexistent_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-path/'
+)
+
+# Test duplicate options - should fail
+statement error 2004
+CREATE DATABASE test_db_duplicate OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'test',
+    DEFAULT_STORAGE_CONNECTION = 'test2',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/dup/'
+)
+
+statement error 2004
+CREATE DATABASE test_db_duplicate2 OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'test',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/dup1/',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/dup2/'
+)
+
+statement ok
+DROP DATABASE test_alter_single
+
+statement ok
+DROP CONNECTION IF EXISTS my_connection
+
+statement ok
+DROP CONNECTION IF EXISTS my_s3_connection
+
+statement ok
+DROP CONNECTION IF EXISTS alter_test_conn
+
+statement ok
+DROP CONNECTION IF EXISTS temp_test

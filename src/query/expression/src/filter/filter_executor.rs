@@ -54,7 +54,7 @@ impl FilterExecutor {
         fn_registry: &'static FunctionRegistry,
         keep_order: bool,
     ) -> Self {
-        let (select_expr, has_or) = SelectExprBuilder::new().build(&expr).into();
+        let (select_expr, has_or) = SelectExprBuilder::new(fn_registry).build(&expr).into();
 
         let true_selection = vec![0; max_block_size];
         let false_selection = if has_or {

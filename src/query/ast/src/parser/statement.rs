@@ -53,6 +53,7 @@ pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
+    Options(Vec<SQLProperty>),
 }
 
 fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
@@ -273,12 +274,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, _, table, opt_selection)| {
+        |(with, _, hints, _, (catalog, database, table), table_alias, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
+                catalog,
+                database,
                 table,
+                table_alias,
                 selection: opt_selection.map(|(_, selection)| selection),
                 with,
             })
@@ -811,28 +815,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( DATABASE | SCHEMA )
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #database_ref
-            ~ #create_database_option?
+            ~ ( ENGINE ~ ^"=" ~ ^#database_engine )?
+            ~ ( OPTIONS ~ ^"(" ~ ^#sql_property_list ~ ^")" )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, database, create_database_option)| {
+        |(_, opt_or_replace, _, opt_if_not_exists, database, engine_opt, options_opt)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
-            let statement = match create_database_option {
-                Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
-                    Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option,
-                        database,
-                        engine: Some(engine),
-                        options: vec![],
-                    })
-                }
-                None => Statement::CreateDatabase(CreateDatabaseStmt {
-                    create_option,
-                    database,
-                    engine: None,
-                    options: vec![],
-                }),
-            };
+            let engine = engine_opt.map(|(_, _, engine)| engine);
+            let options = options_opt
+                .map(|(_, _, options, _)| options)
+                .unwrap_or_default();
+
+            let statement = Statement::CreateDatabase(CreateDatabaseStmt {
+                create_option,
+                database,
+                engine,
+                options,
+            });
 
             Ok(statement)
         },
@@ -1977,6 +1977,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }))
         },
     );
+    let alter_stage = map(
+        rule! {
+            ALTER ~ STAGE ~ ( IF ~ ^EXISTS )? ~ #stage_name ~ #alter_stage_action
+        },
+        |(_, _, opt_if_exists, stage, action)| {
+            Statement::AlterStage(AlterStageStmt {
+                if_exists: opt_if_exists.is_some(),
+                stage_name: stage.to_string(),
+                action,
+            })
+        },
+    );
 
     let list_stage = map(
         rule! {
@@ -2072,6 +2084,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             SHOW ~ CONNECTIONS
         },
         |(_, _)| Statement::ShowConnections(ShowConnectionsStmt {}),
+    );
+
+    let alter_object_tag_action = alter_object_tags_action(
+        |tags| AlterObjectTagAction::Set { tags },
+        |tags| AlterObjectTagAction::Unset { tags },
+    );
+
+    let alter_object_tags = map(
+        rule! {
+            ALTER ~ #alter_object_tag_target ~ #alter_object_tag_action
+        },
+        |(_, object, action)| Statement::AlterObjectTag(AlterObjectTagStmt { object, action }),
     );
 
     let call = map(
@@ -2922,6 +2946,8 @@ AS
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
@@ -4318,6 +4344,109 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     .parse(i)
 }
 
+fn tag_set_item(i: Input) -> IResult<TagSetItem> {
+    map(
+        rule! {
+            #ident ~ ^"=" ~ ^#literal_string
+        },
+        |(tag_name, _, tag_value)| TagSetItem {
+            tag_name,
+            tag_value,
+        },
+    )
+    .parse(i)
+}
+
+fn tag_set_items(i: Input) -> IResult<Vec<TagSetItem>> {
+    map(
+        rule! { #tag_set_item ~ ("," ~ #tag_set_item)* },
+        |(first, rest)| {
+            let mut tags = vec![first];
+            for (_, item) in rest {
+                tags.push(item);
+            }
+            tags
+        },
+    )
+    .parse(i)
+}
+
+fn tag_unset_items(i: Input) -> IResult<Vec<Identifier>> {
+    map(rule! { #comma_separated_list1(ident) }, |tags| tags).parse(i)
+}
+
+fn alter_object_tags_action<'a, T, SetAction, UnsetAction>(
+    set_action: SetAction,
+    unset_action: UnsetAction,
+) -> impl FnMut(Input<'a>) -> IResult<'a, T>
+where
+    SetAction: Fn(Vec<TagSetItem>) -> T,
+    UnsetAction: Fn(Vec<Identifier>) -> T,
+{
+    move |i| {
+        alt((
+            map(
+                rule! {
+                    SET ~ TAG ~ #tag_set_items
+                },
+                |(_, _, tags)| set_action(tags),
+            ),
+            map(
+                rule! {
+                    UNSET ~ TAG ~ #tag_unset_items
+                },
+                |(_, _, tags)| unset_action(tags),
+            ),
+        ))
+        .parse(i)
+    }
+}
+
+fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
+    alt((
+        map(
+            rule! {
+                DATABASE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2
+            },
+            |(_, opt_if_exists, (catalog, database))| AlterObjectTagTarget::Database {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+            },
+        ),
+        map(
+            rule! {
+                TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, table))| AlterObjectTagTarget::Table {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                table,
+            },
+        ),
+        map(
+            rule! {
+                STAGE ~ ( IF ~ ^EXISTS )? ~ #stage_name
+            },
+            |(_, opt_if_exists, stage_name)| AlterObjectTagTarget::Stage {
+                if_exists: opt_if_exists.is_some(),
+                stage_name: stage_name.to_string(),
+            },
+        ),
+        map(
+            rule! {
+                CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
+            },
+            |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
+                if_exists: opt_if_exists.is_some(),
+                connection_name,
+            },
+        ),
+    ))
+    .parse(i)
+}
+
 pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     let rename_database = map(
         rule! {
@@ -4333,9 +4462,17 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
         |(_, _)| AlterDatabaseAction::RefreshDatabaseCache,
     );
 
+    let set_options = map(
+        rule! {
+            SET ~ OPTIONS ~ "(" ~ #sql_property_list ~ ")"
+        },
+        |(_, _, _, options, _)| AlterDatabaseAction::SetOptions { options },
+    );
+
     rule!(
         #rename_database
         | #refresh_cache
+        | #set_options
     )
     .parse(i)
 }
@@ -4646,29 +4783,75 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    rule!(
-        #alter_table_cluster_key
-        | #drop_table_cluster_key
-        | #drop_constraint
-        | #rename_table
-        | #swap_with
-        | #rename_column
-        | #modify_table_comment
-        | #add_column
-        | #drop_column
-        | #modify_column
-        | #recluster_table
-        | #revert_table
-        | #set_table_options
-        | #unset_table_options
-        | #refresh_cache
-        | #modify_table_connection
-        | #drop_all_row_access_polices
-        | #drop_row_access_policy
-        | #add_row_access_policy
-        | #add_constraint
-    )
-    .parse(i)
+    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
+    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
+    // available for SELECT or other query statements, so keep the parsing rule scoped
+    // here to avoid implying broader support.
+    let create_snapshot_ref = map(
+        rule! {
+            CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?
+        },
+        |(_, token, ref_name, opt_travel_point, retain)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, reatin)| reatin),
+            }
+        },
+    );
+
+    let drop_snapshot_ref = map(
+        rule! {
+            DROP ~ ( BRANCH | TAG ) ~ #ident
+        },
+        |(_, token, ref_name)| {
+            let ref_type = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+
+            AlterTableAction::DropTableRef { ref_type, ref_name }
+        },
+    );
+
+    // The action list is split to avoid the trait bound limit in `alt(...)`.
+    let alter_table_action_primary = rule!(
+        #create_snapshot_ref
+            | #drop_snapshot_ref
+            | #alter_table_cluster_key
+            | #drop_table_cluster_key
+            | #drop_constraint
+            | #rename_table
+            | #swap_with
+            | #rename_column
+            | #modify_table_comment
+            | #add_column
+            | #drop_column
+            | #modify_column
+            | #recluster_table
+            | #revert_table
+            | #set_table_options
+    );
+
+    let alter_table_action_secondary = rule!(
+        #unset_table_options
+            | #refresh_cache
+            | #modify_table_connection
+            | #drop_all_row_access_polices
+            | #drop_row_access_policy
+            | #add_row_access_policy
+            | #add_constraint
+    );
+
+    alt((alter_table_action_primary, alter_table_action_secondary)).parse(i)
 }
 
 pub fn match_clause(i: Input) -> IResult<MergeOption> {
@@ -5304,17 +5487,39 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let mut create_db_engine = parser_fn(map(
+    let create_db_engine = parser_fn(map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     ));
 
+    let create_db_options = map(
+        rule! {
+            OPTIONS ~ "(" ~ #sql_property_list ~ ")"
+        },
+        |(_, _, options, _)| CreateDatabaseOption::Options(options),
+    );
+
     rule!(
         #create_db_engine
+        | #create_db_options
     )
     .parse(i)
+}
+
+pub fn sql_property_list(i: Input) -> IResult<Vec<SQLProperty>> {
+    let property = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(name, _, value)| SQLProperty {
+            name: name.name,
+            value,
+        },
+    );
+
+    comma_separated_list1(property).parse(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
@@ -5453,31 +5658,6 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))
-    .parse(i)
-}
-
-pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #dot_separated_idents_1_to_3 ~ #alias_name?
-        }),
-        |(span, ((catalog, database, table), alias))| TableReference::Table {
-            span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
-            alias: alias.map(|v| TableAlias {
-                name: v,
-                columns: vec![],
-                keep_database_name: false,
-            }),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )
     .parse(i)
 }
 

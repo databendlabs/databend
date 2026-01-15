@@ -39,9 +39,7 @@ tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-exception = { workspace = true }
 databend-common-version = { workspace = true }
-pretty_assertions = { workspace = true }
 rand = { workspace = true }
 
 [lints]

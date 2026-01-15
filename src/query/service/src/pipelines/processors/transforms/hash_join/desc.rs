@@ -63,6 +63,7 @@ pub struct HashJoinDesc {
     pub(crate) probe_projections: ColumnSet,
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     pub(crate) build_schema: DataSchemaRef,
+    pub(crate) probe_schema: DataSchemaRef,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +139,7 @@ impl HashJoinDesc {
             build_projection: join.build_projections.clone(),
             probe_projections: join.probe_projections.clone(),
             build_schema: join.build.output_schema()?,
+            probe_schema: join.probe.output_schema()?,
         })
     }
 

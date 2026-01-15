@@ -1,29 +1,91 @@
 statement ok
-drop table if exists ii
-
-statement ok
-create table ii(a int null, b int null)
+create or replace table si(a string, b int)
 
 query TIITI
-copy into ii from @data/csv/null_default.csv file_format = (type = CSV)
+copy into si from @data/csv/null.csv file_format = (type = CSV)
 ----
-csv/null_default.csv 1 0 NULL NULL
+csv/null.csv 6 0 NULL NULL
 
-query II
-select * from ii
+query TI
+select * from si order by b
 ----
 NULL 1
+\N 2
+NULL 3
+(empty) 4
+null 5
+null 6
 
 statement ok
-truncate table ii
+truncate table si
 
 query TIITI
-copy into ii from @data/csv/null_null.csv file_format = (type = CSV null_display = 'null')
+copy into si from @data/csv/null.csv file_format = (type = CSV null_display = 'null')
 ----
-csv/null_null.csv 1 0 NULL NULL
+csv/null.csv 6 0 NULL NULL
 
 
-query II
-select * from ii
+query TI
+select * from si order by b
 ----
-NULL 2
+\N 1
+\N 2
+NULL 3
+(empty) 4
+NULL 5
+null 6
+
+statement ok
+truncate table si
+
+query TIITI
+copy into si from @data/csv/null.csv file_format = (type = CSV null_display = 'null' allow_quoted_nulls=true)
+----
+csv/null.csv 6 0 NULL NULL
+
+
+query TI
+select * from si order by b
+----
+\N 1
+\N 2
+NULL 3
+(empty) 4
+NULL 5
+NULL 6
+
+statement ok
+truncate table si
+
+query TIITI
+copy into si from @data/csv/null.csv file_format = (type = CSV null_display = '' allow_quoted_nulls=true) force=true
+----
+csv/null.csv 6 0 NULL NULL
+
+query TI
+select * from si order by b
+----
+\N 1
+\N 2
+NULL 3
+(empty) 4
+null 5
+null 6
+
+statement ok
+truncate table si
+
+query TIITI
+copy into si from @data/csv/null.csv file_format = (type = CSV null_display = '') force=true
+----
+csv/null.csv 6 0 NULL NULL
+
+query TI
+select * from si order by b
+----
+\N 1
+\N 2
+NULL 3
+(empty) 4
+null 5
+null 6

@@ -81,7 +81,7 @@ impl FuseTable {
             Some(_) => {
                 if let Some(snapshot_loc) = &location {
                     let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator())
+                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true)
                             .await?;
                     let Some(prev_table_seq) = snapshot.prev_table_seq else {
                         return Err(ErrorCode::IllegalStream(
@@ -153,16 +153,18 @@ impl FuseTable {
                 let mut d_alias_vec = Vec::with_capacity(fields.len());
                 let mut d_cols_vec = Vec::with_capacity(fields.len());
                 let mut exprs_vec = Vec::with_capacity(fields.len());
-                for field in fields {
-                    let name = field.name();
-                    a_cols_vec.push(format!("{quote}{name}{quote}"));
-                    d_alias_vec.push(format!("{quote}{name}{quote} as d_{name}"));
-                    d_cols_vec.push(format!("d_{name}"));
+                for (idx, field) in fields.iter().enumerate() {
+                    let quoted = format!("{quote}{}{quote}", field.name());
+                    let d_alias = format!("d_{suffix}_{idx}");
+
+                    a_cols_vec.push(quoted.clone());
+                    d_alias_vec.push(format!("{quoted} as {d_alias}"));
+                    d_cols_vec.push(d_alias.clone());
 
                     if field.data_type().is_nullable_or_null() {
-                        exprs_vec.push(format!("not(equal_null({quote}{name}{quote}, d_{name}))"));
+                        exprs_vec.push(format!("not(equal_null({quoted}, {d_alias}))"));
                     } else {
-                        exprs_vec.push(format!("{quote}{name}{quote} <> d_{name}"));
+                        exprs_vec.push(format!("{quoted} <> {d_alias}"));
                     }
                 }
                 let a_cols = a_cols_vec.join(", ");
@@ -362,7 +364,7 @@ impl FuseTable {
 
         let latest_segments = if let Some(snapshot) = latest {
             let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator(), true).await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -568,7 +570,8 @@ impl FuseTable {
         &self,
         base_location: &String,
     ) -> Result<Arc<TableSnapshot>> {
-        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator()).await {
+        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator(), true).await
+        {
             Ok((base_snapshot, _)) => Ok(base_snapshot),
             Err(_) => Err(ErrorCode::IllegalStream(format!(
                 "Failed to read the offset snapshot: {:?}, maybe purged",

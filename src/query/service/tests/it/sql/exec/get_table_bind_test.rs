@@ -627,6 +627,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_cache_key_extra(&self, extra: String) {
+        self.ctx.add_cache_key_extra(extra)
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        self.ctx.get_cache_key_extras()
+    }
+
     fn get_cacheable(&self) -> bool {
         todo!()
     }
@@ -872,6 +880,7 @@ impl TableContext for CtxDelegation {
         catalog: &str,
         database: &str,
         table: &str,
+        _branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         self.get_table(catalog, database, table).await

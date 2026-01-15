@@ -343,6 +343,8 @@ pub enum TokenKind {
     ALLOWED_IP_LIST,
     #[token("ALLOWED_VALUES", ignore(ascii_case))]
     ALLOWED_VALUES,
+    #[token("ALLOW_QUOTED_NULLS", ignore(ascii_case))]
+    ALLOW_QUOTED_NULLS,
     #[token("ADD", ignore(ascii_case))]
     ADD,
     #[token("AFTER", ignore(ascii_case))]
@@ -421,6 +423,8 @@ pub enum TokenKind {
     BOOLEAN,
     #[token("BOTH", ignore(ascii_case))]
     BOTH,
+    #[token("BRANCH", ignore(ascii_case))]
+    BRANCH,
     #[token("BY", ignore(ascii_case))]
     BY,
     #[token("BROTLI", ignore(ascii_case))]
@@ -627,6 +631,7 @@ pub enum TokenKind {
     YEARWEEK,
     #[token("MICROSECOND", ignore(ascii_case))]
     MICROSECOND,
+
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
@@ -1014,6 +1019,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTED_EMPTY_FIELD_AS", ignore(ascii_case))]
+    QUOTED_EMPTY_FIELD_AS,
     #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
     QUOTED_IDENTIFIERS,
     #[token("RANGE", ignore(ascii_case))]
@@ -1220,16 +1227,16 @@ pub enum TokenKind {
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
     SYSTEM,
-    #[token("TAG", ignore(ascii_case))]
-    TAG,
-    #[token("TAGS", ignore(ascii_case))]
-    TAGS,
     #[token("STORAGE_TYPE", ignore(ascii_case))]
     STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
+    #[token("TAG", ignore(ascii_case))]
+    TAG,
+    #[token("TAGS", ignore(ascii_case))]
+    TAGS,
     #[token("TARGET_LAG", ignore(ascii_case))]
     TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]

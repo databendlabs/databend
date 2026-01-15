@@ -96,6 +96,7 @@ fn test_decode_v55_table_meta() -> anyhow::Result<()> {
         indexes: btreemap! {},
         row_access_policy_columns_ids: None,
         constraints: btreemap! {},
+        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 55, want())?;

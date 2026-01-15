@@ -122,6 +122,8 @@ use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
@@ -132,12 +134,14 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
@@ -548,7 +552,59 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
+        let mut options: BTreeMap<String, String> = BTreeMap::new();
+
+        // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+
+        // Construct a UriLocation from database defaults if table doesn't have explicit location
+        let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
+            && matches!(engine, Engine::Fuse)
+        {
+            if let Ok(database_info) = catalog
+                .get_database(&self.ctx.get_tenant(), &database)
+                .await
+            {
+                // Extract database-level default connection options
+                let default_connection_name =
+                    database_info.options().get(DEFAULT_STORAGE_CONNECTION);
+                let default_path = database_info.options().get(DEFAULT_STORAGE_PATH);
+
+                // If both database defaults exist, construct UriLocation
+                if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
+                {
+                    // Get the connection object to access its storage_params
+                    match self.ctx.get_connection(connection_name).await {
+                        Ok(connection) => {
+                            // Construct UriLocation using the database defaults
+                            match UriLocation::from_uri(path.clone(), connection.storage_params) {
+                                Ok(uri) => Some(uri),
+                                Err(e) => {
+                                    return Err(ErrorCode::BadArguments(format!(
+                                        "Failed to parse database default storage path '{}': {}",
+                                        path, e
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Database default connection '{}' does not exist: {}",
+                                connection_name, e
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            // Use the provided uri_location by cloning it
+            uri_location.clone()
+        };
+
         if catalog.support_partition() != (engine == Engine::Iceberg) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "Catalog '{}' engine type is {:?} but table {} engine type is {}",
@@ -559,8 +615,8 @@ impl Binder {
             )));
         }
 
-        let mut options: BTreeMap<String, String> = BTreeMap::new();
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
+        // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -591,7 +647,7 @@ impl Binder {
                 .collect::<Vec<String>>()
         });
 
-        let mut storage_params = match (uri_location, engine) {
+        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -1030,9 +1086,11 @@ impl Binder {
             catalog,
             database,
             table,
+            ref_name,
             ..
         } = table_reference
         {
+            debug_assert!(ref_name.is_none());
             self.normalize_object_identifier_triple(catalog, database, table)
         } else {
             return Err(ErrorCode::Internal(
@@ -1410,6 +1468,40 @@ impl Binder {
                         table,
                     },
                 )))
+            }
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableRef { ref_type, ref_name } => {
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                })))
             }
         }
     }
@@ -2249,7 +2341,7 @@ const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
 //
 // The permission check might fail for reasons other than the permissions themselves,
 // such as network communication issues.
-async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+pub async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     let verification_task = async move {
         // verify privilege to put
         let mut errors = Vec::new();

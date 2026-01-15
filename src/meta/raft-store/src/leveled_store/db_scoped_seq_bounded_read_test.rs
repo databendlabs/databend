@@ -91,11 +91,8 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
         smap.get(user_key("d"), u64::MAX).await?
     );
 
-    let got = smap
-        .range(UserKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = smap.range(UserKey::default().., u64::MAX).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(
         vec![
             (
@@ -128,11 +125,8 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
         emap.get(ExpireKey::new(5_000, 2), u64::MAX).await?
     );
 
-    let got = emap
-        .range(ExpireKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = emap.range(ExpireKey::default().., u64::MAX).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(
         vec![
             (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),

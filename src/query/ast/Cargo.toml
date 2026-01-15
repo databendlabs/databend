@@ -1,6 +1,6 @@
 [package]
 name = "databend-common-ast"
-version = "0.2.3"
+version = "0.2.4"
 publish = true
 description = "SQL parser for Databend"
 authors = { workspace = true }
@@ -33,6 +33,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 unindent = { workspace = true }
 url = { workspace = true }
+zmij = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
