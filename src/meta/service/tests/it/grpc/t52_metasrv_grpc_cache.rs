@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::SeqV;
@@ -125,7 +124,7 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
 
     // Stop the first node, which is the leader
     let mut stopped = tcs.remove(0);
-    { stopped }.grpc_srv.take().unwrap().stop(None).await?;
+    { stopped }.grpc_srv.take().unwrap().do_stop(None).await;
 
     sleep(Duration::from_secs(6)).await;
 

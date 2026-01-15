@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::Semaphore;
@@ -605,7 +604,7 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
     tokio::time::sleep(secs(1)).await;
 
     let mut srv = tc.grpc_srv.take().unwrap();
-    srv.stop(None).await?;
+    srv.do_stop(None).await;
 
     let res = rx.await;
     info!("permit2: {:?}", res);
