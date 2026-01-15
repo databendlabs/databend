@@ -20,8 +20,8 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingGuard;
 use databend_common_grpc::GrpcClaim;
