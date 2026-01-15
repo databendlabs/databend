@@ -589,7 +589,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     escape_char: b'\\',
                     quote_char: b'"',
                     binary_format: Default::default(),
-                    binary_utf8_lossy: false,
                 };
 
                 for i in 0..row_count {

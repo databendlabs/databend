@@ -40,7 +40,6 @@ pub struct FieldEncoderJSON {
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
     pub binary_format: BinaryDisplayFormat,
-    pub binary_utf8_lossy: bool,
 }
 
 impl FieldEncoderJSON {
@@ -61,12 +60,10 @@ impl FieldEncoderJSON {
                 escape_char: 0,
                 quote_char: 0,
                 binary_format: options.binary_format,
-                binary_utf8_lossy: options.binary_utf8_lossy,
             },
             quote_denormals: false,
             escape_forward_slashes: true,
             binary_format: options.binary_format,
-            binary_utf8_lossy: options.binary_utf8_lossy,
         }
     }
 }
@@ -230,11 +227,9 @@ impl FieldEncoderJSON {
             BinaryDisplayFormat::Base64 => Cow::Owned(general_purpose::STANDARD.encode(buf)),
             BinaryDisplayFormat::Utf8 => match std::str::from_utf8(buf) {
                 Ok(s) => Cow::Borrowed(s),
-                Err(_) if self.binary_utf8_lossy => {
-                    Cow::Owned(String::from_utf8_lossy(buf).into_owned())
-                }
                 Err(_) => Cow::Owned(hex::encode_upper(buf)),
             },
+            BinaryDisplayFormat::Utf8Lossy => Cow::Owned(String::from_utf8_lossy(buf).into_owned()),
         }
     }
 

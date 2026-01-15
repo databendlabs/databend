@@ -1216,7 +1216,6 @@ impl TableContext for QueryContext {
         let settings = self.get_settings();
         let geometry_format = settings.get_geometry_output_format()?;
         let binary_format = settings.get_binary_output_format()?;
-        let binary_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
         let format_null_as_str = settings.get_format_null_as_str()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let format = FormatSettings {
@@ -1224,7 +1223,6 @@ impl TableContext for QueryContext {
             jiff_timezone,
             geometry_format,
             binary_format,
-            binary_utf8_lossy,
             enable_dst_hour_fix,
             format_null_as_str,
         };
@@ -1252,12 +1250,12 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let binary_input_format = settings.get_binary_input_format()?;
+        let binary_output_format = settings.get_binary_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
         let random_function_seed = settings.get_random_function_seed()?;
-        let enable_binary_to_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
 
         Ok(FunctionContext {
             now,
@@ -1268,12 +1266,12 @@ impl TableContext for QueryContext {
 
             geometry_output_format,
             binary_input_format,
+            binary_output_format,
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
             random_function_seed,
             week_start,
             date_format_style,
-            enable_binary_to_utf8_lossy,
         })
     }
 

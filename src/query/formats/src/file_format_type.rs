@@ -54,7 +54,6 @@ pub struct FileFormatOptionsExt {
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
     pub binary_format: BinaryDisplayFormat,
-    pub binary_utf8_lossy: bool,
 }
 
 impl FileFormatOptionsExt {
@@ -67,7 +66,6 @@ impl FileFormatOptionsExt {
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let geometry_format = settings.get_geometry_output_format()?;
         let binary_format = settings.get_binary_output_format()?;
-        let binary_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
         let numeric_cast_option = settings
             .get_numeric_cast_option()
             .unwrap_or("rounding".to_string());
@@ -87,7 +85,6 @@ impl FileFormatOptionsExt {
             geometry_format,
             enable_dst_hour_fix,
             binary_format,
-            binary_utf8_lossy,
         };
         Ok(options)
     }
@@ -101,7 +98,6 @@ impl FileFormatOptionsExt {
         let geometry_format = settings.get_geometry_output_format()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let binary_format = settings.get_binary_output_format()?;
-        let binary_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -116,7 +112,6 @@ impl FileFormatOptionsExt {
             geometry_format,
             enable_dst_hour_fix,
             binary_format,
-            binary_utf8_lossy,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

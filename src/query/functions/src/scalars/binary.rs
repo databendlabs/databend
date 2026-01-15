@@ -141,7 +141,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match ctx.func_ctx.binary_input_format {
             BinaryDisplayFormat::Hex => eval_unhex(val, ctx),
             BinaryDisplayFormat::Base64 => eval_from_base64(val, ctx),
-            BinaryDisplayFormat::Utf8 => eval_utf8_bytes(val),
+            BinaryDisplayFormat::Utf8 | BinaryDisplayFormat::Utf8Lossy => eval_utf8_bytes(val),
         },
     );
 
@@ -177,7 +177,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match ctx.func_ctx.binary_input_format {
             BinaryDisplayFormat::Hex => error_to_null(eval_unhex)(val, ctx),
             BinaryDisplayFormat::Base64 => error_to_null(eval_from_base64)(val, ctx),
-            BinaryDisplayFormat::Utf8 => eval_utf8_bytes_nullable(val),
+            BinaryDisplayFormat::Utf8 | BinaryDisplayFormat::Utf8Lossy => {
+                eval_utf8_bytes_nullable(val)
+            }
         },
     );
 
@@ -263,16 +265,22 @@ fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value
     vectorize_binary_to_string(
         |col| col.total_bytes_len(),
         |val, output, ctx| {
-            let val = if ctx.func_ctx.enable_binary_to_utf8_lossy {
-                String::from_utf8_lossy(val)
+            let decoded = if matches!(
+                ctx.func_ctx.binary_output_format,
+                BinaryDisplayFormat::Utf8Lossy
+            ) {
+                Cow::Owned(String::from_utf8_lossy(val).into_owned())
             } else if let Ok(val) = simdutf8::basic::from_utf8(val) {
                 Cow::Borrowed(val)
             } else {
-                ctx.set_error(output.len(), "invalid utf8 sequence");
+                ctx.set_error(
+                    output.len(),
+                    "invalid utf8 sequence; consider setting binary_output_format to 'utf-8-lossy'",
+                );
                 output.commit_row();
                 return;
             };
-            output.put_str(&val);
+            output.put_str(&decoded);
             output.commit_row();
         },
     )(val, ctx)

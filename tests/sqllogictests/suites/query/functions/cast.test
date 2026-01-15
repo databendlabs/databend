@@ -32,12 +32,15 @@ statement error
 select to_string(UNHEX('C328'));
 
 statement ok
-set enable_binary_to_utf8_lossy = 1;
+set binary_output_format = 'utf-8-lossy';
 
 query T
 select to_string(UNHEX('C328'));
 ----
 �(
+
+statement ok
+unset binary_output_format;
 
 query I
 select try_cast(3 as int);

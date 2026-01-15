@@ -68,7 +68,6 @@ pub struct FieldEncoderValues {
     pub escape_char: u8,
     pub quote_char: u8,
     pub binary_format: BinaryDisplayFormat,
-    pub binary_utf8_lossy: bool,
 }
 
 impl FieldEncoderValues {
@@ -88,7 +87,6 @@ impl FieldEncoderValues {
             escape_char: b'"',
             quote_char: b'"',
             binary_format: options.binary_format,
-            binary_utf8_lossy: options.binary_utf8_lossy,
         }
     }
 
@@ -108,7 +106,6 @@ impl FieldEncoderValues {
             escape_char: b'\\',
             quote_char: b'"',
             binary_format: format.binary_format,
-            binary_utf8_lossy: format.binary_utf8_lossy,
         }
     }
 
@@ -132,7 +129,6 @@ impl FieldEncoderValues {
             escape_char: b'\\',
             quote_char: b'"',
             binary_format: format.binary_format,
-            binary_utf8_lossy: format.binary_utf8_lossy,
         }
     }
 
@@ -279,20 +275,18 @@ impl FieldEncoderValues {
                 out_buf.extend_from_slice(encoded.as_bytes());
                 Ok(())
             }
-            BinaryDisplayFormat::Utf8 => {
-                if self.binary_utf8_lossy {
-                    out_buf.extend_from_slice(String::from_utf8_lossy(v).as_bytes());
-                } else {
-                    match std::str::from_utf8(v) {
-                        Ok(text) => out_buf.extend_from_slice(text.as_bytes()),
-                        Err(err) => {
-                            return Err(ErrorCode::InvalidUtf8String(format!(
-                                "Invalid UTF-8 sequence while formatting binary column: {err}. \
-Consider enabling binary_utf8_lossy."
-                            )));
-                        }
-                    }
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(v) {
+                Ok(text) => {
+                    out_buf.extend_from_slice(text.as_bytes());
+                    Ok(())
                 }
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => {
+                out_buf.extend_from_slice(String::from_utf8_lossy(v).as_bytes());
                 Ok(())
             }
         }

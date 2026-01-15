@@ -167,12 +167,12 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub binary_input_format: BinaryDisplayFormat,
+    pub binary_output_format: BinaryDisplayFormat,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
     pub week_start: u8,
     pub date_format_style: String,
-    pub enable_binary_to_utf8_lossy: bool,
 }
 
 impl Default for FunctionContext {
@@ -186,12 +186,12 @@ impl Default for FunctionContext {
 
             geometry_output_format: Default::default(),
             binary_input_format: BinaryDisplayFormat::Utf8,
+            binary_output_format: BinaryDisplayFormat::Utf8,
             parse_datetime_ignore_remainder: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
             week_start: 0,
             date_format_style: "oracle".to_string(),
-            enable_binary_to_utf8_lossy: false,
         }
     }
 }
