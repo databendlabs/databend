@@ -14,7 +14,6 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
-use std::panic::Location;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -238,11 +237,7 @@ impl Runtime {
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {
             self.handle
-                .block_on(location_future(
-                    future,
-                    std::panic::Location::caller(),
-                    None,
-                ))
+                .block_on(location_future(future, None))
                 .with_context(|| "failed to block on future".to_string())
                 .flatten()
         })
@@ -429,11 +424,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(
-        future,
-        std::panic::Location::caller(),
-        None,
-    ))
+    tokio::spawn(location_future(future, None))
 }
 
 #[track_caller]
@@ -443,11 +434,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(
-        future,
-        std::panic::Location::caller(),
-        Some(name),
-    ))
+    tokio::spawn(location_future(future, Some(name)))
 }
 
 #[track_caller]
@@ -457,11 +444,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::task::spawn_local(location_future(
-        future,
-        std::panic::Location::caller(),
-        None,
-    ))
+    tokio::task::spawn_local(location_future(future, None))
 }
 
 #[track_caller]
@@ -491,11 +474,7 @@ where
 pub fn block_on<F: Future>(future: F) -> F::Output {
     #[expect(clippy::disallowed_methods)]
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(location_future(
-            future,
-            std::panic::Location::caller(),
-            None,
-        ))
+        tokio::runtime::Handle::current().block_on(location_future(future, None))
     })
 }
 
@@ -505,18 +484,14 @@ pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
         Err(_) => Err(future),
         #[expect(clippy::disallowed_methods)]
         Ok(handler) => Ok(tokio::task::block_in_place(|| {
-            handler.block_on(location_future(
-                future,
-                std::panic::Location::caller(),
-                None,
-            ))
+            handler.block_on(location_future(future, None))
         })),
     }
 }
 
+#[track_caller]
 fn location_future<F>(
     future: F,
-    frame_location: &'static Location,
     frame_name: Option<String>,
 ) -> impl Future<Output = F::Output> + use<F>
 where
@@ -525,6 +500,8 @@ where
     // NOTE:
     // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
     // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
+
+    let frame_location = std::panic::Location::caller();
 
     // TODO: tracking payload
     let future = ThreadTracker::tracking_future(future);
