@@ -493,7 +493,10 @@ pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
 }
 
 #[track_caller]
-fn location_future<F>(future: F, frame_name: Option<String>) -> impl Future<Output = F::Output> + use<F>
+fn location_future<F>(
+    future: F,
+    frame_name: Option<String>,
+) -> impl Future<Output = F::Output> + use<F>
 where
     F: Future,
 {
