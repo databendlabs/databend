@@ -1113,10 +1113,6 @@ impl Settings {
         Ok(self.try_get_u64("enforce_local")? == 1)
     }
 
-    pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
-    }
-
     pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
     }

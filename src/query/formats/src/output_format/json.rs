@@ -50,7 +50,6 @@ impl JSONOutputFormat {
                 jiff_timezone: options.jiff_timezone.clone(),
                 geometry_format: options.geometry_format,
                 binary_format: options.binary_format,
-                binary_utf8_lossy: options.binary_utf8_lossy,
                 enable_dst_hour_fix: options.enable_dst_hour_fix,
                 format_null_as_str: true,
             },

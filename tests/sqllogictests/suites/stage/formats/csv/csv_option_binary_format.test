@@ -90,10 +90,7 @@ statement ok
 unset binary_output_format;
 
 statement ok
-set binary_output_format = 'utf-8';
-
-statement ok
-set enable_binary_to_utf8_lossy = 1;
+set binary_output_format = 'UTF-8-LOSSY';
 
 query 
 copy into @s1 from b1 file_format = (type = 'csv');
@@ -108,9 +105,6 @@ select $1 from @s1(file_format => 'csv');
 
 statement ok
 unset binary_output_format;
-
-statement ok
-unset enable_binary_to_utf8_lossy;
 
 statement ok
 remove @s1;

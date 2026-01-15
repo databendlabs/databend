@@ -1246,24 +1246,26 @@ impl DefaultSettings {
                 }),
                 ("binary_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("hex".to_owned()),
-                    desc: "Controls how BINARY columns are rendered (HEX, BASE64 or UTF-8).",
+                    desc: "Controls how BINARY columns are rendered (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![
                         "hex".into(),
                         "base64".into(),
                         "utf-8".into(),
+                        "utf-8-lossy".into(),
                     ])),
                 }),
                 ("binary_input_format", DefaultSettingValue {
                     value: UserSettingValue::String("utf-8".to_owned()),
-                    desc: "Controls how string literals are interpreted when inserted into BINARY columns (HEX, BASE64 or UTF-8).",
+                    desc: "Controls how string literals are interpreted when inserted into BINARY columns (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![
                         "hex".into(),
                         "base64".into(),
                         "utf-8".into(),
+                        "utf-8-lossy".into(),
                     ])),
                 }),
                 ("random_function_seed", DefaultSettingValue {
@@ -1480,13 +1482,6 @@ impl DefaultSettings {
                 ("enable_parallel_union_all", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_binary_to_utf8_lossy", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable binary-to-UTF8 lossy conversion, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

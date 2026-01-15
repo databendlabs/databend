@@ -28,6 +28,7 @@ pub enum BinaryDisplayFormat {
     Hex,
     Base64,
     Utf8,
+    Utf8Lossy,
 }
 
 impl BinaryDisplayFormat {
@@ -36,8 +37,9 @@ impl BinaryDisplayFormat {
             "hex" => Ok(BinaryDisplayFormat::Hex),
             "base64" => Ok(BinaryDisplayFormat::Base64),
             "utf-8" | "utf8" => Ok(BinaryDisplayFormat::Utf8),
+            "utf-8-lossy" | "utf8-lossy" | "utf8_lossy" => Ok(BinaryDisplayFormat::Utf8Lossy),
             other => Err(ErrorCode::InvalidArgument(format!(
-                "Invalid binary format '{other}', valid values: HEX | BASE64 | UTF-8"
+                "Invalid binary format '{other}', valid values: HEX | BASE64 | UTF-8 | UTF-8-LOSSY"
             ))),
         }
     }
@@ -47,6 +49,7 @@ impl BinaryDisplayFormat {
             BinaryDisplayFormat::Hex => "HEX",
             BinaryDisplayFormat::Base64 => "BASE64",
             BinaryDisplayFormat::Utf8 => "UTF-8",
+            BinaryDisplayFormat::Utf8Lossy => "UTF-8-LOSSY",
         }
     }
 }
@@ -57,7 +60,6 @@ pub struct FormatSettings {
     pub jiff_timezone: TimeZone,
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
-    pub binary_utf8_lossy: bool,
     pub enable_dst_hour_fix: bool,
     pub format_null_as_str: bool,
 }
@@ -70,7 +72,6 @@ impl Default for FormatSettings {
             jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
-            binary_utf8_lossy: false,
             enable_dst_hour_fix: false,
             format_null_as_str: false,
         }
@@ -84,11 +85,11 @@ impl FormatSettings {
             BinaryDisplayFormat::Base64 => Cow::Owned(general_purpose::STANDARD.encode(value)),
             BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
                 Ok(s) => Cow::Borrowed(s),
-                Err(_) if self.binary_utf8_lossy => {
-                    Cow::Owned(String::from_utf8_lossy(value).into_owned())
-                }
                 Err(_) => Cow::Owned(hex::encode_upper(value)),
             },
+            BinaryDisplayFormat::Utf8Lossy => {
+                Cow::Owned(String::from_utf8_lossy(value).into_owned())
+            }
         }
     }
 }

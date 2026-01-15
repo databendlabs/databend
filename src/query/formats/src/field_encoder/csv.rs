@@ -86,10 +86,9 @@ pub struct FieldEncoderCSV {
 
 impl FieldEncoderCSV {
     pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
-        let (binary_format, binary_utf8_lossy) = Self::binary_settings(params, options_ext);
+        let binary_format = Self::binary_settings(params, options_ext);
         let mut nested_options = options_ext.clone();
         nested_options.binary_format = binary_format;
-        nested_options.binary_utf8_lossy = binary_utf8_lossy;
         Self {
             nested: FieldEncoderValues::create(&nested_options),
             simple: FieldEncoderValues {
@@ -107,7 +106,6 @@ impl FieldEncoderCSV {
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
                 binary_format,
-                binary_utf8_lossy,
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -133,7 +131,6 @@ impl FieldEncoderCSV {
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
                 binary_format: options_ext.binary_format,
-                binary_utf8_lossy: options_ext.binary_utf8_lossy,
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
@@ -144,17 +141,14 @@ impl FieldEncoderCSV {
     fn binary_settings(
         params: &CsvFileFormatParams,
         options_ext: &FileFormatOptionsExt,
-    ) -> (BinaryDisplayFormat, bool) {
+    ) -> BinaryDisplayFormat {
         if options_ext.is_select {
-            (options_ext.binary_format, options_ext.binary_utf8_lossy)
+            options_ext.binary_format
         } else {
-            (
-                match params.binary_format {
-                    BinaryFormat::Hex => BinaryDisplayFormat::Hex,
-                    BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
-                },
-                false,
-            )
+            match params.binary_format {
+                BinaryFormat::Hex => BinaryDisplayFormat::Hex,
+                BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
+            }
         }
     }
 
