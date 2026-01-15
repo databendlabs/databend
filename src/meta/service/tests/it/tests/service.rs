@@ -21,7 +21,6 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use databend_common_base::base::GlobalSequence;
-use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -66,7 +65,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         .await??;
 
     let mut srv = GrpcServer::create(tc.config.clone(), mh);
-    srv.start().await?;
+    srv.do_start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 
     Ok(())
