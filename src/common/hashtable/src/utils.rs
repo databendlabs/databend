@@ -121,92 +121,101 @@ pub mod sse {
 
     #[inline(always)]
     pub unsafe fn compare_sse2(a: *const u8, b: *const u8) -> bool {
-        0xFFFF
-            == _mm_movemask_epi8(_mm_cmpeq_epi8(
-                _mm_loadu_si128(a as *const __m128i),
-                _mm_loadu_si128(b as *const __m128i),
-            ))
+        unsafe {
+            0xFFFF
+                == _mm_movemask_epi8(_mm_cmpeq_epi8(
+                    _mm_loadu_si128(a as *const __m128i),
+                    _mm_loadu_si128(b as *const __m128i),
+                ))
+        }
     }
 
     #[inline(always)]
     pub unsafe fn compare_sse2_x4(a: *const u8, b: *const u8) -> bool {
-        0xFFFF
-            == _mm_movemask_epi8(_mm_and_si128(
-                _mm_and_si128(
-                    _mm_cmpeq_epi8(
-                        _mm_loadu_si128(a as *const __m128i),
-                        _mm_loadu_si128(b as *const __m128i),
+        unsafe {
+            0xFFFF
+                == _mm_movemask_epi8(_mm_and_si128(
+                    _mm_and_si128(
+                        _mm_cmpeq_epi8(
+                            _mm_loadu_si128(a as *const __m128i),
+                            _mm_loadu_si128(b as *const __m128i),
+                        ),
+                        _mm_cmpeq_epi8(
+                            _mm_loadu_si128((a as *const __m128i).offset(1)),
+                            _mm_loadu_si128((b as *const __m128i).offset(1)),
+                        ),
                     ),
-                    _mm_cmpeq_epi8(
-                        _mm_loadu_si128((a as *const __m128i).offset(1)),
-                        _mm_loadu_si128((b as *const __m128i).offset(1)),
+                    _mm_and_si128(
+                        _mm_cmpeq_epi8(
+                            _mm_loadu_si128((a as *const __m128i).offset(2)),
+                            _mm_loadu_si128((b as *const __m128i).offset(2)),
+                        ),
+                        _mm_cmpeq_epi8(
+                            _mm_loadu_si128((a as *const __m128i).offset(3)),
+                            _mm_loadu_si128((b as *const __m128i).offset(3)),
+                        ),
                     ),
-                ),
-                _mm_and_si128(
-                    _mm_cmpeq_epi8(
-                        _mm_loadu_si128((a as *const __m128i).offset(2)),
-                        _mm_loadu_si128((b as *const __m128i).offset(2)),
-                    ),
-                    _mm_cmpeq_epi8(
-                        _mm_loadu_si128((a as *const __m128i).offset(3)),
-                        _mm_loadu_si128((b as *const __m128i).offset(3)),
-                    ),
-                ),
-            ))
+                ))
+        }
     }
 
     /// # Safety
     /// This is safe that we compare bytes via addr
     #[inline(always)]
     pub unsafe fn memcmp_sse(a: &[u8], b: &[u8]) -> bool {
-        let mut size = a.len();
-        if size != b.len() {
-            return false;
-        }
-
-        let mut a = a.as_ptr();
-        let mut b = b.as_ptr();
-
-        if size <= 16 {
-            if size >= 8 {
-                return (a as *const u64).read_unaligned() == (b as *const u64).read_unaligned()
-                    && (a.add(size - 8) as *const u64).read_unaligned()
-                        == (b.add(size - 8) as *const u64).read_unaligned();
-            } else if size >= 4 {
-                return (a as *const u32).read_unaligned() == (b as *const u32).read_unaligned()
-                    && (a.add(size - 4) as *const u32).read_unaligned()
-                        == (b.add(size - 4) as *const u32).read_unaligned();
-            } else if size >= 2 {
-                return (a as *const u16).read_unaligned() == (b as *const u16).read_unaligned()
-                    && (a.add(size - 2) as *const u16).read_unaligned()
-                        == (b.add(size - 2) as *const u16).read_unaligned();
-            } else if size >= 1 {
-                return *a == *b;
-            }
-            return true;
-        }
-
-        while size >= 64 {
-            if compare_sse2_x4(a, b) {
-                a = a.add(64);
-                b = b.add(64);
-
-                size -= 64;
-            } else {
+        unsafe {
+            let mut size = a.len();
+            if size != b.len() {
                 return false;
             }
-        }
 
-        match size / 16 {
-            3 if !compare_sse2(a.add(32), b.add(32))
-                || !compare_sse2(a.add(16), b.add(16))
-                || !compare_sse2(a, b) =>
-            {
-                false
+            let mut a = a.as_ptr();
+            let mut b = b.as_ptr();
+
+            if size <= 16 {
+                if size >= 8 {
+                    return (a as *const u64).read_unaligned()
+                        == (b as *const u64).read_unaligned()
+                        && (a.add(size - 8) as *const u64).read_unaligned()
+                            == (b.add(size - 8) as *const u64).read_unaligned();
+                } else if size >= 4 {
+                    return (a as *const u32).read_unaligned()
+                        == (b as *const u32).read_unaligned()
+                        && (a.add(size - 4) as *const u32).read_unaligned()
+                            == (b.add(size - 4) as *const u32).read_unaligned();
+                } else if size >= 2 {
+                    return (a as *const u16).read_unaligned()
+                        == (b as *const u16).read_unaligned()
+                        && (a.add(size - 2) as *const u16).read_unaligned()
+                            == (b.add(size - 2) as *const u16).read_unaligned();
+                } else if size >= 1 {
+                    return *a == *b;
+                }
+                return true;
             }
-            2 if !compare_sse2(a.add(16), b.add(16)) || !compare_sse2(a, b) => false,
-            1 if !compare_sse2(a, b) => false,
-            _ => compare_sse2(a.add(size).sub(16), b.add(size).sub(16)),
+
+            while size >= 64 {
+                if compare_sse2_x4(a, b) {
+                    a = a.add(64);
+                    b = b.add(64);
+
+                    size -= 64;
+                } else {
+                    return false;
+                }
+            }
+
+            match size / 16 {
+                3 if !compare_sse2(a.add(32), b.add(32))
+                    || !compare_sse2(a.add(16), b.add(16))
+                    || !compare_sse2(a, b) =>
+                {
+                    false
+                }
+                2 if !compare_sse2(a.add(16), b.add(16)) || !compare_sse2(a, b) => false,
+                1 if !compare_sse2(a, b) => false,
+                _ => compare_sse2(a.add(size).sub(16), b.add(size).sub(16)),
+            }
         }
     }
 }
