@@ -55,6 +55,12 @@ pub mod features {
     /// - 2025-10-16: since 1.2.828
     ///   🖥 server: rename `FetchAddU64` to `FetchIncreaseU64`, add `max_value`.
     pub const FETCH_INCREASE_U64:   FeatureSpec = ("fetch_increase_u64",   (1, 2, 828));
+    /// - 2026-01-12: since 1.2.869
+    ///   🖥 server: add `kv_list` gRPC API: in protobuf, with `limit`, return stream.
+    pub const KV_LIST:              FeatureSpec = ("kv_list",              (1, 2, 869));
+    /// - 2026-01-13: since 1.2.869
+    ///   🖥 server: add `kv_get_many` gRPC API: in protobuf, receive stream, return stream.
+    pub const KV_GET_MANY:          FeatureSpec = ("kv_get_many",          (1, 2, 869));
 
 }
 
@@ -79,6 +85,8 @@ pub fn all() -> &'static [FeatureSpec] {
         features::PUT_SEQUENTIAL,
         features::PROPOSED_AT_MS,
         features::FETCH_INCREASE_U64,
+        features::KV_LIST,
+        features::KV_GET_MANY,
     ];
 
     REQUIRES
