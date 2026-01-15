@@ -28,7 +28,7 @@ INSERT INTO t2 (a,b,c,d,e,f,g,h) VALUES('1','2','3','4','2021-08-15', '2021-09-1
 statement ok
 INSERT INTO t1 (a,b,c,d,e,f,g,h) select * from t2
 
-query IIIITTTT
+query IIII???T
 SELECT * FROM t1
 ----
 1 2 3 4 2021-08-15 2021-09-15 2021-08-15 10:00:00.000000 string1234
@@ -136,7 +136,7 @@ CREATE OR REPLACE TABLE t5(data variant, user_id uint8 not null);
 statement ok
 INSERT INTO t5 SELECT data, data:user_id AS user_id FROM t4;
 
-query TI
+query ?I
 SELECT * FROM t5;
 ----
 {"user_id":1} 1

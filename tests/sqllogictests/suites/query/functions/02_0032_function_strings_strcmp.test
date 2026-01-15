@@ -1,14 +1,14 @@
-query T
+query ?
 SELECT STRCMP(NULL, 'a')
 ----
 NULL
 
-query T
+query ?
 SELECT STRCMP('a', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT STRCMP(NULL, NULL)
 ----
 NULL
@@ -78,4 +78,3 @@ SELECT STRCMP(to_varchar(number + 1), to_varchar(number)) FROM numbers(5) ORDER 
 1
 1
 1
-

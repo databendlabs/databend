@@ -14,7 +14,7 @@ BEGIN
 END;
 $$;
 
-query T
+query I
 EXECUTE IMMEDIATE $$
 BEGIN
     LET p := 'p1';
@@ -40,7 +40,7 @@ $$;
 ----
 NULL
 
-query TT
+query II
 EXECUTE IMMEDIATE $$
 BEGIN
     let x RESULTSET :=  (select number , number + 1  from numbers(5) order by 1, 2);
@@ -54,7 +54,7 @@ $$;
 3 4
 4 5
 
-query T
+query I
 EXECUTE IMMEDIATE $$
 BEGIN
     let x;
@@ -76,4 +76,3 @@ BEGIN
     RETURN y;
 END;
 $$;
-

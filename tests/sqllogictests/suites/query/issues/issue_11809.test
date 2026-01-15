@@ -10,4 +10,3 @@ query I
 select * from numbers(1);
 ----
 0
-

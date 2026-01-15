@@ -29,7 +29,3 @@ drop table t;
 
 statement ok
 DROP DATABASE issue_12126
-
-
-
-

@@ -25,4 +25,3 @@ USE default
 
 statement ok
 DROP DATABASE vector_db
-

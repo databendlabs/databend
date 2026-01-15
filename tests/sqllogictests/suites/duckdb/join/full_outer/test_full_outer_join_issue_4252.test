@@ -48,7 +48,7 @@ INSERT INTO df3 VALUES
     ('2022-02-03',  2000, 'org2'),
     ('2022-04-01',  3000, 'org3');
 
-query II
+query ?R
 SELECT 
     coalesce(anon_1.month, anon_2.month) AS month, 
     coalesce(coalesce(CAST(anon_1.value AS float), 0.0) + coalesce(CAST(anon_2.value AS float), 0.0), 0.0) AS value
@@ -93,7 +93,7 @@ FULL OUTER JOIN (
 ----
 2022-01-01	1100.0
 
-query II
+query ?R
 SELECT 
     coalesce(anon_1.month, anon_2.month) AS month, 
     coalesce(coalesce(CAST(anon_1.value AS float), 0.0) + coalesce(CAST(anon_2.value AS float), 0.0), 0.0) AS value
@@ -138,7 +138,7 @@ FULL OUTER JOIN (
 ----
 2022-01-01	1110.0
 
-query II
+query ?R
 SELECT 
     coalesce(anon_1.month, anon_2.month) AS month, 
     coalesce(coalesce(CAST(anon_1.value AS float), 0.0) + coalesce(CAST(anon_2.value AS float), 0.0), 0.0) AS value

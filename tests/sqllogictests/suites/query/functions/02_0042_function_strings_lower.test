@@ -8,8 +8,7 @@ SELECT LOWER('Здравствуйте')
 ----
 здравствуйте
 
-query T
+query ?
 SELECT LOWER(NULL)
 ----
 NULL
-

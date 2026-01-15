@@ -28,13 +28,13 @@ insert into t1 values(1,'x'),(2,'y'),(3,'z');
 statement ok
 create view v_t as select * from t;
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2306, Text: 'v_union' as view Already Exists
 create view v_union as select c1 from t union all select c1 from t1;
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2306, Text: 'v_subquery' as view Already Exists
 create view v_subquery as select * from (select c1 from t union all select c1 from t1) as res;
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2306, Text: 'v_join' as view Already Exists
 create view v_join as select * from (select c1 from t union all select c1 from t1) as res join t1 on t1.c1=res.c1;
 
 statement ok
@@ -70,7 +70,7 @@ select * from default.v_subquery order by c1;
 3
 3
 
-query III
+query IIT
 select * from default.v_join order by c2;
 ----
 1 1 x

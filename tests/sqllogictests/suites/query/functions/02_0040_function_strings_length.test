@@ -19,8 +19,7 @@ SELECT LENGTH('你好')
 ----
 2
 
-query T
+query ?
 SELECT LENGTH(NULL)
 ----
 NULL
-

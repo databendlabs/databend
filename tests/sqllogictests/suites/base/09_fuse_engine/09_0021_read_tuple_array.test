@@ -13,28 +13,28 @@ CREATE TABLE t (ta ARRAY(TUPLE(a int, b int)))
 statement ok
 INSERT INTO t VALUES ([(1,1),(2,2),(3,3)]), ([(4,5)]), ([(7,8)])
 
-query T
+query ?
 SELECT * FROM t
 ----
 [(1,1),(2,2),(3,3)]
 [(4,5)]
 [(7,8)]
 
-query T
+query ?
 SELECT ta[1] FROM t
 ----
 (1,1)
 (4,5)
 (7,8)
 
-query T
+query ?
 SELECT ta[2] FROM t
 ----
 (2,2)
 NULL
 NULL
 
-query T
+query ?
 SELECT ta[3] FROM t
 ----
 (3,3)
@@ -48,7 +48,7 @@ SELECT ta[1].a FROM t
 4
 7
 
-query T
+query ?
 SELECT * FROM t where ta[1].b > 3
 ----
 [(4,5)]
@@ -71,7 +71,7 @@ CREATE TABLE t2 (a Tuple(Int64, Tuple(String), Array(Int32)) NULL, b Tuple(Int64
 statement ok
 INSERT INTO TABLE t2 VALUES ((1, ('a'), [2, 3]), (10, null, null)), (null, null), ((2, ('c'), []), (null, (null), [null]))
 
-query TT
+query ??
 SELECT * FROM t2;
 ----
 (1,("a"),[2,3]) (10,NULL,NULL)
@@ -84,7 +84,7 @@ CREATE TABLE t3 (a Array(Array(UInt8)) NULL, b Array(Array(Int32 NULL) NULL) NUL
 statement ok
 INSERT INTO TABLE t3 VALUES ([[1, 2], [3, 4]], [[5, null], null]), (null, null), ([[]], [null])
 
-query TT
+query ??
 SELECT * FROM t3;
 ----
 [[1,2],[3,4]] [[5,NULL],NULL]
@@ -97,7 +97,7 @@ CREATE TABLE t4 (a Map(Int32, Array(String) NULL) NULL, b Map(String, Tuple(Int3
 statement ok
 INSERT INTO TABLE t4 VALUES ({1: ['a', 'b']}, {'k1': (1)}), (null, null), ({2: null}, {'k2': (null)})
 
-query TT
+query ??
 SELECT * FROM t4;
 ----
 {1:["a","b"]} {"k1":(1)}
@@ -131,7 +131,7 @@ create table tt2(a int, b bool);
 statement ok
 insert into tt2 values(1, true), (2, null), (null, false);
 
-query II rowsort
+query ? rowsort
 SELECT (1078286207, tt1.b) FROM tt1 CROSS JOIN tt2;
 ----
 (1078286207,0)

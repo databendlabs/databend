@@ -28,7 +28,7 @@ SELECT * FROM (
 ) AS salaries(employee_id, salary);
 
 
-query TT
+query III
 select * from employees e where e.salary > ALL (
           SELECT salary
           FROM salaries
@@ -36,7 +36,7 @@ select * from employees e where e.salary > ALL (
 );
 ----
 
-query TT
+query II
 SELECT
     e.employee_id,
     d.department_name
@@ -54,4 +54,3 @@ WHERE
     )
 ORDER BY employee_id;
 ----
-

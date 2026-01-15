@@ -1,7 +1,7 @@
 statement ok
 drop table if exists try_cast
 
-query T
+query I
 SELECT TRY_CAST('hello' as INTEGER)
 ----
 NULL

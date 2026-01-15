@@ -62,4 +62,3 @@ from
 # from
 #     (select round from test limit 1) as subselect,
 #     test
-

@@ -1,20 +1,19 @@
-query TT
+query ?T
 select * from (select NULL as b) sq1, (select 'asdf' as b) sq2 where sq1.b = sq2.b;
 ----
 
-query ITIT
+query I?IT
 select * from (select 42 as a, NULL as b) sq1, (select 42 as a, 'asdf' as b) sq2 where sq1.b <> sq2.b;
 ----
 
-query ITIT
+query I?IT
 select * from (select 42 as a, NULL as b) sq1, (select 42 as a, 'asdf' as b) sq2 where sq1.a=sq2.a and sq1.b <> sq2.b;
 ----
 
-query ITIT
+query ITI?
 select * from (select 42 as a, 'asdf' as b) sq2, (select 42 as a, NULL as b) sq1 where sq1.b <> sq2.b;
 ----
 
-query ITIT
+query ITI?
 select * from (select 42 as a, 'asdf' as b) sq2, (select 42 as a, NULL as b) sq1 where sq1.a=sq2.a and sq1.b <> sq2.b;
 ----
-

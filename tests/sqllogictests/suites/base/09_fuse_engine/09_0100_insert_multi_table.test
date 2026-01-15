@@ -1,4 +1,4 @@
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -152,7 +152,7 @@ select * from t2 order by c1;
 5 6
 
 # branched insert first
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -186,7 +186,7 @@ select * from t2 order by c1;
 3 4
 
 # projected by source columns
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -220,7 +220,7 @@ select * from t2 order by c1;
 4 3
 
 # cast schema to target table
-statement ok 
+statement ok
 create or replace table t1(c1 bigint,c2 int);
 
 statement ok
@@ -248,7 +248,7 @@ select * from t2 order by c1;
 4 3
 
 # reorder and fill default value
-statement ok 
+statement ok
 create or replace table t1(c1 bigint,c2 int);
 
 statement ok
@@ -276,7 +276,7 @@ select * from t2 order by c1;
 3 4
 
 # test cluster key
-statement ok 
+statement ok
 create or replace table t1(c1 bigint,c2 int) cluster by (c1 + 1);
 
 statement ok
@@ -310,7 +310,7 @@ select * from t2;
 3 4
 
 # test multi-statement transaction
-statement ok 
+statement ok
 create or replace table t1(c1 bigint,c2 int) cluster by (c1 + 1);
 
 statement ok
@@ -391,7 +391,7 @@ select * from t2;
 
 
 # render subquery results
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -426,7 +426,7 @@ select * from t2 order by c1;
 
 
 # same table in different branches
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -463,7 +463,7 @@ select * from t2 order by c1;
 3 4
 
 
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -497,7 +497,7 @@ select * from t2 order by c1;
 4 456
 
 
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok
@@ -572,7 +572,7 @@ select count() from fuse_segment('default', 'processing_updates');
 1
 
 # test default ambiguity
-statement ok 
+statement ok
 create or replace table t1(c1 int,c2 int);
 
 statement ok

@@ -17,4 +17,3 @@ a INT NO 0 (empty)
 
 statement ok
 DROP DATABASE IF EXISTS ss
-

@@ -171,4 +171,3 @@ DROP TABLE t_in_memory
 
 statement ok
 DROP DATABASE db_09_0006
-

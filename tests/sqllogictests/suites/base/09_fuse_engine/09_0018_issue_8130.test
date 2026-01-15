@@ -39,4 +39,3 @@ DROP TABLE t_issue_8130
 
 statement ok
 DROP DATABASE issues
-

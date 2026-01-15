@@ -54,4 +54,3 @@ unset max_threads;
 
 statement ok
 unset enable_backpressure_spiller;
-

@@ -25,7 +25,7 @@ Donald John Trump 80 president
 
 
 # no newline in at file end
-query II
+query TT
 select $1, $2 from @data/csv/no_newline.csv (file_format=>'csv')  order by $1
 ----
 1 2
@@ -37,7 +37,7 @@ drop table if exists ii
 statement ok
 create table ii(a int null, b int null)
 
-query II
+query TIITI
 copy into ii from @data/csv/win_newline.csv file_format = (type = CSV record_delimiter = '\r\n' skip_header = 1)
 ----
 csv/win_newline.csv 2 0 NULL NULL
@@ -54,7 +54,7 @@ drop table if exists it
 statement ok
 create table it(a int not null, b string not null)
 
-query IT
+query TIITI
 copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
 ----
 
@@ -103,4 +103,3 @@ apple.com 2265cbcc3ef24106c9e0eddbd04f3cca0d03225da3fcca8e2d86f7a394af9283 64
 apple.com 2265cbcc3ef24106c9e0eddbd04f3cca0d03225da3fcca8e2d86f7a394af9283 64
 google.com d4c9d9027326271a89ce51fcaf328ed673f17be33469ff979e8ab8dd501e664f 64
 google.com d4c9d9027326271a89ce51fcaf328ed673f17be33469ff979e8ab8dd501e664f 64
-

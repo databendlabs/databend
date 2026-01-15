@@ -27,4 +27,3 @@ DROP SCHEMA IF EXISTS db
 
 statement error 1003
 DROP SCHEMA db
-

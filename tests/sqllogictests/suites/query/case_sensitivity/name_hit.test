@@ -50,7 +50,7 @@ CREATE OR REPLACE TABLE T_17094 (City VARCHAR(255), Temperature DECIMAL(10, 2))
 statement ok
 alter table T_17094 cluster by(City)
 
-query TTIIT
+query TT???
 select cluster_key, type, info:total_block_count, info:constant_block_count, info:block_depth_histogram  from clustering_information('default','T_17094')
 ----
 (City) linear 0 0 {}

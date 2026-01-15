@@ -15,17 +15,17 @@ select regexp_like('foo', 'FOO')
 
 
 
-query T
+query ?
 select regexp_like('foo', null)
 ----
 NULL
 
-query T
+query ?
 select regexp_like(null, null)
 ----
 NULL
 
-query T
+query ?
 select regexp_like('foo', 'FOO', null)
 ----
 NULL

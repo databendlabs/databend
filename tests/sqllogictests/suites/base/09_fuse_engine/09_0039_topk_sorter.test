@@ -25,7 +25,7 @@ insert into test select number % 3000 as m, if(m = 0, '2024-01-05', '2023-01-01'
 statement ok
 insert into test select number % 3000 as m, if(m = 0, '2024-01-06', '2023-01-01'), if(m = 0, 'http://www.google.com/xxx/', 'xxxxxxxx') from numbers(8888);
 
-query ITT
+query I?T
 select * from test where url like '%google%' order by event_time limit 10;
 ----
 0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/
@@ -44,7 +44,7 @@ statement ok
 create table test_k storage_format = 'native' as select * from test;
 
 
-query ITT
+query I?T
 select * from test_k where url like '%google%' order by event_time limit 1;
 ----
 0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/

@@ -7,17 +7,17 @@ CREATE TABLE t0(c0 VARCHAR NOT NULL DEFAULT(-1981039679), c1 TIMESTAMP NULL)
 statement ok
 INSERT INTO t0 VALUES('',NULL)
 
-query I
+query B
 select ''>'!9t'
 ----
 0
 
-query I
+query B
 select ''<='!9t'
 ----
 1
 
-query I
+query B
 SELECT ((t0.c0)>('!9t')) FROM t0
 ----
 0
@@ -31,4 +31,3 @@ query I
 SELECT COUNT(*) FROM t0 WHERE NOT((t0.c0)>('!9t'))
 ----
 1
-

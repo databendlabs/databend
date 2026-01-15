@@ -13,12 +13,12 @@ SELECT BASE64_DECODE_STRING(TO_BASE64('abc'))
 ----
 abc
 
-query T
+query ?
 SELECT TO_BASE64(NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT FROM_BASE64(NULL)
 ----
 NULL
@@ -35,4 +35,3 @@ MQ==
 Mg==
 Mw==
 NA==
-

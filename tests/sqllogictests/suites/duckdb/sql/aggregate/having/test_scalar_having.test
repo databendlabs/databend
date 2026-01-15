@@ -62,4 +62,3 @@ SELECT SUM(a) FROM test HAVING COUNT(*)>1
 
 statement ok
 SELECT SUM(a) FROM test HAVING COUNT(*)>10
-

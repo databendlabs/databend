@@ -45,4 +45,3 @@ query T
 select quote('a\\b')
 ----
 a\\b
-

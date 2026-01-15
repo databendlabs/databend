@@ -17,4 +17,3 @@ query I
 select octet_length('lllllll')
 ----
 7
-

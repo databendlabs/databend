@@ -29,17 +29,18 @@ INSERT INTO t1 VALUES(10000.0)
 statement ok
 INSERT INTO t1 VALUES(0.0)
 
-query FI
+query RB
 SELECT c0, exp(c0) IS NULL FROM t1 order by c0
 ----
 0.0 0
 10000.0 0
 
-query FF
+query RR
 SELECT c0, exp(c0) FROM t1 order by c0
 ----
 0.0 1.0
 10000.0 Infinity
 
-query ok
+query R
 SELECT c0 FROM t1 WHERE exp(c0) IS NULL
+----

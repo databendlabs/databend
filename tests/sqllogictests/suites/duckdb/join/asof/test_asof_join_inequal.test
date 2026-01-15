@@ -25,8 +25,8 @@ CREATE TABLE probe0 AS
 # Strictly Greater Than
 #
 
-# INNER 
-query III
+# INNER
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin > e.begin
@@ -46,7 +46,7 @@ ORDER BY 1,2 ASC
 #
 
 # INNER
-query III
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin <= e.begin
@@ -59,11 +59,11 @@ ORDER BY 1,2 ASC
 2023-03-21 16:00:00.000000	2023-03-21 16:00:00.000000	3
 
 #
-# Strictly Less Than 
+# Strictly Less Than
 #
 
 # INNER
-query III
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin < e.begin

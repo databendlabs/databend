@@ -43,7 +43,7 @@ select * from t order by a
 6
 7
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
 a 3 0 9 (empty)
@@ -73,7 +73,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 ----
 6 6
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
 a 3 0 9 (empty)
@@ -86,7 +86,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 ----
 1 1
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
 a 3 0 8 (empty)
@@ -94,7 +94,7 @@ a 3 0 8 (empty)
 statement ok
 delete from t where a=5
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
 a 2 0 8 (empty)
@@ -102,7 +102,7 @@ a 2 0 8 (empty)
 statement ok
 analyze table `t`
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
 a 2 0 8 (empty)
@@ -119,7 +119,7 @@ set enable_table_snapshot_stats  = 1;
 statement ok
 analyze table t1;
 
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't1');
 ----
 a 10 0 8 [bucket id: 0, min: "0", max: "0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9", max: "9", ndv: 1.0, count: 1.0]
@@ -157,7 +157,7 @@ statement ok
 analyze table t_string;
 
 # Verify that histogram was created for string column
-query T
+query TIIIT
 select * from fuse_statistic('db_09_0020', 't_string') order by column_name asc;
 ----
 id 10 0 4 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 3, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 4, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 5, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 6, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 7, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 8, min: "9", max: "9", ndv: 1.0, count: 1.0], [bucket id: 9, min: "10", max: "10", ndv: 1.0, count: 1.0]
@@ -196,7 +196,7 @@ delete from t2 where a=1;
 ----
 1
 
-query T
+query TTTIIIITTIT
 show statistics from table db_09_0020.t2;
 ----
 db_09_0020 t2 a 3 3 2 0 2 4 4 (empty)
@@ -205,7 +205,7 @@ db_09_0020 t2 b 3 3 3 0 2 4 4 (empty)
 statement ok
 analyze table t2;
 
-query T
+query TTTIIIITTIT
 show statistics from table db_09_0020.t2;
 ----
 db_09_0020 t2 a 3 3 2 0 2 4 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
@@ -287,7 +287,7 @@ insert into t4 values(3, 'a'), (2, 'c');
 statement ok
 update t4 set a = 4 where b = 'c';
 
-query T
+query TTTIIIITTIT
 show statistics from table db_09_0020.t4;
 ----
 db_09_0020 t4 a 5 4 4 0 1 4 4 (empty)
@@ -296,7 +296,7 @@ db_09_0020 t4 b 5 4 3 0 a c <slt:ignore> (empty)
 statement ok
 alter table t4 set options(enable_auto_analyze = 1);
 
-query T
+query TTTIIIITTIT
 show statistics from table db_09_0020.t4;
 ----
 db_09_0020 t4 a 4 4 4 0 1 4 4 (empty)
@@ -305,7 +305,7 @@ db_09_0020 t4 b 4 4 3 0 a c <slt:ignore> (empty)
 statement ok
 delete from t4 where a = 4;
 
-query T
+query TTTIIIITTIT
 show statistics from table db_09_0020.t4;
 ----
 db_09_0020 t4 a 3 3 3 0 1 3 4 (empty)

@@ -1,4 +1,4 @@
-query ??
+query ?TI
 select $1, metadata$filename, metadata$file_row_number from @data/orc/all  (file_format=>'orc');
 ----
 {"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null} orc/alltypes.zstd.orc 0
@@ -16,12 +16,12 @@ select $1, metadata$filename, metadata$file_row_number from @data/orc/all  (file
 statement ok
 create or replace table t1(a variant, filename string, `row` int);
 
-query ??
+query TIITI
 copy into t1 from (select $1, metadata$filename, metadata$file_row_number from @data/orc/all)  file_format=(type=orc);
 ----
 orc/alltypes.zstd.orc 11 0 NULL NULL
 
-query ??
+query ?TI
 select * from t1 order by a;
 ----
 {"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""} orc/alltypes.zstd.orc 1
@@ -36,7 +36,7 @@ select * from t1 order by a;
 {"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null} orc/alltypes.zstd.orc 0
 {"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null} orc/alltypes.zstd.orc 10
 
-query ??
+query ITI
 select int64, metadata$filename, metadata$file_row_number from @data/orc/all  (file_format=>'orc');
 ----
 NULL orc/alltypes.zstd.orc 0
@@ -54,12 +54,12 @@ NULL orc/alltypes.zstd.orc 10
 statement ok
 create or replace table t1(a int64,  filename string, `row` int);
 
-query ??
+query TIITI
 copy into t1 from (select int64, metadata$filename, metadata$file_row_number from @data/orc/all)  file_format=(type=orc);
 ----
 orc/alltypes.zstd.orc 11 0 NULL NULL
 
-query ??
+query ITI
 select * from t1 order by a;
 ----
 -9223372036854775808 orc/alltypes.zstd.orc 5

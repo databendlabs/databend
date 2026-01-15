@@ -26,7 +26,7 @@ insert into target_build_table values(1,'b1','c1');
 statement ok
 insert into target_build_table values(2,'b2','c2');
 
-query TTT
+query ITT
 select * from target_build_table order by a; 
 ----
 1 b1 c1
@@ -50,7 +50,7 @@ insert into source_probe_table values(5,'b7','c7');
 statement ok
 insert into source_probe_table values(6,'b8','c8');
 
-query TTT
+query ITT
 select * from source_probe_table order by a; 
 ----
 1 b3 c3
@@ -61,24 +61,24 @@ select * from source_probe_table order by a;
 6 b8 c8
 
 ## test matched only
-query T
+query I
 merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when matched then update *;
 ----
 2
 
-query TTT
+query ITT
 select * from target_build_table order by a; 
 ----
 1 b3 c3
 2 b4 c4
 
 ## test insert only
-query T
+query I
 merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when not matched then insert *;
 ----
 4
 
-query TTT
+query ITT
 select * from target_build_table order by a; 
 ----
 1 b3 c3
@@ -92,18 +92,18 @@ select * from target_build_table order by a;
 statement ok
 delete from target_build_table where a >= 3;
 
-query TTT
+query ITT
 select * from target_build_table order by a; 
 ----
 1 b3 c3
 2 b4 c4
 
-query T
+query II
 merge into target_build_table as t1 using source_probe_table as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
 4 2
 
-query TTT
+query ITT
 select * from target_build_table order by a; 
 ----
 1 b3 c3
@@ -232,7 +232,7 @@ MERGE INTO t2 a USING (
 WHEN MATCHED AND b.action = 'update' THEN 
 UPDATE * WHEN MATCHED AND b.action = 'delete' THEN DELETE WHEN NOT MATCHED AND b.action!='delete' THEN INSERT *
 
-query II
+query IR
 SELECT id, float_col FROM t2 ORDER BY id;
 ----
 1 3.14159
@@ -241,4 +241,3 @@ SELECT id, float_col FROM t2 ORDER BY id;
 
 statement ok
 drop database if exists db;
-

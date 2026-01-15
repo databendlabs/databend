@@ -10,7 +10,7 @@ export function gcd_js(a, b) {
 }
 $$
 
-query F
+query II
 select number, gcd_js(number * 3, number * 6) from numbers(5) where number > 0 order by 1
 ----
 1 3
@@ -21,7 +21,7 @@ select number, gcd_js(number * 3, number * 6) from numbers(5) where number > 0 o
 statement ok
 CREATE OR REPLACE FUNCTION gcd_js_v2 (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS '@data/udf/gcd.js'
 
-query F
+query II
 select number, gcd_js_v2(number * 3, number * 6) from numbers(5) where number > 0 order by 1
 ----
 1 3
@@ -32,7 +32,7 @@ select number, gcd_js_v2(number * 3, number * 6) from numbers(5) where number > 
 statement ok
 CREATE OR REPLACE FUNCTION to_array_js (INT) RETURNS ARRAY(INT) LANGUAGE javascript HANDLER = 'to_array_js' AS '@data/udf/to_array.js'
 
-query IT 
+query I?
 select number, to_array_js(number) from numbers(5)
 ----
 0 [0,0]

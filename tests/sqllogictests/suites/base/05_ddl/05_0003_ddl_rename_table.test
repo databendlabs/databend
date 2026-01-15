@@ -95,4 +95,3 @@ RENAME TABLE t1 to system.t1
 
 statement ok
 DROP TABLE IF EXISTS t1
-

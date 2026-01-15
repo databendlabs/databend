@@ -75,4 +75,3 @@ query IIIII
 SELECT * FROM t1 JOIN t2 USING (b, c) JOIN t3 USING (d, e);
 ----
 1	2	2	3	4
-

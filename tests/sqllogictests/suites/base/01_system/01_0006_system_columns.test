@@ -34,6 +34,16 @@ columntest tid2
 columntest tid3
 columntest tid4
 default id
+dump_snapshots c
+i15760 c
+m_test a
+m_test b
+m_test c
+m_test d
+m_test k
+test_alter_table_unset a
+test_tbl_opt_parquet_encoding c
+test_tbl_opt_parquet_encoding s
 
 query TT
 SELECT lower(database), name FROM system.columns  WHERE table = 't' and database='columntest' order by name

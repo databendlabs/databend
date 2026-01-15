@@ -28,4 +28,3 @@ SELECT LENGTH(number) FROM array_length_test
 
 statement ok
 DROP TABLE array_length_test
-

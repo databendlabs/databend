@@ -12,4 +12,3 @@ SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a
 ----
 helloworld 43
 thisisalongstring 22
-

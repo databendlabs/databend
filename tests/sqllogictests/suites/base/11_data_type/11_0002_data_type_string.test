@@ -5,7 +5,7 @@ SELECT '1'::string from numbers(3)
 1
 1
 
-query T
+query ?
 SELECT {'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232} from numbers(3);
 ----
 {"w1vY1t5":-15239676694.972677,"6UfU721":-4905646705.765232}
@@ -19,24 +19,24 @@ SELECT 'hello' || ' ' || 'world' FROM numbers(1);
 ----
 hello world
 
-query T
+query TTT
 SELECT '!@#$%^&*()'::string, '你好'::string, '🌟'::string;
 ----
 !@#$%^&*() 你好 🌟
 
 # String with escape sequences
-query T
+query TT
 SELECT 'line1-line2'::string, 'tab\there'::string;
 ----
 line1-line2 tab	here
 
-query T
+query TTI
 SELECT UPPER('hello'), LOWER('WORLD'), LENGTH('databend') FROM numbers(1);
 ----
 HELLO world 8
 
 # String with JSON objects
-query T
+query ?
 SELECT {'key': 'value'::string, 'numbers': 123::string} FROM numbers(2);
 ----
 {"key":"value","numbers":"123"}
@@ -44,7 +44,7 @@ SELECT {'key': 'value'::string, 'numbers': 123::string} FROM numbers(2);
 
 
 # String with scientific notation
-query T
+query ?
 SELECT {'scientific': 1.23e-4, 'regular': 123.456} FROM numbers(1);
 ----
 {"scientific":0.000123,"regular":123.456000}
@@ -57,13 +57,13 @@ SELECT repeat('a', 100)::string FROM numbers(1);
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 # String with whitespace handling
-query T
+query TTT
 SELECT TRIM('  spaced  ')::string, LTRIM('  left')::string, RTRIM('right  ')::string;
 ----
 spaced	left	right
 
 # String with NULL values
-query T
+query TT
 SELECT NULL::string, COALESCE(NULL::string, 'default') FROM numbers(1);
 ----
 NULL	default
@@ -124,4 +124,3 @@ insert into test_to_date select '2024-01-3' || number::string a, a || ' 00:00:00
 
 statement error
 select count() from test_to_date where to_date(col1) between  to_date('2024-01-01') and to_date('2024-10-01');
-

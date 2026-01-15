@@ -16,7 +16,7 @@ SELECT NULLIF(1, NULL)
 ----
 1
 
-query T
+query ?
 SELECT NULLIF(NULL, 1)
 ----
 NULL
@@ -36,12 +36,12 @@ SELECT NULLIF('a', NULL)
 ----
 a
 
-query T
+query ?
 SELECT NULLIF(NULL, 'a')
 ----
 NULL
 
-query T
+query ?
 SELECT NULLIF(NULL, NULL)
 ----
 NULL
@@ -120,4 +120,3 @@ NULL NULL NULL
 
 statement ok
 DROP TABLE t
-

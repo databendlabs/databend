@@ -42,4 +42,3 @@ drop view t0
 
 statement ok
 drop view t1
-

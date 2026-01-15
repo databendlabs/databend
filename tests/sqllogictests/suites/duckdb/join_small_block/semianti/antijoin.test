@@ -57,8 +57,9 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a)
 statement ok
 drop table if exists other;
 
-query I
+query 
 CREATE TABLE other (a INTEGER, b INTEGER);
+----
 
 statement ok
 INSERT INTO other VALUES (42, 1), (43, 1);

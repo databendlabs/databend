@@ -66,11 +66,12 @@ select * from t, lateral(select unnest([a, a+1, a+2]) as b) t1 order by a, b
 statement ok
 create table test_mm(payload variant, create_date Date);
 
-query T
+query ?
 select test_mm.payload payload from test_mm,
 lateral flatten(payload:key) walks
 where create_date > date_add(hour, -6, current_timestamp())
 and walks.value:source_person_id::varchar = 'xvcvz'  limit 1;
+----
 
 statement ok
 CREATE TABLE user_activities(user_id int, activities variant)
@@ -101,7 +102,7 @@ FROM user_activities u, LATERAL FLATTEN(input => u.activities) f
 ----
 8
 
-query I
+query R
 SELECT AVG(activity_count) AS avg_activities_per_user
 FROM (
   SELECT u.user_id, COUNT(f.value) AS activity_count
@@ -150,7 +151,7 @@ INSERT INTO persons (id, c) VALUES
     (12712555, '{"name":{"first":"John","last":"Smith"},"contact":[{"business":[{"type":"phone","content":"555-1234"},{"type":"email","content":"j.smith@company.com"}]}]}'),
     (98127771, '{"name":{"first":"Jane","last":"Doe"},"contact":[{"business":[{"type":"phone","content":"555-1236"},{"type":"email","content":"j.doe@company.com"}]}]}')
 
-query ITTT
+query I???
 SELECT id AS "ID", f.value AS "Contact", f1.value:type AS "Type", f1.value:content AS "Details" FROM
     persons p,
     LATERAL FLATTEN(input => p.c, path => 'contact') f,
@@ -171,7 +172,7 @@ GROUP BY p.id ORDER BY p.id
 12712555 2
 98127771 2
 
-query IT
+query I?
 SELECT u.user_id, f.value from
     user_activities u,
     LATERAL unnest(u.activities) f
@@ -203,28 +204,28 @@ insert into t1 values (1, 10, 11), (10, 20, 111), (2, 20, 200);
 statement ok
 insert into t2 values (1, 10, 22), (2222, 10, 22), (3, 20, 222);
 
-query I
+query II
 select t1.a, t1.b from t1 join lateral (values(t1.b)) as v1 ("c1") on t1.b = v1.c1 order by t1.a, t1.b;
 ----
 1 10
 2 20
 10 20
 
-query I
+query II
 select t1.a, t1.b from t1 join lateral (values(t1.b), (t1.c)) as v1 ("c1") on t1.b = v1.c1 order by t1.a, t1.b;
 ----
 1 10
 2 20
 10 20
 
-query T
+query ITI
 select t1.a, v1.c1, v1.c2 from t1 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v1 ("c1", "c2") on t1.a = v1.c2 order by t1.a, v1.c1, v1.c2;
 ----
 1 NULL NULL
 2 NULL NULL
 10 NULL NULL
 
-query T
+query ITI
 select t1.a, v1.c1, v1.c2 from t1 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v1 ("c1", "c2") on t1.a = v1.c2 left join lateral (values('t1_b', t1.b), ('t1_c', t1.c)) as v2 ("c1", "c2") on t1.a = v2.c2 order by t1.a, v1.c1, v1.c2;
 ----
 1 NULL NULL
@@ -237,7 +238,7 @@ create or replace table rates(origin varchar, dest varchar, distance int, "r2023
 statement ok
 insert into rates values ('a', 'b', 500, 2023.12, 2022.23, 2021.34), ('a', 'c', 500, 2023.11, null, null);
 
-query T
+query TTTR
 WITH source AS(
 	SELECT origin,
 		dest,
@@ -279,7 +280,7 @@ insert into rates values ('a', 'd', 400, null, null, null);
 statement ok
 insert into rates values ('a', 'e', null, null, null, null);
 
-query T
+query TTTR
 WITH source AS(
   SELECT
     origin,

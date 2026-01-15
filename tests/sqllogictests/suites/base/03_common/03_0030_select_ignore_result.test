@@ -1,5 +1,6 @@
 # query ok
 # SELECT FROM 1 IGNORE_RESULT
 
-query ok
+query I
 SELECT * FROM NUMBERS(1000) IGNORE_RESULT
+----

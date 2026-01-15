@@ -8,7 +8,7 @@ account_admin
 public
 test
 
-query T
+query TITBBT
 show roles like 'account_admin';
 ----
 account_admin 0 (empty) 1 1 (empty)

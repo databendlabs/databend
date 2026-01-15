@@ -62,4 +62,3 @@ SELECT test.b, SUM(a) FROM test GROUP BY test.b ORDER BY (SELECT SUM(a) FROM tes
 ----
 22 24
 21 12
-

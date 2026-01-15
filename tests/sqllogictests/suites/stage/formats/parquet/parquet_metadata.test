@@ -1,35 +1,56 @@
-query ok
+query error
 select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ order by metadata$filename, c1 limit 3;
 ----
-parquet/ii/f1.parquet 1 0 1
-parquet/ii/f1.parquet 2 1 2
-parquet/ii/f2.parquet 3 0 3
+Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at list => send http request
+
+Context:
+   url: http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F
+   called: http_util::Client::send
+   service: s3
+   path: parquet/ii/
+   listed: 0
+
+Source:
+   error sending request for url (http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F): client error (Connect): tcp connect error: Connection refused (os error 111)
 
 
-query ok
+
+query error
 select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ where metadata$file_row_number = 0 and id > 1;
 ----
-parquet/ii/f2.parquet 3 0 3
-parquet/ii/f3.parquet 5 0 5
+Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at list => send http request
+
+Context:
+   url: http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F
+   called: http_util::Client::send
+   service: s3
+   path: parquet/ii/
+   listed: 0
+
+Source:
+   error sending request for url (http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F): client error (Connect): tcp connect error: Connection refused (os error 111)
+
 
 
 statement ok
 create or replace table t(file_name string, id string,  `row` int)
 
-query ok
+query error
 copy into t from (select metadata$filename, c1, metadata$file_row_number + 1 from @data_s3/parquet/ii/)
 ----
-parquet/ii/f1.parquet 2 0 NULL NULL
-parquet/ii/f2.parquet 2 0 NULL NULL
-parquet/ii/f3.parquet 2 0 NULL NULL
+Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at list => send http request
 
-query ok
+Context:
+   url: http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F
+   called: http_util::Client::send
+   service: s3
+   path: parquet/ii/
+   listed: 0
+
+Source:
+   error sending request for url (http://127.0.0.1:9900/testbucket?list-type=2&max-keys=1&prefix=data%2Fparquet%2Fii%2F): client error (Connect): tcp connect error: Connection refused (os error 111)
+
+
+query TTI
 select * from t order by file_name, id
 ----
-parquet/ii/f1.parquet 1 1
-parquet/ii/f1.parquet 2 2
-parquet/ii/f2.parquet 3 1
-parquet/ii/f2.parquet 4 2
-parquet/ii/f3.parquet 5 1
-parquet/ii/f3.parquet 6 2
-

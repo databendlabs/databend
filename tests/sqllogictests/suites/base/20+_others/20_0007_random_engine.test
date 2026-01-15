@@ -37,4 +37,3 @@ SELECT COUNT(*) FROM random_table
 
 statement ok
 DROP TABLE random_table
-

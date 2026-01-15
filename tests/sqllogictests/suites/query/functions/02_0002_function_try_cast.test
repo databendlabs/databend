@@ -1,4 +1,4 @@
-query F
+query R
 SELECT try_cast(1 + 1, Float64)
 ----
 2.0
@@ -79,7 +79,7 @@ SELECT try_cast(parse_json('123') as int32)  = 123
 ----
 1
 
-query I
+query R
 select  number / try_cast(if(number % 3 > 0, null, 2) as Int8) from numbers(3);
 ----
 0.0
@@ -106,7 +106,7 @@ SELECT try_cast(get(try_parse_json(c1),'key1') as varchar) FROM t1
 ----
 NULL
 
-query TT
+query ??
 select  try_cast(number as timestamp), try_cast(number as timestamp null)  from numbers(1);
 ----
 1970-01-01 00:00:00.000000 1970-01-01 00:00:00.000000
@@ -123,22 +123,22 @@ select * from test having try_cast(b as boolean);
 statement error
 select * from test having try_cast(try_cast(b as timestamp null) as boolean);
 
-query TTT
+query ???
 select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));
 ----
 4000000210000004100000041000000420000002646174617465737462656E645064 80000003200000022000000220000002500150025003 20000000200000025064
 
-query TT
+query ??
 SELECT try_to_binary(to_bitmap('100,200,300')), try_to_binary(to_bitmap('1,2,3,4,5'));
 ----
 48420100036400000000000000C8000000000000002C01000000000000 484201000501000000000000000200000000000000030000000000000004000000000000000500000000000000
 
-query TT
+query ??
 SELECT try_to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)')), try_to_binary(st_geometryfromwkt('SRID=4326;LINESTRING(1.0 2.0, 3.0 4.0, 10.1 11.2)'));
 ----
 0101000020E6100000000000000000F03F0000000000000040 0102000020E610000003000000000000000000F03F00000000000000400000000000000840000000000000104033333333333324406666666666662640
 
-query TT
+query ??
 SELECT try_to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')), try_to_binary(st_geographyfromewkt('SRID=4326;LINESTRING(-122.35 37.5, -151.55 39.25)'));
 ----
 0101000020E61000006666666666965EC06666666666C64240 0102000020E6100000020000006666666666965EC00000000000C042409A99999999F162C00000000000A04340

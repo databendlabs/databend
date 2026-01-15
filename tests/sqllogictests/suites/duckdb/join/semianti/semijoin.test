@@ -55,8 +55,9 @@ SELECT * FROM left_table SEMI JOIN right_table ON (left_table.a = right_table.a)
 statement ok
 drop table if exists other;
 
-query I
+query 
 CREATE TABLE other (a int, b int);
+----
 
 statement ok
 INSERT INTO other VALUES (42, 1), (43, 1);
@@ -142,4 +143,3 @@ SELECT * FROM left_table SEMI JOIN right_table ON ((left_table.a = NULL AND righ
 42	1	5
 42	1	5
 42	1	5
-

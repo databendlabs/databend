@@ -97,7 +97,7 @@ select nextval(seq) + 20 from numbers(5);
 33
 34
 
-query B
+query R
 select cast(nextval(seq) as float);
 ----
 15.0

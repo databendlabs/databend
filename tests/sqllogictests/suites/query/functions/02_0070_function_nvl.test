@@ -61,7 +61,7 @@ SELECT NVL(NULL, 'a')
 ----
 a
 
-query T
+query ?
 SELECT NVL(NULL, NULL)
 ----
 NULL
@@ -100,4 +100,3 @@ NULL NULL NULL
 
 statement ok
 DROP TABLE t
-

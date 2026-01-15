@@ -1,4 +1,4 @@
-query T
+query I
 select unicode(char(97)::String);
 ----
 97
@@ -9,7 +9,7 @@ create or replace table t(id int);
 statement ok
 insert into t values(97),(98),(99);
 
-query TT
+query TI
 select char(id)::String as c1, unicode(c1) from t;
 ----
 a 97

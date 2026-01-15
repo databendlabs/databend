@@ -14,7 +14,7 @@ create table t1(c int);
 statement ok
 begin;
 
-query
+query TIITI
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
 csv/numbers.csv 18 0 NULL NULL
@@ -24,7 +24,7 @@ select count(*) from t1;
 ----
 18
 
-query
+query TIITI
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
 
@@ -41,7 +41,7 @@ select count(*) from t1;
 ----
 18
 
-query
+query TIITI
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
 
@@ -67,7 +67,7 @@ statement ok
 begin;
 
 
-query
+query TIITI
 copy into t1 from @data/csv/numbers.csv file_format = (type = CSV) purge = true;
 ----
 csv/numbers.csv 18 0 NULL NULL
@@ -89,7 +89,7 @@ select count(*) from t1;
 statement ok
 create table t2(c int);
 
-query
+query TIITI
 copy into t2 from @data/csv/numbers.csv file_format = (type = CSV);
 ----
 csv/numbers.csv 18 0 NULL NULL

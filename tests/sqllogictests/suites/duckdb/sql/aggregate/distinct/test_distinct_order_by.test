@@ -33,4 +33,3 @@ SELECT DISTINCT integers.i FROM integers ORDER BY integers.i DESC
 3
 2
 1
-

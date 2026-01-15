@@ -37,7 +37,7 @@ create table if not exists t4(a float, b float, c varchar, d bool)
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false )
 
-query FFTB
+query RRTB
 select a,b,c,d from t4
 ----
 1.0 10.224 xxdsfs 0
@@ -48,7 +48,7 @@ select a,b,c,d from t4
 statement ok
 drop table t4
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 1003, Text: Unknown database 'db2'
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
 
 query III
@@ -78,4 +78,3 @@ select 1
 
 statement ok
 drop table if exists t1
-

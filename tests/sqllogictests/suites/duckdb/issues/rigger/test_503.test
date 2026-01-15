@@ -12,4 +12,3 @@ CREATE TABLE t1(c0 INT)
 
 statement ok
 SELECT * FROM t0 RIGHT JOIN t1 ON t0.c0!=t1.c0
-

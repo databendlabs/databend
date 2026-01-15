@@ -8,7 +8,7 @@ select typeof(number + 1), typeof(number - 1),       typeof(number / 1), typeof(
 ----
 BIGINT UNSIGNED BIGINT DOUBLE BIGINT UNSIGNED
 
-query TTT
+query TT?
 select typeof('33'), typeof('44'), typeof(Null)
 ----
 VARCHAR VARCHAR NULL
@@ -102,5 +102,3 @@ query B
 select typeof(today()) = 'Date'
 ----
 0
-
-

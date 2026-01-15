@@ -34,4 +34,3 @@ SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1
 
 statement ok
 set max_block_size = 65536;
-

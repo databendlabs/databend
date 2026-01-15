@@ -45,4 +45,3 @@ select * from t1
 
 statement ok
 DROP DATABASE db1
-

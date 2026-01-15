@@ -18,12 +18,12 @@ select as_integer(parse_json('456'))
 ----
 456
 
-query F
+query R
 select as_float(parse_json('12.34'))
 ----
 12.34
 
-query F
+query R
 select as_float(parse_json('56.78'))
 ----
 56.78
@@ -38,62 +38,62 @@ select as_string(parse_json('"xyz"'))
 ----
 xyz
 
-query T
+query ?
 select as_array(parse_json('[1,2,3]'))
 ----
 [1,2,3]
 
-query T
+query ?
 select as_array(parse_json('["a","b","c"]'))
 ----
 ["a","b","c"]
 
-query T
+query ?
 select as_object(parse_json('{"a":"b"}'))
 ----
 {"a":"b"}
 
-query T
+query ?
 select as_object(parse_json('{"k": 123}'))
 ----
 {"k":123}
 
-query TTTT
+query ????
 select to_binary('abc')::variant, to_binary(to_binary('abc')::variant), to_binary(parse_json('"abc"')), as_binary(to_binary('abc')::variant)
 ----
 "616263" 616263 616263 616263
 
-query TTTT
+query ????
 select to_date('2025-01-01')::variant, to_date(to_date('2025-01-01')::variant), to_date(parse_json('"2025-01-01"')), as_date(to_date('2025-01-01')::variant)
 ----
 "2025-01-01" 2025-01-01 2025-01-01 2025-01-01
 
-query TTTT
+query ????
 select to_timestamp('2025-01-01 10:00:00')::variant, to_timestamp(to_timestamp('2025-01-01 10:00:00')::variant), to_timestamp(parse_json('"2025-01-01 10:00:00"')), as_timestamp(to_timestamp('2025-01-01 10:00:00')::variant)
 ----
 "2025-01-01 10:00:00.000000" 2025-01-01 10:00:00.000000 2025-01-01 10:00:00.000000 2025-01-01 10:00:00.000000
 
-query TTTT
+query ????
 select to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant, to_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant), to_timestamp_tz(parse_json('"2025-01-01 10:00:00 +0800"')), as_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0800')::variant)
 ----
 "2025-01-01 10:00:00.000000 +0800" 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800 2025-01-01 10:00:00.000000 +0800
 
-query TTTT
+query ????
 select to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant, to_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant), to_timestamp_tz(parse_json('"2025-01-01 10:00:00 +0830"')), as_timestamp_tz(to_timestamp_tz('2025-01-01 10:00:00 +0830')::variant)
 ----
 "2025-01-01 10:00:00.000000 +0830" 2025-01-01 10:00:00.000000 +0830 2025-01-01 10:00:00.000000 +0830 2025-01-01 10:00:00.000000 +0830
 
-query TTTT
+query ????
 select to_interval('10 months 2 days')::variant, to_interval(to_interval('10 months 2 days')::variant), to_interval(parse_json('"10 months 2 days"')), as_interval(to_interval('10 months 2 days')::variant)
 ----
 "10 months 2 days" 10 months 2 days 10 months 2 days 10 months 2 days
 
-query TTTT
+query ????
 select to_interval('-10 months -2 days')::variant, to_interval(to_interval('-10 months -2 days')::variant), to_interval(parse_json('"-10 months -2 days"')), as_interval(to_interval('-10 months -2 days')::variant)
 ----
 "-10 months -2 days" -10 months -2 days -10 months -2 days -10 months -2 days
 
-query TTTT
+query RIRR
 select to_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14')), as_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14'), 10, 2)
 ----
 3.14 3 3.14 3.14
@@ -173,7 +173,7 @@ select is_binary(to_binary('abc')::variant)
 ----
 1
 
-query B 
+query B
 select is_date(to_date('2025-01-01')::variant)
 ----
 1
@@ -227,7 +227,7 @@ insert into t1 select 6, parse_json('{"a":"b"}')
 statement ok
 insert into t1 select 7, parse_json('null')
 
-query ITBIFTTT
+query I?BIRT??
 select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(v), as_object(v) from t1 order by id asc
 ----
 1 true 1 NULL NULL NULL NULL NULL
@@ -238,7 +238,7 @@ select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(
 6 {"a":"b"} NULL NULL NULL NULL NULL {"a":"b"}
 7 null NULL NULL NULL NULL NULL NULL
 
-query ITBBBBBBB
+query I?BBBBBBB
 select id, v, is_null_value(v), is_boolean(v), is_integer(v), is_float(v), is_string(v), is_array(v), is_object(v) from t1 order by id asc
 ----
 1 true 0 1 0 0 0 0 0
@@ -251,4 +251,3 @@ select id, v, is_null_value(v), is_boolean(v), is_integer(v), is_float(v), is_st
 
 statement ok
 DROP DATABASE db1
-

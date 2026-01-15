@@ -16,7 +16,7 @@ create stage csv_decimal_stage file_format = (type = 'csv')
 statement ok
 copy into @csv_decimal_stage from decimal_test
 
-query T
+query TT
 select $1, $2 from @csv_decimal_stage order by $1
 ----
 1.23 100

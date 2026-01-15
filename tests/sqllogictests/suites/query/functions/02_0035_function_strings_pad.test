@@ -1,34 +1,34 @@
-query T
+query ?
 SELECT LPAD(NULL, NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD('a', NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD(NULL, 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD('a', 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD(NULL, NULL, 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD('a', NULL, 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT LPAD(NULL, 1, 'b')
 ----
 NULL
@@ -139,37 +139,37 @@ SELECT LPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDE
 333
 4444
 
-query T
+query ?
 SELECT RPAD(NULL, NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD('a', NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD(NULL, 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD('a', 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD(NULL, NULL, 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD('a', NULL, 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT RPAD(NULL, 1, 'b')
 ----
 NULL
@@ -279,4 +279,3 @@ SELECT RPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDE
 22
 333
 4444
-

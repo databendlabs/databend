@@ -115,4 +115,3 @@ query I
 SELECT COUNT() FROM (SELECT (0 - number) :: Int64 AS c FROM numbers(65535) GROUP BY c HAVING c > 0)
 ----
 0
-

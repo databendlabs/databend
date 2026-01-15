@@ -88,4 +88,3 @@ query II
 SELECT * FROM (VALUES (1), (2)) tbl(i) JOIN (VALUES (1), (2)) tbl2(j) ON (i=j) WHERE i+j=2;
 ----
 1	1
-

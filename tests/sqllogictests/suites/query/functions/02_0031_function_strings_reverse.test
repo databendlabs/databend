@@ -1,4 +1,4 @@
-query T
+query ?
 SELECT REVERSE(NULL)
 ----
 NULL
@@ -10,4 +10,3 @@ query T
 SELECT REVERSE('abc')
 ----
 cba
-

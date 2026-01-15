@@ -14,7 +14,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 9
 
 # two materialized ctes and select all columns
-query I
+query II
 with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select * from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0 0
@@ -200,7 +200,7 @@ statement ok
 insert into test values (1, 'a'), (2, 'b');
 
 # main query doesn't use materialized cte, but materialized cte is defined
-query TT rowsort
+query T rowsort
 WITH tq9v2(cHAx0) AS materialized (SELECT a AS cHAx0 FROM test) SELECT b from test;
 ----
 a
@@ -216,7 +216,7 @@ create table target_table(a int, b string);
 statement ok
 insert into target_table values(1, 's');
 
-query TT
+query II
 merge into target_table using(with t1 AS materialized (SELECT a, b from test), t2 as materialized (select number, 'a' from numbers(2)) 
 select * from t1 union select * from t2) as source_table on target_table.a = source_table.a when matched then update * when not matched then insert *;
 ----

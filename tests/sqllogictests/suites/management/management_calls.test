@@ -66,8 +66,7 @@ DESC STAGE @~;
 statement ok
 SHOW LOCKS
 
-query T
+query IIII
 call admin$tenant_quota('admin')
 ----
 0 0 0 0
-

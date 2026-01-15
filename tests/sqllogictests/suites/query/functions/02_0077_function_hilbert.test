@@ -1,24 +1,24 @@
-query T
+query ?
 select hilbert_range_index(1, [1,2], 2, [1,2]);
 ----
 00000003
 
-query T
+query ?
 select hilbert_range_index(null, [1,2], 2, [1,2]);
 ----
 0000000D
 
-query T
+query ?
 select hilbert_range_index(3, [1,2], 2, [1,2]);
 ----
 0000000D
 
-query T
+query ?
 select hilbert_range_index(1, [], 2, [1,2]);
 ----
 00000003
 
-query T
+query ?
 select hilbert_range_index(1, [], 2, null);
 ----
 00000000
@@ -32,12 +32,12 @@ create table t_hilbert(a int, b int);
 statement ok
 insert into t_hilbert values(0, 0), (1, 2), (4, 3), (5, 6), (8, 7), (9, 10), (null, 8), (3, null);
 
-query T
+query ??
 select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert;
 ----
 [1,4,8] [2,6,8]
 
-query T
+query IIII
 with tt as (select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert)
 select a, range_partition_id(a, tt.a_bound), b, range_partition_id(b, tt.b_bound) from t_hilbert, tt order by t_hilbert.a;
 ----
@@ -50,7 +50,7 @@ select a, range_partition_id(a, tt.a_bound), b, range_partition_id(b, tt.b_bound
 9 3 10 3
 NULL 3 8 2
 
-query T
+query II?
 with tt as (select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert)
 select t.a, t.b, hilbert_range_index(t.a, tt.a_bound, t.b, tt.b_bound) as index from t_hilbert t, tt order by index;
 ----

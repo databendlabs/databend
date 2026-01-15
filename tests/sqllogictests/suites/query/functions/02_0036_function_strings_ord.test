@@ -1,4 +1,4 @@
-query T
+query ?
 SELECT ORD(NULL)
 ----
 NULL
@@ -27,4 +27,3 @@ query I
 SELECT ORD('💖a')
 ----
 4036989590
-

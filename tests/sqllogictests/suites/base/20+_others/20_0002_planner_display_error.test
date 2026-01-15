@@ -32,4 +32,3 @@ create table t2(a int)
 
 statement error 1065
 select a as b from t1 intersect select a as b from t2 order by a
-

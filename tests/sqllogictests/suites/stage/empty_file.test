@@ -1,14 +1,14 @@
-query ok
+query T
 select $1 from @data (files=>( 'empty.txt'), file_format=>'csv')
 ----
 
-query ok
+query T
 select $1 from @data (files=>('csv/it.csv', 'empty.txt'), file_format=>'csv')
 ----
 1
 2
 
-query ok
+query I
 select id from @data (files=>('parquet/ii/f2.parquet', 'empty.txt'), file_format=>'parquet');
 ----
 3
@@ -17,23 +17,23 @@ select id from @data (files=>('parquet/ii/f2.parquet', 'empty.txt'), file_format
 statement ok
 create or replace table t (c1 int, id string);
 
-query ok
+query TIITI
 copy into t(c1) from  @data files=('parquet/ii/f2.parquet', 'empty.txt') file_format=(type='parquet')
 ----
 parquet/ii/f2.parquet 2 0 NULL NULL
 
-query ok
+query IT
 select * from t
 ----
 3 NULL
 4 NULL
 
-query ok
+query TIITI
 copy into t from  @data files=('csv/it.csv', 'empty.txt') file_format=(type='csv')
 ----
 csv/it.csv 2 0 NULL NULL
 
-query ok
+query IT
 select * from t order by c1
 ----
 1 b
@@ -41,7 +41,7 @@ select * from t order by c1
 3 NULL
 4 NULL
 
-query ok
+query T
 select name from list_stage(location=>'@data', pattern=>'emp.*')
 ----
 empty.txt

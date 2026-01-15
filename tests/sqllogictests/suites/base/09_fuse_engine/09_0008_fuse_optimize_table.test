@@ -44,7 +44,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1
 1 1
 
 
-query II
+query TTI
 select  column_name, column_type, row_count from fuse_column('db_09_0008', 't') limit 1
 ----
 a UInt64 3
@@ -52,7 +52,7 @@ a UInt64 3
 statement ok
 optimize table `t` purge
 
-query B
+query I
 select count(*) from fuse_snapshot('db_09_0008', 't')
 ----
 5
@@ -568,7 +568,7 @@ insert into t10 values(-6),(-8)
 statement ok
 insert into t10 values(2),(5),(-7)
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
 (abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"total_block_count":4}
@@ -577,7 +577,7 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 statement ok
 alter table t10 recluster
 
-query F
+query ?
 select info:average_depth from clustering_information('db_09_0008','t10')
 ----
 2.75
@@ -586,7 +586,7 @@ select info:average_depth from clustering_information('db_09_0008','t10')
 statement ok
 optimize table t10 compact
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
 (abs(a)) linear {"average_depth":3.0,"average_overlaps":2.0,"block_depth_histogram":{"00003":3},"constant_block_count":0,"total_block_count":3}
@@ -594,7 +594,7 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 statement ok
 alter table t10 recluster
 
-query F
+query ?
 select info:average_depth from clustering_information('db_09_0008','t10')
 ----
 1.0
@@ -630,7 +630,7 @@ insert into t11 values(3)
 statement ok
 insert into t11 values(-6),(-8)
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t11')
 ----
 (abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"total_block_count":4}
@@ -792,7 +792,7 @@ insert into t14 values('12345678', 'efg');
 statement ok
 alter table t14 recluster
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t14')
 ----
 (a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":1},"constant_block_count":0,"total_block_count":1}
@@ -816,7 +816,7 @@ ALTER TABLE t15 cluster by(abs(a))
 statement ok
 insert into t15 values(2),(5),(-7)
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t15')
 ----
 (abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"total_block_count":4}
@@ -824,7 +824,7 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t15')
 statement ok
 alter table t15 recluster
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('db_09_0008','t15')
 ----
 (abs(a)) linear {"average_depth":3.0,"average_overlaps":2.0,"block_depth_histogram":{"00003":3},"constant_block_count":0,"total_block_count":3}
@@ -832,7 +832,7 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t15')
 statement ok
 alter table t15 recluster
 
-query TTFF
+query TT??
 select cluster_key, type, info:average_overlaps, info:average_depth from clustering_information('db_09_0008','t15')
 ----
 (abs(a)) linear 0.0 1.0

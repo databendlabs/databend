@@ -12,7 +12,7 @@ copy into v from @data/csv/escape_default.csv file_format = (type = CSV)
 ----
 csv/escape_default.csv 1 0 NULL NULL
 
-query T
+query ?
 select a:hello from v;
 ----
 "world"
@@ -25,7 +25,7 @@ copy into v from @data/csv/escape_quote_with_slash.csv file_format = (type = CSV
 ----
 csv/escape_quote_with_slash.csv 1 0 NULL NULL
 
-query T
+query ?
 select a:hello from v;
 ----
 "world"

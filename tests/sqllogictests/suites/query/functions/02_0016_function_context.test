@@ -15,4 +15,3 @@ query T
 SELECT timezone()
 ----
 UTC
-

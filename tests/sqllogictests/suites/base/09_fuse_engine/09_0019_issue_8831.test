@@ -52,4 +52,3 @@ DROP TABLE t1;
 
 statement ok
 DROP DATABASE issue_8130
-

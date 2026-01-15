@@ -21,4 +21,3 @@ DROP TABLE t ALL
 
 statement ok
 DROP database db_13_0001
-

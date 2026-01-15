@@ -16,7 +16,7 @@ create stage tsv_decimal_stage file_format = (type = 'tsv')
 statement ok
 copy into @tsv_decimal_stage from decimal_test
 
-query T
+query TT
 select $1, $2 from @tsv_decimal_stage order by $1
 ----
 1.23 100

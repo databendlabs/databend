@@ -101,7 +101,7 @@ insert into showtabstat.t4 values(1)
 # ----
 # t4 FUSE 0 NULL 1 NULL 4 NULL 224 NULL NULL $DATE NULL NULL NULL NULL
 
-statement ok 
+statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'
 
 statement ok

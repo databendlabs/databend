@@ -1,19 +1,19 @@
-query T
+query ?
 SELECT REPLACE(NULL, 'a', 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE('aaa', 'a', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE('aaa', NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE(NULL, NULL, NULL)
 ----
 NULL
@@ -95,4 +95,3 @@ SELECT REPLACE(to_varchar(number * 10), to_varchar(number), to_varchar(number)) 
 20
 30
 40
-

@@ -101,4 +101,3 @@ drop table if exists t
 
 statement ok
 drop view if exists v_t
-

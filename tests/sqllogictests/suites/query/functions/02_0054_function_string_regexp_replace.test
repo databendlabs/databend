@@ -43,22 +43,22 @@ SELECT REGEXP_REPLACE('µå周çб周周', '周+', '唐', 1, 2)
 ----
 µå周çб唐
 
-query T
+query ?
 SELECT REGEXP_REPLACE(NULL, 'b', 'X')
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_REPLACE('a b c', NULL, 'X')
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_REPLACE('a b c', 'b', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', NULL)
 ----
 NULL
@@ -78,12 +78,12 @@ select REGEXP_REPLACE('abc-123-abc',  '^([a-z]+)\-([1-9]+)\-[a-z]+', '$2+$1');
 ----
 123+abc
 
-query T
+query ?
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, 2, NULL)
 ----
 NULL

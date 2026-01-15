@@ -47,12 +47,12 @@ SELECT regexp_split_to_array('helloTworld', 't', 'i') AS word;
 ----
 ["hello","world"]
 
-query ?
+query I
 select count(regexp_split_to_array(',apple,,banana,', ','));
 ----
 1
 
-query ?
+query I
 SELECT count(regexp_split_to_array('the quick brown fox', '\\s*'));
 ----
 1

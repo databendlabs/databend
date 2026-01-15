@@ -53,8 +53,9 @@ statement error 1003
 ALTER DATABASE c RENAME TO C
 
 # don't exist database c, so the result will be empty
-query ok
+query TTIT?
 SELECT * FROM system.databases where name = 'c'
+----
 
 # don't exist database c, so the result will be empty
 statement ok
@@ -115,6 +116,3 @@ DROP DATABASE b2
 
 statement ok
 DROP DATABASE a2
-
-
-

@@ -13,7 +13,7 @@ select hex('abc')
 ----
 616263
 
-query T
+query ?
 select hex(null)
 ----
 NULL

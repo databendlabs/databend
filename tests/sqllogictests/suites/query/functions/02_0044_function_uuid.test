@@ -14,5 +14,3 @@ query BB
 SELECT UNIQ(gen_random_uuid())  = 10, COUNT_IF(LENGTH(gen_random_uuid()) = 36)  = 10 from numbers(10)
 ----
 1 1
-
-

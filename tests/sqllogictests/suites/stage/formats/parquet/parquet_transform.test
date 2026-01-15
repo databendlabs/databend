@@ -4,12 +4,12 @@ drop table if exists i
 statement ok
 create table i (a int)
 
-query 
+query TIITI
 copy into i from (select (t.id+1) from @data/parquet/ t)  files=('tuple.parquet')
 ----
 parquet/tuple.parquet 3 0 NULL NULL
 
-query 
+query I
 select * from i order by a
 ----
 2
@@ -41,33 +41,33 @@ copy into @parquet_transform from ii FILE_FORMAT = (type = PARQUET)
 statement ok
 truncate table ii
 
-query 
+query TIITI
 copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet) PATTERN='.*parquet' RETURN_FAILED_ONLY=TRUE
 ----
 
-query 
+query II
 select * from ii order by id
 ----
 2 3
 5 6
 
 # copy same file again, should skip it
-query 
+query TIITI
 copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet)
 ----
 
-query 
+query II
 select * from ii order by id
 ----
 2 3
 5 6
 
 # copy same file again with force, should load it
-query 
+query TIITI
 copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet) FORCE=TRUE RETURN_FAILED_ONLY=TRUE
 ----
 
-query 
+query II
 select * from ii order by id
 ----
 2 3

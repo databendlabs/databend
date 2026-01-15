@@ -85,7 +85,7 @@ privileges NULL NO NULL (empty)
 default VARCHAR NO '' (empty)
 extra NULL NO NULL (empty)
 
-query TTT
+query TIT
 select column_name, nullable, is_nullable from INFORMATION_SCHEMA.COLUMNS where table_name='tables_with_history' and column_name in ('num_rows', 'dropped_on') order by column_name
 ----
 dropped_on 1 YES

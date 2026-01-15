@@ -23,22 +23,22 @@ copy into @s1 from (select '61626364') file_format = (type = csv);
 statement ok
 copy into b1 from @s1 file_format = (type = 'csv') ;
 
-query 
+query ?
 select a from b1;
 ----
 61626364
 
-query 
+query T
 select hex(a) from b1;
 ----
 61626364
 
-query 
+query III
 copy into @s1 from b1 file_format = (type = csv);
 ----
 1 9 9
 
-query 
+query T
 select $1 from @s1(file_format => 'csv');
 ----
 61626364
@@ -47,12 +47,12 @@ select $1 from @s1(file_format => 'csv');
 statement ok
 remove @s1;
 
-query 
+query III
 copy into @s1 from b1 file_format = (type = 'csv' binary_format = BASE64);
 ----
 1 9 9
 
-query 
+query T
 select $1 from @s1 (file_format => 'csv');
 ----
 YWJjZA==
@@ -60,7 +60,7 @@ YWJjZA==
 statement ok
 copy into b1 from @s1 file_format = (type = 'csv' binary_format = BASE64);
 
-query 
+query ?
 select * from b1;
 ----
 61626364

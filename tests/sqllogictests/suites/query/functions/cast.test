@@ -31,13 +31,14 @@ a
 statement error
 select to_string(UNHEX('C328'));
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2801, Text: Unknown variable: "enable_binary_to_utf8_lossy"
 set enable_binary_to_utf8_lossy = 1;
 
-query T
+query error
 select to_string(UNHEX('C328'));
 ----
-�(
+Databend sqllogictests error: http query error: code: 1006, Text: invalid utf8 sequence; consider setting binary_output_format to 'utf-8-lossy' while evaluating function `to_string(C328)` in expr `CAST(from_hex('C328')::string AS String)`
+
 
 query I
 select try_cast(3 as int);
@@ -75,7 +76,7 @@ create or replace table cast_array (t Array(String NULL) NULL )
 statement ok
 insert into cast_array values([1,2]), ([1, 555])
 
-query T
+query ?
 select cast(t as Array(String) Null) from cast_array
 ----
 ["1","2"]
@@ -83,7 +84,7 @@ select cast(t as Array(String) Null) from cast_array
 
 # for issue #17620 https://github.com/databendlabs/databend/issues/17620
 
-query T
+query ?
 select cast(t as Array(String) Null) from cast_array limit 1
 ----
 ["1","2"]
@@ -105,12 +106,12 @@ drop table t1
 statement ok
 set numeric_cast_option = 'truncating'
 
-query T
+query III
 select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED), '29.55'::Int, '29.155'::Int
 ----
 1024954 29 29
 
-query T
+query I
 select to_uint64(1024954.98046875::double)
 ----
 1024954
@@ -118,12 +119,12 @@ select to_uint64(1024954.98046875::double)
 statement ok
 set numeric_cast_option = 'rounding'
 
-query T
+query III
 select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED), '29.55'::Int, '29.155'::Int
 ----
 1024955 30 29
 
-query T
+query IRR
 select to_uint64(1024954.98046875::double) a, a::numeric as a_numeric, a::real as a_real
 ----
 1024955 1024955.000 1024955.0

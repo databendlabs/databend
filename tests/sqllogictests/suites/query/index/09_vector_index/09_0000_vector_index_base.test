@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS t1(id Int, embedding Vector(8)) Engine = Fuse
 statement ok
 INSERT INTO t1 SELECT id, embedding FROM t
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 1 0.009774268
@@ -99,7 +99,7 @@ SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.5584
 11 0.14048636
 8 0.14554787
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 1 0.0
@@ -108,7 +108,7 @@ SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.5584
 8 0.13477594
 3 0.13801938
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.043031156
@@ -117,7 +117,7 @@ SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.315
 2 0.085320055
 16 0.111266375
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.031086385
@@ -126,7 +126,7 @@ SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.315
 11 0.097252846
 16 0.105270445
 
-query IF
+query IR
 SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 1 0.0
@@ -135,7 +135,7 @@ SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271
 8 1.770357
 15 1.8413826
 
-query IF
+query IR
 SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 1 1.4901161e-7
@@ -144,7 +144,7 @@ SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271
 8 1.7851611
 15 1.8448958
 
-query IF
+query IR
 SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.87704676
@@ -153,7 +153,7 @@ SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 11 1.7874013
 10 1.8277186
 
-query IF
+query IR
 SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.86807996
@@ -162,7 +162,7 @@ SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 2 1.8405688
 11 1.8465424
 
-query IF
+query IR
 SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 1 0.052975703
@@ -171,7 +171,7 @@ SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271
 8 0.92271036
 3 0.9368646
 
-query IF
+query IR
 SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 1 8.940697e-8
@@ -180,7 +180,7 @@ SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271
 8 0.91897535
 3 0.93300396
 
-query IF
+query IR
 SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.41017252
@@ -189,7 +189,7 @@ SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 2 0.7379028
 11 0.8144757
 
-query IF
+query IR
 SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
 ----
 4 0.40161562
@@ -199,28 +199,28 @@ SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 11 0.76073563
 
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity DESC LIMIT 3;
 ----
 9 0.2568838
 16 0.25626028
 13 0.24121934
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity DESC LIMIT 3;
 ----
 9 0.286018
 16 0.24571353
 13 0.23111635
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
 ----
 11 0.14048636
 8 0.14554787
 3 0.14645952
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
 ----
 8 0.13477594
@@ -274,12 +274,12 @@ SELECT vector_index_size > 3000 FROM fuse_block('test_vector_index', 't2')
 1
 1
 
-query IF
+query IR
 SELECT id, l1_distance(embedding1, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
 ----
 1 0.0
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
 ----
 5 0.03522873
@@ -309,7 +309,7 @@ INSERT INTO t_native VALUES
 (15, [0.13230447, 0.630588, 0.10812326, 0.21558228, 0.83768057, 0.48870546, 0.65021806, 0.31626541]),
 (16, [0.2667851, 0.01529589, 0.98994706, 0.31870983, 0.31783372, 0.34863699, 0.30254189, 0.84441678])
 
-query IF
+query IR
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t_native ORDER BY similarity ASC LIMIT 5;
 ----
 1 0.015007019
@@ -323,4 +323,3 @@ use default
 
 statement ok
 drop database test_vector_index
-

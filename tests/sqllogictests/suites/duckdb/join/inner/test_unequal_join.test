@@ -85,4 +85,3 @@ query I
 select count(*) from a,b where i <> j
 ----
 1080
-

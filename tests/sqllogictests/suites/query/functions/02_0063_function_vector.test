@@ -1,65 +1,65 @@
 # From sklearn.metrics.pairwise import cosine_similarity
-query F
+query R
 select cosine_distance([3.0, 45.0, 7.0, 2.0, 5.0, 20.0, 13.0, 12.0], [2.0, 54.0, 13.0, 15.0, 22.0, 34.0, 50.0, 1.0]) as sim
 ----
 0.12641934893868967
 
-query FF
+query RR
 select [1, 2] <=> [2, 3] as sim1, [1,2.2,3] <=> [4,6,8] as sim2
 ----
 0.0077221394 0.00699537571767439
 
-query FF
+query RR
 select cosine_distance([1.1,2.2,3], [1,1,1]), cosine_distance([1,2.2,3], [4,6,8])
 ----
 0.062412794753543555 0.00699537571767439
 
-query FF
+query RR
 select cosine_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), cosine_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
 ----
 0.06241274 0.0069953203
 
-query FF
+query RR
 select l1_distance([1.1,2.2,3], [1,1,1]), l1_distance([1,2.2,3], [4,6,8])
 ----
 3.3000000000000003 11.8
 
-query FF
+query RR
 select [1, 2] <+> [2, 3] as sim1, [1,2.2,3] <+> [4,6,8] as sim2
 ----
 2.0 11.8
 
-query FF
+query RR
 select l1_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), l1_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
 ----
 3.3000002 11.8
 
-query FF
+query RR
 select l2_distance([1.1,2.2,3], [1,1,1]), l2_distance([1,2.2,3], [4,6,8])
 ----
 2.3345235059857505 6.959885056522126 
 
-query FF
+query RR
 select l2_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), l2_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
 ----
 2.3345234 6.959885
 
-query FF
+query RR
 select [1, 2] <-> [2, 3] as sim1, [1,2.2,3] <-> [4,6,8] as sim2
 ----
 1.4142135 6.959885056522126
 
-query FF
+query RR
 select inner_product([1.1,2.2,3], [1,1,1]), inner_product([1,2.2,3], [4,6,8])
 ----
 6.300000000000001 41.2
 
-query FF
+query RR
 select inner_product([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), inner_product([1,2.2,3]::vector(3), [4,6,8]::vector(3))
 ----
 6.3 41.2
 
-query FFFF
+query RRRR
 SELECT COSINE_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
        L1_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
        L2_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
@@ -73,7 +73,7 @@ CREATE OR REPLACE TABLE vectors (a VECTOR(3), b VECTOR(3));
 statement ok
 INSERT INTO vectors VALUES ([1.1,2.2,3], [1,1,1]), ([1,2.2,3], [4,6,8]), ([1,2,3], [3,5,7]), (NULL, [7,8,9]);
 
-query FFFF
+query RRRR
 select cosine_distance(a, b), l1_distance(a, b), l2_distance(a, b), inner_product(a, b) FROM vectors;
 ----
 0.06241274 3.3000002 2.3345234 6.3
@@ -81,7 +81,7 @@ select cosine_distance(a, b), l1_distance(a, b), l2_distance(a, b), inner_produc
 0.0025851727 9.0 5.3851647 34.0
 NULL NULL NULL NULL
 
-query IF
+query IR
 select vector_dims(a), vector_norm(a) FROM vectors;
 ----
 3 3.879433
@@ -91,4 +91,3 @@ NULL NULL
 
 statement ok
 DROP TABLE vectors;
-

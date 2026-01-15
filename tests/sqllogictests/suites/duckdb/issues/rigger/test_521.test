@@ -1,7 +1,7 @@
 statement ok
 drop table if exists t0
 
-query F
+query R
 SELECT ROUND(0.1::float64, 1000)
 ----
 0.1
@@ -19,4 +19,3 @@ query I
 SELECT * FROM t0 WHERE t0.c0 <= ROUND(0.1::float64, 1000)
 ----
 0
-

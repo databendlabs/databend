@@ -58,7 +58,7 @@ statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=JSON)
 
 
-query II
+query I
 SELECT COUNT(*) FROM t_copy;
 ----
 28

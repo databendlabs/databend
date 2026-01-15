@@ -1,10 +1,10 @@
 
-query F
+query R
 select '1e308'::float
 ----
 Infinity
 
-query F
+query R
 select '1e310'::double
 ----
 Infinity

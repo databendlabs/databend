@@ -10,12 +10,12 @@ CREATE TABLE test(d DATE, i INTEGER)
 statement ok
 INSERT INTO test VALUES ('2021-01-01', 1), ('2021-02-01', 2), ('2021-03-01', 3), ('2021-04-01', 4)
 
-query IT
+query I?
 select arg_max(i, d), arg_max(d, i) from test
 ----
 4 2021-04-01
 
-query IT
+query I?
 select arg_min(i, d), arg_min(d, i) from test
 ----
 1 2021-01-01
@@ -35,4 +35,3 @@ query II
 select arg_min(i, d), arg_min(d, i) from test2
 ----
 1 -9223372036854775807
-

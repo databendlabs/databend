@@ -17,7 +17,7 @@ INSERT INTO t1 VALUES
 (3, 'The early bird catches the worm'),
 (4, 'Actions speak louder than words');
 
-query TII
+query TIII
 select name, index_size, bloom_index_size, ngram_index_size from system.tables where name='t1' and database='test_gram_index';
 ----
 t1 1049509 1049509 1048617
@@ -55,7 +55,7 @@ CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
 statement ok
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576
 
-query T
+query TTTT
 select name, type, original, definition from system.indexes where database = 'test_gram_index' AND type = 'NGRAM';
 ----
 idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
@@ -67,12 +67,12 @@ CREATE INVERTED INDEX idx1 ON t1(content)
 statement ok
 DROP NGRAM INDEX idx2 ON t2
 
-query T
+query TTTT
 select name, type, original, definition from system.indexes where database = 'test_gram_index' AND type = 'NGRAM';
 ----
 idx1 NGRAM (empty) t1(content)bloom_size='1048576' gram_size='5'
 
-query T
+query TT
 show create table t1;
 ----
 t1 CREATE TABLE t1 (     id INT NULL,     content VARCHAR NULL,     SYNC NGRAM INDEX idx1 (content) bloom_size = '1048576', gram_size = '5'   ) ENGINE=FUSE
@@ -82,5 +82,3 @@ use default
 
 statement ok
 drop database test_gram_index
-
-

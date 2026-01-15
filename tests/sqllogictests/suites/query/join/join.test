@@ -15,17 +15,17 @@ select * from (select * from numbers(100)) n join t1 on n.number = t1.a;
 ----
 
 # right semi with empty build side
-query II
+query I
 select * from (select * from numbers(100)) n right semi join t1 on n.number = t1.a;
 ----
 
 # right anti with empty build side
-query II
+query I
 select * from (select * from numbers(100)) n right anti join t1 on n.number = t1.a;
 ----
 
 # left semi with empty build side
-query II
+query I
 select * from (select * from numbers(100)) n left semi join t1 on n.number = t1.a;
 ----
 
@@ -97,7 +97,7 @@ insert into t1 values(2, 2);
 statement ok
 insert into t2 values(2, 6), (2, 8);
 
-query I
+query III
 select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.b, t1.b;
 ----
 1 2 2
@@ -139,7 +139,7 @@ select t1.id from t1 left join t2 on t1.id = t2.id where t1.val >= t2.val;
 2
 2
 
-query I
+query II
 select t1.id, t1.val from t1 left join t2 on t1.id = t2.id and t1.val = t2.val where t1.val >= t2.val;
 ----
 2 1696549154013
@@ -162,7 +162,7 @@ create or replace table t1(id int, col1 varchar);
 statement ok
 insert into t1 values(1, 'c'), (3, 'd');
 
-query I rowsort
+query IITIIT rowsort
 SELECT * FROM t JOIN t1, t as t2 JOIN t1 as t3;
 ----
 1 1 c 1 1 c
@@ -265,7 +265,7 @@ select * from (select a, 'A' as name from t) t1 full outer join (select number f
 2 A 2
 3 A 3
 
-query ITI
+query IIT
 select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number where t1.name is not null order by a;
 ----
 1 1 A
@@ -309,4 +309,3 @@ drop table if exists t1;
 
 statement ok
 with v2 as (SELECT 'xx' || cast(number as string) AS invoice_nr FROM numbers(135) group by invoice_nr order by invoice_nr) select v2.invoice_nr from v2 where EXISTS (SELECT cast(number as string) AS invoice_nr FROM numbers(800) where v2.invoice_nr = cast(number as string)) ignore_result;
-

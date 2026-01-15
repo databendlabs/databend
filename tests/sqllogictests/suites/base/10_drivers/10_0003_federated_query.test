@@ -58,4 +58,3 @@ SHOW COLLATION
 onlyif mysql
 statement ok
 SET net_write_timeout=600
-

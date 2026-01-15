@@ -95,7 +95,7 @@ select count() > 4 from fuse_snapshot('i15760', 't1');
 ----
 1
 
-query R
+query ?
 select info:average_depth from clustering_information('i15760', 't1')
 ----
 1.0
@@ -116,7 +116,7 @@ insert into t2 select number from numbers(12);
 statement ok
 insert into t2 select number from numbers(2);
 
-query T
+query II
 select block_count, row_count from fuse_segment('i15760', 't2');
 ----
 1 2
@@ -127,7 +127,7 @@ statement ok
 insert into t2 select number from numbers(2);
 
 # after auto compaction
-query T
+query II
 select block_count, row_count from fuse_segment('i15760', 't2');
 ----
 3 18

@@ -20,7 +20,7 @@ select sum(3) from numbers(1000)
 ----
 3000
 
-query ITTTI
+query I???I
 select count(null), min(null), sum(null), avg(null), approx_count_distinct(null) from numbers(1000)
 ----
 0 NULL NULL NULL 0
@@ -37,7 +37,7 @@ select k, count(distinct k), count(*) from (select number % 3 as k from numbers(
 1 1 2
 2 1 1
 
-query II
+query III
 select n, count(distinct n), count(*) from (select cast(NULL as Nullable(Int32)) as n from numbers(3)) group by n
 ----
 NULL 0 3

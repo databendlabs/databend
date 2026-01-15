@@ -20,4 +20,3 @@ query II
 SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0
 ----
 0 0
-

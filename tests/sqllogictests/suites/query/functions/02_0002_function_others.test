@@ -13,12 +13,12 @@ SELECT TRY_INET_ATON('10.0.5.9')
 ----
 167773449
 
-query T
+query ?
 SELECT TRY_INET_ATON(NULL)
 ----
 NULL
 
-query I
+query ?
 SELECT TRY_INET_ATON('hello')
 ----
 NULL
@@ -28,7 +28,7 @@ SELECT INET_ATON('10.0.5.9')
 ----
 167773449
 
-query T
+query ?
 SELECT INET_ATON(NULL)
 ----
 NULL
@@ -47,7 +47,7 @@ SELECT TRY_INET_NTOA('167773449')
 ----
 10.0.5.9
 
-query T
+query ?
 SELECT TRY_INET_NTOA(NULL)
 ----
 NULL
@@ -57,13 +57,12 @@ SELECT INET_NTOA(167773449)
 ----
 10.0.5.9
 
-query T
+query ?
 SELECT INET_NTOA(NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT array(1);
 ----
 [1]
-

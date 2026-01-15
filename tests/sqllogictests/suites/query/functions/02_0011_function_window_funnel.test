@@ -177,4 +177,3 @@ select 5 = window_funnel(4000000)(dt, event = 1003, event = 1004, event = 1005, 
 
 statement ok
 drop table funnel_test
-

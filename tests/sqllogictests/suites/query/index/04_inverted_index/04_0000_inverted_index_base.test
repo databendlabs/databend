@@ -425,48 +425,48 @@ INSERT INTO t1 VALUES
 (9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"],"price":29.91}}'),
 (10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"],"price":29.00}}')
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.title:energy')
 ----
 2 3.2427819 {"metadata":{"author":"Pamela","price":63.69,"publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology')
 ----
 3 2.411387 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 5 2.411387 {"metadata":{"author":"Samuel","price":69.99,"publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology AND body.metadata.author:Quincy')
 ----
 3 5.654169 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('(body.metadata.tags:technology AND body.metadata.author:Quincy) OR body.metadata.author:Oliver')
 ----
 1 3.2427819 {"metadata":{"author":"Oliver","price":15.44,"publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]},"title":"The Psychology of Persuasion"}
 3 5.654169 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
 ----
 6 2.411387 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 10 2.411387 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags: IN [技术 物理学]')
 ----
 6 1.0 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
 10 1.0 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [40 TO 60]')
 ----
 3 1.0 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 8 1.0 {"metadata":{"author":"王五","price":47.70,"publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]},"title":"物联网与智能家居"}
 
-query IRT
+query IR?
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [29.91 TO 33.90}')
 ----
 9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
@@ -514,29 +514,29 @@ INSERT INTO t3 VALUES
 (6, '{"videoInfo":{"extraData":[{ "name": "codec foo", "type": "jpg" }, { "name": "codec bar", "type": "mp4" }]}}'),
 (7, '{"videoInfo":{"extraData":[{ "name": "codec foo", "type": "mp4" }]}}');
 
-query IT
+query I?
 select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.type:jpg');
 ----
 2 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecA","type":"mp4"}]}}
 3 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecB","type":"mp4"}]}}
 
-query IT
+query I?
 select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.type:mp4');
 ----
 1 {"videoInfo":{"extraData":[{"name":"codecA","type":"mp4"},{"name":"codecB","type":"jpg"}]}}
 2 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecA","type":"mp4"}]}}
 
-query IT
+query I?
 select * from t3 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.attributes.type:jpg');
 ----
 4 {"videoInfo":{"extraData":[{"attributes":{"type":"jpg"},"name":"codecA"},{"attributes":{"type":"mp4"},"name":"codecB"}]}}
 
-query IT
+query I?
 select * from t3 where query('body.videoInfo.extraData.name:"codec foo" AND body.videoInfo.extraData.type:mp4');
 ----
 7 {"videoInfo":{"extraData":[{"name":"codec foo","type":"mp4"}]}}
 
-query IT
+query I?
 select * from t3 where query('body.videoInfo.extraData.name:codecB AND body.videoInfo.extraData.type:jpg');
 ----
 1 {"videoInfo":{"extraData":[{"name":"codecA","type":"mp4"},{"name":"codecB","type":"jpg"}]}}
@@ -551,13 +551,13 @@ INSERT INTO t4 VALUES
 (2, '{"videoInfo":{"extraData":[{ "name": "codecA", "type": "jpg" },{ "name": "codecA", "type": "mp4" }]}}'),
 (3, '{"videoInfo":{"extraData":[{ "name": "codecA", "type": "jpg" },{ "name": "codecB", "type": "mp4" }]}}');
 
-query IT
+query I?
 select * from t4 where query('body.videoInfo.extraData.name:codecA AND body.videoInfo.extraData.type:jpg');
 ----
 2 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecA","type":"mp4"}]}}
 3 {"videoInfo":{"extraData":[{"name":"codecA","type":"jpg"},{"name":"codecB","type":"mp4"}]}}
 
-query IT
+query I?
 select * from t4 where query('body.videoInfo.extraData.name:codecB AND body.videoInfo.extraData.type:jpg');
 ----
 1 {"videoInfo":{"extraData":[{"name":"codecA","type":"mp4"},{"name":"codecB","type":"jpg"}]}}
@@ -590,5 +590,3 @@ use default
 
 statement ok
 drop database test_inverted_index
-
-

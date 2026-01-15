@@ -47,4 +47,3 @@ DROP TABLE t;
 
 statement ok
 DROP DATABASE issue_13610
-

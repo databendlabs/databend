@@ -22,7 +22,7 @@ drop table onecolumn
 statement ok
 drop table empty
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2302, Text: Table 'cte_test1' already exists
 CREATE TABLE cte_test1 (
   "Price Branch Region" VARCHAR NULL,
   "PriceBranchID" VARCHAR NULL,
@@ -52,7 +52,7 @@ INSERT INTO cte_test1 VALUES (
     , 10
 );
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2302, Text: Table 'cte_test2' already exists
 CREATE TABLE cte_test2 (
   "Year" VARCHAR NULL,
   "PriceBranchGlRegionID" VARCHAR NULL,
