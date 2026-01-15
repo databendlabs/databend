@@ -22,7 +22,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::tokio::time::timeout;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -37,6 +36,7 @@ use log::info;
 use log::warn;
 use tokio::time::Instant;
 use tokio::time::error::Elapsed;
+use tokio::time::timeout;
 use tokio_stream::Stream;
 
 pub type WatchStream =

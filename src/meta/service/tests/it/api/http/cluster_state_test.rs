@@ -19,8 +19,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::time::Instant;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
@@ -42,6 +40,7 @@ use poem::Route;
 use poem::get;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::Instant;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;

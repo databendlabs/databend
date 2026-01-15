@@ -22,7 +22,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;

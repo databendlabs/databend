@@ -16,9 +16,6 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::to_digit_ver;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -43,6 +40,8 @@ use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use futures::Stream;
 use rand::Rng;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;

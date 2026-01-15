@@ -22,8 +22,6 @@ use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
@@ -71,6 +69,7 @@ use seq_marked::SeqData;
 use seq_marked::SeqV;
 use state_machine_api::MetaValue;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
