@@ -18,7 +18,6 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
@@ -290,7 +289,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
 
-    srv.start().await.expect("HTTP: admin api error");
+    srv.do_start().await.expect("HTTP: admin api error");
 
     // kick off
     let client = reqwest::Client::builder()
