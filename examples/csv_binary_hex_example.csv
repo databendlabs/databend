@@ -1,4 +1,0 @@
-id,payload_hex,notes
-1,48656C6C6F20576F726C64,"ASCII text Hello World"
-2,00FF1080,"Bytes \x00 \xFF \x10 \x80"
-3,546167735C6E42696E,"Literal contains escaped newline"
