@@ -190,17 +190,19 @@ Query {
                             span: Some(
                                 51..59,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    51..59,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        51..59,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -212,17 +214,19 @@ Query {
                             span: Some(
                                 71..77,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    71..77,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        71..77,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -417,17 +421,19 @@ Query {
                     span: Some(
                         56..57,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            56..57,
-                        ),
-                        name: "t",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                56..57,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -501,17 +507,19 @@ Query {
                     span: Some(
                         23..24,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            23..24,
-                        ),
-                        name: "t",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                23..24,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -569,17 +577,19 @@ Query {
                     span: Some(
                         14..45,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..22,
-                        ),
-                        name: "customer",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..22,
+                            ),
+                            name: "customer",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: Some(
                         TimeTravel(
@@ -666,17 +676,19 @@ Query {
                     span: Some(
                         14..71,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..22,
-                        ),
-                        name: "customer",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..22,
+                            ),
+                            name: "customer",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: Some(
                         Changes(
@@ -800,17 +812,19 @@ Query {
                     span: Some(
                         14..40,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..22,
-                        ),
-                        name: "customer",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..22,
+                            ),
+                            name: "customer",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: Some(
                         TableAlias {
                             name: Identifier {
@@ -887,17 +901,19 @@ Query {
                     span: Some(
                         14..52,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..22,
-                        ),
-                        name: "t12_0004",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..22,
+                            ),
+                            name: "t12_0004",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: Some(
                         TableAlias {
                             name: Identifier {
@@ -1024,17 +1040,19 @@ Query {
                     span: Some(
                         23..60,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            23..31,
-                        ),
-                        name: "t12_0004",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                23..31,
+                            ),
+                            name: "t12_0004",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: Some(
                         TableAlias {
                             name: Identifier {
@@ -1118,17 +1136,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1140,17 +1160,19 @@ Query {
                             span: Some(
                                 34..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    34..40,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        34..40,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1217,17 +1239,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1239,17 +1263,19 @@ Query {
                             span: Some(
                                 34..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    34..40,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        34..40,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1361,17 +1387,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1383,17 +1411,19 @@ Query {
                             span: Some(
                                 34..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    34..40,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        34..40,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1505,17 +1535,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1527,17 +1559,19 @@ Query {
                             span: Some(
                                 34..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    34..40,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        34..40,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1658,17 +1692,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1680,17 +1716,19 @@ Query {
                             span: Some(
                                 34..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    34..40,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        34..40,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1775,17 +1813,19 @@ Query {
                             span: Some(
                                 14..22,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..22,
-                                ),
-                                name: "customer",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..22,
+                                    ),
+                                    name: "customer",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1797,17 +1837,19 @@ Query {
                             span: Some(
                                 41..47,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    41..47,
-                                ),
-                                name: "orders",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        41..47,
+                                    ),
+                                    name: "orders",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -1892,17 +1934,19 @@ Query {
                                     span: Some(
                                         14..22,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            14..22,
-                                        ),
-                                        name: "customer",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                14..22,
+                                            ),
+                                            name: "customer",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -1914,17 +1958,19 @@ Query {
                                     span: Some(
                                         36..42,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            36..42,
-                                        ),
-                                        name: "orders",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                36..42,
+                                            ),
+                                            name: "orders",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -1938,17 +1984,19 @@ Query {
                             span: Some(
                                 59..65,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    59..65,
-                                ),
-                                name: "detail",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        59..65,
+                                    ),
+                                    name: "detail",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -2058,17 +2106,19 @@ Query {
                                         span: Some(
                                             30..31,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                30..31,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    30..31,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -2139,17 +2189,19 @@ Query {
                     span: Some(
                         51..53,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            51..53,
-                        ),
-                        name: "t2",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                51..53,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -2300,17 +2352,19 @@ Query {
                                         span: Some(
                                             43..44,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                43..44,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    43..44,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -2381,17 +2435,19 @@ Query {
                     span: Some(
                         64..66,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            64..66,
-                        ),
-                        name: "t2",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                64..66,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -2533,17 +2589,19 @@ Query {
                                         span: Some(
                                             26..27,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                26..27,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    26..27,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -2614,17 +2672,19 @@ Query {
                     span: Some(
                         46..48,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            46..48,
-                        ),
-                        name: "t2",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                46..48,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -2775,17 +2835,19 @@ Query {
                                         span: Some(
                                             43..44,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                43..44,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    43..44,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -2855,17 +2917,19 @@ Query {
                                         span: Some(
                                             81..82,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                81..82,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    81..82,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -2947,17 +3011,19 @@ Query {
                                         span: Some(
                                             106..107,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                106..107,
-                                            ),
-                                            name: "t",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    106..107,
+                                                ),
+                                                name: "t",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -3124,17 +3190,19 @@ Query {
                     span: Some(
                         151..153,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            151..153,
-                        ),
-                        name: "t2",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                151..153,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3146,17 +3214,19 @@ Query {
                     span: Some(
                         155..157,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            155..157,
-                        ),
-                        name: "t3",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                155..157,
+                            ),
+                            name: "t3",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3168,17 +3238,19 @@ Query {
                     span: Some(
                         159..161,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            159..161,
-                        ),
-                        name: "t4",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                159..161,
+                            ),
+                            name: "t4",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3336,17 +3408,19 @@ Query {
                                                 span: Some(
                                                     40..42,
                                                 ),
-                                                catalog: None,
-                                                database: None,
-                                                table: Identifier {
-                                                    span: Some(
-                                                        40..42,
-                                                    ),
-                                                    name: "t1",
-                                                    quote: None,
-                                                    ident_type: None,
+                                                table: TableRef {
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            40..42,
+                                                        ),
+                                                        name: "t1",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    branch: None,
                                                 },
-                                                ref_name: None,
                                                 alias: None,
                                                 temporal: None,
                                                 with_options: None,
@@ -3399,17 +3473,19 @@ Query {
                                                 span: Some(
                                                     64..66,
                                                 ),
-                                                catalog: None,
-                                                database: None,
-                                                table: Identifier {
-                                                    span: Some(
-                                                        64..66,
-                                                    ),
-                                                    name: "t2",
-                                                    quote: None,
-                                                    ident_type: None,
+                                                table: TableRef {
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            64..66,
+                                                        ),
+                                                        name: "t2",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    branch: None,
                                                 },
-                                                ref_name: None,
                                                 alias: None,
                                                 temporal: None,
                                                 with_options: None,
@@ -3482,17 +3558,19 @@ Query {
                     span: Some(
                         86..88,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            86..88,
-                        ),
-                        name: "t2",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                86..88,
+                            ),
+                            name: "t2",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3714,17 +3792,19 @@ Query {
                     span: Some(
                         68..69,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            68..69,
-                        ),
-                        name: "t",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                68..69,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3896,17 +3976,19 @@ Query {
                     span: Some(
                         75..83,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            75..83,
-                        ),
-                        name: "customer",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                75..83,
+                            ),
+                            name: "customer",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -3918,17 +4000,19 @@ Query {
                     span: Some(
                         85..95,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            85..91,
-                        ),
-                        name: "orders",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                85..91,
+                            ),
+                            name: "orders",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: Some(
                         TableAlias {
                             name: Identifier {
@@ -4133,17 +4217,19 @@ Query {
                                                 span: Some(
                                                     196..204,
                                                 ),
-                                                catalog: None,
-                                                database: None,
-                                                table: Identifier {
-                                                    span: Some(
-                                                        196..204,
-                                                    ),
-                                                    name: "customer",
-                                                    quote: None,
-                                                    ident_type: None,
+                                                table: TableRef {
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            196..204,
+                                                        ),
+                                                        name: "customer",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    branch: None,
                                                 },
-                                                ref_name: None,
                                                 alias: None,
                                                 temporal: None,
                                                 with_options: None,
@@ -4155,17 +4241,19 @@ Query {
                                                 span: Some(
                                                     221..227,
                                                 ),
-                                                catalog: None,
-                                                database: None,
-                                                table: Identifier {
-                                                    span: Some(
-                                                        221..227,
-                                                    ),
-                                                    name: "orders",
-                                                    quote: None,
-                                                    ident_type: None,
+                                                table: TableRef {
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            221..227,
+                                                        ),
+                                                        name: "orders",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    branch: None,
                                                 },
-                                                ref_name: None,
                                                 alias: None,
                                                 temporal: None,
                                                 with_options: None,
@@ -4416,17 +4504,19 @@ Query {
                             span: Some(
                                 14..16,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..16,
-                                ),
-                                name: "t1",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                    name: "t1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -4467,17 +4557,19 @@ Query {
                             span: Some(
                                 37..39,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    37..39,
-                                ),
-                                name: "t2",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        37..39,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -4544,17 +4636,19 @@ Query {
                             span: Some(
                                 14..16,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..16,
-                                ),
-                                name: "t1",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                    name: "t1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -4595,17 +4689,19 @@ Query {
                             span: Some(
                                 38..40,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    38..40,
-                                ),
-                                name: "t2",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        38..40,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -4679,17 +4775,19 @@ Query {
                                     span: Some(
                                         14..16,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            14..16,
-                                        ),
-                                        name: "t1",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                14..16,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -4730,17 +4828,19 @@ Query {
                                     span: Some(
                                         37..39,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            37..39,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                37..39,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -4783,17 +4883,19 @@ Query {
                             span: Some(
                                 60..62,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    60..62,
-                                ),
-                                name: "t3",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        60..62,
+                                    ),
+                                    name: "t3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -4867,17 +4969,19 @@ Query {
                                     span: Some(
                                         14..16,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            14..16,
-                                        ),
-                                        name: "t1",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                14..16,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -4918,17 +5022,19 @@ Query {
                                     span: Some(
                                         37..39,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            37..39,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                37..39,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -4971,17 +5077,19 @@ Query {
                             span: Some(
                                 64..66,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    64..66,
-                                ),
-                                name: "t3",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        64..66,
+                                    ),
+                                    name: "t3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -5128,17 +5236,19 @@ Query {
                                                         span: Some(
                                                             42..60,
                                                         ),
-                                                        catalog: None,
-                                                        database: None,
-                                                        table: Identifier {
-                                                            span: Some(
-                                                                42..60,
-                                                            ),
-                                                            name: "union_fuzz_result1",
-                                                            quote: None,
-                                                            ident_type: None,
+                                                        table: TableRef {
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    42..60,
+                                                                ),
+                                                                name: "union_fuzz_result1",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            branch: None,
                                                         },
-                                                        ref_name: None,
                                                         alias: None,
                                                         temporal: None,
                                                         with_options: None,
@@ -5213,17 +5323,19 @@ Query {
                                                         span: Some(
                                                             101..119,
                                                         ),
-                                                        catalog: None,
-                                                        database: None,
-                                                        table: Identifier {
-                                                            span: Some(
-                                                                101..119,
-                                                            ),
-                                                            name: "union_fuzz_result2",
-                                                            quote: None,
-                                                            ident_type: None,
+                                                        table: TableRef {
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    101..119,
+                                                                ),
+                                                                name: "union_fuzz_result2",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            branch: None,
                                                         },
-                                                        ref_name: None,
                                                         alias: None,
                                                         temporal: None,
                                                         with_options: None,
@@ -5307,17 +5419,19 @@ Query {
                                                         span: Some(
                                                             165..183,
                                                         ),
-                                                        catalog: None,
-                                                        database: None,
-                                                        table: Identifier {
-                                                            span: Some(
-                                                                165..183,
-                                                            ),
-                                                            name: "union_fuzz_result2",
-                                                            quote: None,
-                                                            ident_type: None,
+                                                        table: TableRef {
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    165..183,
+                                                                ),
+                                                                name: "union_fuzz_result2",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            branch: None,
                                                         },
-                                                        ref_name: None,
                                                         alias: None,
                                                         temporal: None,
                                                         with_options: None,
@@ -5392,17 +5506,19 @@ Query {
                                                         span: Some(
                                                             224..242,
                                                         ),
-                                                        catalog: None,
-                                                        database: None,
-                                                        table: Identifier {
-                                                            span: Some(
-                                                                224..242,
-                                                            ),
-                                                            name: "union_fuzz_result1",
-                                                            quote: None,
-                                                            ident_type: None,
+                                                        table: TableRef {
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    224..242,
+                                                                ),
+                                                                name: "union_fuzz_result1",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            branch: None,
                                                         },
-                                                        ref_name: None,
                                                         alias: None,
                                                         temporal: None,
                                                         with_options: None,
@@ -5488,17 +5604,19 @@ Query {
                             span: Some(
                                 14..16,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..16,
-                                ),
-                                name: "t1",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                    name: "t1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -5546,17 +5664,19 @@ Query {
                                     span: Some(
                                         37..39,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            37..39,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                37..39,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5597,17 +5717,19 @@ Query {
                                     span: Some(
                                         64..66,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            64..66,
-                                        ),
-                                        name: "t3",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                64..66,
+                                            ),
+                                            name: "t3",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5683,17 +5805,19 @@ Query {
                                     span: Some(
                                         15..17,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            15..17,
-                                        ),
-                                        name: "t1",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                15..17,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5734,17 +5858,19 @@ Query {
                                     span: Some(
                                         38..40,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            38..40,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                38..40,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5787,17 +5913,19 @@ Query {
                             span: Some(
                                 66..68,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    66..68,
-                                ),
-                                name: "t3",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        66..68,
+                                    ),
+                                    name: "t3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -5871,17 +5999,19 @@ Query {
                                     span: Some(
                                         15..17,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            15..17,
-                                        ),
-                                        name: "t1",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                15..17,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5922,17 +6052,19 @@ Query {
                                     span: Some(
                                         38..40,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            38..40,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                38..40,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -5975,17 +6107,19 @@ Query {
                             span: Some(
                                 62..64,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    62..64,
-                                ),
-                                name: "t3",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        62..64,
+                                    ),
+                                    name: "t3",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -6052,17 +6186,19 @@ Query {
                             span: Some(
                                 14..16,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..16,
-                                ),
-                                name: "t1",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                    name: "t1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -6110,17 +6246,19 @@ Query {
                                     span: Some(
                                         38..40,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            38..40,
-                                        ),
-                                        name: "t2",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                38..40,
+                                            ),
+                                            name: "t2",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -6161,17 +6299,19 @@ Query {
                                     span: Some(
                                         61..63,
                                     ),
-                                    catalog: None,
-                                    database: None,
-                                    table: Identifier {
-                                        span: Some(
-                                            61..63,
-                                        ),
-                                        name: "t3",
-                                        quote: None,
-                                        ident_type: None,
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                61..63,
+                                            ),
+                                            name: "t3",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
                                     },
-                                    ref_name: None,
                                     alias: None,
                                     temporal: None,
                                     with_options: None,
@@ -6550,17 +6690,19 @@ Query {
                                         span: Some(
                                             29..32,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                29..32,
-                                            ),
-                                            name: "xyu",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    29..32,
+                                                ),
+                                                name: "xyu",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -6715,17 +6857,19 @@ Query {
                     span: Some(
                         48..120,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            48..63,
-                        ),
-                        name: "quarterly_sales",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                48..63,
+                            ),
+                            name: "quarterly_sales",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -6864,17 +7008,19 @@ Query {
                     span: Some(
                         14..88,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..27,
-                        ),
-                        name: "monthly_sales",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..27,
+                            ),
+                            name: "monthly_sales",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -7075,17 +7221,19 @@ Query {
                                         span: Some(
                                             29..42,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                29..42,
-                                            ),
-                                            name: "monthly_sales",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    29..42,
+                                                ),
+                                                name: "monthly_sales",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -7272,17 +7420,19 @@ Query {
                     span: Some(
                         14..102,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..27,
-                        ),
-                        name: "monthly_sales",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..27,
+                            ),
+                            name: "monthly_sales",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -7380,17 +7530,19 @@ Query {
                                                     span: Some(
                                                         87..100,
                                                     ),
-                                                    catalog: None,
-                                                    database: None,
-                                                    table: Identifier {
-                                                        span: Some(
-                                                            87..100,
-                                                        ),
-                                                        name: "monthly_sales",
-                                                        quote: None,
-                                                        ident_type: None,
+                                                    table: TableRef {
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                87..100,
+                                                            ),
+                                                            name: "monthly_sales",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        branch: None,
                                                     },
-                                                    ref_name: None,
                                                     alias: None,
                                                     temporal: None,
                                                     with_options: None,
@@ -7522,17 +7674,19 @@ Query {
                                         span: Some(
                                             29..42,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                29..42,
-                                            ),
-                                            name: "monthly_sales",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    29..42,
+                                                ),
+                                                name: "monthly_sales",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -7648,17 +7802,19 @@ Query {
                                                     span: Some(
                                                         104..117,
                                                     ),
-                                                    catalog: None,
-                                                    database: None,
-                                                    table: Identifier {
-                                                        span: Some(
-                                                            104..117,
-                                                        ),
-                                                        name: "monthly_sales",
-                                                        quote: None,
-                                                        ident_type: None,
+                                                    table: TableRef {
+                                                        catalog: None,
+                                                        database: None,
+                                                        table: Identifier {
+                                                            span: Some(
+                                                                104..117,
+                                                            ),
+                                                            name: "monthly_sales",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        branch: None,
                                                     },
-                                                    ref_name: None,
                                                     alias: None,
                                                     temporal: None,
                                                     with_options: None,
@@ -7758,17 +7914,19 @@ Query {
                     span: Some(
                         14..112,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..29,
-                        ),
-                        name: "monthly_sales_1",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..29,
+                            ),
+                            name: "monthly_sales_1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -7952,17 +8110,19 @@ Query {
                                         span: Some(
                                             29..44,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                29..44,
-                                            ),
-                                            name: "monthly_sales_1",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    29..44,
+                                                ),
+                                                name: "monthly_sales_1",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -8257,17 +8417,19 @@ Query {
                     span: Some(
                         26..34,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            26..34,
-                        ),
-                        name: "customer",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                26..34,
+                            ),
+                            name: "customer",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -8580,17 +8742,19 @@ Query {
                     span: Some(
                         61..63,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            61..63,
-                        ),
-                        name: "t1",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                61..63,
+                            ),
+                            name: "t1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -8822,17 +8986,19 @@ Query {
                                         span: Some(
                                             30..33,
                                         ),
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                30..33,
-                                            ),
-                                            name: "xyu",
-                                            quote: None,
-                                            ident_type: None,
+                                        table: TableRef {
+                                            catalog: None,
+                                            database: None,
+                                            table: Identifier {
+                                                span: Some(
+                                                    30..33,
+                                                ),
+                                                name: "xyu",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            branch: None,
                                         },
-                                        ref_name: None,
                                         alias: None,
                                         temporal: None,
                                         with_options: None,
@@ -9244,17 +9410,19 @@ Query {
                             span: Some(
                                 14..15,
                             ),
-                            catalog: None,
-                            database: None,
-                            table: Identifier {
-                                span: Some(
-                                    14..15,
-                                ),
-                                name: "t",
-                                quote: None,
-                                ident_type: None,
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..15,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
                             },
-                            ref_name: None,
                             alias: None,
                             temporal: None,
                             with_options: None,
@@ -9410,17 +9578,19 @@ Query {
                     span: Some(
                         14..15,
                     ),
-                    catalog: None,
-                    database: None,
-                    table: Identifier {
-                        span: Some(
-                            14..15,
-                        ),
-                        name: "t",
-                        quote: None,
-                        ident_type: None,
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
                     },
-                    ref_name: None,
                     alias: None,
                     temporal: None,
                     with_options: None,

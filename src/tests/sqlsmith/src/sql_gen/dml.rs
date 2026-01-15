@@ -35,6 +35,7 @@ use databend_common_ast::ast::MutationSource;
 use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateStmt;
@@ -83,9 +84,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 // TODO
                 hints: None,
                 with: None,
-                catalog: None,
-                database: table.db_name.clone(),
-                table: table.name.clone(),
+                table: TableRef {
+                    catalog: None,
+                    database: table.db_name.clone(),
+                    table: table.name.clone(),
+                    // TODO
+                    branch: None,
+                },
                 // TODO
                 columns: vec![],
                 source,
@@ -342,10 +347,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
         let table_reference = TableReference::Table {
             span: Span::default(),
-            catalog: None,
-            database: table.db_name.clone(),
-            table: table.name.clone(),
-            ref_name: None,
+            table: TableRef {
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                branch: None,
+            },
             alias: None,
             temporal: None,
             with_options: None,
@@ -534,9 +541,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 // TODO
                 hints: None,
                 with: None,
-                catalog: None,
-                database: table.db_name.clone(),
-                table: table.name.clone(),
+                table: TableRef {
+                    catalog: None,
+                    database: table.db_name.clone(),
+                    table: table.name.clone(),
+                    branch: None,
+                },
                 columns,
                 source,
                 overwrite: false,
@@ -547,10 +557,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
         let table_reference = TableReference::Table {
             span: Span::default(),
-            catalog: None,
-            database: table.db_name.clone(),
-            table: table.name.clone(),
-            ref_name: None,
+            table: TableRef {
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                branch: None,
+            },
             alias: None,
             temporal: None,
             with_options: None,

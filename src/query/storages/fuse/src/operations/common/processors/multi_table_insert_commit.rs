@@ -292,13 +292,18 @@ async fn build_update_table_meta_req(
     // write snapshot
     let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
-    let location = location_generator
-        .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    // TODO(zhyass): multi table insert don't support branch now.
+    debug_assert!(fuse_table.get_branch_id().is_none());
+    let location = location_generator.gen_snapshot_location(
+        None,
+        &snapshot.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     dal.write(&location, snapshot.to_bytes()?).await?;
 
     // build new table meta
     let new_table_meta =
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
+        fuse_table.build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
     let table_id = fuse_table.table_info.ident.table_id;
     let table_version = fuse_table.table_info.ident.seq;
 
