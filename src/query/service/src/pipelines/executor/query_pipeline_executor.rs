@@ -44,6 +44,7 @@ use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
+use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorWorkerContext;
@@ -265,7 +266,8 @@ impl QueryPipelineExecutor {
             wait_count = self.workers_condvar.get_total_wait_count(),
             wait_time_ms = self.workers_condvar.get_total_wait_time_ms(),
             max_wait_time_ms = self.workers_condvar.get_max_wait_time_ms(),
-            worker_stats:? = self.workers_condvar.get_all_worker_stats();
+            worker_stats:? = self.workers_condvar.get_all_worker_stats(),
+            processor_wait_stats:? = self.graph.get_processor_wait_stats();
             "Pipeline executor finished"
         );
 
@@ -397,11 +399,13 @@ impl QueryPipelineExecutor {
         unsafe {
             let workers_condvar = self.workers_condvar.clone();
             let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+            let mut last_executed: Option<(NodeIndex, Arc<RunningGraph>)> = None;
 
             while !self.global_tasks_queue.is_finished() {
                 // When there are not enough tasks, the thread will be blocked, so we need loop check.
                 while !self.global_tasks_queue.is_finished() && !context.has_task() {
-                    self.global_tasks_queue.steal_task_to_context(&mut context);
+                    self.global_tasks_queue
+                        .steal_task_to_context(&mut context, last_executed.take());
                 }
 
                 while !self.global_tasks_queue.is_finished() && context.has_task() {
@@ -409,6 +413,9 @@ impl QueryPipelineExecutor {
                     let execute_res = context.execute_task(None);
                     match execute_res {
                         Ok(Some((executed_pid, graph))) => {
+                            // Store the last executed processor
+                            last_executed = Some((executed_pid, graph.clone()));
+
                             // Not scheduled graph if pipeline is finished.
                             if !self.global_tasks_queue.is_finished() {
                                 // We immediately schedule the processor again.

@@ -95,6 +95,8 @@ pub(crate) struct Node {
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
+    /// Count of times this processor caused thread to enter wait state after scheduling
+    pub(crate) wait_count: AtomicUsize,
 }
 
 impl Node {
@@ -143,6 +145,7 @@ impl Node {
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
+            wait_count: AtomicUsize::new(0),
         })
     }
 
@@ -993,6 +996,34 @@ impl RunningGraph {
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
         self.0.executor_stats.dump_snapshot()
+    }
+
+    /// Get wait counter for a processor node
+    pub fn get_node_wait_counter(&self, node_index: NodeIndex) -> &AtomicUsize {
+        &self.0.graph[node_index].wait_count
+    }
+
+    /// Get wait statistics for all processors
+    /// Returns a vector of (processor_id, processor_name, wait_count) sorted by wait_count descending
+    pub fn get_processor_wait_stats(&self) -> Vec<(usize, String, usize)> {
+        unsafe {
+            let mut stats: Vec<_> = self
+                .0
+                .graph
+                .node_indices()
+                .map(|idx| {
+                    let node = &self.0.graph[idx];
+                    (
+                        idx.index(),
+                        node.processor.name(),
+                        node.wait_count.load(Ordering::Relaxed),
+                    )
+                })
+                .filter(|(_, _, count)| *count > 0)
+                .collect();
+            stats.sort_by(|a, b| b.2.cmp(&a.2));
+            stats
+        }
     }
 }
 
