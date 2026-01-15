@@ -922,11 +922,29 @@ pub enum ChunkIndexItem {
     Range { block: u32, len: u32 },
 }
 
+impl ChunkIndexItem {
+    pub fn block(&self) -> u32 {
+        match *self {
+            ChunkIndexItem::Single { block, .. } => block,
+            ChunkIndexItem::Repeat { block, .. } => block,
+            ChunkIndexItem::Range { block, .. } => block,
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        match *self {
+            ChunkIndexItem::Single { n, .. } => n,
+            ChunkIndexItem::Repeat { count, .. } => count,
+            ChunkIndexItem::Range { len, .. } => len,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct ChunkIndex {
     rows: Vec<u32>,
     chunks: Vec<ChunkIndexItem>,
-    total: usize,
+    total: u32,
 }
 
 impl ChunkIndex {
@@ -940,58 +958,78 @@ impl ChunkIndex {
         debug_assert!(len > 0);
         self.rows.push(row);
         self.chunks.push(ChunkIndexItem::Range { block, len });
-        self.total += len as usize;
+        self.total += len;
+    }
+
+    pub fn push_merge_range(&mut self, block: u32, row: u32, len: u32) {
+        if len == 1 {
+            self.push_merge(block, row);
+            return;
+        }
+
+        match self.chunks.last_mut() {
+            Some(ChunkIndexItem::Range {
+                block: pre_block,
+                len: pre_len,
+            }) if *pre_block == block && *self.rows.last().unwrap() + *pre_len == row => {
+                self.total += len;
+                *pre_len += len;
+            }
+            Some(
+                item @ &mut ChunkIndexItem::Single {
+                    block: pre_block,
+                    n: 1,
+                },
+            ) if pre_block == block && *self.rows.last().unwrap() + 1 == row => {
+                self.total += len;
+                *item = ChunkIndexItem::Range {
+                    block,
+                    len: len + 1,
+                }
+            }
+            _ => self.push_range(block, row, len),
+        }
     }
 
     pub fn push_repeat(&mut self, block: u32, row: u32, count: u32) {
         self.rows.push(row);
         self.chunks.push(ChunkIndexItem::Repeat { block, count });
-        self.total += count as usize;
+        self.total += count;
     }
 
     pub fn push_merge(&mut self, block: u32, row: u32) {
-        let block_idx = block;
-        let row_idx = row;
+        let new_block = block;
+        let new_row = row;
         self.total += 1;
         match self.chunks.last_mut() {
             Some(ChunkIndexItem::Repeat { block, count })
-                if *block == block_idx && self.rows.last().is_some_and(|row| *row == row_idx) =>
+                if *block == new_block && *self.rows.last().unwrap() == new_row =>
             {
                 *count += 1;
             }
             Some(ChunkIndexItem::Range { block, len })
-                if *block == block_idx
-                    && self
-                        .rows
-                        .last()
-                        .is_some_and(|start| row_idx == *start + *len) =>
+                if *block == new_block && *self.rows.last().unwrap() + *len == new_row =>
             {
                 *len += 1;
             }
             Some(item @ &mut ChunkIndexItem::Single { block, n: 1 })
-                if block == block_idx && Some(&row_idx) == self.rows.last() =>
+                if block == new_block && *self.rows.last().unwrap() == new_row =>
             {
-                *item = ChunkIndexItem::Repeat {
-                    block: block_idx,
-                    count: 2,
-                }
+                *item = ChunkIndexItem::Repeat { block, count: 2 }
             }
             Some(item @ &mut ChunkIndexItem::Single { block, n: 1 })
-                if block == block_idx && row_idx == *self.rows.last().unwrap() + 1 =>
+                if block == new_block && new_row == *self.rows.last().unwrap() + 1 =>
             {
-                *item = ChunkIndexItem::Range {
-                    block: block_idx,
-                    len: 2,
-                }
+                *item = ChunkIndexItem::Range { block, len: 2 }
             }
-            Some(ChunkIndexItem::Single { block, n }) if *block == block_idx => {
-                self.rows.push(row_idx);
+            Some(ChunkIndexItem::Single { block, n }) if *block == new_block => {
+                self.rows.push(new_row);
                 *n += 1;
             }
             _ => {
                 self.rows.push(row);
                 self.chunks.push(ChunkIndexItem::Single {
-                    block: block_idx,
+                    block: new_block,
                     n: 1,
                 });
             }
@@ -1008,13 +1046,24 @@ impl ChunkIndex {
     }
 
     pub fn num_rows(&self) -> usize {
-        self.total
+        self.total as _
     }
 
     pub fn clear(&mut self) {
         self.rows.clear();
         self.chunks.clear();
         self.total = 0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    pub fn check_valid(&self) -> bool {
+        if self.chunks.iter().any(|item| item.size() == 0) {
+            return false;
+        }
+        self.chunks.iter().map(|item| item.size()).sum::<u32>() == self.total
     }
 }
 
@@ -1100,7 +1149,7 @@ mod tests {
     use super::*;
 
     fn flatten_index(index: &ChunkIndex) -> Vec<(u32, u32)> {
-        let mut flattened = Vec::with_capacity(index.total);
+        let mut flattened = Vec::with_capacity(index.total as _);
         for chunk in index.iter_chunk() {
             match chunk {
                 Chunk::Single { block, rows } => {
@@ -1121,7 +1170,7 @@ mod tests {
     }
 
     #[test]
-    fn test_chunk_index() {
+    fn test_chunk_index_push_merge() {
         let mut index = ChunkIndex::default();
 
         let input = vec![
@@ -1143,10 +1192,34 @@ mod tests {
 
         for &(block, row) in &input {
             index.push_merge(block, row);
+            assert!(index.check_valid());
         }
 
-        assert_eq!(index.total, input.len());
+        assert_eq!(index.total as usize, input.len());
         let flattened = flatten_index(&index);
         assert_eq!(flattened, input);
+    }
+
+    #[test]
+    fn test_chunk_index_push_merge_range() {
+        let mut index = ChunkIndex::default();
+
+        index.push_merge_range(0, 3, 1);
+        index.push_merge_range(0, 4, 1);
+        index.push_merge_range(0, 5, 2);
+        index.push_merge_range(0, 3, 1);
+        index.push_merge_range(0, 3, 1);
+
+        assert!(index.check_valid());
+
+        let flattened = flatten_index(&index);
+        assert_eq!(flattened, vec![
+            (0, 3),
+            (0, 4),
+            (0, 5),
+            (0, 6),
+            (0, 3),
+            (0, 3),
+        ])
     }
 }

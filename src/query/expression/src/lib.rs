@@ -80,6 +80,7 @@ pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
+pub use crate::block_vec::DataBlockVec;
 pub use crate::constant_folder::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;

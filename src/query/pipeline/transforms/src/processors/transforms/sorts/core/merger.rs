@@ -16,8 +16,10 @@ use std::cmp::Reverse;
 use std::collections::VecDeque;
 
 use databend_common_exception::Result;
+use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataBlockVec;
 use databend_common_expression::DataSchemaRef;
 
 use super::Rows;
@@ -48,13 +50,13 @@ where
     schema: DataSchemaRef,
     unsorted_streams: Vec<S>,
     sorted_cursors: A,
-    buffer: Vec<DataBlock>,
+    buffer: DataBlockVec,
     pending_streams: VecDeque<usize>,
     batch_rows: usize,
     limit: Option<usize>,
 
     temp_sorted_num_rows: usize,
-    temp_output_indices: Vec<(usize, usize, usize)>,
+    temp_output_indices: ChunkIndex,
     temp_sorted_blocks: Vec<DataBlock>,
 }
 
@@ -73,7 +75,12 @@ where
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
         let sorted_cursors = A::with_capacity(streams.len());
-        let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
+        let mut buffer = DataBlockVec::default();
+        for _ in 0..streams.len() {
+            buffer
+                .push(DataBlock::empty_with_schema(schema.clone()))
+                .unwrap()
+        }
         let pending_streams = (0..streams.len()).collect();
 
         Self {
@@ -85,7 +92,7 @@ where
             limit,
             pending_streams,
             temp_sorted_num_rows: 0,
-            temp_output_indices: vec![],
+            temp_output_indices: ChunkIndex::default(),
             temp_sorted_blocks: vec![],
         }
     }
@@ -107,7 +114,7 @@ where
     pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffer[i].is_empty());
+            debug_assert!(self.buffer.block_rows()[i] == 0);
             let (input, pending) = self.unsorted_streams[i].async_next().await?;
             if pending {
                 continue_pendings.push(i);
@@ -117,7 +124,7 @@ where
                 let rows = A::Rows::from_column(&col)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
-                self.buffer[i] = block;
+                self.buffer.replace(i, block);
             }
         }
         self.sorted_cursors.rebuild();
@@ -129,7 +136,7 @@ where
     pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffer[i].is_empty());
+            debug_assert!(self.buffer.block_rows()[i] == 0);
             let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
                 continue_pendings.push(i);
@@ -139,7 +146,7 @@ where
                 let rows = A::Rows::from_column(&col)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
-                self.buffer[i] = block;
+                self.buffer.replace(i, block);
             }
         }
         self.sorted_cursors.rebuild();
@@ -164,7 +171,8 @@ where
         let count = self.evaluate_cursor_count(cursor);
 
         self.temp_sorted_num_rows += count;
-        self.push_output_indices((input_index, start, count));
+        self.temp_output_indices
+            .push_merge_range(input_index as _, start as _, count as _);
 
         // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
         // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
@@ -176,12 +184,11 @@ where
             // Pop the current `cursor`.
             A::pop_mut(peek_mut);
             // We have read all rows of this block, need to release the old memory and read a new one.
-            let temp_block = DataBlock::take_by_slices_limit_from_blocks(
-                &self.buffer,
-                &self.temp_output_indices,
-                None,
+            let temp_block = self.buffer.take(&self.temp_output_indices);
+            self.buffer.replace(
+                input_index,
+                DataBlock::empty_with_schema(self.schema.clone()),
             );
-            self.buffer[input_index] = DataBlock::empty_with_schema(self.schema.clone());
             self.temp_sorted_blocks.push(temp_block);
             self.temp_output_indices.clear();
             self.pending_streams.push_back(input_index);
@@ -233,23 +240,9 @@ where
         p.row_index - start
     }
 
-    fn push_output_indices(&mut self, (input, start, count): (usize, usize, usize)) {
-        match self.temp_output_indices.last_mut() {
-            Some((pre_input, pre_start, pre_count)) if input == *pre_input => {
-                debug_assert_eq!(*pre_start + *pre_count, start);
-                *pre_count += count
-            }
-            _ => self.temp_output_indices.push((input, start, count)),
-        }
-    }
-
     fn build_output(&mut self) -> Result<DataBlock> {
         if !self.temp_output_indices.is_empty() {
-            let block = DataBlock::take_by_slices_limit_from_blocks(
-                &self.buffer,
-                &self.temp_output_indices,
-                None,
-            );
+            let block = self.buffer.take(&self.temp_output_indices);
             self.temp_sorted_blocks.push(block);
         }
         let block = DataBlock::concat(&self.temp_sorted_blocks)?;

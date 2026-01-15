@@ -56,6 +56,9 @@ struct ColumnStorage {
     data: Box<dyn Any>, // ColumnView<T>
 }
 
+unsafe impl Send for ColumnStorage {}
+unsafe impl Sync for ColumnStorage {}
+
 #[derive(Clone, Copy)]
 struct TypeHandler {
     init: fn(BlockEntry) -> Result<ColumnStorage>,
@@ -259,6 +262,10 @@ impl DataBlockVec {
             .collect::<Vec<_>>();
 
         DataBlock::new(columns, num_rows)
+    }
+
+    pub fn block_rows(&self) -> &[usize] {
+        &self.block_rows
     }
 
     fn init_typed<T: AccessType>(entry: BlockEntry) -> Result<ColumnStorage> {
