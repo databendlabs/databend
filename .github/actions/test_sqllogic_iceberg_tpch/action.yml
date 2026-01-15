@@ -16,9 +16,6 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
-    - name: Setup uv
-      uses: astral-sh/setup-uv@v7
-
     - name: Iceberg Setup for (ubuntu-latest only)
       shell: bash
       run: |
@@ -32,12 +29,11 @@ runs:
         fi
         tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
-        cwd=$(pwd)
-        cd tests/sqllogictests/scripts/ && uv sync && cd $cwd
+        uv sync
         echo "Running prepare_iceberg_tpch_data.py..."
-        uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
+        uv run python tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
-        uv run tests/sqllogictests/scripts/prepare_iceberg_test_data.py
+        uv run python tests/sqllogictests/scripts/prepare_iceberg_test_data.py
 
 
     - name: Run sqllogic Tests with Standalone lib

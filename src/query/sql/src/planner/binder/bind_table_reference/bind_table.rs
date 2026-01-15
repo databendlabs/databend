@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
@@ -42,24 +42,24 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
-        catalog: &Option<Identifier>,
-        database: &Option<Identifier>,
-        table: &Identifier,
-        ref_name: &Option<Identifier>,
+        table_ref: &TableRef,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
         with_options: &Option<WithOptions>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        let table_identifier =
-            TableIdentifier::new(self, catalog, database, table, ref_name, alias);
-        let (catalog, database, table_name, table_ref_name, table_name_alias) = (
-            table_identifier.catalog_name(),
-            table_identifier.database_name(),
-            table_identifier.table_name(),
-            table_identifier.table_ref_name(),
-            table_identifier.table_name_alias(),
-        );
+        let TableRef {
+            catalog,
+            database,
+            table,
+            branch,
+        } = table_ref;
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
+        let catalog = table_identifier.catalog_name();
+        let database = table_identifier.database_name();
+        let table_name = table_identifier.table_name();
+        let branch_name = table_identifier.branch_name();
+        let table_name_alias = table_identifier.table_name_alias();
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if cte_name == &table_name {
@@ -133,7 +133,7 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
-                table_ref_name.as_deref(),
+                branch_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
             ) {
@@ -177,7 +177,7 @@ impl Binder {
                     catalog,
                     database.clone(),
                     table_meta.clone(),
-                    table_ref_name,
+                    branch_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
@@ -264,7 +264,7 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta,
-                        table_ref_name,
+                        branch_name,
                         table_name_alias,
                         false,
                         false,
@@ -298,7 +298,7 @@ impl Binder {
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
-                    table_ref_name,
+                    branch_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,

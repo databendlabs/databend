@@ -8,7 +8,7 @@ create table t (x INT);
 statement ok
 insert into t(x) values (1), (2);
 
-query I
+query T
 explain select * from t as a(id) where a.id > 1;
 ----
 Filter

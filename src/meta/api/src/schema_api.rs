@@ -348,11 +348,8 @@ pub async fn construct_drop_table_txn_operations(
         ObjectTagIdRef::new(taggable_object.clone(), 0),
     );
     let obj_tag_dir = DirName::new(obj_tag_prefix);
-    let tag_entries: Vec<_> = kv_api
-        .list_pb(ListOptions::unlimited(&obj_tag_dir))
-        .await?
-        .try_collect()
-        .await?;
+    let strm = kv_api.list_pb(ListOptions::unlimited(&obj_tag_dir)).await?;
+    let tag_entries: Vec<_> = strm.try_collect().await?;
     for entry in tag_entries {
         let tag_id = entry.key.name().tag_id;
         // Delete object -> tag reference

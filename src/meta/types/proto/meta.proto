@@ -437,6 +437,11 @@ message KvListRequest {
   optional uint64 limit = 2;
 }
 
+// Request message for KvGetMany - single key per message in the input stream.
+message KvGetManyRequest {
+  string key = 1;
+}
+
 service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
@@ -462,8 +467,20 @@ service MetaService {
   //
   // Returns a stream of key-value pairs matching the given prefix.
   //
+  // This API does not forward to leader, but return a Status error with redirect.
+  //
   // 2026-**-**: since 1.2.** TODO: fill when merged.
   rpc KvList(KvListRequest) returns (stream StreamItem);
+
+  // Get multiple key-value pairs by streaming keys.
+  //
+  // Takes a stream of keys as input and returns a stream of key-value pairs.
+  // This is a bidirectional streaming RPC allowing efficient pipelining.
+  //
+  // This API does not forward to leader, but returns a Status error with redirect.
+  //
+  // 2026-**-**: since 1.2.** TODO: fill when merged.
+  rpc KvGetMany(stream KvGetManyRequest) returns (stream StreamItem);
 
   // Export all meta data.
   //

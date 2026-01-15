@@ -15,7 +15,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_base::base::tokio::sync::oneshot::Sender;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
@@ -31,6 +30,7 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use fastrace::Span;
+use tokio::sync::oneshot::Sender;
 use tonic::codegen::BoxStream;
 
 use crate::established_client::EstablishedClient;
@@ -78,6 +78,7 @@ pub struct InitFlag;
 #[derive(Debug, Clone, derive_more::From)]
 pub enum Request {
     /// Get multiple KV, returning a stream.
+    // TODO: Add a new variant to support real stream input + stream output get-many
     StreamMGet(Streamed<MGetKVReq>),
 
     /// List KVs by key prefix, returning a stream.

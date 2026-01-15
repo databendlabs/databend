@@ -136,20 +136,11 @@ impl Display for Datum {
 
 impl Datum {
     pub fn type_comparable(&self, other: &Datum) -> bool {
-        matches!(
-            (self, other),
-            (Datum::Bool(_), Datum::Bool(_))
-                | (Datum::Bytes(_), Datum::Bytes(_))
-                | (Datum::Int(_), Datum::UInt(_))
-                | (Datum::Int(_), Datum::Int(_))
-                | (Datum::Int(_), Datum::Float(_))
-                | (Datum::UInt(_), Datum::Int(_))
-                | (Datum::UInt(_), Datum::UInt(_))
-                | (Datum::UInt(_), Datum::Float(_))
-                | (Datum::Float(_), Datum::Float(_))
-                | (Datum::Float(_), Datum::Int(_))
-                | (Datum::Float(_), Datum::UInt(_))
-        )
+        self.is_numeric() && other.is_numeric()
+            || matches!(
+                (self, other),
+                (Datum::Bool(_), Datum::Bool(_)) | (Datum::Bytes(_), Datum::Bytes(_))
+            )
     }
 
     pub fn is_numeric(&self) -> bool {
@@ -191,22 +182,5 @@ impl Datum {
                 self, other
             ))),
         }
-    }
-
-    pub fn can_compare(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (Datum::Bool(_), Datum::Bool(_))
-                | (Datum::Int(_), Datum::Int(_))
-                | (Datum::Int(_), Datum::UInt(_))
-                | (Datum::Int(_), Datum::Float(_))
-                | (Datum::UInt(_), Datum::UInt(_))
-                | (Datum::UInt(_), Datum::Int(_))
-                | (Datum::UInt(_), Datum::Float(_))
-                | (Datum::Float(_), Datum::Float(_))
-                | (Datum::Float(_), Datum::Int(_))
-                | (Datum::Float(_), Datum::UInt(_))
-                | (Datum::Bytes(_), Datum::Bytes(_))
-        )
     }
 }

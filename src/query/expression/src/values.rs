@@ -427,6 +427,13 @@ impl Value<AnyType> {
     pub fn is_scalar_null(&self) -> bool {
         *self == Value::Scalar(Scalar::Null)
     }
+
+    pub fn is_value_of_type(&self, data_type: &DataType) -> bool {
+        match self {
+            Value::Scalar(scalar) => scalar.as_ref().is_value_of_type(data_type),
+            Value::Column(column) => column.data_type() == *data_type,
+        }
+    }
 }
 
 impl Scalar {

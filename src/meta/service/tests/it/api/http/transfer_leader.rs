@@ -15,13 +15,12 @@
 use std::time::Duration;
 
 use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::time::Instant;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_meta::api::HttpService;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::Instant;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::start_metasrv_cluster;

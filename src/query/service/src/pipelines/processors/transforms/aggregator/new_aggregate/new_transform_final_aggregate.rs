@@ -13,272 +13,248 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::BorrowMut;
+use std::mem;
 use std::sync::Arc;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use bumpalo::Bump;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use log::debug;
-use parking_lot::Mutex;
-use tokio::sync::Barrier;
+use databend_common_pipeline_transforms::MemorySettings;
 
-use super::new_aggregate_spiller::NewAggregateSpiller;
-use super::new_final_aggregate_state::FinalAggregateSharedState;
-use super::new_final_aggregate_state::LocalRoundState;
-use super::new_final_aggregate_state::RepartitionedQueues;
-use super::new_final_aggregate_state::RoundPhase;
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
+use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
+use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
+use crate::sessions::QueryContext;
 
-pub struct NewFinalAggregateTransform {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    id: usize,
-    partition_count: usize,
+const SPILL_BUCKET_NUM: usize = 2;
 
-    /// final aggregate
-    params: Arc<AggregatorParams>,
-    flush_state: PayloadFlushState,
-
-    /// storing repartition result
-    repartitioned_queues: RepartitionedQueues,
-
-    /// schedule
-    round_state: LocalRoundState,
-    barrier: Arc<Barrier>,
-    shared_state: Arc<Mutex<FinalAggregateSharedState>>,
-
-    /// spill
-    spiller: NewAggregateSpiller,
-
-    statistics: AggregationStatistics,
+enum Stage {
+    Input,
+    Channel,
 }
 
-impl NewFinalAggregateTransform {
+pub struct FinalAggregateTask {
+    spilled_depth: usize,
+    spilled_payload: Vec<NewSpilledPayload>,
+    tx: Sender<FinalAggregateTask>,
+}
+
+pub struct NewTransformFinalAggregate {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    input_data: Option<AggregateMeta>,
+    channel_data: Option<FinalAggregateTask>,
+    should_finish: bool,
+    tx: Option<Sender<FinalAggregateTask>>,
+    rx: Receiver<FinalAggregateTask>,
+    stage: Stage,
+    spilled_occurred: bool,
+
+    hashtable: HashTable,
+    params: Arc<AggregatorParams>,
+    flush_state: PayloadFlushState,
+    statistics: AggregationStatistics,
+    _id: usize,
+    spiller: NewAggregateSpiller<LocalPartitionStream>,
+    settings: MemorySettings,
+    max_aggregate_spill_level: usize,
+}
+
+impl NewTransformFinalAggregate {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        id: usize,
         params: Arc<AggregatorParams>,
-        partition_count: usize,
-        barrier: Arc<Barrier>,
-        shared_state: Arc<Mutex<FinalAggregateSharedState>>,
-        spiller: NewAggregateSpiller,
-        max_aggregate_spill_level: usize,
+        _id: usize,
+        ctx: Arc<QueryContext>,
+        tx: Sender<FinalAggregateTask>,
+        rx: Receiver<FinalAggregateTask>,
     ) -> Result<Box<dyn Processor>> {
-        let round_state = LocalRoundState::new(max_aggregate_spill_level);
-        Ok(Box::new(NewFinalAggregateTransform {
+        let settings = ctx.get_settings();
+        let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()?;
+
+        let hashtable = AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            HashTableConfig::default()
+                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64),
+            Arc::new(Bump::new()),
+        );
+        let flush_state = PayloadFlushState::default();
+
+        let spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            SPILL_BUCKET_NUM,
+            LocalPartitionStream::new(
+                params.max_block_rows,
+                params.max_block_bytes,
+                SPILL_BUCKET_NUM,
+            ),
+        )?;
+
+        Ok(Box::new(NewTransformFinalAggregate {
             input,
             output,
-            id,
-            partition_count,
+            input_data: None,
+            channel_data: None,
+            should_finish: false,
+            tx: Some(tx),
+            rx,
+            stage: Stage::Input,
+            spilled_occurred: false,
+            hashtable: HashTable::AggregateHashTable(hashtable),
             params,
-            flush_state: PayloadFlushState::default(),
-            round_state,
-            repartitioned_queues: RepartitionedQueues::create(partition_count),
-            barrier,
-            shared_state,
-            spiller,
+            flush_state,
             statistics: AggregationStatistics::new("NewFinalAggregate"),
+            _id,
+            spiller,
+            settings: MemorySettings::from_aggregate_settings(&ctx)?,
+            max_aggregate_spill_level: max_aggregate_spill_level as usize,
         }))
     }
+}
 
-    /// Repartition the given AggregateMeta into `partition_count` partitions
-    /// in aggregate stage, `partition_count` processors will handle each partition respectively.
-    fn repartition(&mut self, meta: AggregateMeta) -> Result<()> {
-        // Step 1: normalize input into a single Payload to scatter.
-        let mut src_payload = match meta {
-            // Deserialize into a hashtable with radix_bits = 0. This yields a single payload.
-            AggregateMeta::Serialized(payload) => {
-                let p = payload.convert_to_partitioned_payload(
-                    self.params.group_data_types.clone(),
-                    self.params.aggregate_functions.clone(),
-                    self.params.num_states(),
-                    0,
-                    Arc::new(Bump::new()),
-                )?;
-                debug_assert_eq!(p.partition_count(), 1);
-                // Safe to unwrap due to partition_count == 1
-                p.payloads.into_iter().next().unwrap()
-            }
-            // Already a single payload for one upstream bucket.
-            AggregateMeta::AggregatePayload(agg_payload) => agg_payload.payload,
-            AggregateMeta::NewSpilled(_) => {
-                return Err(ErrorCode::Internal(
-                    "New spilled payload must be restored before repartitioning",
-                ));
-            }
-            _ => {
-                return Err(ErrorCode::Internal(
-                    "Unexpected meta type for repartitioning",
-                ));
-            }
-        };
+impl NewTransformFinalAggregate {
+    fn handle_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
+        if payload.data_block.is_empty() {
+            return Ok(());
+        }
 
-        // Step 2: scatter this payload across all partitions using modulo hashing.
-        let arena = src_payload.arena.clone();
-        let mut repartitioned = PartitionedPayload::new(
+        let rows = payload.data_block.num_rows();
+        let bytes = payload.data_block.memory_size();
+        self.statistics.record_block(rows, bytes);
+
+        let partitioned_payload = payload.convert_to_partitioned_payload(
             self.params.group_data_types.clone(),
             self.params.aggregate_functions.clone(),
-            self.partition_count as u64,
-            vec![arena],
-        );
+            self.params.num_states(),
+            0,
+            Arc::new(Bump::new()),
+        )?;
 
-        let mut flush_state = PayloadFlushState::default();
-        while src_payload.scatter(&mut flush_state, self.partition_count) {
-            let state = &*flush_state.probe_state;
-
-            for (payload, (count, sel)) in repartitioned
-                .payloads
-                .iter_mut()
-                .zip(&state.partition_entries)
-            {
-                if *count > 0 {
-                    payload.copy_rows(&sel[..*count as usize], &flush_state.addresses);
-                }
-            }
+        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+            ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
         }
-        // Avoid double drop of states moved into new payloads.
-        src_payload.state_move_out = true;
-
-        // Step 3: enqueue into per-partition queues.
-        let mut new_produced = RepartitionedQueues::create(self.partition_count);
-        for (partition_id, payload) in repartitioned.payloads.into_iter().enumerate() {
-            if payload.len() == 0 {
-                continue;
-            }
-            let meta = AggregateMeta::AggregatePayload(AggregatePayload {
-                bucket: partition_id as isize,
-                payload,
-                max_partition_count: self.partition_count,
-            });
-            new_produced.push_to_queue(partition_id, meta);
-        }
-
-        if self.round_state.is_spilled {
-            self.spill(new_produced)?;
-            return Ok(());
-        }
-
-        self.repartitioned_queues.merge_queues(new_produced);
-
-        // other processor has spilled in this round, we need to spill too
-        if self.shared_state.lock().is_spilled {
-            let queues = self.repartitioned_queues.take_queues();
-            self.spill(queues)?;
-            self.round_state.is_spilled = true;
-            return Ok(());
-        }
-
-        // we issue spill based on memory usage
-        let need_spill = self.spiller.memory_settings.check_spill();
-        let can_trigger_spill =
-            self.round_state.current_queue_spill_round < self.round_state.max_aggregate_spill_level;
-
-        if need_spill && can_trigger_spill {
-            debug!(
-                "[FinalAggregateTransform-{}] detected memory pressure",
-                self.id
-            );
-            self.round_state.is_spilled = true;
-            self.shared_state.lock().is_spilled = true;
-            let queues = self.repartitioned_queues.take_queues();
-            self.spill(queues)?;
-
-            return Ok(());
-        }
-
-        self.try_finish_spill_round()?;
 
         Ok(())
     }
 
-    fn push_output(&mut self) -> Result<Event> {
-        if let RoundPhase::OutputReady(data_block) = self.round_state.take_phase() {
-            self.output.push_data(Ok(data_block));
-            Ok(Event::NeedConsume)
-        } else {
-            Err(ErrorCode::Internal(
-                "NewFinalAggregateTransform output called in invalid state",
-            ))
+    fn handle_aggregate_payload(&mut self, payload: AggregatePayload) -> Result<()> {
+        let rows = payload.payload.len();
+        let bytes = payload.payload.memory_size();
+        self.statistics.record_block(rows, bytes);
+
+        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+            ht.combine_payload(&payload.payload, &mut self.flush_state)?;
         }
+
+        Ok(())
     }
 
-    fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
-        let mut agg_hashtable: Option<AggregateHashTable> = None;
+    fn handle_new_spilled(&mut self, payloads: Vec<NewSpilledPayload>) -> Result<()> {
+        for payload in payloads {
+            let restored = self.spiller.restore(payload)?;
+            let AggregateMeta::Serialized(restored) = restored else {
+                unreachable!("unexpected aggregate meta, found type: {:?}", restored)
+            };
+            self.handle_serialized(restored)?;
+        }
 
-        while let Some(meta) = queue.pop() {
-            match meta {
-                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
-                        let rows = payload.data_block.num_rows();
-                        let bytes = payload.data_block.memory_size();
-                        self.statistics.record_block(rows, bytes);
-                        let payload = payload.convert_to_partitioned_payload(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            self.params.num_states(),
-                            0,
-                            Arc::new(Bump::new()),
-                        )?;
-                        ht.combine_payloads(&payload, &mut self.flush_state)?;
-                    }
-                    None => {
-                        let rows = payload.data_block.num_rows();
-                        let bytes = payload.data_block.memory_size();
-                        self.statistics.record_block(rows, bytes);
-                        agg_hashtable = Some(payload.convert_to_aggregate_table(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            self.params.num_states(),
-                            0,
-                            Arc::new(Bump::new()),
-                            true,
-                        )?);
-                    }
-                },
-                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
-                        let rows = payload.payload.len();
-                        let bytes = payload.payload.memory_size();
-                        self.statistics.record_block(rows, bytes);
-                        ht.combine_payload(&payload.payload, &mut self.flush_state)?;
-                    }
-                    None => {
-                        let rows = payload.payload.len();
-                        let bytes = payload.payload.memory_size();
-                        self.statistics.record_block(rows, bytes);
-                        let capacity =
-                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
-                        let mut hashtable = AggregateHashTable::new_with_capacity(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            HashTableConfig::default().with_initial_radix_bits(0),
-                            capacity,
-                            Arc::new(Bump::new()),
-                        );
-                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
-                        agg_hashtable = Some(hashtable);
-                    }
-                },
-                AggregateMeta::NewSpilled(_) => unreachable!(),
-                _ => unreachable!(),
+        Ok(())
+    }
+
+    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
+        match meta {
+            AggregateMeta::Serialized(payload) => {
+                self.handle_serialized(payload)?;
+            }
+            AggregateMeta::AggregatePayload(payload) => {
+                self.handle_aggregate_payload(payload)?;
+            }
+            AggregateMeta::NewSpilled(payloads) => {
+                self.handle_new_spilled(payloads)?;
+            }
+            AggregateMeta::NewBucketSpilled(payload) => {
+                self.handle_new_spilled(vec![payload])?;
+            }
+            AggregateMeta::Partitioned { bucket: _, data } => {
+                for meta in data {
+                    self.handle_meta(meta, need_check_spill)?;
+                }
+            }
+            _ => {
+                unreachable!("unexpected aggregate meta, found type: {:?}", meta);
             }
         }
 
-        let output_block = if let Some(mut ht) = agg_hashtable {
+        if need_check_spill && self.settings.check_spill() {
+            self.spill_out()?;
+        }
+
+        Ok(())
+    }
+
+    fn spill_out(&mut self) -> Result<()> {
+        self.spilled_occurred = true;
+        if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
+            let group_types = v.payload.group_types.clone();
+            let aggrs = v.payload.aggrs.clone();
+            let config = v.config.clone();
+
+            for (bucket, payload) in v.payload.payloads.into_iter().enumerate() {
+                if payload.len() == 0 {
+                    continue;
+                }
+
+                let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+                self.spiller.spill(bucket, data_block)?;
+            }
+
+            let arena = Arc::new(Bump::new());
+            self.hashtable = HashTable::AggregateHashTable(AggregateHashTable::new(
+                group_types,
+                aggrs,
+                config,
+                arena,
+            ));
+        } else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
+        }
+        Ok(())
+    }
+
+    fn finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
+        if self.spilled_occurred {
+            self.spill_finish(spilled_depth, tx)?;
+
+            self.spilled_occurred = false;
+            return Ok(());
+        }
+
+        if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
+            let group_types = ht.payload.group_types.clone();
+            let aggrs = ht.payload.aggrs.clone();
+            let config = ht.config.clone();
+
             self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
             self.flush_state.clear();
@@ -295,60 +271,44 @@ impl NewFinalAggregateTransform {
                 }
             }
 
-            if blocks.is_empty() {
-                self.params.empty_result_block()
-            } else {
-                DataBlock::concat(&blocks)?
-            }
-        } else {
-            self.params.empty_result_block()
-        };
-
-        if output_block.is_empty() {
-            self.round_state.phase = RoundPhase::Idle;
-        } else {
-            self.round_state.phase = RoundPhase::OutputReady(output_block);
-        }
-
-        Ok(())
-    }
-
-    pub fn spill(&mut self, mut queues: RepartitionedQueues) -> Result<()> {
-        for (id, queue) in queues.0.iter_mut().enumerate() {
-            while let Some(meta) = queue.pop() {
-                match meta {
-                    AggregateMeta::AggregatePayload(AggregatePayload { payload, .. }) => {
-                        let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
-                        self.spiller.spill(id, data_block)?;
-                    }
-                    AggregateMeta::NewSpilled(_) => {
-                        return Err(ErrorCode::Internal(
-                            "New spilled payload should not exist in repartitioned queues",
-                        ));
-                    }
-                    _ => {
-                        return Err(ErrorCode::Internal(
-                            "NewAggregateSpiller expects AggregatePayload in repartitioned queue",
-                        ));
-                    }
+            if !blocks.is_empty() {
+                let concat = DataBlock::concat(&blocks)?;
+                if !concat.is_empty() {
+                    self.output.push_data(Ok(concat));
                 }
             }
+            self.hashtable = HashTable::AggregateHashTable(AggregateHashTable::new(
+                group_types,
+                aggrs,
+                config,
+                Arc::new(Bump::new()),
+            ));
         }
-        self.try_finish_spill_round()?;
 
         Ok(())
     }
 
-    /// this need to be called because the shared partition stream depends on it
-    pub fn try_finish_spill_round(&mut self) -> Result<()> {
-        if self.round_state.working_queue.is_empty() {
-            let spilled_payloads = self.spiller.spill_finish()?;
-            for payload in spilled_payloads {
-                self.repartitioned_queues.push_to_queue(
-                    payload.bucket as usize,
-                    AggregateMeta::NewBucketSpilled(payload),
-                );
-            }
+    fn spill_finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
+        self.spill_out()?;
+
+        let spilled_payload = self.spiller.spill_finish()?;
+        let mut chunks = (0..SPILL_BUCKET_NUM).map(|_| vec![]).collect::<Vec<_>>();
+        for payload in spilled_payload.into_iter() {
+            chunks[payload.bucket as usize].push(payload);
+        }
+
+        for chunk in chunks.into_iter() {
+            let spilled = FinalAggregateTask {
+                spilled_depth: spilled_depth + 1,
+                spilled_payload: chunk,
+                tx: tx.clone(),
+            };
+            tx.try_send(spilled).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "Failed to send final aggregate meta to spiller: {}",
+                    e
+                ))
+            })?;
         }
 
         Ok(())
@@ -356,9 +316,9 @@ impl NewFinalAggregateTransform {
 }
 
 #[async_trait::async_trait]
-impl Processor for NewFinalAggregateTransform {
+impl Processor for NewTransformFinalAggregate {
     fn name(&self) -> String {
-        "NewFinalAggregateTransform".to_string()
+        "NewTransformFinalAggregate".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -367,6 +327,7 @@ impl Processor for NewFinalAggregateTransform {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
+            let _ = self.tx.take();
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -376,63 +337,36 @@ impl Processor for NewFinalAggregateTransform {
             return Ok(Event::NeedConsume);
         }
 
-        let round_state = &mut self.round_state;
-
-        if matches!(round_state.phase, RoundPhase::OutputReady(_)) {
-            return self.push_output();
-        }
-
-        if matches!(round_state.phase, RoundPhase::Aggregate) {
+        if self.input_data.is_some() {
             return Ok(Event::Sync);
         }
 
-        // schedule a task from local working queue first
-        if let Some(event) = round_state.schedule_next_task() {
-            return Ok(event);
+        if self.channel_data.is_some() {
+            return Ok(Event::Sync);
         }
 
-        // no more task in local working queue, means we need report repartitioned queues to shared state
-        if !round_state.is_reported && round_state.first_data_ready {
-            return Ok(round_state.schedule_async_wait());
-        }
-
-        // after reported, try get datablock from shared state
-        let next_datablock = self.shared_state.lock().borrow_mut().get_next_datablock();
-        if let Some((mut datablock, spill_round)) = next_datablock {
-            // begin a new round, reset spilled flag and reported flag
-            round_state.reset_for_new_round(spill_round);
-
-            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut datablock)? {
-                self.spiller.update_activate_worker(activate_worker);
-            }
-
-            // schedule next task from working queue
-            if let Some(event) = round_state.schedule_next_task() {
-                return Ok(event);
-            } else {
-                return Ok(round_state.schedule_async_wait());
-            }
-        }
-
-        // no more work from shared state, try pull data from input
         if self.input.has_data() {
-            // begin a new round, reset spilled flag and reported flag
-            round_state.reset_for_new_round(0);
-            round_state.first_data_ready = true;
-
             let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut data_block)? {
-                self.spiller.update_activate_worker(activate_worker);
-            }
-            // schedule next task from working queue
-            if let Some(event) = round_state.schedule_next_task() {
-                return Ok(event);
-            } else {
-                return Ok(round_state.schedule_async_wait());
+            if let Some(block_meta) = data_block
+                .take_meta()
+                .and_then(AggregateMeta::downcast_from)
+            {
+                self.input_data = Some(block_meta);
+                return Ok(Event::Sync);
             }
         }
 
         if self.input.is_finished() {
+            if matches!(self.stage, Stage::Input) {
+                // the stage that get meta from input is end now
+                // begin to get meta from channel
+                self.stage = Stage::Channel;
+                return Ok(Event::Sync);
+            }
+
+            if !self.should_finish {
+                return Ok(Event::Async);
+            }
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -442,58 +376,40 @@ impl Processor for NewFinalAggregateTransform {
     }
 
     fn process(&mut self) -> Result<()> {
-        let phase = self.round_state.take_phase();
-        match phase {
-            RoundPhase::NewTask(meta) => {
-                let meta = match meta {
-                    AggregateMeta::NewBucketSpilled(p) => self.spiller.restore(p)?,
-                    AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::NewSpilled(_) => unreachable!(),
-                    other => other,
-                };
-                self.repartition(meta)?;
+        let input_data = self.input_data.take();
+        if let Some(meta) = input_data {
+            self.handle_meta(meta, true)?;
+            return Ok(());
+        } else if let Some(mut task) = self.channel_data.take() {
+            let meta = AggregateMeta::NewSpilled(mem::take(&mut task.spilled_payload));
+            if task.spilled_depth >= self.max_aggregate_spill_level {
+                self.handle_meta(meta, false)?;
+            } else {
+                self.handle_meta(meta, true)?;
+            }
+            self.finish(task.spilled_depth, task.tx)?;
 
-                Ok(())
-            }
-            RoundPhase::Aggregate => {
-                let queue = self
-                    .shared_state
-                    .lock()
-                    .need_aggregate_queues
-                    .take_queue(self.id);
-                self.final_aggregate(queue)
-            }
-            _ => Err(ErrorCode::Internal(format!(
-                "NewFinalAggregateTransform process called in {} state",
-                phase
-            ))),
+            return Ok(());
+        } else {
+            let sender = mem::take(&mut self.tx)
+                .expect("logic error: called finished for input data more than once");
+            self.finish(0, sender)?;
         }
+
+        Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let phase = self.round_state.take_phase();
-        match phase {
-            RoundPhase::AsyncWait => {
-                // report local repartitioned queues to shared state
-                let queues = self.repartitioned_queues.take_queues();
-                if self.shared_state.lock().add_repartitioned_queue(queues) {
-                    // if it is the last one called, we add a checkpoint to ensure
-                    // the spiller finished in every round
-                    #[cfg(debug_assertions)]
-                    debug_assert!(self.spiller.is_stream_partition_clean());
-                }
-
-                self.barrier.wait().await;
-
-                // we can only begin aggregate when last round no processor spills
-                if !self.shared_state.lock().last_round_is_spilled {
-                    self.round_state.phase = RoundPhase::Aggregate;
-                }
-                Ok(())
+        match self.rx.recv().await {
+            Ok(meta) => {
+                self.channel_data = Some(meta);
             }
-            _ => Err(ErrorCode::Internal(
-                "NewFinalAggregateTransform async_process called in invalid state",
-            ))?,
+            Err(_) => {
+                self.should_finish = true;
+            }
         }
+
+        Ok(())
     }
 }

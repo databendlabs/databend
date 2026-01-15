@@ -1027,7 +1027,35 @@ impl<Index: ColumnIndex> Expr<Index> {
                     function, args, id, ..
                 }) => match (function.signature.name.as_str(), args.as_slice()) {
                     ("and", [lhs, rhs]) => write_binary_op("AND", lhs, rhs, 10, min_precedence),
+                    ("and_filters", args) if !args.is_empty() => {
+                        let precedence = 10;
+                        let str = args
+                            .iter()
+                            .map(|arg| write_expr(arg, precedence))
+                            .collect::<Vec<_>>()
+                            .join(" and ");
+
+                        if precedence < min_precedence {
+                            format!("({str})")
+                        } else {
+                            str
+                        }
+                    }
                     ("or", [lhs, rhs]) => write_binary_op("OR", lhs, rhs, 5, min_precedence),
+                    ("or_filters", args) if !args.is_empty() => {
+                        let precedence = 5;
+                        let str = args
+                            .iter()
+                            .map(|arg| write_expr(arg, precedence))
+                            .collect::<Vec<_>>()
+                            .join(" or ");
+
+                        if precedence < min_precedence {
+                            format!("({str})")
+                        } else {
+                            str
+                        }
+                    }
                     ("not", [expr]) => write_unary_op("NOT", expr, 15, min_precedence),
                     ("gte", [lhs, rhs]) => write_binary_op(">=", lhs, rhs, 20, min_precedence),
                     ("gt", [lhs, rhs]) => write_binary_op(">", lhs, rhs, 20, min_precedence),

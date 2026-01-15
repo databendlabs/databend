@@ -32,12 +32,14 @@ use databend_common_meta_types::MetaDataError;
 use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
 use databend_common_metrics::count::Count;
+use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
@@ -340,6 +342,34 @@ impl<'a> MetaLeader<'a> {
             .await?;
         let strm = strm.map_err(|e| Status::internal(e.to_string()));
         Ok(strm.boxed())
+    }
+
+    /// Get multiple key-value pairs by streaming keys.
+    ///
+    /// Processes keys lazily as they arrive, delegating to `KVApi::get_many_kv`.
+    /// Errors from the input stream are propagated to the output stream.
+    /// Returns a `BoxStream<StreamItem>` (tonic's BoxStream yields `Result<StreamItem, Status>`).
+    pub async fn kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<StreamItem>, io::Error> {
+        // Convert input stream: extract keys and map Status errors to io::Error
+        let keys = input.map(|res| {
+            res.map(|r| r.key)
+                .map_err(|e| io::Error::other(e.to_string()))
+        });
+
+        // Delegate to KVApi which handles error propagation
+        let strm = self
+            .sto
+            .get_sm_v003()
+            .kv_api()
+            .get_many_kv(keys.boxed())
+            .await?;
+
+        // Convert io::Error to Status for the output stream
+        let strm = strm.map(|res| res.map_err(|e| Status::internal(e.to_string())));
+        Ok(Box::pin(strm))
     }
 }
 

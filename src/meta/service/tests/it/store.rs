@@ -366,11 +366,8 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 }
 
 async fn db_to_lines(db: &DB) -> Result<Vec<String>, io::Error> {
-    let res = DBExporter::new(db)
-        .export()
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = DBExporter::new(db).export().await?;
+    let res = strm.try_collect::<Vec<_>>().await?;
 
     let res = res
         .into_iter()

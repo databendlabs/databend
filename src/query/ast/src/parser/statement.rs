@@ -1977,6 +1977,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }))
         },
     );
+    let alter_stage = map(
+        rule! {
+            ALTER ~ STAGE ~ ( IF ~ ^EXISTS )? ~ #stage_name ~ #alter_stage_action
+        },
+        |(_, _, opt_if_exists, stage, action)| {
+            Statement::AlterStage(AlterStageStmt {
+                if_exists: opt_if_exists.is_some(),
+                stage_name: stage.to_string(),
+                action,
+            })
+        },
+    );
 
     let list_stage = map(
         rule! {
@@ -2935,6 +2947,7 @@ AS
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
             | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
@@ -3007,21 +3020,11 @@ pub fn insert_stmt(
         map_res(
             rule! {
                 #with? ~ INSERT ~ #hint? ~ OVERWRITE? ~ INTO?  ~ TABLE?
-                ~ #dot_separated_idents_1_to_3
+                ~ #table_ref
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ #insert_source_parser
             },
-            |(
-                with,
-                _,
-                opt_hints,
-                overwrite,
-                into,
-                _,
-                (catalog, database, table),
-                opt_columns,
-                source,
-            )| {
+            |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
                     return Err(nom::Err::Failure(ErrorKind::Other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
@@ -3030,8 +3033,6 @@ pub fn insert_stmt(
                 Ok(Statement::Insert(InsertStmt {
                     hints: opt_hints,
                     with,
-                    catalog,
-                    database,
                     table,
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)

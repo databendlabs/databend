@@ -25,6 +25,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream::BoxStream;
 
 use crate::ClientHandle;
 use crate::Streamed;
@@ -40,14 +41,6 @@ impl kvapi::KVApi for ClientHandle {
     }
 
     #[fastrace::trace]
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        let keys = keys.to_vec();
-        let strm = self.request(Streamed(MGetKVReq { keys })).await?;
-        let strm = strm.map_err(MetaError::from);
-        Ok(strm.boxed())
-    }
-
-    #[fastrace::trace]
     async fn list_kv(
         &self,
         opts: ListOptions<'_, str>,
@@ -60,6 +53,38 @@ impl kvapi::KVApi for ClientHandle {
 
         let strm = strm.map_err(MetaError::from);
         Ok(limit_stream(strm, opts.limit))
+    }
+
+    #[fastrace::trace]
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        use databend_common_meta_kvapi::kvapi::fail_fast;
+
+        // For remote client, collect keys first then use batch request.
+        // fail_fast stops at first error; we save it to append to output stream.
+        let mut collected = Vec::new();
+        let mut input_error = None;
+        let mut keys = std::pin::pin!(fail_fast(keys));
+        while let Some(result) = keys.next().await {
+            match result {
+                Ok(key) => collected.push(key),
+                Err(e) => input_error = Some(e),
+            }
+        }
+
+        // Make batch request for successfully collected keys
+        let strm = self
+            .request(Streamed(MGetKVReq { keys: collected }))
+            .await?;
+        let strm = strm.map_err(MetaError::from);
+
+        // If there was an input error, append it to the output stream
+        match input_error {
+            None => Ok(strm.boxed()),
+            Some(e) => Ok(strm.chain(futures::stream::once(async { Err(e) })).boxed()),
+        }
     }
 
     #[fastrace::trace]

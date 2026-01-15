@@ -202,3 +202,27 @@ pub fn parse_db_tb_col_args(table_args: &TableArgs, func_name: &str) -> Result<S
     let db = string_value(&args[0])?;
     Ok(db)
 }
+
+pub fn parse_table_name(input: &str) -> Result<(String, Option<String>)> {
+    match input.split_once('/') {
+        // table/branch
+        Some((table, branch)) => {
+            if table.is_empty() || branch.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "Invalid table name format: expected table[/branch]",
+                ));
+            }
+            Ok((table.to_string(), Some(branch.to_string())))
+        }
+
+        // table
+        None => {
+            if input.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "Invalid table name format: table name is empty",
+                ));
+            }
+            Ok((input.to_string(), None))
+        }
+    }
+}

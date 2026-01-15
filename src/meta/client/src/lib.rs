@@ -170,6 +170,9 @@ use semver::Version;
 /// - 2026-01-12: since TODO
 ///   🖥 server: add `kv_list` gRPC API: in protobuf, with `limit`, return stream.
 ///
+/// - 2026-01-13: since TODO
+///   🖥 server: add `kv_get_many` gRPC API: in protobuf, receive stream, return stream.
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:

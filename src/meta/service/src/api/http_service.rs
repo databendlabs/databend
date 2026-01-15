@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use anyerror::AnyError;
 use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio::sync::broadcast;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
 use databend_common_http::health_handler;
@@ -33,6 +32,7 @@ use poem::EndpointExt;
 use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
+use tokio::sync::broadcast;
 
 use crate::configs::Config;
 use crate::meta_node::meta_handle::MetaHandle;

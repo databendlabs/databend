@@ -24,19 +24,21 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
-use parking_lot::Mutex;
-use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
+use crate::clusters::ClusterHelper;
+use crate::physical_plans::AggregateShuffleMode;
+use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
+use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::NewTransformFinalAggregate;
+use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
-use crate::pipelines::processors::transforms::aggregator::new_aggregate::FinalAggregateSharedState;
-use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewAggregateSpiller;
-use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewFinalAggregateTransform;
-use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::new_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
+use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
 
 fn build_partition_bucket_experimental(
@@ -44,65 +46,83 @@ fn build_partition_bucket_experimental(
     params: Arc<AggregatorParams>,
     after_worker: usize,
     ctx: Arc<QueryContext>,
+    shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
-    // PartitionedPayload only accept power of two partitions
-    let mut output_num = after_worker.next_power_of_two();
-    const MAX_PARTITION_COUNT: usize = 128;
-    if output_num > MAX_PARTITION_COUNT {
-        output_num = MAX_PARTITION_COUNT;
+    let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+    match shuffle_mode {
+        AggregateShuffleMode::Row => {
+            pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
+                    input,
+                    output,
+                    NewAggregateSpillReader::try_create(ctx.clone())?,
+                )))
+            })?;
+
+            pipeline.add_transform(|input, output| {
+                Ok(LocalScatterTransform::create(
+                    input,
+                    output,
+                    Arc::new(Box::new(AggregateRowScatter {
+                        buckets: final_parallelism,
+                        aggregate_params: params.clone(),
+                    })),
+                ))
+            })?;
+        }
+        AggregateShuffleMode::Bucket(hint) => {
+            let hint = hint as usize;
+            final_parallelism = if params.cluster_aggregator {
+                let cluster = ctx.get_cluster();
+                let local_pos = cluster.ordered_index();
+                let nodes_num = cluster.nodes.len();
+                let base = hint / nodes_num;
+                let rem = hint % nodes_num;
+                if local_pos < rem { base + 1 } else { base }
+            } else {
+                hint
+            };
+
+            pipeline.add_transform(|input, output| {
+                Ok(LocalScatterTransform::create(
+                    input,
+                    output,
+                    Arc::new(Box::new(AggregateBucketScatter {
+                        buckets: final_parallelism,
+                    })),
+                ))
+            })?;
+        }
     }
 
-    let input_num = pipeline.output_len();
-    let scatter = TransformPartitionBucketScatter::create(input_num, output_num, params.clone())?;
-    let scatter_inputs = scatter.get_inputs();
-    let scatter_outputs = scatter.get_outputs();
-
-    pipeline.add_pipe(Pipe::create(
-        scatter_inputs.len(),
-        scatter_outputs.len(),
-        vec![PipeItem::create(
-            ProcessorPtr::create(Box::new(scatter)),
-            scatter_inputs,
-            scatter_outputs,
-        )],
-    ));
+    let input_len = pipeline.output_len();
+    let transform =
+        ExchangeShuffleTransform::create(input_len, final_parallelism, final_parallelism);
+    let inputs = transform.get_inputs();
+    let outputs = transform.get_outputs();
+    pipeline.add_pipe(Pipe::create(input_len, final_parallelism, vec![
+        PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
+    ]));
 
     let mut builder = TransformPipeBuilder::create();
-    let barrier = Arc::new(Barrier::new(output_num));
-    let shared_state = Arc::new(Mutex::new(FinalAggregateSharedState::new(output_num)));
-
-    let settings = ctx.get_settings();
-    let max_rows = settings.get_max_block_size()? as usize;
-    let max_bytes = settings.get_max_block_bytes()? as usize;
-    let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()? as usize;
-
-    let shared_partition_stream =
-        SharedPartitionStream::new(output_num, max_rows, max_bytes, output_num);
-
-    for id in 0..output_num {
-        let spiller = NewAggregateSpiller::try_create(
-            ctx.clone(),
-            output_num,
-            shared_partition_stream.clone(),
-            true,
-        )?;
+    let (tx, rx) = async_channel::unbounded();
+    for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
-        let processor = NewFinalAggregateTransform::try_create(
+        let processor = NewTransformFinalAggregate::try_create(
             input_port.clone(),
             output_port.clone(),
-            id,
             params.clone(),
-            output_num,
-            barrier.clone(),
-            shared_state.clone(),
-            spiller,
-            max_aggregate_spill_level,
+            id,
+            ctx.clone(),
+            tx.clone(),
+            rx.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }
 
     pipeline.add_pipe(builder.finalize());
+
     pipeline.resize(after_worker, true)?;
 
     Ok(())
@@ -154,9 +174,10 @@ pub fn build_partition_bucket(
     max_restore_worker: u64,
     after_worker: usize,
     ctx: Arc<QueryContext>,
+    shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
     if params.enable_experiment_aggregate {
-        build_partition_bucket_experimental(pipeline, params, after_worker, ctx)
+        build_partition_bucket_experimental(pipeline, params, after_worker, ctx, shuffle_mode)
     } else {
         build_partition_bucket_legacy(pipeline, params, max_restore_worker, after_worker)
     }

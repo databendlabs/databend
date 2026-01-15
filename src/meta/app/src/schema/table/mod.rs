@@ -194,6 +194,7 @@ pub struct TableMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotRef {
     /// The unique id of the reference.
+    /// It is allocated from a global sequence and is unique cluster-wide.
     pub id: u64,
     /// After this timestamp, the reference becomes inactive.
     pub expire_at: Option<DateTime<Utc>>,
@@ -233,6 +234,26 @@ impl Display for SnapshotRefType {
             SnapshotRefType::Branch => write!(f, "BRANCH"),
             SnapshotRefType::Tag => write!(f, "TAG"),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct BranchInfo {
+    pub name: String,
+    pub info: SnapshotRef,
+}
+
+impl BranchInfo {
+    pub fn branch_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn branch_id(&self) -> u64 {
+        self.info.id
+    }
+
+    pub fn branch_type(&self) -> SnapshotRefType {
+        self.info.typ.clone()
     }
 }
 
@@ -397,6 +418,23 @@ impl TableInfo {
             )));
         }
         Ok(table_ref)
+    }
+
+    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
+        self.meta
+            .refs
+            .iter()
+            .find(|(_, r)| r.id == id)
+            .map(|(name, info)| BranchInfo {
+                name: name.clone(),
+                info: info.clone(),
+            })
+            .ok_or_else(|| {
+                ErrorCode::UnknownReference(format!(
+                    "Unknown reference '{}' in table {}",
+                    id, self.desc
+                ))
+            })
     }
 }
 

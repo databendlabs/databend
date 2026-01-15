@@ -1082,16 +1082,11 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            ref_name,
-            ..
-        } = table_reference
+        let (catalog, database, table) = if let TableReference::Table { table, .. } =
+            table_reference
         {
-            debug_assert!(ref_name.is_none());
-            self.normalize_object_identifier_triple(catalog, database, table)
+            debug_assert!(table.branch.is_none());
+            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
         } else {
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",

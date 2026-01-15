@@ -62,7 +62,7 @@ impl Rule for RuleEliminateEvalScalar {
             return Ok(());
         }
 
-        if self.metadata.read().has_agg_indexes() {
+        if self.metadata.read().has_agg_indices() {
             return Ok(());
         }
 

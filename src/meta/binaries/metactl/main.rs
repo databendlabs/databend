@@ -22,7 +22,6 @@ use std::sync::Arc;
 use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
-use databend_common_base::base::tokio;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;

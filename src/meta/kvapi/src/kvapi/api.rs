@@ -50,6 +50,22 @@ where S: Stream<Item = Result<StreamItem, E>> + Send + 'static {
     }
 }
 
+/// Wrap a stream to stop yielding after the first error (fail-fast).
+///
+/// Returns a stream that yields items until an error is encountered.
+/// The error is yielded, then the stream terminates immediately.
+pub fn fail_fast<S, T, E>(strm: S) -> impl Stream<Item = Result<T, E>>
+where S: Stream<Item = Result<T, E>> {
+    strm.scan(false, |stop, item| {
+        std::future::ready(if *stop {
+            None
+        } else {
+            *stop = item.is_err();
+            Some(item)
+        })
+    })
+}
+
 /// API of a key-value store.
 #[async_trait]
 pub trait KVApi: Send + Sync {
@@ -63,10 +79,18 @@ pub trait KVApi: Send + Sync {
     /// Update or insert a key-value record.
     async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error>;
 
-    /// Get key-values by keys.
+    /// Get key-values by streaming keys.
     ///
-    /// 2024-01-06: since: 1.2.287
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error>;
+    /// Processes keys lazily as they arrive from the input stream.
+    /// The input stream may contain errors; when an error is encountered,
+    /// it is propagated to the output stream.
+    ///
+    /// The input uses `BoxStream` instead of `impl Stream` to keep the trait dyn-compatible,
+    /// allowing usage as `dyn KVApi`.
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
+    ) -> Result<KVStream<Self::Error>, Self::Error>;
 
     /// List key-value records that are starts with the specified prefix.
     ///
@@ -89,8 +113,11 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
         self.deref().upsert_kv(act).await
     }
 
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.deref().get_kv_stream(keys).await
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.deref().get_many_kv(keys).await
     }
 
     async fn list_kv(
@@ -102,19 +129,5 @@ impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         self.deref().transaction(txn).await
-    }
-}
-
-pub trait AsKVApi {
-    type Error: std::error::Error;
-
-    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error>;
-}
-
-impl<T: kvapi::KVApi> kvapi::AsKVApi for T {
-    type Error = T::Error;
-
-    fn as_kv_api(&self) -> &dyn kvapi::KVApi<Error = Self::Error> {
-        self
     }
 }

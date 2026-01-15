@@ -20,11 +20,21 @@ use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::kvapi::KVApi;
+use crate::kvapi::KVStream;
 use crate::kvapi::ListOptions;
 
 /// Extend the `KVApi` trait with auto implemented handy methods.
 #[async_trait]
 pub trait KvApiExt: KVApi {
+    /// Get key-values by keys.
+    ///
+    /// 2024-01-06: since: 1.2.287
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
+        let keys: Vec<Result<String, Self::Error>> = keys.iter().map(|k| Ok(k.clone())).collect();
+        let strm = futures_util::stream::iter(keys);
+        self.get_many_kv(strm.boxed()).await
+    }
+
     /// Get single key-value record by key.
     async fn get_kv(&self, key: &str) -> Result<Option<SeqV>, Self::Error> {
         let mut strm = self.get_kv_stream(&[key.to_string()]).await?;

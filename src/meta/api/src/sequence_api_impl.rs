@@ -134,9 +134,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<Vec<(String, SequenceMeta)>, MetaError> {
         let dir_name = DirName::new(SequenceIdent::new(tenant, "dummy"));
 
-        let ident_metas = self
-            .list_pb(ListOptions::unlimited(&dir_name))
-            .await?
+        let strm = self.list_pb(ListOptions::unlimited(&dir_name)).await?;
+        let ident_metas = strm
             .map_ok(|itm| (itm.key, itm.seqv.data))
             .try_collect::<Vec<_>>()
             .await?;
@@ -145,11 +144,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             .iter()
             .map(|(ident, _)| SequenceStorageIdent::new_from(ident.clone()));
 
-        let storage_values = self
-            .get_pb_values(storage_idents)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        let strm = self.get_pb_values(storage_idents).await?;
+        let storage_values = strm.try_collect::<Vec<_>>().await?;
 
         let key_metas = ident_metas
             .into_iter()

@@ -52,11 +52,8 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     // Listing entries from all levels see the latest
     let view = l.to_view();
-    let got = view
-        .range(user_key("")..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = view.range(user_key("")..).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (user_key("a1"), SeqMarked::new_normal(2, (None, b("b1")))),
@@ -73,11 +70,8 @@ async fn test_freeze() -> anyhow::Result<()> {
     tmp.replace_immutable_levels(immutables);
     let view = tmp.to_view();
 
-    let got = view
-        .range(user_key("")..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = view.range(user_key("")..).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (user_key("a1"), SeqMarked::new_normal(1, (None, b("b0")))),
@@ -315,11 +309,8 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let got = l.get(user_key("f"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_tombstone(0));
 
-    let got = l
-        .range(user_key("").., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = l.range(user_key("").., u64::MAX).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
@@ -376,11 +367,8 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
 
     let view = l.to_view();
 
-    let got = view
-        .range(user_key("")..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = view.range(user_key("")..).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (user_key("a"), SeqMarked::new_normal(8, (None, b("x")))),
@@ -427,11 +415,8 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
 
     let view = l.to_view();
 
-    let got = view
-        .range(user_key("")..)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let strm = view.range(user_key("")..).await?;
+    let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
         (user_key("a"), SeqMarked::new_tombstone(7)),

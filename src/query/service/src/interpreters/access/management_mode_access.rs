@@ -107,6 +107,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::RevokeRole(_)
                 // Stage.
                 | Plan::CreateStage(_)
+                | Plan::AlterStage(_)
                 | Plan::DropStage(_)
                 // Network policy.
                 | Plan::CreateNetworkPolicy(_)

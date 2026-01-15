@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
@@ -40,6 +39,7 @@ use log::info;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
@@ -955,7 +955,7 @@ async fn assert_get_kv(
     value: &str,
 ) -> anyhow::Result<()> {
     for (i, mn) in meta_nodes.iter().enumerate() {
-        let got = mn.kv_api().get_kv(key).await?;
+        let got = mn.raft_store.get_sm_v003().kv_api().get_kv(key).await?;
         assert_eq!(
             value.to_string().into_bytes(),
             got.unwrap().data,

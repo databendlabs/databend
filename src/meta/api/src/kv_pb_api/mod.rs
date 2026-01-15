@@ -538,6 +538,7 @@ mod tests {
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use futures::TryStreamExt;
+    use futures::stream::BoxStream;
     use prost::Message;
     use seq_marked::SeqValue;
 
@@ -545,7 +546,7 @@ mod tests {
 
     //
     struct FooKV {
-        /// Whether to return without exhausting the input for `get_kv_stream`.
+        /// Whether to return without exhausting the input for `get_many_kv`.
         early_return: Option<usize>,
         kvs: BTreeMap<String, SeqV>,
     }
@@ -558,27 +559,23 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_kv_stream(
+        async fn get_many_kv(
             &self,
-            keys: &[String],
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            let mut res = Vec::with_capacity(keys.len());
-            for (i, key) in keys.iter().enumerate() {
-                // For testing early return stream.
-                if let Some(early_return) = self.early_return {
-                    if i >= early_return {
-                        break;
-                    }
-                }
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+            use futures::TryStreamExt;
 
-                let k = key.clone();
-                let v = self.kvs.get(key).cloned();
+            let kvs = self.kvs.clone();
+            let early_return = self.early_return;
 
-                let item = StreamItem::new(k, v.map(|v| v.into()));
-                res.push(Ok(item));
-            }
-
-            let strm = futures::stream::iter(res);
+            // early_return limits total items for testing
+            let strm = fail_fast(keys)
+                .take(early_return.unwrap_or(usize::MAX))
+                .map_ok(move |key| {
+                    let v = kvs.get(&key).cloned();
+                    StreamItem::new(key, v.map(|v| v.into()))
+                });
             Ok(strm.boxed())
         }
 
@@ -863,28 +860,19 @@ mod tests {
         let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
 
         // List all with no limit
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::unlimited(&dir))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::unlimited(&dir)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert_eq!(res.len(), 5);
         assert_eq!(res[0].catalog_option, catalog_meta.catalog_option);
 
         // List with limit 3
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::limited(&dir, 3))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 3)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert_eq!(res.len(), 3);
 
         // List with limit 0
-        let res: Vec<_> = foo
-            .list_pb_values(ListOptions::limited(&dir, 0))
-            .await?
-            .try_collect()
-            .await?;
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 0)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
         assert!(res.is_empty());
 
         Ok(())
