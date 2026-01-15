@@ -27,7 +27,6 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use log::info;
-use log::warn;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tonic::async_trait;
@@ -40,44 +39,14 @@ use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
 
-/// Default connection TTL: 5 seconds.
+/// Default connection TTL: 20 seconds.
 ///
 /// This prevents h2 stream reset accumulation that can lead to
 /// `too_many_internal_resets` errors (ENHANCE_YOUR_CALM).
 /// The h2 library has a default limit of 1024 locally-reset streams
 /// per connection. By refreshing connections periodically, we prevent
 /// hitting this limit.
-pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(5);
-
-/// Override meta-client connection TTL in seconds.
-///
-/// This is intended for CI/release builds that run high-concurrency SQL tests for a long time,
-/// where stream reset accumulation may trip h2's `too_many_internal_resets` flood protection.
-pub const META_CLIENT_CONNECTION_TTL_SECS_ENV: &str = "DATABEND_META_CLIENT_CONNECTION_TTL_SECS";
-
-fn default_connection_ttl() -> Duration {
-    static TTL: OnceCell<Duration> = OnceCell::new();
-    *TTL.get_or_init(|| {
-        let Ok(v) = std::env::var(META_CLIENT_CONNECTION_TTL_SECS_ENV) else {
-            return DEFAULT_CONNECTION_TTL;
-        };
-
-        if v.trim().is_empty() {
-            return DEFAULT_CONNECTION_TTL;
-        }
-
-        match v.parse::<u64>() {
-            Ok(secs) => Duration::from_secs(secs),
-            Err(e) => {
-                warn!(
-                    "Invalid {META_CLIENT_CONNECTION_TTL_SECS_ENV}={v:?}: {e}; using default {:?}",
-                    DEFAULT_CONNECTION_TTL
-                );
-                DEFAULT_CONNECTION_TTL
-            }
-        }
-    })
-}
+pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
 
 #[derive(Debug)]
 pub struct MetaChannelManager {
@@ -121,7 +90,7 @@ impl MetaChannelManager {
             tls_config,
             required_features,
             endpoints,
-            connection_ttl: connection_ttl.unwrap_or_else(default_connection_ttl),
+            connection_ttl: connection_ttl.unwrap_or(DEFAULT_CONNECTION_TTL),
         }
     }
 
