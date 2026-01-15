@@ -54,7 +54,7 @@ pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<d
                             Some(DeleteTask {
                                 path: file.file_path.clone(),
                                 ty,
-                                equality_ids: file.equality_ids.clone().unwrap_or_default(),
+                                equality_ids: file.equality_ids.clone(),
                             })
                         })
                         .collect(),

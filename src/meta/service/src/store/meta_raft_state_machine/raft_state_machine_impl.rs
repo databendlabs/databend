@@ -69,7 +69,6 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     }
 
     // This method is not used
-    #[allow(clippy::diverging_sub_expression)]
     #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<DB, io::Error> {
         unreachable!(

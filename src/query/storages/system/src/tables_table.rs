@@ -64,7 +64,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
-use crate::util::generate_default_catalog_meta;
+use crate::util::generate_catalog_meta;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -1223,7 +1223,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_default_catalog_meta(),
+                meta: generate_catalog_meta(ctl_name),
                 ..Default::default()
             }),
             ..Default::default()

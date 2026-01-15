@@ -5,7 +5,7 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests && ls -lh target
 
-FROM eclipse-temurin:11-jdk
+FROM eclipse-temurin:11-jdk-alpine
 
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
