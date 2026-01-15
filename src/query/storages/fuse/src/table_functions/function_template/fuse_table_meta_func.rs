@@ -150,7 +150,7 @@ where
         if let Some(snapshot) = location_snapshot(tbl, args).await? {
             return T::apply(ctx, tbl, snapshot, limit).await;
         } else {
-            Ok(DataBlock::empty_with_schema(Arc::new(T::schema().into())))
+            Ok(DataBlock::empty_with_schema(&T::schema().into()))
         }
     }
 }

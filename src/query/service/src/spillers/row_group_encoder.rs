@@ -166,7 +166,7 @@ impl RowGroupEncoder {
             .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {
-            return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
+            return Ok(DataBlock::empty_with_schema(&data_schema));
         }
 
         let block = if blocks.len() == 1 {

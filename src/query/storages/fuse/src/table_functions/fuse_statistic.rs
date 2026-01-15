@@ -137,9 +137,9 @@ impl<'a> FuseStatisticImpl<'a> {
                 .await?;
             return self.to_block(&snapshot.summary, &table_statistics);
         }
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            FuseStatisticImpl::schema().into(),
-        )))
+        Ok(DataBlock::empty_with_schema(
+            &FuseStatisticImpl::schema().into(),
+        ))
     }
 
     fn to_block(

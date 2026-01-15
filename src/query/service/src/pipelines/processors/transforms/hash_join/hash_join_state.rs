@@ -334,7 +334,7 @@ impl HashJoinState {
                 DataBlock::take_column_vec(build_columns, build_columns_data_type, row_ptrs);
             Ok(data_block)
         } else {
-            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
+            Ok(DataBlock::empty_with_schema(&self.build_schema))
         }
     }
 }

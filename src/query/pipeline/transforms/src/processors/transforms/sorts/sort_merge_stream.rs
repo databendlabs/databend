@@ -148,7 +148,7 @@ where A: SortAlgorithm + 'static
                 }
 
                 if !self.cur_finished {
-                    let empty = DataBlock::empty_with_schema(self.schema.clone());
+                    let empty = DataBlock::empty_with_schema(&self.schema);
                     self.output_data.push_back(
                         empty.add_meta(Some(SortBound::create(
                             self.cur_index,

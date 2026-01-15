@@ -77,9 +77,7 @@ where
         let sorted_cursors = A::with_capacity(streams.len());
         let mut buffer = DataBlockVec::default();
         for _ in 0..streams.len() {
-            buffer
-                .push(DataBlock::empty_with_schema(schema.clone()))
-                .unwrap()
+            buffer.push(DataBlock::empty_with_schema(&schema)).unwrap()
         }
         let pending_streams = (0..streams.len()).collect();
 
@@ -185,10 +183,8 @@ where
             A::pop_mut(peek_mut);
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = self.buffer.take(&self.temp_output_indices);
-            self.buffer.replace(
-                input_index,
-                DataBlock::empty_with_schema(self.schema.clone()),
-            );
+            self.buffer
+                .replace(input_index, DataBlock::empty_with_schema(&self.schema));
             self.temp_sorted_blocks.push(temp_block);
             self.temp_output_indices.clear();
             self.pending_streams.push_back(input_index);

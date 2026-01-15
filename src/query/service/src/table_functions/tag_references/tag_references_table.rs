@@ -348,7 +348,7 @@ async fn collect_tag_references(
     let tags = meta.get_object_tags(&tenant, &taggable_object).await?;
 
     if tags.is_empty() {
-        return Ok(DataBlock::empty_with_schema(schema));
+        return Ok(DataBlock::empty_with_schema(&schema));
     }
 
     // Batch fetch tag names
