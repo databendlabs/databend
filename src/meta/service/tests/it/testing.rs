@@ -17,7 +17,6 @@ use std::sync::Once;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_base::base::tokio;
 use databend_common_tracing::Config;
 use databend_common_tracing::closure_name;
 use databend_common_tracing::init_logging;

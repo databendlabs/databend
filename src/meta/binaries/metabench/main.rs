@@ -29,7 +29,6 @@ use std::time::Instant;
 
 use chrono::Utc;
 use clap::Parser;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;

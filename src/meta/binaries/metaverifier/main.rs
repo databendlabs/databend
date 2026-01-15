@@ -24,7 +24,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use clap::Parser;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
