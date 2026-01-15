@@ -1,4 +1,0 @@
-id,payload_base64,notes
-1,SGVsbG8gV29ybGQ=,"ASCII text Hello World"
-2,AP8QgA==,"Bytes \x00 \xFF \x10 \x80"
-3,VGFncwpuQmlu,"Contains an embedded newline"
