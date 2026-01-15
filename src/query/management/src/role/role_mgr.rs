@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
@@ -62,6 +61,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use tokio::sync::Mutex;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;

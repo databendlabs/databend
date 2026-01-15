@@ -17,7 +17,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -32,6 +31,7 @@ use mysql_async::Row;
 use mysql_async::SslOpts;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
+use tokio;
 use tokio::sync::Barrier;
 
 use crate::tests::tls_constants::*;

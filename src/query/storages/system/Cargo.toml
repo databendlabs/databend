@@ -48,6 +48,7 @@ serde_json = { workspace = true }
 serde_repr = { workspace = true }
 snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 
 [lints]

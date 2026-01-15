@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -30,6 +29,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> Result<()> {

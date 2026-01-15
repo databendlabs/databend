@@ -218,8 +218,8 @@ pub async fn load_bendsave_storage(uri: &str) -> Result<Operator> {
 mod tests {
     use std::path::Path;
 
-    use databend_common_base::base::tokio;
     use opendal::Scheme;
+    use tokio;
 
     use super::*;
 

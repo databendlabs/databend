@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;
@@ -25,6 +24,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {

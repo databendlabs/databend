@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::Lock;
@@ -31,6 +30,7 @@ use databend_common_metrics::lock::metrics_inc_start_lock_holder_nums;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::UnlockApi;
 use parking_lot::RwLock;
+use tokio::sync::mpsc;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;

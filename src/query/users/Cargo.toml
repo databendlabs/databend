@@ -39,6 +39,7 @@ reqwest = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }

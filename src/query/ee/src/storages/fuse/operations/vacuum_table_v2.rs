@@ -21,8 +21,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::TimeDelta;
 use chrono::Utc;
-use databend_common_base::base::uuid::Uuid;
-use databend_common_base::base::uuid::Version;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -48,6 +46,8 @@ use log::info;
 use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
+use uuid::Uuid;
+use uuid::Version;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum2(

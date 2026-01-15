@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -46,6 +45,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures_util::TryStreamExt;
+use tokio;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,

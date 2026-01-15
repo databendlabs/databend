@@ -26,7 +26,6 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
@@ -46,6 +45,7 @@ use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::Direction;
 use petgraph::prelude::EdgeRef;
+use tokio::sync::oneshot;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;

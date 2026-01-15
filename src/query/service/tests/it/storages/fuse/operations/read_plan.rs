@@ -19,7 +19,6 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowType;
 use arrow_schema::Field;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
@@ -36,6 +35,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::TryStreamExt;
+use tokio;
 
 #[test]
 fn test_to_partitions() -> Result<()> {

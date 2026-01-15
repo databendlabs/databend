@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -39,6 +38,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use tokio;
 
 use super::test_utils::raw_plan;
 

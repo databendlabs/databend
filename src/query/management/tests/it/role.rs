@@ -15,13 +15,13 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
+use tokio;
+use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
     format!("__fd_roles/admin/{}", role)

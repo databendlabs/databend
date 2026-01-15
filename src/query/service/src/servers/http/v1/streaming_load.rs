@@ -19,8 +19,6 @@ use std::future::Future;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
@@ -52,6 +50,8 @@ use poem::web::Json;
 use poem::web::Multipart;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio;
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc::Sender;
 
 use super::HttpQueryContext;

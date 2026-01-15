@@ -450,11 +450,11 @@ fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
 mod tests {
     use std::collections::HashSet;
 
-    use databend_common_base::base::tokio;
     use databend_common_exception::Result;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
+    use tokio;
 
     use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
     use crate::pipelines::processors::transforms::aggregator::new_aggregate::LocalPartitionStream;

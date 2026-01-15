@@ -468,7 +468,7 @@ impl FuseTable {
                 Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
                     match backoff.next_backoff() {
                         Some(d) => {
-                            databend_common_base::base::tokio::time::sleep(d).await;
+                            tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             latest_table_info = latest_table_ref.get_table_info();
                             retries += 1;

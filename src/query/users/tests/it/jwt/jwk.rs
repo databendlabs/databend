@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_users::JwkKeyStore;
 use databend_common_users::PubKey;
 use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
 use parking_lot::Mutex;
+use tokio;
 
 struct MockJwksLoader {
     keys: Mutex<HashMap<String, PubKey>>,

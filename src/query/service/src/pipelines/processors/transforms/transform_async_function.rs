@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -35,6 +34,7 @@ use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use tokio::sync::RwLock;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;

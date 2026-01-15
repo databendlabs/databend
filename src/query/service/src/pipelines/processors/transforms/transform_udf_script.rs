@@ -639,11 +639,8 @@ impl TransformUdfScript {
                                         let temp_file = temp_dir_path.join(name);
                                         fts.push(async move {
                                             let buffer = op.read(path).await?;
-                                            databend_common_base::base::tokio::fs::write(
-                                                &temp_file,
-                                                buffer.to_bytes().as_ref(),
-                                            )
-                                            .await
+                                            tokio::fs::write(&temp_file, buffer.to_bytes().as_ref())
+                                                .await
                                         });
                                     }
                                     let _ = futures::future::join_all(fts).await;

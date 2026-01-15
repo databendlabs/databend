@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
@@ -25,6 +24,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeCompactBlockInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
+use tokio;
 
 #[test]
 pub fn test_format_field_name() {

@@ -18,6 +18,7 @@ jwt-simple = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tonic = { workspace = true }
 tower-service = { workspace = true }
 
