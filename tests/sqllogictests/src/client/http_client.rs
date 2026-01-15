@@ -122,9 +122,9 @@ impl HttpClient {
         let client = ClientBuilder::new()
             .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
-            .http1_only()
+            // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
+            .http2_keep_alive_timeout(Duration::from_secs(15))
             .pool_max_idle_per_host(16)
-            .tcp_keepalive(Duration::from_secs(60))
             .build()?;
 
         let url = format!("http://127.0.0.1:{}/v1/session/login", port);
