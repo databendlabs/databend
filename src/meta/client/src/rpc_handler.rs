@@ -18,7 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyerror::AnyError;
-use databend_common_base::future::TimedFutureExt;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
@@ -107,7 +107,7 @@ impl<'a> RpcHandler<'a> {
         let client = self
             .client
             .get_established_client()
-            .with_timing_threshold(
+            .inspect_elapsed_over(
                 default_timing_threshold(),
                 create_timing_logger("MetaGrpcClient::get_established_client"),
             )

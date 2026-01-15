@@ -21,6 +21,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_flight::BasicAuth;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::tokio::select;
 use databend_common_base::base::tokio::sync::mpsc;
@@ -29,7 +30,6 @@ use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::containers::Pool;
-use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -836,7 +836,7 @@ impl MetaGrpcClient {
 
             let result = established
                 .kv_read_v1(req)
-                .with_timing_threshold(threshold(), info_spent(service_spec.0))
+                .inspect_elapsed_over(threshold(), info_spent(service_spec.0))
                 .await;
 
             debug!("{self}::kv_read_v1 result: {:?}", result);
@@ -874,7 +874,7 @@ impl MetaGrpcClient {
 
             let result = established
                 .transaction(req)
-                .with_timing_threshold(threshold(), info_spent(service_spec.0))
+                .inspect_elapsed_over(threshold(), info_spent(service_spec.0))
                 .await;
 
             let retryable = rpc_handler.process_response_result(&txn, result)?;
