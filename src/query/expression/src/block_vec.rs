@@ -46,6 +46,7 @@ use crate::with_opaque_size;
 
 #[derive(Debug, Default)]
 pub struct DataBlockVec {
+    size_hit: usize,
     columns: Vec<ColumnStorage>,
     block_rows: Vec<usize>,
 }
@@ -61,7 +62,7 @@ unsafe impl Sync for ColumnStorage {}
 
 #[derive(Clone, Copy)]
 struct TypeHandler {
-    init: fn(BlockEntry) -> Result<ColumnStorage>,
+    init: fn(BlockEntry, usize) -> Result<ColumnStorage>,
     push: fn(&mut ColumnStorage, BlockEntry) -> Result<()>,
     replace: fn(&mut ColumnStorage, usize, BlockEntry),
     take: fn(&ColumnStorage, &ChunkIndex) -> BlockEntry,
@@ -181,6 +182,13 @@ impl TypeHandler {
 }
 
 impl DataBlockVec {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            size_hit: capacity,
+            ..Default::default()
+        }
+    }
+
     pub fn push(&mut self, data_block: DataBlock) -> Result<()> {
         if !self.block_rows.is_empty() && self.columns.len() != data_block.num_columns() {
             return Err(ErrorCode::Internal(format!(
@@ -196,7 +204,7 @@ impl DataBlockVec {
             for entry in data_block.take_columns() {
                 let data_type = entry.data_type();
                 let handler = Self::handler_for(&data_type);
-                let storage = (handler.init)(entry)?;
+                let storage = (handler.init)(entry, self.size_hit)?;
                 self.columns.push(storage);
             }
         } else {
@@ -246,6 +254,15 @@ impl DataBlockVec {
         }
     }
 
+    pub fn replace_with_empty(&mut self, i: usize) {
+        assert!(
+            i < self.block_rows.len(),
+            "DataBlockVec replace index out of range"
+        );
+        let empty_block = self.empty_block();
+        self.replace(i, empty_block);
+    }
+
     pub fn take(&self, indices: &ChunkIndex) -> DataBlock {
         let num_rows = indices.num_rows();
         if self.columns.is_empty() {
@@ -268,9 +285,26 @@ impl DataBlockVec {
         &self.block_rows
     }
 
-    fn init_typed<T: AccessType>(entry: BlockEntry) -> Result<ColumnStorage> {
+    fn empty_block(&self) -> DataBlock {
+        if self.columns.is_empty() {
+            return DataBlock::empty();
+        }
+
+        let entries = self
+            .columns
+            .iter()
+            .map(|storage| {
+                let mut builder = ColumnBuilder::with_capacity(&storage.data_type, 0);
+                builder.build().into()
+            })
+            .collect();
+
+        DataBlock::new(entries, 0)
+    }
+
+    fn init_typed<T: AccessType>(entry: BlockEntry, size_hit: usize) -> Result<ColumnStorage> {
         let data_type = entry.data_type();
-        let mut data = Box::new(Vec::<ColumnView<T>>::new());
+        let mut data = Box::new(Vec::<ColumnView<T>>::with_capacity(size_hit));
         data.push(entry.downcast::<T>()?);
         Ok(ColumnStorage {
             data_type,

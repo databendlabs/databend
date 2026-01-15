@@ -15,8 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 
@@ -57,9 +55,7 @@ impl Bounds {
             0 => Ok(Bounds(vec![])),
             1 => Ok(vector.pop().unwrap()),
             _ => {
-                let schema = DataSchema::new(vec![DataField::new("order_col", R::data_type())]);
-                let mut merger =
-                    LoserTreeMerger::<R, _>::create(schema.into(), vector, batch_rows, None);
+                let mut merger = LoserTreeMerger::<R, _>::new(vector, batch_rows, None);
 
                 let mut blocks = Vec::new();
                 while let Some(block) = merger.next_block()? {

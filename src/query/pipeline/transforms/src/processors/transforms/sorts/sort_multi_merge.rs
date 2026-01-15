@@ -126,8 +126,7 @@ impl MultiSortMergeBuilder<'_> {
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), self.remove_order_col))
             .collect::<Vec<_>>();
-        let merger =
-            Merger::<A, _>::create(self.schema.clone(), streams, self.block_size, self.limit);
+        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
 
         Ok(Box::new(MultiSortMergeProcessor {
             merger,

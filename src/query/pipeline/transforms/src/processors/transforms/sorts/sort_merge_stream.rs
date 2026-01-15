@@ -180,12 +180,7 @@ where A: SortAlgorithm + 'static
             stream.update_bound_index(self.cur_index);
         }
 
-        self.inner = Ok(Merger::create(
-            self.schema.clone(),
-            std::mem::take(streams),
-            self.block_size,
-            None,
-        ));
+        self.inner = Ok(Merger::new(std::mem::take(streams), self.block_size, None));
         Ok(Event::Sync)
     }
 }

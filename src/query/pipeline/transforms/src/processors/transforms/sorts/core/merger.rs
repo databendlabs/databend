@@ -20,7 +20,6 @@ use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataBlockVec;
-use databend_common_expression::DataSchemaRef;
 
 use super::Rows;
 use super::algorithm::*;
@@ -41,23 +40,97 @@ pub trait SortedStream {
     }
 }
 
+struct BufferState {
+    buffer: DataBlockVec,
+    stream_to_buffer: Vec<Option<usize>>,
+    output_indices: ChunkIndex,
+    detach: Vec<usize>,
+    free: Vec<usize>,
+}
+
+impl BufferState {
+    fn new(stream_count: usize) -> Self {
+        Self {
+            buffer: DataBlockVec::with_capacity(stream_count * 2),
+            stream_to_buffer: vec![None; stream_count],
+            output_indices: ChunkIndex::default(),
+            detach: Vec::new(),
+            free: Vec::new(),
+        }
+    }
+
+    fn has_output(&self) -> bool {
+        self.output_indices.num_rows() > 0
+    }
+
+    fn output_len(&self) -> usize {
+        self.output_indices.num_rows()
+    }
+
+    fn attach_stream_block(&mut self, stream_index: usize, block: DataBlock) -> Result<()> {
+        let index = if let Some(index) = self.free.pop() {
+            self.buffer.replace(index, block);
+            index
+        } else {
+            let index = self.buffer.block_rows().len();
+            self.buffer.push(block)?;
+            index
+        };
+        self.stream_to_buffer[stream_index] = Some(index);
+        Ok(())
+    }
+
+    fn detach(&mut self, buffer_index: usize, stream_index: usize) {
+        debug_assert_eq!(self.stream_to_buffer[stream_index], Some(buffer_index));
+        self.stream_to_buffer[stream_index] = None;
+        self.detach.push(buffer_index);
+    }
+
+    fn record_output_range(&mut self, buffer_index: usize, start: usize, count: usize) {
+        self.output_indices
+            .push_merge_range(buffer_index as _, start as _, count as _);
+    }
+
+    fn build_output(&mut self) -> DataBlock {
+        let block = self.buffer.take(&self.output_indices);
+        for i in self.detach.iter().copied() {
+            self.buffer.replace_with_empty(i);
+            self.free.push(i);
+        }
+
+        self.detach.clear();
+        self.output_indices.clear();
+
+        debug_assert_eq!(
+            (0..self.buffer.block_rows().len())
+                .filter(|buf| {
+                    self.stream_to_buffer
+                        .iter()
+                        .flatten()
+                        .all(|used| used != buf)
+                        && !self.free.contains(buf)
+                })
+                .count(),
+            0
+        );
+
+        block
+    }
+}
+
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
 pub struct Merger<A, S>
 where
     A: SortAlgorithm,
     S: SortedStream,
 {
-    schema: DataSchemaRef,
-    unsorted_streams: Vec<S>,
-    sorted_cursors: A,
-    buffer: DataBlockVec,
-    pending_streams: VecDeque<usize>,
     batch_rows: usize,
     limit: Option<usize>,
+    unsorted_streams: Vec<S>,
 
-    temp_sorted_num_rows: usize,
-    temp_output_indices: ChunkIndex,
-    temp_sorted_blocks: Vec<DataBlock>,
+    pending_streams: VecDeque<usize>,
+    sorted_cursors: A,
+    buffers: BufferState,
 }
 
 impl<A, S> Merger<A, S>
@@ -65,41 +138,27 @@ where
     A: SortAlgorithm,
     S: SortedStream + Send,
 {
-    pub fn create(
-        schema: DataSchemaRef,
-        streams: Vec<S>,
-        batch_rows: usize,
-        limit: Option<usize>,
-    ) -> Self {
+    pub fn new(streams: Vec<S>, batch_rows: usize, limit: Option<usize>) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
         let sorted_cursors = A::with_capacity(streams.len());
-        let mut buffer = DataBlockVec::default();
-        for _ in 0..streams.len() {
-            buffer.push(DataBlock::empty_with_schema(&schema)).unwrap()
-        }
         let pending_streams = (0..streams.len()).collect();
+        let buffers = BufferState::new(streams.len());
 
         Self {
-            schema,
             unsorted_streams: streams,
             sorted_cursors,
-            buffer,
             batch_rows,
             limit,
             pending_streams,
-            temp_sorted_num_rows: 0,
-            temp_output_indices: ChunkIndex::default(),
-            temp_sorted_blocks: vec![],
+            buffers,
         }
     }
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.sorted_cursors.is_empty()
-            && !self.has_pending_stream()
-            && self.temp_sorted_num_rows == 0)
+        (self.sorted_cursors.is_empty() && !self.has_pending_stream() && !self.buffers.has_output())
             || self.limit == Some(0)
     }
 
@@ -112,7 +171,7 @@ where
     pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffer.block_rows()[i] == 0);
+            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
             let (input, pending) = self.unsorted_streams[i].async_next().await?;
             if pending {
                 continue_pendings.push(i);
@@ -120,9 +179,9 @@ where
             }
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
+                self.buffers.attach_stream_block(i, block)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
-                self.buffer.replace(i, block);
             }
         }
         self.sorted_cursors.rebuild();
@@ -134,7 +193,7 @@ where
     pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffer.block_rows()[i] == 0);
+            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
             let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
                 continue_pendings.push(i);
@@ -142,9 +201,9 @@ where
             }
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
+                self.buffers.attach_stream_block(i, block)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
-                self.buffer.replace(i, block);
             }
         }
         self.sorted_cursors.rebuild();
@@ -164,13 +223,13 @@ where
             return false;
         };
 
-        let input_index = cursor.input_index;
+        let stream_index = cursor.input_index;
+        let buffer_index = self.buffers.stream_to_buffer[stream_index]
+            .expect("cursor must point to active stream buffer");
         let start = cursor.row_index;
         let count = self.evaluate_cursor_count(cursor);
 
-        self.temp_sorted_num_rows += count;
-        self.temp_output_indices
-            .push_merge_range(input_index as _, start as _, count as _);
+        self.buffers.record_output_range(buffer_index, start, count);
 
         // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
         // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
@@ -181,18 +240,13 @@ where
         if cursor.is_finished() {
             // Pop the current `cursor`.
             A::pop_mut(peek_mut);
-            // We have read all rows of this block, need to release the old memory and read a new one.
-            let temp_block = self.buffer.take(&self.temp_output_indices);
-            self.buffer
-                .replace(input_index, DataBlock::empty_with_schema(&self.schema));
-            self.temp_sorted_blocks.push(temp_block);
-            self.temp_output_indices.clear();
-            self.pending_streams.push_back(input_index);
+            self.buffers.detach(buffer_index, stream_index);
+            self.pending_streams.push_back(stream_index);
         }
 
         let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
-        debug_assert!(self.temp_sorted_num_rows <= max_rows);
-        self.temp_sorted_num_rows != max_rows
+        debug_assert!(self.buffers.output_len() <= max_rows);
+        self.buffers.output_len() != max_rows
     }
 
     #[inline(always)]
@@ -202,7 +256,7 @@ where
         let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
         let row_index_limit = cursor
             .num_rows()
-            .min(start + max_rows - self.temp_sorted_num_rows);
+            .min(start + max_rows - self.buffers.output_len());
 
         if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
             return row_index_limit - start;
@@ -237,20 +291,10 @@ where
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {
-        if !self.temp_output_indices.is_empty() {
-            let block = self.buffer.take(&self.temp_output_indices);
-            self.temp_sorted_blocks.push(block);
-        }
-        let block = DataBlock::concat(&self.temp_sorted_blocks)?;
-
-        debug_assert_eq!(block.num_rows(), self.temp_sorted_num_rows);
+        let output_rows = self.buffers.output_len();
+        self.limit = self.limit.map(|limit| limit - output_rows);
+        let block = self.buffers.build_output();
         debug_assert!(block.num_rows() <= self.batch_rows);
-
-        self.limit = self.limit.map(|limit| limit - self.temp_sorted_num_rows);
-        self.temp_sorted_blocks.clear();
-        self.temp_output_indices.clear();
-        self.temp_sorted_num_rows = 0;
-
         Ok(block)
     }
 
@@ -271,7 +315,7 @@ where
 
         // No pending streams now.
         if self.sorted_cursors.is_empty() {
-            return if self.temp_sorted_num_rows > 0 {
+            return if self.buffers.has_output() {
                 Ok(Some(self.build_output()?))
             } else {
                 Ok(None)
@@ -305,7 +349,7 @@ where
 
         // No pending streams now.
         if self.sorted_cursors.is_empty() {
-            return if self.temp_sorted_num_rows > 0 {
+            return if self.buffers.has_output() {
                 Ok(Some(self.build_output()?))
             } else {
                 Ok(None)

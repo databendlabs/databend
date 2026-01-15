@@ -18,13 +18,9 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::block_debug::pretty_format_blocks;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::sorts::core::Merger;
 use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
@@ -140,16 +136,12 @@ fn create_test_merger<A: SortAlgorithm>(
     input: Vec<Vec<DataBlock>>,
     limit: Option<usize>,
 ) -> TestMerger<A> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new(
-        "a",
-        DataType::Number(NumberDataType::Int32),
-    )]);
     let streams = input
         .into_iter()
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::<A>::create(schema, streams, 4, limit)
+    TestMerger::<A>::new(streams, 4, limit)
 }
 
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
