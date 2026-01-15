@@ -17,7 +17,6 @@ use std::io;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::codec_wrapper::Cw;
 use databend_common_meta_raft_store::raft_log_v004::io_desc::IODesc;
@@ -41,6 +40,7 @@ use log::debug;
 use log::info;
 use log::warn;
 use raft_log::api::raft_log_writer::RaftLogWriter;
+use tokio::sync::oneshot;
 
 use crate::store::meta_raft_log::MetaRaftLog;
 

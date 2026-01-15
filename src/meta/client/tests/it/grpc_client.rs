@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MIN_METASRV_SEMVER;

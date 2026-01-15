@@ -20,8 +20,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio::sync::mpsc::UnboundedSender;
-use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::UnlimitedFuture;
@@ -43,6 +41,8 @@ use fastrace::Span;
 use log::debug;
 use log::error;
 use log::info;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::oneshot;
 use tonic::codegen::BoxStream;
 
 use crate::ClientWorkerRequest;

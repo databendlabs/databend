@@ -3986,6 +3986,7 @@ dependencies = [
  "databend-common-exception",
  "opendal",
  "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -4044,6 +4045,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tonic 0.13.1",
 ]
 
