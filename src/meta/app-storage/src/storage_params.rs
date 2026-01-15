@@ -378,6 +378,7 @@ impl StorageParams {
             StorageParams::S3(cfg) => some_if_not_empty(&cfg.endpoint_url),
             StorageParams::Cos(cfg) => some_if_not_empty(&cfg.endpoint_url),
             StorageParams::Webhdfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Hdfs(cfg) => some_if_not_empty(&cfg.name_node),
             _ => None,
         }
     }
