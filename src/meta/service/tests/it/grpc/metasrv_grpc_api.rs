@@ -15,7 +15,6 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -74,7 +73,7 @@ async fn test_restart() -> anyhow::Result<()> {
     info!("--- stop metasrv");
     {
         let mut srv = tc.grpc_srv.take().unwrap();
-        srv.stop(None).await?;
+        srv.do_stop(None).await;
 
         drop(client);
         drop(srv);
@@ -294,7 +293,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
             .current_term;
 
         let mut srv = tc0.grpc_srv.take().unwrap();
-        srv.stop(None).await?;
+        srv.do_stop(None).await;
 
         // wait for leader observed
         // if tc0 is old leader, then we need to check both current_leader is some and current_term > old_term

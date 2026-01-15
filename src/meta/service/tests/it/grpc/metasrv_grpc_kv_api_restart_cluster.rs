@@ -17,7 +17,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -82,7 +81,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             assert!(tc.meta_node.is_none());
 
             let mut srv = tc.grpc_srv.take().unwrap();
-            srv.stop(None).await?;
+            srv.do_stop(None).await;
 
             stopped_tcs.push(tc);
         }
@@ -185,7 +184,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             assert!(tc.meta_node.is_none());
 
             let mut srv = tc.grpc_srv.take().unwrap();
-            srv.stop(None).await?;
+            srv.do_stop(None).await;
 
             stopped_tcs.push(tc);
         }
