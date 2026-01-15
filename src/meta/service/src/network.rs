@@ -21,9 +21,9 @@ use std::time::Duration;
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
@@ -588,7 +588,7 @@ impl Network {
 
         let grpc_res = client
             .install_snapshot_v004(strm)
-            .with_timing(observe_snapshot_send_spent(target))
+            .inspect_elapsed(observe_snapshot_send_spent(target))
             .await;
 
         info!("{}: grpc_result: {:?}", ctx, grpc_res,);
@@ -668,7 +668,7 @@ impl Network {
 
         let grpc_res = client
             .install_snapshot_v003(strm)
-            .with_timing(observe_snapshot_send_spent(target))
+            .inspect_elapsed(observe_snapshot_send_spent(target))
             .await;
 
         info!(
@@ -770,7 +770,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
             let grpc_res = client
                 .append_entries(req)
-                .with_timing(observe_append_send_spent(self.target))
+                .inspect_elapsed(observe_append_send_spent(self.target))
                 .await;
 
             debug!(
