@@ -19,7 +19,6 @@ use std::time::Instant;
 use std::vec;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;

@@ -19,7 +19,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;

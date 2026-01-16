@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -34,9 +33,9 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();
-    let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
+    let join_handler = ctx.try_spawn(ThreadTracker::tracking_future(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
-    }));
+    }))?;
 
     if let Err(cause) = join_handler.await.flatten() {
         DataExchangeManager::instance().on_finished_query(&query_id, Some(cause.clone()));

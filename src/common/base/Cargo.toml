@@ -20,7 +20,6 @@ memory-profiling = [
 databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
-async-trait = { workspace = true }
 borsh = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
@@ -28,7 +27,6 @@ bytesize = { workspace = true }
 chrono = { workspace = true }
 concurrent-queue = { workspace = true }
 crc32fast = { workspace = true }
-ctrlc = { workspace = true }
 enquote = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true }

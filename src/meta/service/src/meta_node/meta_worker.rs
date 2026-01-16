@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_version::BUILD_INFO;
 use log::error;

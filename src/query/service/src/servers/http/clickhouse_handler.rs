@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use databend_common_base::base::short_sql;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -141,81 +140,74 @@ async fn execute(
     //
     //  P.S. I think it will be better/more reasonable if we could avoid using pthread_join inside an async stack.
 
-    ctx.try_spawn(
-        {
-            let ctx = ctx.clone();
-            async move {
-                let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                let table_schema = infer_table_schema(&schema)?;
-                let mut output_format =
-                    FileFormatOptionsExt::get_output_format_from_clickhouse_format(
-                        format,
-                        table_schema,
-                        &ctx.get_settings(),
-                    )?;
+    ctx.try_spawn({
+        let ctx = ctx.clone();
+        async move {
+            let mut data_stream = interpreter.execute(ctx.clone()).await?;
+            let table_schema = infer_table_schema(&schema)?;
+            let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
+                format,
+                table_schema,
+                &ctx.get_settings(),
+            )?;
 
-                let prefix = Ok(output_format.serialize_prefix()?);
+            let prefix = Ok(output_format.serialize_prefix()?);
 
-                let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
-                    if params.compress() {
-                        match rb {
-                            Ok(b) => compress_block(b),
-                            Err(e) => Err(e),
-                        }
-                    } else {
-                        rb
+            let compress_fn = move |rb: Result<Vec<u8>>| -> Result<Vec<u8>> {
+                if params.compress() {
+                    match rb {
+                        Ok(b) => compress_block(b),
+                        Err(e) => Err(e),
                     }
-                };
-
-                // try to catch runtime error before http response, so user can client can get http 500
-                let first_block = match data_stream.next().await {
-                    Some(block) => match block {
-                        Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
-                        Err(err) => return Err(err),
-                    },
-                    None => None,
-                };
-
-                let session = ctx.get_current_session();
-                let stream = stream! {
-                    yield compress_fn(prefix);
-                    let mut ok = true;
-                    // do not pull data_stream if we already meet a None
-                    if let Some(block) = first_block {
-                        yield block;
-                        while let Some(block) = data_stream.next().await {
-                            match block{
-                                Ok(block) => {
-                                    yield compress_fn(output_format.serialize_block(&block));
-                                },
-                                Err(err) => {
-                                    let message = format!("{}", err);
-                                    yield compress_fn(Ok(message.into_bytes()));
-                                    ok = false;
-                                    break
-                                }
-                            };
-                        }
-                    }
-                    if ok {
-                        yield compress_fn(output_format.finalize());
-                    }
-                    // to hold session ref until stream is all consumed
-                    let _ = session.get_id();
-                };
-                if let Some(handle) = handle {
-                    handle.await.expect("must")
+                } else {
+                    rb
                 }
+            };
 
-                let stream = stream.map_err(std::io::Error::other);
-                Ok(
-                    Body::from_bytes_stream(stream)
-                        .with_content_type(format_typ.get_content_type()),
-                )
+            // try to catch runtime error before http response, so user can client can get http 500
+            let first_block = match data_stream.next().await {
+                Some(block) => match block {
+                    Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
+                    Err(err) => return Err(err),
+                },
+                None => None,
+            };
+
+            let session = ctx.get_current_session();
+            let stream = stream! {
+                yield compress_fn(prefix);
+                let mut ok = true;
+                // do not pull data_stream if we already meet a None
+                if let Some(block) = first_block {
+                    yield block;
+                    while let Some(block) = data_stream.next().await {
+                        match block{
+                            Ok(block) => {
+                                yield compress_fn(output_format.serialize_block(&block));
+                            },
+                            Err(err) => {
+                                let message = format!("{}", err);
+                                yield compress_fn(Ok(message.into_bytes()));
+                                ok = false;
+                                break
+                            }
+                        };
+                    }
+                }
+                if ok {
+                    yield compress_fn(output_format.finalize());
+                }
+                // to hold session ref until stream is all consumed
+                let _ = session.get_id();
+            };
+            if let Some(handle) = handle {
+                handle.await.expect("must")
             }
-        },
-        None,
-    )?
+
+            let stream = stream.map_err(std::io::Error::other);
+            Ok(Body::from_bytes_stream(stream).with_content_type(format_typ.get_content_type()))
+        }
+    })?
     .await
     .map_err(|err| {
         ErrorCode::from_string(format!(

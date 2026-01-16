@@ -25,7 +25,6 @@ use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -255,17 +254,15 @@ impl MetaGrpcClient {
 
         let worker_name = worker.to_string();
 
-        rt.try_spawn(
+        rt.spawn_named(
             UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
-            Some(format!("{}::worker_loop()", worker_name)),
-        )
-        .unwrap();
+            format!("{}::worker_loop()", worker_name),
+        );
 
-        rt.try_spawn(
+        rt.spawn_named(
             UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_rx)),
-            Some(format!("{}::auto_sync_endpoints()", worker_name)),
-        )
-        .unwrap();
+            format!("{}::auto_sync_endpoints()", worker_name),
+        );
 
         Ok(handle)
     }
