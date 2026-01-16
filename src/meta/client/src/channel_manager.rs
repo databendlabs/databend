@@ -17,7 +17,6 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::containers::ItemManager;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -38,6 +37,7 @@ use crate::endpoints::Endpoints;
 use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
+use crate::pool::ItemManager;
 
 /// Default connection TTL: 20 seconds.
 ///

@@ -29,6 +29,7 @@ mod grpc_client;
 mod grpc_metrics;
 mod kv_api_impl;
 mod message;
+mod pool;
 pub mod required;
 pub(crate) mod rpc_handler;
 
