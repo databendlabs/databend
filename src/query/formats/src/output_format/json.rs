@@ -77,11 +77,14 @@ impl JSONOutputFormat {
     }
 }
 
-fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
+fn scalar_to_json(
+    s: ScalarRef<'_>,
+    format: &FormatSettings,
+) -> databend_common_exception::Result<JsonValue> {
     match s {
-        ScalarRef::Null => JsonValue::Null,
-        ScalarRef::Boolean(v) => JsonValue::Bool(v),
-        ScalarRef::Number(v) => match v {
+        ScalarRef::Null => Ok(JsonValue::Null),
+        ScalarRef::Boolean(v) => Ok(JsonValue::Bool(v)),
+        ScalarRef::Number(v) => Ok(match v {
             NumberScalar::Int8(v) => JsonValue::Number(v.into()),
             NumberScalar::Int16(v) => JsonValue::Number(v.into()),
             NumberScalar::Int32(v) => JsonValue::Number(v.into()),
@@ -96,43 +99,45 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             NumberScalar::Float64(v) => {
                 JsonValue::Number(serde_json::Number::from_f64(v.into()).unwrap())
             }
-        },
-        ScalarRef::Decimal(x) => serde_json::to_value(x.to_string()).unwrap(),
+        }),
+        ScalarRef::Decimal(x) => Ok(serde_json::to_value(x.to_string()).unwrap()),
         ScalarRef::Date(v) => {
             let dt = DateConverter::to_date(&v, &format.jiff_timezone);
-            serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
+            Ok(serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap())
         }
-        ScalarRef::Interval(v) => serde_json::to_value(interval_to_string(&v).to_string()).unwrap(),
+        ScalarRef::Interval(v) => {
+            Ok(serde_json::to_value(interval_to_string(&v).to_string()).unwrap())
+        }
         ScalarRef::Timestamp(v) => {
             let dt = DateConverter::to_timestamp(&v, &format.jiff_timezone);
-            serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
+            Ok(serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap())
         }
-        ScalarRef::TimestampTz(v) => serde_json::to_value(v.to_string()).unwrap(),
-        ScalarRef::EmptyArray => JsonValue::Array(vec![]),
-        ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
-        ScalarRef::Binary(x) => JsonValue::String(format.format_binary(x).into_owned()),
-        ScalarRef::Opaque(x) => hex::encode_upper(x.to_le_bytes()).into(),
-        ScalarRef::String(x) => JsonValue::String(x.to_string()),
+        ScalarRef::TimestampTz(v) => Ok(serde_json::to_value(v.to_string()).unwrap()),
+        ScalarRef::EmptyArray => Ok(JsonValue::Array(vec![])),
+        ScalarRef::EmptyMap => Ok(JsonValue::Object(JsonMap::new())),
+        ScalarRef::Binary(x) => Ok(JsonValue::String(format.format_binary(x)?.into_owned())),
+        ScalarRef::Opaque(x) => Ok(hex::encode_upper(x.to_le_bytes()).into()),
+        ScalarRef::String(x) => Ok(JsonValue::String(x.to_string())),
         ScalarRef::Array(x) => {
             let vals = x
                 .iter()
                 .map(|x| scalar_to_json(x.clone(), format))
-                .collect();
-            JsonValue::Array(vals)
+                .collect::<databend_common_exception::Result<Vec<_>>>()?;
+            Ok(JsonValue::Array(vals))
         }
         ScalarRef::Map(x) => {
-            let vals = x
-                .iter()
-                .map(|s| match s {
+            let mut vals = JsonMap::new();
+            for s in x.iter() {
+                match s {
                     ScalarRef::Tuple(t) => {
-                        let k = scalar_to_json(t[0].clone(), format);
-                        let v = scalar_to_json(t[1].clone(), format);
-                        (k.to_string(), v)
+                        let k = scalar_to_json(t[0].clone(), format)?;
+                        let v = scalar_to_json(t[1].clone(), format)?;
+                        vals.insert(k.to_string(), v);
                     }
                     _ => unreachable!(),
-                })
-                .collect();
-            JsonValue::Object(vals)
+                }
+            }
+            Ok(JsonValue::Object(vals))
         }
         ScalarRef::Bitmap(b) => {
             let rb = deserialize_bitmap(b).expect("failed to deserialize bitmap");
@@ -140,34 +145,33 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .iter()
                 .map(|v| JsonValue::Number(serde_json::Number::from(v)))
                 .collect::<Vec<_>>();
-            JsonValue::Array(data)
+            Ok(JsonValue::Array(data))
         }
         ScalarRef::Tuple(x) => {
-            let vals = x
-                .iter()
-                .enumerate()
-                .map(|(idx, x)| (format!("{idx}"), scalar_to_json(x.clone(), format)))
-                .collect();
-            JsonValue::Object(vals)
+            let mut vals = JsonMap::new();
+            for (idx, x) in x.iter().enumerate() {
+                vals.insert(format!("{idx}"), scalar_to_json(x.clone(), format)?);
+            }
+            Ok(JsonValue::Object(vals))
         }
         ScalarRef::Variant(x) => {
             let b = jsonb::from_slice(x).unwrap();
-            b.into()
+            Ok(b.into())
         }
         ScalarRef::Geometry(x) => {
             let geom = Ewkb(x).to_json().expect("failed to convert ewkb to json");
-            jsonb::from_slice(geom.as_bytes()).unwrap().into()
+            Ok(jsonb::from_slice(geom.as_bytes()).unwrap().into())
         }
         ScalarRef::Geography(x) => {
             let geom = Ewkb(x.0).to_json().expect("failed to convert ewkb to json");
-            jsonb::from_slice(geom.as_bytes()).unwrap().into()
+            Ok(jsonb::from_slice(geom.as_bytes()).unwrap().into())
         }
         ScalarRef::Vector(x) => {
             let vals = match x {
                 VectorScalarRef::Int8(x) => x.iter().map(|x| (*x as i64).into()).collect(),
                 VectorScalarRef::Float32(x) => x.iter().map(|x| x.0.into()).collect(),
             };
-            JsonValue::Array(vals)
+            Ok(JsonValue::Array(vals))
         }
     }
 }
@@ -205,7 +209,7 @@ impl OutputFormat for JSONOutputFormat {
             res.push(b'{');
             for (c, value) in data_block.columns().iter().enumerate() {
                 let scalar = unsafe { value.index_unchecked(row) };
-                let value = scalar_to_json(scalar, &self.format_settings);
+                let value = scalar_to_json(scalar, &self.format_settings)?;
 
                 res.push(b'\"');
                 res.extend_from_slice(names[c].as_bytes());

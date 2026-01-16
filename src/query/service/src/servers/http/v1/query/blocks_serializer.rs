@@ -177,70 +177,80 @@ impl RowSerializer<'_> {
     // when column is a Variant, value will have a meaningless conversion overhead:
     // `RawJsonb::to_string()` -> `as_bytes` -> `String::from_utf8_lossy`.
     // therefore, in this case where only strings are needed, Variant is specially processed to avoid the overhead of intermediate conversion.
-    fn try_direct_as_string(&self, column: &Column) -> Option<String> {
+    fn try_direct_as_string(&self, column: &Column) -> Result<Option<String>> {
         match column {
             Column::Variant(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
-                Some(RawJsonb::new(v).to_string())
+                Ok(Some(RawJsonb::new(v).to_string()))
             }
-            Column::Decimal(c) => Some(c.index(self.row_index).unwrap().to_string()),
+            Column::Decimal(c) => Ok(Some(c.index(self.row_index).unwrap().to_string())),
             Column::Binary(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
-                Some(self.format.format_binary(v).into_owned())
+                Ok(Some(self.format.format_binary(v)?.into_owned()))
             }
-            Column::String(c) => Some(unsafe { c.index_unchecked(self.row_index).to_string() }),
+            Column::String(c) => Ok(Some(unsafe {
+                c.index_unchecked(self.row_index).to_string()
+            })),
             Column::Date(b) => {
                 let v = unsafe { b.get_unchecked(self.row_index) };
-                Some(date_to_string(*v as i64, &self.format.jiff_timezone).to_string())
+                Ok(Some(
+                    date_to_string(*v as i64, &self.format.jiff_timezone).to_string(),
+                ))
             }
             Column::Timestamp(b) => {
                 let v = unsafe { b.get_unchecked(self.row_index) };
-                Some(timestamp_to_string(*v, &self.format.jiff_timezone).to_string())
+                Ok(Some(
+                    timestamp_to_string(*v, &self.format.jiff_timezone).to_string(),
+                ))
             }
             Column::Interval(b) => {
                 let v = unsafe { b.get_unchecked(self.row_index) };
-                Some(interval_to_string(v).to_string())
+                Ok(Some(interval_to_string(v).to_string()))
             }
-            Column::Bitmap(_) => Some("<bitmap binary>".to_string()),
+            Column::Bitmap(_) => Ok(Some("<bitmap binary>".to_string())),
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
 
-                match (&self.format.geometry_format, ewkb_to_geo(&mut Ewkb(v))) {
-                    (GeometryDataType::WKB, Ok((geo, _))) => {
-                        geo_to_wkb(geo).map(hex::encode_upper).ok()
-                    }
-                    (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
-                    (GeometryDataType::EWKB, Ok((geo, srid))) => {
-                        geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
-                    }
-                    (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
-                    (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
-                    (_, Err(_)) => None,
-                }
+                Ok(
+                    match (&self.format.geometry_format, ewkb_to_geo(&mut Ewkb(v))) {
+                        (GeometryDataType::WKB, Ok((geo, _))) => {
+                            geo_to_wkb(geo).map(hex::encode_upper).ok()
+                        }
+                        (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
+                        (GeometryDataType::EWKB, Ok((geo, srid))) => {
+                            geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
+                        }
+                        (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
+                        (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
+                        (_, Err(_)) => None,
+                    },
+                )
             }
             Column::Geography(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
 
-                match (&self.format.geometry_format, ewkb_to_geo(&mut Ewkb(v.0))) {
-                    (GeometryDataType::WKB, Ok((geo, _))) => {
-                        geo_to_wkb(geo).map(hex::encode_upper).ok()
-                    }
-                    (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
-                    (GeometryDataType::EWKB, Ok((geo, srid))) => {
-                        geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
-                    }
-                    (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
-                    (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
-                    (_, Err(_)) => None,
-                }
+                Ok(
+                    match (&self.format.geometry_format, ewkb_to_geo(&mut Ewkb(v.0))) {
+                        (GeometryDataType::WKB, Ok((geo, _))) => {
+                            geo_to_wkb(geo).map(hex::encode_upper).ok()
+                        }
+                        (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
+                        (GeometryDataType::EWKB, Ok((geo, srid))) => {
+                            geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
+                        }
+                        (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
+                        (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
+                        (_, Err(_)) => None,
+                    },
+                )
             }
             Column::Nullable(c) => {
                 if !c.validity.get_bit(self.row_index) {
-                    return None;
+                    return Ok(None);
                 }
                 self.try_direct_as_string(&c.column)
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 }
@@ -255,7 +265,10 @@ impl serde::Serialize for RowSerializer<'_> {
                 serialize_seq.serialize_element(&None::<String>)?;
                 continue;
             }
-            let string = if let Some(value) = self.try_direct_as_string(column) {
+            let direct = self
+                .try_direct_as_string(column)
+                .map_err(serde::ser::Error::custom)?;
+            let string = if let Some(value) = direct {
                 value
             } else {
                 let mut buf = self.buf.borrow_mut();

@@ -79,16 +79,19 @@ impl Default for FormatSettings {
 }
 
 impl FormatSettings {
-    pub fn format_binary<'a>(&self, value: &'a [u8]) -> Cow<'a, str> {
+    pub fn format_binary<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, str>, ErrorCode> {
         match self.binary_format {
-            BinaryDisplayFormat::Hex => Cow::Owned(hex::encode_upper(value)),
-            BinaryDisplayFormat::Base64 => Cow::Owned(general_purpose::STANDARD.encode(value)),
+            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value))),
+            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(general_purpose::STANDARD.encode(value))),
             BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
-                Ok(s) => Cow::Borrowed(s),
-                Err(_) => Cow::Owned(hex::encode_upper(value)),
+                Ok(s) => Ok(Cow::Borrowed(s)),
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
             },
             BinaryDisplayFormat::Utf8Lossy => {
-                Cow::Owned(String::from_utf8_lossy(value).into_owned())
+                Ok(Cow::Owned(String::from_utf8_lossy(value).into_owned()))
             }
         }
     }
