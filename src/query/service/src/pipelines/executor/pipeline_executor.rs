@@ -20,7 +20,6 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
 use databend_common_exception::ErrorCode;

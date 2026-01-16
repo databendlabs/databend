@@ -3257,11 +3257,15 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.1"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.1#a475dccc70127d6e9f4ef55c9938eb703619dc97"
+version = "0.2.2"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.2#a2714ece292137d19c404ac241199e8a4ef428a3"
 dependencies = [
+ "async-trait",
+ "ctrlc",
+ "futures",
  "log",
  "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -3379,7 +3383,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-backtrace",
- "async-trait",
  "borsh",
  "bytemuck",
  "bytes",
@@ -3387,15 +3390,12 @@ dependencies = [
  "chrono",
  "concurrent-queue",
  "crc32fast",
- "ctrlc",
  "databend-common-exception",
  "enquote",
- "fastrace",
  "futures",
  "hickory-resolver",
  "libc",
  "log",
- "logcall",
  "micromarshal",
  "num-traits",
  "num_cpus",
@@ -5471,6 +5471,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "databend-base",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",

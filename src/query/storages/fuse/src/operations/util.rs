@@ -19,7 +19,6 @@ use std::time::Duration;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;

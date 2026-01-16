@@ -79,50 +79,6 @@ impl<Output> Future for JoinHandle<Output> {
     }
 }
 
-/// Methods to spawn tasks.
-pub trait TrySpawn {
-    /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
-    ///
-    /// It allows to return an error before spawning the task.
-    #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static;
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    ///
-    /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
-    #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.try_spawn(task, None).unwrap()
-    }
-}
-
-impl<S: TrySpawn> TrySpawn for Arc<S> {
-    #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.as_ref().try_spawn(task, name)
-    }
-
-    #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.as_ref().spawn(task)
-    }
-}
-
 /// Tokio Runtime wrapper.
 /// If a runtime is in an asynchronous context, shutdown it first.
 pub struct Runtime {
@@ -327,32 +283,42 @@ impl Runtime {
     }
 }
 
-impl TrySpawn for Runtime {
+impl Runtime {
+    /// Spawns a new asynchronous task with a specific name, returning a JoinHandle for it.
     #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
+    pub fn spawn_named<T>(&self, task: T, name: impl Into<String>) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        let task = ThreadTracker::tracking_future(task);
+        let location_name = name.into();
+        let task = async_backtrace::location!(location_name).frame(task);
+
+        #[expect(clippy::disallowed_methods)]
+        JoinHandle::create(self.handle.spawn(task))
+    }
+
+    /// Spawns a new asynchronous task, returning a JoinHandle for it.
+    #[track_caller]
+    pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
         let task = ThreadTracker::tracking_future(task);
 
-        let location_name = {
-            if let Some(name) = name {
-                name
-            } else {
-                match ThreadTracker::query_id() {
-                    None => String::from(GLOBAL_TASK_DESC),
-                    Some(query_id) => {
-                        format!("Running query {} spawn task", query_id)
-                    }
-                }
+        let location_name = match ThreadTracker::query_id() {
+            None => String::from(GLOBAL_TASK_DESC),
+            Some(query_id) => {
+                format!("Running query {} spawn task", query_id)
             }
         };
 
         let task = async_backtrace::location!(location_name).frame(task);
 
         #[expect(clippy::disallowed_methods)]
-        Ok(JoinHandle::create(self.handle.spawn(task)))
+        JoinHandle::create(self.handle.spawn(task))
     }
 }
 

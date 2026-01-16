@@ -16,12 +16,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::Stoppable;
+use databend_base::shutdown::Graceful;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use fastrace::prelude::*;
+use futures::future::BoxFuture;
 use futures::future::Either;
 use futures::future::select;
 use log::info;
@@ -160,7 +161,7 @@ impl GrpcServer {
         Ok(())
     }
 
-    pub async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+    pub async fn do_stop(&mut self, _force: Option<BoxFuture<'static, ()>>) {
         info!("GrpcServer::stop");
 
         let meta_handle = self.meta_handle.take();
@@ -221,19 +222,12 @@ impl GrpcServer {
     }
 }
 
-#[tonic::async_trait]
-impl Stoppable for GrpcServer {
+#[async_trait::async_trait]
+impl Graceful for GrpcServer {
     type Error = AnyError;
 
-    async fn start(&mut self) -> Result<(), Self::Error> {
-        self.do_start().await.map_err(|e| AnyError::new(&e))
-    }
-
-    async fn stop(
-        &mut self,
-        force: Option<tokio::sync::broadcast::Receiver<()>>,
-    ) -> Result<(), Self::Error> {
-        let _: () = self.do_stop(force).await;
+    async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {
+        self.do_stop(force).await;
         Ok(())
     }
 }

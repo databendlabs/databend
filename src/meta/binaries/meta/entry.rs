@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
+use databend_base::shutdown::ShutdownGroup;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::StopHandle;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -154,8 +154,8 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
     let meta_handle = Arc::new(meta_handle);
 
-    let mut stop_handler = StopHandle::<AnyError>::create();
-    let stop_tx = StopHandle::<AnyError>::install_termination_handle();
+    let mut stop_handler = ShutdownGroup::<AnyError>::new();
+    let stop_tx = ShutdownGroup::<AnyError>::install_termination_handle();
 
     // HTTP API service.
     {

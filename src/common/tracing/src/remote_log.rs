@@ -35,7 +35,6 @@ use async_channel::bounded;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::spawn;
 use databend_common_exception::Result;
 use jiff::Timestamp;
