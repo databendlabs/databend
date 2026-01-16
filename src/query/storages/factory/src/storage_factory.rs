@@ -24,6 +24,7 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_storages_basic::MemoryTable;
 use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::RandomTable;
+use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_common_storages_basic::view_table::ViewTable;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
@@ -31,6 +32,8 @@ use databend_common_storages_stream::stream_table::StreamTable;
 
 use crate::Table;
 use crate::fuse::FuseTable;
+
+const RECURSIVE_CTE_OPT_KEY: &str = "recursive_cte";
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>>;
@@ -63,6 +66,19 @@ impl StorageCreator for FuseTableCreator {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
         let tbl = FuseTable::try_create(table_info, self.s3_storage_class_spec, disable_refresh)?;
         Ok(tbl)
+    }
+}
+
+#[derive(Clone)]
+struct MemoryStorageCreator;
+
+impl StorageCreator for MemoryStorageCreator {
+    fn try_create(&self, table_info: TableInfo, _disable_refresh: bool) -> Result<Box<dyn Table>> {
+        if table_info.options().contains_key(RECURSIVE_CTE_OPT_KEY) {
+            RecursiveCteMemoryTable::try_create(table_info)
+        } else {
+            MemoryTable::try_create(table_info)
+        }
     }
 }
 
@@ -109,7 +125,7 @@ impl StorageFactory {
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Storage {
-                creator: Arc::new(MemoryTable::try_create),
+                creator: Arc::new(MemoryStorageCreator),
                 descriptor: Arc::new(MemoryTable::description),
             });
         }
