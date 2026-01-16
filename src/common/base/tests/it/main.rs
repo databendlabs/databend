@@ -21,7 +21,6 @@ mod metrics;
 mod progress;
 mod range_merger;
 mod runtime;
-mod stoppable;
 mod string;
 mod time_series;
 
