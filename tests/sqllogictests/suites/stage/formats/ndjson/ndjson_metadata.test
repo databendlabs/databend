@@ -1,4 +1,4 @@
-query T?I
+query TTI
 select metadata$filename, $1, metadata$file_row_number  from @data_s3/ndjson/ts.ndjson (file_format=>'ndjson')
 ----
 testbucket/data/ndjson/ts.ndjson {"t":1736305864} 0
@@ -13,7 +13,7 @@ copy into t from (select metadata$filename, $1, metadata$file_row_number + 1  fr
 ----
 ndjson/ts.ndjson 3 0 NULL NULL
 
-query T?I
+query TTI
 select * from t
 ----
 testbucket/data/ndjson/ts.ndjson {"t":1736305864} 1

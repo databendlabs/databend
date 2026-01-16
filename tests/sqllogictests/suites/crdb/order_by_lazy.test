@@ -11,21 +11,21 @@ CREATE TABLE t (  a INT,  b INT,  c BOOLEAN NULL)
 statement ok
 INSERT INTO t VALUES (1, 9, true), (2, 8, false), (3, 7, NULL)
 
-query I
+query B
 SELECT c FROM t ORDER BY c
 ----
 0
 1
 NULL
 
-query I
+query B
 SELECT c FROM t ORDER BY c
 ----
 0
 1
 NULL
 
-query I
+query B
 SELECT c FROM t ORDER BY c DESC
 ----
 1
@@ -59,7 +59,7 @@ SELECT a, b FROM t ORDER BY b DESC LIMIT 2
 1 9
 2 8
 
-query II
+query BI
 SELECT DISTINCT c, b FROM t ORDER BY b DESC LIMIT 2
 ----
 1 9
@@ -163,7 +163,7 @@ SELECT CASE a WHEN 1 THEN b ELSE c END as val FROM t ORDER BY val
 statement error 1065
 SELECT * FROM t ORDER BY 0
 
-query III
+query IIB
 SELECT * FROM t ORDER BY true,a
 ----
 1 9 1
@@ -172,7 +172,7 @@ SELECT * FROM t ORDER BY true,a
 4 7 NULL
 5 7 NULL
 
-query III
+query IIB
 SELECT * FROM t ORDER BY "a"
 ----
 1 9 1
@@ -181,7 +181,7 @@ SELECT * FROM t ORDER BY "a"
 4 7 NULL
 5 7 NULL
 
-query III
+query IIB
 SELECT * FROM t ORDER BY 2.5,a
 ----
 1 9 1
@@ -291,7 +291,7 @@ CREATE TABLE xy(x INT NULL, y INT NULL)
 statement ok
 INSERT INTO xy VALUES (2, NULL), (NULL, 6), (2, 5), (4, 8)
 
-query IT
+query II
 SELECT x, y FROM xy ORDER BY y NULLS FIRST
 ----
 2 NULL
@@ -307,7 +307,7 @@ NULL 6
 4 8
 2 NULL
 
-query IT
+query II
 SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST
 ----
 2 NULL
@@ -334,7 +334,7 @@ NULL 6
 statement ok
 INSERT INTO xy VALUES (NULL, NULL)
 
-query TI
+query II
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y NULLS LAST
 ----
 NULL 6
@@ -343,7 +343,7 @@ NULL NULL
 2 NULL
 4 8
 
-query IT
+query II
 SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST
 ----
 2 NULL
@@ -361,7 +361,7 @@ SELECT x, y FROM xy ORDER BY x, y
 NULL 6
 NULL NULL
 
-query IT
+query II
 SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST
 ----
 2 NULL
@@ -370,7 +370,7 @@ SELECT x, y FROM xy ORDER BY x, y DESC NULLS FIRST
 NULL NULL
 NULL 6
 
-query IT
+query II
 SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST
 ----
 2 NULL
@@ -379,7 +379,7 @@ SELECT x, y FROM xy ORDER BY x NULLS LAST, y DESC NULLS FIRST
 NULL NULL
 NULL 6
 
-query TT
+query II
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS LAST
 ----
 NULL 6
@@ -388,7 +388,7 @@ NULL NULL
 2 NULL
 4 8
 
-query TT
+query II
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC
 ----
 NULL 6
@@ -397,7 +397,7 @@ NULL NULL
 2 NULL
 4 8
 
-query TI
+query II
 SELECT x, y FROM xy ORDER BY x NULLS FIRST, y DESC NULLS FIRST
 ----
 NULL NULL

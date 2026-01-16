@@ -36,7 +36,7 @@ select geo_to_h3(lon, lat, resolution) from t1 order by lat, lon, resolution
 statement ok
 DROP TABLE t1
 
-query ?
+query T
 select geohash_decode('ezs42')
 ----
 (-5.60302734375,42.60498046875)

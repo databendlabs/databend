@@ -9,7 +9,7 @@ copy into cast_ndjson from @data/ndjson/cast_sample.ndjson file_format = (type =
 ----
 ndjson/cast_sample.ndjson 3 0 NULL NULL
 
-query T?
+query TT
 select * from cast_ndjson
 ----
 data1 {"env":"test1","length":"ok"}
@@ -39,7 +39,7 @@ COPY INTO number FROM @data/ndjson/numbers.ndjson file_format = (type = NDJSON) 
 ----
 ndjson/numbers.ndjson 3 0 NULL NULL
 
-query II?
+query IIT
 SELECT * FROM number
 ----
 1 100 1e38

@@ -148,7 +148,7 @@ $$;
 statement ok
 set script_max_steps = 1000;
 
-query
+query ?
 EXECUTE IMMEDIATE $$
 BEGIN
     LET sum := 0;

@@ -1,4 +1,4 @@
-query ?TI
+query TTI
 select $1, metadata$filename, metadata$file_row_number from @data/orc/all  (file_format=>'orc');
 ----
 {"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null} orc/alltypes.zstd.orc 0
@@ -21,7 +21,7 @@ copy into t1 from (select $1, metadata$filename, metadata$file_row_number from @
 ----
 orc/alltypes.zstd.orc 11 0 NULL NULL
 
-query ?TI
+query TTI
 select * from t1 order by a;
 ----
 {"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""} orc/alltypes.zstd.orc 1

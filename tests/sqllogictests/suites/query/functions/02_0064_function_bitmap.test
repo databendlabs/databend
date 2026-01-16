@@ -82,7 +82,7 @@ SELECT bitmap_subset_in_range(build_bitmap([5,7,9]), 6, 9)::String;
 ----
 7
 
-query ?
+query T
 SELECT bitmap_to_array(build_bitmap([1, 2, 3, 100, 10000]));
 ----
 [1,2,3,100,10000]

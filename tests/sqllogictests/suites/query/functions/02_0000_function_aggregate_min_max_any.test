@@ -49,7 +49,7 @@ select any(a), min(a), max(a), c from t_min_max_any group by c order by c
 NULL NULL NULL 3
 
 
-query I??
+query ITT
 select c, min(h), max(h) from t_min_max_any group by c order by c
 ----
 1 (1460608685,NULL) (1460608685,NULL)

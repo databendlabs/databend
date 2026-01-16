@@ -227,7 +227,7 @@ CREATE TABLE boolean_table (  id INTEGER NOT NULL,  value BOOLEAN NULL)
 statement ok
 INSERT INTO boolean_table (id, value) VALUES (1, NULL)
 
-query T
+query B
 SELECT value FROM boolean_table
 ----
 NULL
@@ -257,7 +257,7 @@ SELECT a FROM MaxIntTest WHERE a = 9223372036854775807
 ----
 9223372036854775807
 
-query I
+query B
 SELECT 1 IN (1, 2)
 ----
 1
@@ -267,7 +267,7 @@ SELECT NULL IN (1, 2)
 ----
 NULL
 
-query I
+query B
 SELECT 1 IN (1, NULL)
 ----
 1
@@ -524,7 +524,7 @@ CREATE TABLE wide (id INT8 NOT NULL, a INT8 NOT NULL, b TEXT NOT NULL, c INT8 NO
 statement error 1006
 INSERT INTO wide(id, n) VALUES(0, 10)
 
-query T
+query I
 SELECT count(*) FROM wide
 ----
 0

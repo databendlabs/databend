@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS t_variant(id Int null, var Variant null) Engine = Fus
 statement ok
 INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')),        (2, parse_json('{"k":"v"}')),        (3, parse_json('"abcd"')),        (4, parse_json('"abcd"')),        (5, parse_json('12')),        (6, parse_json('12')),        (7, parse_json('[1,2,3]')),        (8, parse_json('[1,2,3]'))
 
-query II?
+query IIT
 SELECT max(id) as n, min(id), var FROM t_variant GROUP BY var ORDER BY n ASC
 ----
 2 1 {"k":"v"}
@@ -185,14 +185,14 @@ select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from num
 
 ## group by variant  https://github.com/datafuselabs/databend/issues/10603
 
-query ?I
+query TI
 select number::Variant a, count()  from numbers(3) group by a order by a;
 ----
 0 1
 1 1
 2 1
 
-query ?II
+query TII
 select number::Variant a, number as b, count()  from numbers(3) group by a, b order by a;
 ----
 0 0 1
@@ -277,7 +277,7 @@ test
 statement ok
 DROP TABLE t_str
 
-query ? rowsort
+query T rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
 (NULL,18,"1970-01-01")

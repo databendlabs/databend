@@ -37,12 +37,12 @@ insert into db.t2(id2) values(3)
 statement ok
 insert into db.t2(id2,c1) values(3,(0,0))
 
-query I?I?
+query ITIT
 select t.*, t.id, t.c1 from db.t
 ----
 1 (0,0) 1 (0,0)
 
-query I?I?
+query ITIT
 select db.t.*, db.t.id, db.t.c1 from db.t
 ----
 1 (0,0) 1 (0,0)
@@ -53,17 +53,17 @@ select default.t.* from db.t
 statement error 1025
 select t1.* from db.t
 
-query I?
+query IT
 select t1.* from db.t as t1
 ----
 1 (0,0)
 
-query I?I?
+query ITIT
 select c.* from (select t1.*, t2.* from db.t as t1 join db.t1 as t2 on t1.id!=t2.id) as c
 ----
 1  (0,0)     2  (0,0)
 
-query I?I?
+query ITIT
 select c.* from (select t1.*, t.* from db.t as t1 join db.t2 as t on t1.id!=t.id2) as c
 ----
 1  (0,0)     3  (0,0)

@@ -127,7 +127,7 @@ INSERT INTO t1 SELECT 1, parse_json('{"k":"v"}')
 statement ok
 INSERT INTO t1 SELECT 2, parse_json('"abcd"')
 
-query ??
+query TT
 SELECT max(var), min(var) FROM t1
 ----
 {"k":"v"} "abcd"
@@ -155,7 +155,7 @@ INSERT INTO t1 SELECT 5, parse_json('null')
 statement ok
 INSERT INTO t1 SELECT 6, parse_json('true')
 
-query ??
+query TT
 SELECT max(var), min(var) FROM t1
 ----
 null true
@@ -177,7 +177,7 @@ INSERT INTO t2 VALUES(2, [1,2,4])
 statement ok
 INSERT INTO t2 VALUES(3, [3,4,5])
 
-query ??
+query TT
 SELECT max(arr), min(arr) FROM t2
 ----
 [3,4,5] [1,2,3]
@@ -219,12 +219,12 @@ SELECT quantile_cont(1)(number) from numbers_mt(10000)
 ----
 9999.0
 
-query ?
+query T
 SELECT quantile_cont(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
 [0.0,4999.5,5999.4,9999.0]
 
-query ?
+query T
 SELECT quantile_cont(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(10000);
 ----
 [0.00,4999.00,5999.00,9999.00]
@@ -232,12 +232,12 @@ SELECT quantile_cont(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(1000
 statement error 1010
 SELECT quantile_cont(5)(number) from numbers_mt(10000)
 
-query ?
+query T
 SELECT quantile_disc(0, 0.5, 0.6, 1)(number) from numbers_mt(10000);
 ----
 [0,4999,5999,9999]
 
-query ?
+query T
 SELECT quantile_disc(0, 0.5, 0.6, 1)(number::decimal(10,2)) from numbers_mt(10000);
 ----
 [0.00,4999.00,5999.00,9999.00]
@@ -247,7 +247,7 @@ SELECT quantile_tdigest(0.6)(number) from numbers_mt(10000)
 ----
 5999.5
 
-query ?
+query T
 SELECT quantile_tdigest(0, 0.5, 0.6, 1)(number) from numbers_mt(10000)
 ----
 [0.0,4999.5,5999.5,9999.0]
@@ -257,22 +257,22 @@ SELECT quantile_tdigest_weighted(0.6)(number, 1) from numbers_mt(10000)
 ----
 5999.5
 
-query ?
+query T
 SELECT quantile_tdigest_weighted(0, 0.5, 0.6, 1)(number, 1) from numbers_mt(10000)
 ----
 [0.0,4999.5,5999.5,9999.0]
 
-query ?
+query T
 SELECT list(number) from numbers_mt(10)
 ----
 [0,1,2,3,4,5,6,7,8,9]
 
-query ??
+query TT
 SELECT array_sort(list(id), 'asc'), array_sort(list(var), 'asc') FROM t1;
 ----
 [1,2,3,4,5,6] [true,10,"abcd",{"k":"v"},[1,2,3],null]
 
-query ??
+query TT
 SELECT array_sort(list(id), 'asc'), array_sort(list(arr), 'asc') FROM t2;
 ----
 [1,2,3] [[1,2,3],[1,2,4],[3,4,5]]
@@ -350,7 +350,7 @@ select skewness(v2) from aggr group by v order by v
 NULL
 -0.3301409513655613
 
-query ??
+query TT
 select group_array_moving_avg(k), group_array_moving_avg(2)(v) from aggr;
 ----
 [0.09090909090909091,0.2727272727272727,0.45454545454545453,0.6363636363636364,0.8181818181818182,1.0,1.1818181818181819,1.3636363636363635,1.5454545454545454,1.7272727272727273,1.9090909090909092] [5.0,10.0,10.0,10.0,15.0,20.0,22.5,27.5,30.0,30.0,30.0]
@@ -358,7 +358,7 @@ select group_array_moving_avg(k), group_array_moving_avg(2)(v) from aggr;
 statement error 2004
 SELECT group_array_moving_sum('x')(-1130932975.87767);
 
-query ??
+query TT
 select group_array_moving_sum(k), group_array_moving_sum(2)(v) from aggr;
 ----
 [1,3,5,7,9,11,13,15,17,19,21] [10,20,20,20,30,40,45,55,60,60,60]
@@ -456,17 +456,17 @@ select listagg(concat('Hello ', s), '|') within group (order by y + 1 desc, x de
 ----
 Hello xyz|Hello abc|Hello def
 
-query ?
+query T
 select array_agg(x) within group (order by y + 1 desc, x desc) from t3;
 ----
 [1,0,3,2]
 
-query ?
+query T
 select array_agg(x) within group (order by x desc) from t3;
 ----
 [3,2,1,0]
 
-query ??
+query TT
 select array_agg(s), array_agg(null) from t3;
 ----
 ["abc","def","xyz"] []
@@ -512,22 +512,22 @@ select stddev_samp(a) from d where b = 'abc';
 ----
 NULL
 
-query ??????
+query TTTTTT
 select json_agg(a), json_agg(b), json_agg(c), json_agg(d), json_agg(e), json_agg('a') from d
 ----
 [20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
 
-query ??????
+query TTTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
 [20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
 
-query ?????
+query TTTTT
 select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
 ----
 {"abc":20.00,"de":10.00,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
-query ??????
+query TTTTTT
 select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d
 ----
 [20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]

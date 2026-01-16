@@ -1,7 +1,7 @@
 statement ok
 set max_block_size = 3
 
-query ?
+query T
 SELECT CASE WHEN number > 3 THEN [{}, {}, {}] WHEN number > 5 THEN [{}] END FROM numbers(10) order by number;
 ----
 NULL
@@ -15,7 +15,7 @@ NULL
 [{},{},{}]
 [{},{},{}]
 
-query ?
+query T
 select [{}] from numbers(3)
 ----
 [{}]
@@ -122,7 +122,7 @@ select if (number > 0, 1 / number, null) from numbers(2);
 NULL
 1.0
 
-query ?
+query T
 select if(number = 4, 3::VARIANT, number = 5, null, number = 6, '"a"'::VARIANT, null) from numbers(10) order by number
 ----
 NULL

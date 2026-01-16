@@ -67,7 +67,7 @@ CREATE TEMP TABLE db1.test1(a INT not null, b INT null) Engine = Fuse
 statement ok
 INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4)
 
-query I
+query ??
 select * from db1.test1
 ----
 1 2

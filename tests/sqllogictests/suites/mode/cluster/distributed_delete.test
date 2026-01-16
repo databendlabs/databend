@@ -28,17 +28,17 @@ statement ok
 delete from t where id % 3 = 0 and id > 500;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_origin where id % 3 != 0 or id <= 500) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_origin where id % 3 != 0 or id <= 500) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_origin where id % 3 != 0 or id <= 500) = (select sum(c2) from t);
 ----
 1
@@ -52,17 +52,17 @@ statement ok
 delete from t where id <= 499;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_after_delete where id > 499) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_after_delete where id > 499) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_after_delete where id > 499) = (select sum(c2) from t);
 ----
 1
@@ -76,17 +76,17 @@ statement ok
 delete from t where id > 600 and id < 700;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c2) from t);
 ----
 1
@@ -122,7 +122,7 @@ query III
 select * from t order by id except select * from v_after_deletion order by id;
 ----
 
-query I
+query B
 select (select count() from v_after_deletion) = (select count() from t);
 ----
 1

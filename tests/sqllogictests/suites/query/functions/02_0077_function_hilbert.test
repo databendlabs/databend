@@ -32,7 +32,7 @@ create table t_hilbert(a int, b int);
 statement ok
 insert into t_hilbert values(0, 0), (1, 2), (4, 3), (5, 6), (8, 7), (9, 10), (null, 8), (3, null);
 
-query ??
+query TT
 select range_bound(4)(a) as a_bound, range_bound(4)(b) as b_bound from t_hilbert;
 ----
 [1,4,8] [2,6,8]

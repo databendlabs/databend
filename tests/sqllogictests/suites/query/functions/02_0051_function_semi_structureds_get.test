@@ -1,4 +1,4 @@
-query ?
+query T
 select get(parse_json('[2.71, 3.14]'), 0)
 ----
 2.71
@@ -8,7 +8,7 @@ select get(parse_json('[2.71, 3.14]'), 2)
 ----
 NULL
 
-query ?
+query T
 select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA')
 ----
 2
@@ -18,7 +18,7 @@ select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA')
 ----
 NULL
 
-query ?
+query T
 select get(parse_json('{"aa": null, "aA": 2, "Aa": 3}'), 'aa')
 ----
 null
@@ -28,7 +28,7 @@ select get(null, 'aa')
 ----
 NULL
 
-query ?
+query T
 select parse_json('[2.71, 3.14]')->0
 ----
 2.71
@@ -38,12 +38,12 @@ select parse_json('[2.71, 3.14]')->2
 ----
 NULL
 
-query ?
+query T
 select parse_json('[[2.71, 3.14]]')->0->1
 ----
 3.14
 
-query ?
+query T
 select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'aA'
 ----
 2
@@ -53,7 +53,7 @@ select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'AA'
 ----
 NULL
 
-query ?
+query T
 select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->'aa'
 ----
 null
@@ -104,57 +104,57 @@ select parse_json('{"key1":null}')->>'key1'
 ----
 NULL
 
-query ?
+query T
 select parse_json('[2.71, 3.14]')[0]
 ----
 2.71
 
-query ?
+query T
 select parse_json('[[2.71, 3.14]]')[0][1]
 ----
 3.14
 
-query ?
+query T
 select parse_json('{"aa": 1, "aA": 2, "Aa": 3 }')['aa']
 ----
 1
 
-query ?
+query T
 select '{"k1": 1, "k2": null}'::json['k2']
 ----
 null
 
-query ?
+query T
 select get_ignore_case(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA')
 ----
 2
 
-query ?
+query T
 select get_ignore_case(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA')
 ----
 3
 
-query ?
+query T
 select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[0].name')
 ----
 1
 
-query ?
+query T
 select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]["name"]')
 ----
 2
 
-query ?
+query T
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["id"]')
 ----
 1
 
-query ?
+query T
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer.name')
 ----
 "databend"
 
-query ?
+query T
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][0]')
 ----
 "ext"
@@ -165,7 +165,7 @@ select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["
 NULL
 
 
-query ?
+query T
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), '')
 ----
 {"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
@@ -231,7 +231,7 @@ select parse_json('[1, 2, 3]')#>'{a}'
 ----
 NULL
 
-query ?
+query T
 select parse_json('[1, 2, 3]')#>'{1}'
 ----
 2
@@ -241,7 +241,7 @@ select parse_json('[1, 2, 3]')#>'{3}'
 ----
 NULL
 
-query ?
+query T
 select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1}'
 ----
 [1,2]
@@ -251,17 +251,17 @@ select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1, 0, 1}'
 ----
 NULL
 
-query ?
+query T
 select parse_json('[1, {"a": 1, "b": 2}, 3]')#>'{1}'
 ----
 {"a":1,"b":2}
 
-query ?
+query T
 select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>'{1, b, 2, k1}'
 ----
 1
 
-query ?
+query T
 select '[1, 2, 3, null]'::json#>'{3}'
 ----
 null
@@ -326,12 +326,12 @@ select [0,1,2,3][1]
 ----
 0
 
-query ?
+query T
 select [[[1,2,3],[4,5,6]],[[7,8,9]]][1]
 ----
 [[1,2,3],[4,5,6]]
 
-query ?
+query T
 select [[[1,2,3],[4,5,6]],[[7,8,9]]][1][2]
 ----
 [4,5,6]
@@ -385,92 +385,92 @@ CREATE TABLE IF NOT EXISTS t5(id Int null, obj Variant null) Engine = Fuse
 statement ok
 insert into t5 values(1, '{"car_no":10,"测试\\"\\uD83D\\uDC8E":"a","nums":[2,3,4],"obj":{"a":{"b":[1,2]},"c":1}}'), (2, '{"car_no":20,"nums":[-10,-11],"obj":{"x":"y"}}')
 
-query ?
+query T
 select get(arr, 0) from t1
 ----
 1
 
-query ?
+query T
 select get(arr, 'a') from t1
 ----
 NULL
 
-query ?
+query T
 select get(obj, 0) from t2
 ----
 NULL
 
-query ?
+query T
 select get(obj, 'a') from t2
 ----
 1
 
-query ?
+query T
 select arr->0 from t1
 ----
 1
 
-query ?
+query T
 select arr->'a' from t1
 ----
 NULL
 
-query ?
+query T
 select obj->0 from t2
 ----
 NULL
 
-query ?
+query T
 select obj->'a' from t2
 ----
 1
 
-query ?
+query T
 select get_ignore_case(obj, 'a') from t2
 ----
 1
 
-query ?
+query T
 select get_ignore_case(obj, 'A') from t2
 ----
 1
 
-query I?
+query IT
 select id, obj:b from (select id, obj from t2) tt
 ----
 1 {"c":2}
 
-query I?
+query IT
 select id, obj:b from (select id, obj from t2)
 ----
 1 {"c":2}
 
-query ?
+query T
 select get_path(arr, '[0]') from t1
 ----
 1
 
-query ?
+query T
 select get_path(arr, '[3][0]') from t1
 ----
 "a"
 
-query ?
+query T
 select get_path(obj, 'a') from t2
 ----
 1
 
-query ?
+query T
 select get_path(obj, '["a"]') from t2
 ----
 1
 
-query ?
+query T
 select get_path(obj, 'b.c') from t2
 ----
 2
 
-query ?
+query T
 select get_path(obj, '["b"]["c"]') from t2
 ----
 2
@@ -536,45 +536,45 @@ select id, get(arr, 'a') from t4
 statement ok
 set max_block_size = 2;
 
-query I?T
+query ITT
 select id, json_path_query(arr, '$[2, 1 to last -1]'), typeof(json_path_query(arr, '$[2, 1 to last -1]')) from t1
 ----
 1 3 INTEGER
 1 2 INTEGER
 1 3 INTEGER
 
-query I?
+query IT
 select id, json_path_query(arr, '$[*]?(@ > 1 && @ <= 3)') from t1
 ----
 1 2
 1 3
 
-query I?
+query IT
 select id, json_path_query(arr, '$[3][*]?(@ starts with "a")') from t1
 ----
 1 "a"
 
-query I?
+query IT
 select id, json_path_query(arr, '$[*][1]') from t1
 ----
 1 "b"
 
-query I?
+query IT
 select id, json_path_query(obj, '$.a') from t2
 ----
 1 1
 
-query I?
+query IT
 select id, json_path_query(obj, '$.a') from t2
 ----
 1 1
 
-query I?
+query IT
 select id, json_path_query(obj, '$.b.c') from t2
 ----
 1 2
 
-query I?
+query IT
 select id, json_path_query(obj, '$.b?(@.c == 2)') from t2
 ----
 1 {"c":2}
@@ -592,37 +592,37 @@ select id from t2 where json_path_query(obj, '$.a') = 1
 statement error 1065
 select id from t2 having json_path_query(obj, '$.a') = 1
 
-query I?
+query IT
 select id, json_path_query_array(arr, '$[2, 1 to last -1]') from t1
 ----
 1 [3,2,3]
 
-query I?
+query IT
 select id, json_path_query_array(arr, '$[*]?(@ > 1 && @ <= 3)') from t1
 ----
 1 [2,3]
 
-query I?
+query IT
 select id, json_path_query_array(arr, '$[*][1]') from t1
 ----
 1 ["b"]
 
-query I?
+query IT
 select id, json_path_query_array(obj, '$.a') from t2
 ----
 1 [1]
 
-query I?
+query IT
 select id, json_path_query_array(obj, '$.b.c') from t2
 ----
 1 [2]
 
-query I?
+query IT
 select id, json_path_query_array(obj, '$.b?(@.c == 2)') from t2
 ----
 1 [{"c":2}]
 
-query I?
+query IT
 select id, json_path_query_array(obj, '$.b?(@.c > 2)') from t2
 ----
 1 []
@@ -630,37 +630,37 @@ select id, json_path_query_array(obj, '$.b?(@.c > 2)') from t2
 statement error 1006
 select id, json_path_query_array(obj, '--') from t2
 
-query I?
+query IT
 select id, json_path_query_first(arr, '$[2, 1 to last -1]') from t1
 ----
 1 3
 
-query I?
+query IT
 select id, json_path_query_first(arr, '$[*]?(@ > 1 && @ <= 3)') from t1
 ----
 1 2
 
-query I?
+query IT
 select id, json_path_query_first(arr, '$[*][1]') from t1
 ----
 1 "b"
 
-query I?
+query IT
 select id, json_path_query_first(obj, '$.a') from t2
 ----
 1 1
 
-query I?
+query IT
 select id, json_path_query_first(obj, '$.b.c') from t2
 ----
 1 2
 
-query I?
+query IT
 select id, json_path_query_first(obj, '$.b?(@.c == 2)') from t2
 ----
 1 {"c":2}
 
-query I?
+query IT
 select id, json_path_query_first(obj, '$.b?(@.c > 2)') from t2
 ----
 1 NULL
@@ -668,48 +668,48 @@ select id, json_path_query_first(obj, '$.b?(@.c > 2)') from t2
 statement error 1006
 select id, json_path_query_first(obj, '--') from t2
 
-query ?
+query T
 select get(obj, 'car_no') from t5
 ----
 10
 20
 
-query ?
+query T
 select get_path(obj, '["car_no"]') from t5
 ----
 10
 20
 
-query ?
+query T
 select get(obj, '测试"💎') from t5
 ----
 "a"
 NULL
 
-query ?
+query T
 select get_path(obj, '["测试\\"\\uD83D\\uDC8E"]') from t5
 ----
 "a"
 NULL
 
-query ?
+query T
 select json_path_query(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 "a"
 
-query ?
+query T
 select json_path_query_array(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 ["a"]
 []
 
-query ?
+query T
 select json_path_query_first(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 "a"
 NULL
 
-query I?
+query IT
 select id, json_path_query(obj, '$.obj.**') from t5
 ----
 1 {"a":{"b":[1,2]},"c":1}
@@ -721,26 +721,26 @@ select id, json_path_query(obj, '$.obj.**') from t5
 2 {"x":"y"}
 2 "y"
 
-query I?
+query IT
 select id, json_path_query(obj, '$.obj.**{2 to last}') from t5
 ----
 1 [1,2]
 1 1
 1 2
 
-query I?
+query IT
 select id, json_path_query(obj, '$.obj.**{1}') from t5
 ----
 1 {"b":[1,2]}
 1 1
 2 "y"
 
-query I?
+query IT
 select id, json_path_query(obj, '$.obj.**{1}.b') from t5
 ----
 1 [1,2]
 
-query I?
+query IT
 select id, json_path_query(obj, '+$.nums') from t5
 ----
 1 2
@@ -749,7 +749,7 @@ select id, json_path_query(obj, '+$.nums') from t5
 2 -10
 2 -11
 
-query I?
+query IT
 select id, json_path_query(obj, '-$.nums') from t5
 ----
 1 -2
@@ -758,31 +758,31 @@ select id, json_path_query(obj, '-$.nums') from t5
 2 10
 2 11
 
-query I?
+query IT
 select id, json_path_query(obj, '$.nums[0] + 3') from t5
 ----
 1 5
 2 -7
 
-query I?
+query IT
 select id, json_path_query(obj, '7 - $.nums[0]') from t5
 ----
 1 5
 2 17
 
-query I?
+query IT
 select id, json_path_query(obj, '2 * $.nums[1]') from t5
 ----
 1 6
 2 -22
 
-query I?
+query IT
 select id, json_path_query(obj, '$.nums[1] / 2') from t5
 ----
 1 1.5
 2 -5.5
 
-query I?
+query IT
 select id, json_path_query(obj, '$.nums[1] % 2') from t5
 ----
 1 1
@@ -791,17 +791,17 @@ select id, json_path_query(obj, '$.nums[1] % 2') from t5
 statement ok
 set max_block_size = 65535;
 
-query ?
+query T
 SELECT arr #> '{3}' FROM t1;
 ----
 ["a","b","c"]
 
-query ?
+query T
 SELECT arr #> '{3,1}' FROM t1;
 ----
 "b"
 
-query ?
+query T
 SELECT obj #> '{a}' FROM t2;
 ----
 1

@@ -1,11 +1,11 @@
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/') order by name
 ----
 csv/prefix/ab.csv 1 NULL
 csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/a') order by name
 ----
 csv/prefix/ab.csv 1 NULL
@@ -13,41 +13,41 @@ csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab') order by name
 ----
 csv/prefix/ab.csv 1 NULL
 csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab/') order by name
 ----
 csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab/cd.csv') order by name
 ----
 csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab/cd.csv.bk') order by name
 ----
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query
+query TIT
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab', pattern => 'cd[.].*') order by name
 ----
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/ab/', pattern => 'cd[.].*') order by name
 ----
 csv/prefix/ab/cd.csv 1 NULL
 csv/prefix/ab/cd.csv.bk 1 NULL
 
-query 
+query ???
 select name, size, creator from list_stage(location => '@data/csv/prefix/', pattern => '.*[.]csv') order by name
 ----
 csv/prefix/ab.csv 1 NULL

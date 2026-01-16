@@ -900,7 +900,7 @@ create or replace TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query 
+query ?
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log

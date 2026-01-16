@@ -136,7 +136,7 @@ CREATE OR REPLACE TABLE t5(data variant, user_id uint8 not null);
 statement ok
 INSERT INTO t5 SELECT data, data:user_id AS user_id FROM t4;
 
-query ?I
+query TI
 SELECT * FROM t5;
 ----
 {"user_id":1} 1

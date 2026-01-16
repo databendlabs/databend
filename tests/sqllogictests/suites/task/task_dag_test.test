@@ -14,7 +14,7 @@ CREATE TASK mytaskroot
   WHEN SYSTEM$STREAM_HAS_DATA('mystream')
   AS SELECT 1;
 
-query SSSSSS
+query TTTTTT
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskroot'
 ----
 mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1 SYSTEM$STREAM_HAS_DATA('mystream') (empty)
@@ -34,7 +34,7 @@ CREATE TASK mytaskchild
   WHEN SYSTEM$STREAM_HAS_DATA('stream2')
   AS SELECT 1;
 
-query SSSS
+query ??????
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
 ----
 mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream2') mytaskroot
@@ -42,7 +42,7 @@ mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream2') mytaskroot
 statement ok
 ALTER TASK mytaskchild MODIFY WHEN SYSTEM$STREAM_HAS_DATA('stream3');
 
-query SSSS
+query ??????
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
 ----
 mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
@@ -50,7 +50,7 @@ mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
 statement ok
 ALTER TASK mytaskchild REMOVE AFTER 'mytaskroot';
 
-query SSSS
+query ??????
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
 ----
 mytaskchild mywh INTERVAL 0 SECOND SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') (empty)
@@ -58,12 +58,12 @@ mytaskchild mywh INTERVAL 0 SECOND SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') (e
 statement ok
 ALTER TASK mytaskchild ADD AFTER 'mytaskroot';
 
-query SSSS
+query ??????
 select name, warehouse, schedule, definition, condition_text, after from system.tasks where name = 'mytaskchild'
 ----
 mytaskchild mywh NULL SELECT 1 SYSTEM$STREAM_HAS_DATA('stream3') mytaskroot
 
-query SS
+query T?
 select name, predecessors from task_dependents(task_name => 'mytaskchild', recursive => true)
 ----
 mytaskroot []
@@ -74,7 +74,7 @@ statement ok
 call TASK_DEPENDENTS_ENABLE('mytaskchild');
 
 
-query SS
+query ???
 select name, state, predecessors from task_dependents(task_name => 'mytaskchild')
 ----
 mytaskchild Started ["mytaskroot"]
@@ -83,7 +83,7 @@ mytaskchild Started ["mytaskroot"]
 statement ok
 EXECUTE TASK mytaskroot;
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.task_history where name = 'mytaskroot'
 ----
 mytaskroot mywh CRON 0 0 0 1 1 ? 2100 SELECT 1

@@ -16,7 +16,7 @@ insert into a values (1),(2)
 statement ok
 copy into @unload from a file_format = (type = 'csv')
 
-query
+query ?
 select $1 from @unload (file_format => 'csv')
 ----
 1
@@ -37,7 +37,7 @@ copy into @unload from a file_format = (type = 'parquet')
 query error 1065
 select *, $1 from @unload (file_format => 'parquet')
 
-query
+query ?
 select * from @unload (file_format => 'parquet')
 ----
 1

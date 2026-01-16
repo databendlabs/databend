@@ -23,7 +23,7 @@ statement ok
 INSERT INTO t1 (id, var) VALUES(18, [1,2,3])
 
 
-query I?
+query IT
 select * from t1 order by id asc
 ----
 1 NULL
@@ -51,32 +51,32 @@ CREATE TABLE IF NOT EXISTS t2(id Int null, arr Json null) Engine = Fuse
 statement ok
 INSERT INTO t2 SELECT 1, parse_json('[1,2,3,["a","b","c"],{"k":"v"}]')
 
-query I?
+query IT
 select * from t2
 ----
 1 [1,2,3,["a","b","c"],{"k":"v"}]
 
-query ?
+query T
 select arr[0] from t2
 ----
 1
 
-query ?
+query T
 select arr[5] from t2
 ----
 NULL
 
-query ?
+query T
 select arr[3][0] from t2
 ----
 "a"
 
-query ?
+query T
 select arr[4]['k'] from t2
 ----
 "v"
 
-query ?
+query T
 select arr[4][0] from t2
 ----
 NULL
@@ -87,62 +87,62 @@ CREATE TABLE IF NOT EXISTS t3(id Int null, obj Json null) Engine = Fuse
 statement ok
 INSERT INTO t3 SELECT 1, parse_json('{"a": 1,"b":{"k": 2},"c": [10,11,12]}')
 
-query I?
+query IT
 select * from t3
 ----
 1 {"a":1,"b":{"k":2},"c":[10,11,12]}
 
-query ?
+query T
 select obj:a from t3
 ----
 1
 
-query ?
+query T
 select obj['a'] from t3
 ----
 1
 
-query ?
+query T
 select obj[0] from t3
 ----
 NULL
 
-query ?
+query T
 select obj:x from t3
 ----
 NULL
 
-query ?
+query T
 select obj:b from t3
 ----
 {"k":2}
 
-query ?
+query T
 select obj:b:k from t3
 ----
 2
 
-query ?
+query T
 select obj:b.k from t3
 ----
 2
 
-query ?
+query T
 select obj:c from t3
 ----
 [10,11,12]
 
-query ?
+query T
 select obj:c[0] from t3
 ----
 10
 
-query ?
+query T
 select obj['c'][0] from t3
 ----
 10
 
-query ?
+query T
 select obj['c'][3] from t3
 ----
 NULL
@@ -159,39 +159,39 @@ INSERT INTO t4 SELECT 2, parse_json('{"a": true,"b": {"k": false},"c": [1,2,3]}'
 statement ok
 INSERT INTO t4 SELECT 3, parse_json('{"a": "v","b": {"k": "vv"},"c": []}')
 
-query I?
+query IT
 select * from t4 order by id asc
 ----
 1 {"a":2,"b":{"k":2},"c":[10,11,12]}
 2 {"a":true,"b":{"k":false},"c":[1,2,3]}
 3 {"a":"v","b":{"k":"vv"},"c":[]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and m:a = 2
 ----
 1 {"a":2,"b":{"k":2},"c":[10,11,12]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and m:a = true
 ----
 2 {"a":true,"b":{"k":false},"c":[1,2,3]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and m:a = 'v'
 ----
 3 {"a":"v","b":{"k":"vv"},"c":[]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and 2 = m:b:k
 ----
 1 {"a":2,"b":{"k":2},"c":[10,11,12]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and false = m:b:k
 ----
 2 {"a":true,"b":{"k":false},"c":[1,2,3]}
 
-query I?
+query IT
 select * from t4 where id >= 1 and 'vv' = m:b:k
 ----
 3 {"a":"v","b":{"k":"vv"},"c":[]}
@@ -206,7 +206,7 @@ UPDATE t4 SET m = '{"a":"x1"}' WHERE id = 3
 statement ok
 REPLACE INTO t4 ON CONFLICT(id) values(5,'{"a":"x3"}'), (6,'{"a":"x4"}')
 
-query I??
+query ITT
 select id, m, m['a'] from t4 order by id asc
 ----
 1 {"a":2,"b":{"k":2},"c":[10,11,12]} 2

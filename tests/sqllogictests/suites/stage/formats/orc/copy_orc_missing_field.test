@@ -14,7 +14,7 @@ select count(*) from nested
 0
 
 
-query 
+query TIITI
 copy into nested from @data/orc/nested file_format = (type = orc missing_field_as=field_default)  RETURN_FAILED_ONLY=TRUE
 ----
 

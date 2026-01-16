@@ -1,7 +1,7 @@
 statement ok
 SELECT (1, 'a', NULL, to_date(18869), (2.1, to_datetime(1630320462000000)))
 
-query ?
+query T
 SELECT tuple([1,2,3], ['a','b','c'], 10);
 ----
 ([1,2,3],["a","b","c"],10)

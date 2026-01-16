@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS t2(id Int null, var Variant null) Engine = Fuse
 statement ok
 INSERT INTO t2 VALUES(1, parse_json('{"k":"v"}')),                     (2, parse_json('"abcd"')),                     (3, parse_json('[1,2,3]')),                     (4, parse_json('10')),                     (5, parse_json('null')),                     (6, parse_json('true'))
 
-query I?
+query IT
 SELECT id, var FROM t2 ORDER BY var ASC
 ----
 6 true
@@ -98,7 +98,7 @@ SELECT id, var FROM t2 ORDER BY var ASC
 3 [1,2,3]
 5 null
 
-query I?
+query IT
 SELECT id, var FROM t2 ORDER BY var DESC
 ----
 5 null

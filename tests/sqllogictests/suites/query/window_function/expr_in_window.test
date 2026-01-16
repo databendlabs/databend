@@ -289,12 +289,12 @@ sales 3 5
 sales 4 NULL
 
 # lag from array
-query ?
+query T
 SELECT lag([456],8,[123]) OVER (PARTITION BY 10)
 ----
 [123]
 
-query ?
+query T
 SELECT lag([456],8,['123']) OVER (PARTITION BY 10)
 ----
 [123]

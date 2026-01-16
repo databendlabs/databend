@@ -688,7 +688,7 @@ create or replace table t (a string default '\'0\'', b int);
 statement ok
 insert into t(b)  values (1)
 
-query
+query ?
 select '\'0\'' = a from t
 ----
 1

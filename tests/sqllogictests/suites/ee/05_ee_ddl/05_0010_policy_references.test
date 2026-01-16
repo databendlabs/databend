@@ -81,28 +81,28 @@ create table employees2(
 statement ok
 alter table employees2 modify column ssn set masking policy mask_ssn_conditional1 using (ssn, role);
 
-query T
+query ????????
 select * from policy_references(POLICY_NAME => 'maska1');
 ----
 maska1 MASKING POLICY default employees1 TABLE salary NULL ACTIVE
 
-query T
+query ????????
 select * from policy_references(POLICY_NAME => 'rap_multi_case1');
 ----
 rap_multi_case1 ROW ACCESS POLICY default employees1 TABLE NULL name, department ACTIVE
 
-query T
+query ????????
 select * from policy_references(POLICY_NAME => 'mask_ssn_conditional1') order by ref_entity_name;
 ----
 mask_ssn_conditional1 MASKING POLICY default employees1 TABLE ssn role ACTIVE
 mask_ssn_conditional1 MASKING POLICY default employees2 TABLE ssn role ACTIVE
 
-query T
+query ????????
 select * from policy_references(REF_ENTITY_NAME => 'default.employees2', REF_ENTITY_DOMAIN => 'TABLE');
 ----
 mask_ssn_conditional1 MASKING POLICY default employees2 TABLE ssn role ACTIVE
 
-query T
+query ????????
 select * from policy_references(REF_ENTITY_NAME => 'default.employees1', REF_ENTITY_DOMAIN => 'TABLE');
 ----
 mask_ssn_conditional1 MASKING POLICY default employees1 TABLE ssn role ACTIVE

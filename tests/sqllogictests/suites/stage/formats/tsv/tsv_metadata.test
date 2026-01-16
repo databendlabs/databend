@@ -1,4 +1,4 @@
-query TTII
+query TTIT
 select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/tsv/no_newline.tsv (file_format=>'tsv')
 ----
 testbucket/data/tsv/no_newline.tsv 2 0 1

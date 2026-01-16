@@ -118,7 +118,7 @@ SELECT group_concat(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno D
 5200|5200|4500|6000|4200
 6000|4200
 
-query ? rowsort
+query T rowsort
 SELECT array_agg(salary) WITHIN GROUP (ORDER BY salary DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
 ----
 [3900,3500]

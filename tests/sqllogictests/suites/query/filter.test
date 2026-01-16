@@ -207,7 +207,7 @@ CREATE OR REPLACE TABLE t2(id int, payload variant);
 statement ok
 INSERT INTO t2 VALUES(1, '{"key":"val1","key2":null}'),(2, '{"key":"val2","key2":"null"}')
 
-query I?
+query IT
 SELECT * FROM t2 WHERE payload:key2 = 'null';
 ----
 2 {"key":"val2","key2":"null"}

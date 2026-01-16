@@ -7,7 +7,7 @@ CREATE DATABASE IF NOT EXISTS map_func_test
 statement ok
 USE map_func_test
 
-query ??
+query TT
 select map_keys({}), map_values({})
 ----
 [] []
@@ -17,7 +17,7 @@ select map_size({})
 ----
 0
 
-query ??
+query TT
 select map_keys({'k1':1,'k2':2,'k3':null}), map_values({'k1':1,'k2':2,'k3':null})
 ----
 ["k1","k2","k3"] [1,2,NULL]
@@ -28,7 +28,7 @@ create table t(col1 Map(String, String Null) Not Null, col2 Map(String, Int Null
 statement ok
 insert into t values({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, null)
 
-query ??
+query TT
 select map_keys(col1), map_keys(col2) from t
 ----
 ["k1","k2","k3"] ["a","b"]
@@ -42,7 +42,7 @@ select map_size(col1), map_size(col2) from t
 2 3
 0 NULL
 
-query ??
+query TT
 select map_values(col1), map_values(col2) from t
 ----
 ["v1","v2",NULL] [10,20]
@@ -60,14 +60,14 @@ INSERT INTO map_cat_test VALUES (1, {'name_r11': 'John Smith', 'name_r12': 'Emil
 (2, {'name_r21': 'Michael Brown', 'name_22': 'Sarah Davis'}, {'dob_21': '1978-08-17', 'dob_22': '1989-07-19'}),
 (3, {'name_r31': 'David Wilson', 'name_32': 'white rose'}, {'dob_31': '1998-09-02', 'dob_32': '1992-05-18'});
 
-query
+query ???
 SELECT * FROM map_cat_test LIMIT 3;
 ----
 1 {"name_r11":"John Smith","name_r12":"Emily Johnson"} {"dob_11":"1988-07-12","dob_12":"1995-03-21"}
 2 {"name_r21":"Michael Brown","name_22":"Sarah Davis"} {"dob_21":"1978-08-17","dob_22":"1989-07-19"}
 3 {"name_r31":"David Wilson","name_32":"white rose"} {"dob_31":"1998-09-02","dob_32":"1992-05-18"}
 
-query
+query ??
 SELECT
   s_no,
   MAP_CAT(p_prof_name, p_prof_dob) AS concatenated_map
@@ -79,46 +79,46 @@ FROM
 3 {"name_r31":"David Wilson","name_32":"white rose","dob_31":"1998-09-02","dob_32":"1992-05-18"}
 
 # Test empty maps
-query
+query ?
 SELECT MAP_CAT({}, {})
 ----
 {}
 
-query
+query ?
 SELECT MAP_CAT({}, {'k1': 'v1'})
 ----
 {"k1":"v1"}
 
-query
+query ?
 SELECT MAP_CAT({'k1': 'v1'}, {})
 ----
 {"k1":"v1"}
 
 # Test deduplication
-query
+query ?
 SELECT MAP_CAT({'k1': 'v1', 'k2': 'v2'}, {'k1': 'abc'})
 ----
 {"k1":"abc","k2":"v2"}
 
 # Test different map sizes
-query
+query ?
 SELECT MAP_CAT({'k1': 'v1', 'k2': 'v2'}, {'k3': 'v3'})
 ----
 {"k1":"v1","k2":"v2","k3":"v3"}
 
-query
+query ?
 SELECT MAP_CAT({'k1': 'v1'}, {'k2': 'v2', 'k3': 'v3'})
 ----
 {"k1":"v1","k2":"v2","k3":"v3"}
 
 # Test NULL values
-query
+query ?
 SELECT MAP_CAT({'k1': 'v1', 'k2': NULL}, {'k2': 'v2', 'k3': NULL})
 ----
 {"k1":"v1","k2":"v2","k3":NULL}
 
 # Test nested maps
-query
+query ?
 SELECT MAP_CAT(
   {'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}},
   {'k2': {'nk3': 'nv3'}, 'k3': {'nk4': 'nv4'}}
@@ -126,7 +126,7 @@ SELECT MAP_CAT(
 ----
 {"k1":{"nk1":"nv1"},"k2":{"nk3":"nv3"},"k3":{"nk4":"nv4"}}
 
-query
+query ?
 SELECT MAP_CAT(
   {'k1': {'nk1': 'nv1'}, 'k2': {'nk2': 'nv2'}},
   {'k3': {'nk1': 'new_nv1'}, 'k4': {'nk3': 'nv3'}}
@@ -135,7 +135,7 @@ SELECT MAP_CAT(
 {"k1":{"nk1":"nv1"},"k2":{"nk2":"nv2"},"k3":{"nk1":"new_nv1"},"k4":{"nk3":"nv3"}}
 
 # Deleting keys from a map literal
-query
+query ?
 SELECT MAP_DELETE(
   {'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 
   'k3', 'k2'
@@ -143,12 +143,12 @@ SELECT MAP_DELETE(
 ----
 {"k1":"v1","k4":"v4"}
 
-query
+query ?
 SELECT MAP_DELETE({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2', 'k10'])
 ----
 {"k1":"v1","k4":"v4"}
 
-query
+query ?
 SELECT MAP_DELETE({}, 'k1', 'k2')
 ----
 {}
@@ -165,14 +165,14 @@ INSERT INTO map_delete_test VALUES ({'a_k1': 'aaa1', 'b_k1': 'bbb1'}),
 ({'a_k2': 'aaa2', 'b_k2': 'bbb2'}),
 ({'a_k3': 'aaa3', 'b_k3': 'bbb3'});
 
-query
+query ?
 SELECT * FROM map_delete_test LIMIT 3;
 ----
 {"a_k1":"aaa1","b_k1":"bbb1"}
 {"a_k2":"aaa2","b_k2":"bbb2"}
 {"a_k3":"aaa3","b_k3":"bbb3"}
 
-query
+query ?
 SELECT 
   MAP_DELETE(src_map, 'a_k2', 'b_k3')
 FROM
@@ -183,19 +183,19 @@ FROM
 {"a_k3":"aaa3"}
 
 # Deleting all keys from a map
-query
+query ?
 SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k2', 'k3' )
 ----
 {}
 
 # Deleting keys from a map with duplicate keys
-query
+query ?
 SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k1' )
 ----
 {"k2":"v2","k3":"v3"}
 
 # Deleting non-existent keys
-query
+query ?
 SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2'}, 'k3', 'k4' )
 ----
 {"k1":"v1","k2":"v2"}
@@ -215,45 +215,45 @@ select map_contains_key(col_str, 'k1'), map_contains_key(col_str, 'k2'), map_con
 0 0 NULL
 
 # Test empty map
-query
+query ?
 SELECT map_contains_key({}, 'k1')
 ----
 0
 
 # Test non-existent key
-query
+query ?
 SELECT map_contains_key({'k1': 'v1', 'k2': 'v2'}, 'k3')
 ----
 0
 
 # Test NULL value
-query
+query ?
 SELECT map_contains_key({'k1': 'v1', 'k2': NULL}, 'k2')
 ----
 1
 
 # Test map_pick function
-query
+query ?
 SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, 'k1', 'k3')
 ----
 {"k1":"v1","k3":NULL}
 
-query
+query ?
 SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, ['k1', 'k3', 'k10'])
 ----
 {"k1":"v1","k3":NULL}
 
-query
+query ?
 SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, '')
 ----
 {}
 
-query
+query ?
 SELECT map_pick({'k1': 'v1', 'k2': 'v2', 'k3': null}, [])
 ----
 {}
 
-query
+query ?
 SELECT map_pick({}, 1, 2)
 ----
 {}
@@ -267,13 +267,13 @@ CREATE TABLE map_pick_test(col_str Map(String, String Null) Not Null, col_int Ma
 statement ok
 INSERT INTO map_pick_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50})
 
-query
+query ??
 SELECT map_pick(col_str, 'k1', 'k3'), map_pick(col_int, ['a', 'e', 'x']) FROM map_pick_test
 ----
 {"k1":"v1","k3":NULL} {"a":10}
 {} {"e":NULL}
 
-query
+query ?
 SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k3', NULL)
 ----
 {"k1":"v1","k2":"v2","k3":NULL}
@@ -281,12 +281,12 @@ SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k3', NULL)
 statement error 1006
 SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k1', 'new_v1')
 
-query
+query ?
 SELECT map_insert({}, 'k1', 'v1')
 ----
 {"k1":"v1"}
 
-query
+query ?
 SELECT map_insert({'k1': 'v1', 'k2': 'v2'}, 'k2', 'v3', true)
 ----
 {"k1":"v1","k2":"v3"}
@@ -303,7 +303,7 @@ CREATE TABLE map_insert_test(col_str Map(String, String Null) Not Null, col_int 
 statement ok
 INSERT INTO map_insert_test VALUES ({'k1':'v1','k2':'v2','k3':null},{'a':10,'b':20}), ({'k5':'v5','k6':'v6'}, {'d':40,'e':null,'f':50}), ({}, NULL);
 
-query
+query ??
 SELECT map_insert(col_str, 'k1', 'k100', true), map_insert(col_int, 'c', 100, false) FROM map_insert_test;
 ----
 {"k1":"k100","k2":"v2","k3":NULL} {"a":10,"b":20,"c":100}
@@ -311,17 +311,17 @@ SELECT map_insert(col_str, 'k1', 'k100', true), map_insert(col_int, 'c', 100, fa
 {"k1":"k100"} {"c":100}
 
 # Test map_filter
-query ?
+query T
 SELECT map_filter({1:0,2:2,3:-1}, (k, v) -> k > v);
 ----
 {1:0,3:-1}
 
-query ?
+query T
 SELECT map_filter({1:1,2:null,3:3}, (k, v) -> k = v);
 ----
 {1:1,3:3}
 
-query ?
+query T
 SELECT map_filter({1:1,2:null,3:3}, (k, v) -> v IS NOT NULL);
 ----
 {1:1,3:3}
@@ -330,22 +330,22 @@ statement error 1065
 SELECT map_filter({1:1,2:null,3:3}, (k, v) -> k + 1);
 
 # Test map_transform_keys
-query ?
+query T
 SELECT map_transform_keys({1:1,2:2,3:3}, (k, v) -> k + 1);
 ----
 {2:1,3:2,4:3}
 
-query ?
+query T
 SELECT map_transform_keys({'a':1,'b':2,'c':3}, (k, v) -> v + 1);
 ----
 {2:1,3:2,4:3}
 
-query ?
+query T
 SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> k * 2 + 1);
 ----
 {23:111,45:222,67:333}
 
-query ?
+query T
 SELECT map_transform_keys({11:111,22:222,33:333}, (k, v) -> k + v + 1);
 ----
 {123:111,245:222,367:333}
@@ -354,27 +354,27 @@ statement error 1006
 SELECT map_transform_keys({'a':1,'b':2,'c':'3'}, (k, v) -> k + 1);
 
 # Test map_transform_values
-query ?
+query T
 SELECT map_transform_values({1:1,2:2,3:3}, (k, v) -> v + 1);
 ----
 {1:2,2:3,3:4}
 
-query ?
+query T
 SELECT map_transform_values({1:'a',2:'b',3:'c'}, (k, v) -> k + 1);
 ----
 {1:2,2:3,3:4}
 
-query ?
+query T
 SELECT map_transform_values({11:111,22:222,33:333}, (k, v) -> v * 2 + 1);
 ----
 {11:223,22:445,33:667}
 
-query ?
+query T
 SELECT map_transform_values({11:111,22:222,33:333}, (k, v) -> k + v + 1);
 ----
 {11:123,22:245,33:367} 
 
-query ?
+query T
 SELECT map_transform_values({}, (k, v) -> k + v + 1);
 ----
 {}
@@ -391,14 +391,14 @@ CREATE TABLE map_lambda_test(col1 Map(Int, Int), col2 Map(String, String));
 statement ok
 INSERT INTO map_lambda_test VALUES ({1:1},{'k1':'v1','k2':'v2'}), ({2:1,1:2},{'data':'bend','space':'time'}), ({3:3},{});
 
-query ?
+query T
 select map_filter(col1, (k, v) -> k = v) from map_lambda_test;
 ----
 {1:1}
 {}
 {3:3}
 
-query
+query ?
 select map_transform_keys(col1, (k, v) -> k + 1) from map_lambda_test;
 ----
 {2:1}
@@ -408,14 +408,14 @@ select map_transform_keys(col1, (k, v) -> k + 1) from map_lambda_test;
 statement error 1006
 select map_transform_keys(col1, (k, v) -> k + v) from map_lambda_test;
 
-query ?
+query T
 select map_transform_values(col1, (k, v) -> k + 1) from map_lambda_test;
 ----
 {1:2}
 {2:3,1:2}
 {3:4}
 
-query ?
+query T
 select map_transform_values(col2, (k, v) -> CONCAT(k, v)) from map_lambda_test;
 ----
 {"k1":"k1v1","k2":"k2v2"}
@@ -424,12 +424,12 @@ select map_transform_values(col2, (k, v) -> CONCAT(k, v)) from map_lambda_test;
 
 ## json map functions
 
-query ?
+query T
 select json_map_transform_keys({'data':'bend','a':'b'}::Variant, (k, v) -> CONCAT(k, v) );
 ----
 {"ab":"b","databend":"bend"}
 
-query ??
+query TT
 select json_map_transform_values(try_cast(col2 as Variant), (k, v) -> concat(k, v)), json_map_filter(try_cast(col2 as Variant), (k, v) -> k = 'data') from map_lambda_test;
 ----
 {"k1":"k1v1","k2":"k2v2"} {}

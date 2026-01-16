@@ -24,7 +24,7 @@ SELECT t.a::String.lowe() FROM numbers(1) t(a)
 
 ## List Comprehension
 
-query ?
+query T
 select  [ x * 100  FOR x in [1,2,3] if x % 2 = 0 ];
 ----
 [200]

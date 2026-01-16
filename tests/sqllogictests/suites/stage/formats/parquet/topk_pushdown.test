@@ -47,13 +47,13 @@ select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (patte
 
 # More row groups
 
-query ?I
+query TI
 select * from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int limit 2;
 ----
 [1] 0
 [1] 0
 
-query ?
+query T
 select col_arr from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int desc limit 2;
 ----
 [1,2]

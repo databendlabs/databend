@@ -57,7 +57,7 @@ statement ok
 select min(number), max(number),  arg_min(number, number), arg_max(number, number), count(number), uniq(number), count_if(number, number > 0)   from numbers_mt (10) where 1 = 2 group by number % 2
 
 
-query
+query ?
 select avg(number) from numbers_mt (10) where 1 = 2
 ----
 NULL

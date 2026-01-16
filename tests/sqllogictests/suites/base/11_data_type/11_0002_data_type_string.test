@@ -5,7 +5,7 @@ SELECT '1'::string from numbers(3)
 1
 1
 
-query ?
+query T
 SELECT {'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232} from numbers(3);
 ----
 {"w1vY1t5":-15239676694.972677,"6UfU721":-4905646705.765232}
@@ -36,7 +36,7 @@ SELECT UPPER('hello'), LOWER('WORLD'), LENGTH('databend') FROM numbers(1);
 HELLO world 8
 
 # String with JSON objects
-query ?
+query T
 SELECT {'key': 'value'::string, 'numbers': 123::string} FROM numbers(2);
 ----
 {"key":"value","numbers":"123"}
@@ -44,7 +44,7 @@ SELECT {'key': 'value'::string, 'numbers': 123::string} FROM numbers(2);
 
 
 # String with scientific notation
-query ?
+query T
 SELECT {'scientific': 1.23e-4, 'regular': 123.456} FROM numbers(1);
 ----
 {"scientific":0.000123,"regular":123.456000}

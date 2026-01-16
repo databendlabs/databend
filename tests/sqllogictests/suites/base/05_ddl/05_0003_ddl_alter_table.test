@@ -157,7 +157,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(VARCHAR NULL) NULL, d TUPLE(1 VARCHAR NULL, 2 VARCHAR NULL) NULL ) ENGINE=FUSE
 
-query TT??
+query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
 a b ["c1","c2"] ("d1","d2")
@@ -179,7 +179,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY NULL) NULL, d TUPLE(1 BINARY NULL, 2 BINARY NULL) NULL ) ENGINE=FUSE
 
-query
+query ????
 SELECT * FROM `05_0003_at_t4`
 ----
 61 62 [6331,6332] (6431,6432)
@@ -201,7 +201,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(VARCHAR NULL) NULL, d TUPLE(1 VARCHAR NULL, 2 VARCHAR NULL, 3 INT NULL) NULL ) ENGINE=FUSE
 
-query TT??
+query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
 a b ["c1","c2"] ("d1","d2",NULL)
@@ -215,7 +215,7 @@ CREATE OR REPLACE TABLE "05_0003_at_t5" ( a int, b array(tuple(int, int, string)
 statement ok
 INSERT INTO `05_0003_at_t5` VALUES(1, null),(2, [(1,2,'x'),(3,4,'y')]),(3, [(5,null,null),(6,null,'z')]);
 
-query I?
+query IT
 SELECT * FROM `05_0003_at_t5`
 ----
 1 NULL
@@ -225,7 +225,7 @@ SELECT * FROM `05_0003_at_t5`
 statement ok
 ALTER TABLE `05_0003_at_t5` MODIFY COLUMN b array(tuple(int, float64, string, string));
 
-query I?
+query IT
 SELECT * FROM `05_0003_at_t5`
 ----
 1 NULL

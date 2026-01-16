@@ -31,7 +31,7 @@ SELECT cal(1, 2, 3, 4, 6)
 ----
 6.0
 
-query ?
+query T
 SELECT array_except_fn([1,2], [2,3])
 ----
 [1]
@@ -134,7 +134,7 @@ CREATE FUNCTION variant_udf_test (VARIANT) RETURNS VARIANT LANGUAGE javascript H
 	}
 $$;
 
-query ?
+query T
 select variant_udf_test(json_object('some_key', [1, 2]));
 ----
 {"added_key":"yes","some_key":[1,2]}

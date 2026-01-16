@@ -1,4 +1,4 @@
-query ?
+query T
 select $1 from @data/orc/  (file_format=>'orc') order by $1
 ----
 {"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""}
@@ -34,7 +34,7 @@ query TIITI
 copy into t1 from (select $1 from @data/orc/) file_format=(type=orc) RETURN_FAILED_ONLY=true
 ----
 
-query ?
+query T
 select a from t1 order by a
 ----
 {"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""}

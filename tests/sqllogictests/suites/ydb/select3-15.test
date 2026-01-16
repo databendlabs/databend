@@ -372,7 +372,7 @@ where e+d between a+b-10 and c+130
    and (e>a and e<b)
 order by col5,col3,col2,col4,col1
 
-query IIFIIII
+query IIRIIII
 select a-b as col1,
        b-c as col2,
        (a+b+c+d+e)/5 as col3,
@@ -415,7 +415,7 @@ NULL NULL NULL -1 444 NULL NULL
 3 NULL NULL 1 444 NULL NULL
 NULL NULL NULL NULL 444 NULL NULL
 
-query IIFIIII
+query IIRIIII
 select a-b as col1,
        b-c as col2,
        (a+b+c+d+e)/5 as col3,
@@ -554,7 +554,7 @@ where d not between 110 and 150
    and c between b-2 and d+2
 order by col4,col2,col1,col3
 
-query TTTI
+query IRII
 select b as col1,
        (a+b+c+d+e)/5 as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -598,7 +598,7 @@ NULL NULL 402 202
 249 247.0 490 247
 236 NULL 2360 NULL
 
-query TTTI
+query IRII
 select b as col1,
        (a+b+c+d+e)/5 as col2,
        case when c>avg_c then a*2 else b*10 end as col3,

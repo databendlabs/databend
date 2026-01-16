@@ -289,7 +289,7 @@ CREATE OR REPLACE table t_tree (id int, parent int, name string);
 statement ok
 INSERT INTO t_tree VALUES(1, null, 'root'),(2, 1, 'a'),(3, 2, 'b'),(4, 1, 'c'),(5, 4, 'd');
 
-query ?
+query T
 SETTINGS(disable_join_reorder = 1) WITH RECURSIVE tree AS (
     SELECT
         id,

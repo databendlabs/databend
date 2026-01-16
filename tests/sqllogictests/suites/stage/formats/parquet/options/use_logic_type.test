@@ -16,14 +16,14 @@ select * from @data/parquet/timestamp_types_example.parquet( file_format=>'parqu
 2023-01-02 12:30:15.000000 2023-01-02 12:30:15.789012 2023-01-02 12:30:15.987654 2023-01-15
 2023-01-03 18:45:30.000000 2023-01-03 18:45:30.999999 2023-01-03 18:45:30.999999 2023-02-28
 
-query ?
+query T
 select $1 from @data/parquet/timestamp_types_example.parquet( file_format=>'parquet_raw')
 ----
 {"date32":19358,"timestamp_ms":1672574400000,"timestamp_ns":1672574400123456789,"timestamp_us":1672574400123456}
 {"date32":19372,"timestamp_ms":1672662615000,"timestamp_ns":1672662615987654321,"timestamp_us":1672662615789012}
 {"date32":19416,"timestamp_ms":1672771530000,"timestamp_ns":1672771530999999999,"timestamp_us":1672771530999999}
 
-query ?
+query T
 select $1 from @data/parquet/timestamp_types_example.parquet( file_format=>'parquet')
 ----
 {"date32":"2023-01-01","timestamp_ms":"2023-01-01 12:00:00.000000","timestamp_ns":"2023-01-01 12:00:00.123456","timestamp_us":"2023-01-01 12:00:00.123456"}
@@ -36,24 +36,24 @@ create or replace table t1 (date32 date, timestamp_ms timestamp,  timestamp_us t
 statement ok
 create or replace table t2 (date32 int64, timestamp_ms int64,  timestamp_us int64, timestamp_ns int64);
 
-query 
+query ?????
 copy into t1 from @data/parquet/timestamp_types_example.parquet
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ?????
 copy into t2 from @data/parquet/timestamp_types_example.parquet file_format=(format_name='parquet_raw')
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ????
 select * from t1
 ----
 2023-01-01 2023-01-01 12:00:00.000000 2023-01-01 12:00:00.123456 2023-01-01 12:00:00.123456
 2023-01-15 2023-01-02 12:30:15.000000 2023-01-02 12:30:15.789012 2023-01-02 12:30:15.987654
 2023-02-28 2023-01-03 18:45:30.000000 2023-01-03 18:45:30.999999 2023-01-03 18:45:30.999999
 
-query 
+query ????
 select * from t2
 ----
 19358 1672574400000 1672574400123456 1672574400123456789
@@ -66,24 +66,24 @@ truncate table t1
 statement ok
 truncate table t2
 
-query 
+query ?????
 copy into t1 from (select date32, timestamp_ms, timestamp_us , timestamp_ns from  @data/parquet/timestamp_types_example.parquet) force=true
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ?????
 copy into t2 from (select date32, timestamp_ms, timestamp_us , timestamp_ns from  @data/parquet/timestamp_types_example.parquet) force=true file_format=(format_name='parquet_raw')
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ????
 select * from t1
 ----
 2023-01-01 2023-01-01 12:00:00.000000 2023-01-01 12:00:00.123456 2023-01-01 12:00:00.123456
 2023-01-15 2023-01-02 12:30:15.000000 2023-01-02 12:30:15.789012 2023-01-02 12:30:15.987654
 2023-02-28 2023-01-03 18:45:30.000000 2023-01-03 18:45:30.999999 2023-01-03 18:45:30.999999
 
-query 
+query ????
 select * from t2
 ----
 19358 1672574400000 1672574400123456 1672574400123456789
@@ -96,24 +96,24 @@ truncate table t1
 statement ok
 truncate table t2
 
-query 
+query ?????
 copy into t1 from (select $1:date32, $1:timestamp_ms, $1:timestamp_us , $1:timestamp_ns from @data/parquet/timestamp_types_example.parquet) force=true
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ?????
 copy into t2 from (select $1:date32, $1:timestamp_ms, $1:timestamp_us , $1:timestamp_ns from  @data/parquet/timestamp_types_example.parquet) force=true file_format=(format_name='parquet_raw')
 ----
 parquet/timestamp_types_example.parquet 3 0 NULL NULL
 
-query 
+query ????
 select * from t1
 ----
 2023-01-01 2023-01-01 12:00:00.000000 2023-01-01 12:00:00.123456 2023-01-01 12:00:00.123456
 2023-01-15 2023-01-02 12:30:15.000000 2023-01-02 12:30:15.789012 2023-01-02 12:30:15.987654
 2023-02-28 2023-01-03 18:45:30.000000 2023-01-03 18:45:30.999999 2023-01-03 18:45:30.999999
 
-query 
+query ????
 select * from t2
 ----
 19358 1672574400000 1672574400123456 1672574400123456789

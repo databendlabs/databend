@@ -12,7 +12,7 @@ select hex($1), hex($2) from @data/tsv/mysql_text.tsv (file_format => 'tsv') a o
 615c 615c
 615c09 615c09
 
-query 
+query ?????
 copy into tt from @data/tsv/mysql_text.tsv file_format = (type = TSV)
 ----
 tsv/mysql_text.tsv 4 0 NULL NULL

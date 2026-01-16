@@ -250,7 +250,7 @@ where b>c
     or (a>b-2 and a<b+2)
 order by col2,col1
 
-query IIIF
+query IIIR
 select b-c as col1,
        c as col2,
        d-e as col3,
@@ -289,7 +289,7 @@ NULL 202 -1 NULL
 -4 244 NULL NULL
 NULL NULL 1 NULL
 
-query IIIF
+query IIIR
 select b-c as col1,
        c as col2,
        d-e as col3,
@@ -822,7 +822,7 @@ where c>d
    and b>c
 order by col4,col5,col1,col2,col3
 
-query TI
+query II
 select a-b as col1,
        c as col2
 from t1
@@ -859,7 +859,7 @@ NULL 208
 -4 247
 3 NULL
 
-query TI
+query II
 select a-b as col1,
        c as col2
 from t1
@@ -3034,7 +3034,7 @@ from t1
 where (e>c or e<d)
 order by col3,col5,col6,col1,col2,col4
 
-query TTTII
+query IIIII
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        a+b*2 as col3,
@@ -3079,7 +3079,7 @@ NULL 1670 502 NULL 168
 NULL 358 529 NULL 179
 NULL 486 723 NULL 243
 
-query TTTII
+query IIIII
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        a+b*2 as col3,
@@ -3124,7 +3124,7 @@ NULL 486 723 NULL 243
 4 1120 NULL 114 NULL
 NULL NULL NULL 207 NULL
 
-query ITTIT
+query IIIII
 select abs(a) as col1,
        b-c as col2,
        a-b as col3,
@@ -3164,7 +3164,7 @@ order by col4,col5,col2,col3,col1
 NULL -1 NULL NULL 4
 NULL -2 NULL NULL NULL
 
-query ITTIT
+query IIIII
 select abs(a) as col1,
        b-c as col2,
        a-b as col3,
@@ -3386,7 +3386,7 @@ where (e>a and e<b)
     or a>b
 order by col5,col6,col1,col2,col7,col3,col4
 
-query IIIFII
+query IIIRII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a-b as col2,
@@ -3408,7 +3408,7 @@ order by col6,col4,col5,col2,col3,col1
 222 -3 -1 222.0 666 440
 111 -4 2 247.0 743 490
 
-query IIIFII
+query IIIRII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a-b as col2,
@@ -3430,7 +3430,7 @@ order by col1,col5,col6,col4,col2,col3
 111 -4 2 247.0 743 490
 222 -3 -1 222.0 666 440
 
-query IIIFII
+query IIIRII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a-b as col2,
@@ -3452,7 +3452,7 @@ order by col6,col4,col5,col2,col3,col1
 222 -3 -1 222.0 666 440
 111 -4 2 247.0 743 490
 
-query IIIFII
+query IIIRII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a-b as col2,

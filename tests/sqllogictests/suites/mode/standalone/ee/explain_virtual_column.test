@@ -199,7 +199,7 @@ EvalScalar
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
 
-query T
+query ??
 select v['d']::string, v['d']::int from t2;
 ----
 20 20

@@ -4,12 +4,12 @@ drop table if exists it
 statement ok
 create table it (a int not null, b string not null, c string)
 
-query 
+query ?????
 copy into it from @data/csv/select.csv file_format = (type = CSV) ON_ERROR=continue force=true;
 ----
 csv/select.csv 1 2 Number of columns in file (2) does not match that of the corresponding table (3) 2
 
-query 
+query ???
 select * from it
 ----
 2 b B
@@ -22,7 +22,7 @@ copy into it from @data/csv/select.csv file_format = (type = CSV error_on_column
 ----
 csv/select.csv 3 0 NULL NULL
 
-query 
+query ???
 select * from it order by a
 ----
 1 (empty) NULL
@@ -38,7 +38,7 @@ create table iii (a int, b int, c int)
 statement ok
 set input_read_buffer_size=100;
 
-query
+query ?????
 copy into iii from @data/csv/ii_100.csv file_format=(type=csv error_on_column_count_mismatch=false) force=true;
 ----
 csv/ii_100.csv 100 0 NULL NULL

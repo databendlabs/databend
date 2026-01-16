@@ -1,4 +1,4 @@
-query TTII
+query TTIT
 select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/csv/it.csv (file_format=>'csv')
 ----
 testbucket/data/csv/it.csv b 0 1

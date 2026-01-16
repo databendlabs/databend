@@ -19,7 +19,7 @@ remove @s10;
 statement ok
 copy into '@s10/a b' from (select 2);
 
-query
+query ?
 select * from '@s10/a b/'
 ----
 2

@@ -226,7 +226,7 @@ select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T???III
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -259,7 +259,7 @@ select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T???III
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -293,7 +293,7 @@ select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T???III
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),

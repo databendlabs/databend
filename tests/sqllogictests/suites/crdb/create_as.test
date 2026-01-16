@@ -84,7 +84,7 @@ create or replace table t01 as select number::varchar ,number::int, number::floa
 statement ok
 create or replace table t01 as select number::varchar::int ,number::varchar as n1, number::float as n2  from numbers(10);
 
-query T
+query ?????
 desc t01
 ----
 number INT YES NULL (empty)
