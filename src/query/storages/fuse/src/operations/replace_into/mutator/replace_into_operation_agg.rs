@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table::Table;
