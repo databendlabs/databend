@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resolver_github() -> Result<()> {
