@@ -106,9 +106,8 @@ impl FilterBuilder for Xor8Builder {
         Ok(Xor8Filter { filter: f })
     }
 
-    fn peek_len(&self) -> Option<usize> {
-        // Use unique_count() from patched xorfilter to get accurate NDV
-        Some(self.builder.unique_count())
+    fn peek_digest_count(&self) -> Option<usize> {
+        Some(self.builder.digest_count())
     }
 }
 
