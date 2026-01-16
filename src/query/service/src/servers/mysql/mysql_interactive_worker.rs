@@ -21,7 +21,6 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -478,7 +477,6 @@ impl InteractiveWorkerBase {
                 }
                 .in_span(Span::enter_with_local_parent(func_path!()))
             },
-            None,
         )?;
 
         let query_result = query_result.await.map_err_to_code(

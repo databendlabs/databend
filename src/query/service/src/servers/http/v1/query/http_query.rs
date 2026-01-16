@@ -25,7 +25,6 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
@@ -834,7 +833,7 @@ impl HttpQuery {
 
         let query_state = self.execute_state.clone();
 
-        GlobalQueryRuntime::instance().runtime().try_spawn(
+        GlobalQueryRuntime::instance().runtime().spawn(
             async move {
                 let block_sender_closer = block_sender.closer();
                 if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
@@ -873,8 +872,7 @@ impl HttpQuery {
             .in_span(fastrace::Span::enter_with_local_parent(
                 "HttpQuery::start_query",
             )),
-            None,
-        )?;
+        );
 
         Ok(())
     }

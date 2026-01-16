@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;

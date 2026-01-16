@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
