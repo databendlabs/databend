@@ -80,6 +80,64 @@ impl StorageParams {
         }
     }
 
+    /// Return a redacted clone suitable for display/logging.
+    ///
+    /// Sensitive credential fields are masked in the returned config so callers can
+    /// serialize it for user-visible contexts without leaking plaintext secrets.
+    pub fn redacted_for_display(&self) -> Self {
+        let mut clone = self.clone();
+        clone.redact_sensitive_fields();
+        clone
+    }
+
+    fn redact_sensitive_fields(&mut self) {
+        fn mask_if_not_empty(value: &mut String) {
+            if !value.is_empty() {
+                *value = mask_string(value, 3);
+            }
+        }
+
+        match self {
+            StorageParams::Azblob(cfg) => {
+                mask_if_not_empty(&mut cfg.account_key);
+            }
+            StorageParams::Ftp(cfg) => {
+                mask_if_not_empty(&mut cfg.password);
+            }
+            StorageParams::Gcs(cfg) => {
+                mask_if_not_empty(&mut cfg.credential);
+            }
+            StorageParams::Obs(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.secret_access_key);
+            }
+            StorageParams::Oss(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.access_key_secret);
+                mask_if_not_empty(&mut cfg.server_side_encryption);
+                mask_if_not_empty(&mut cfg.server_side_encryption_key_id);
+            }
+            StorageParams::S3(cfg) => {
+                mask_if_not_empty(&mut cfg.access_key_id);
+                mask_if_not_empty(&mut cfg.secret_access_key);
+                mask_if_not_empty(&mut cfg.security_token);
+                mask_if_not_empty(&mut cfg.master_key);
+                mask_if_not_empty(&mut cfg.external_id);
+            }
+            StorageParams::Cos(cfg) => {
+                mask_if_not_empty(&mut cfg.secret_id);
+                mask_if_not_empty(&mut cfg.secret_key);
+            }
+            StorageParams::Huggingface(cfg) => {
+                mask_if_not_empty(&mut cfg.token);
+            }
+            StorageParams::Webhdfs(cfg) => {
+                mask_if_not_empty(&mut cfg.delegation);
+            }
+            _ => {}
+        }
+    }
+
     /// Whether this storage params is secure.
     ///
     /// Query will forbid this storage config unless `allow_insecure` has been enabled.
@@ -214,21 +272,178 @@ impl StorageParams {
             ))),
         }
     }
+
+    /// Try to reconstruct the URL that was used when the storage params were created.
+    ///
+    /// This is primarily used for displaying stage/connection information. It best-effort
+    /// recreates the `CreateStageStmt.location` string for bucket-style backends (S3, GCS,
+    /// OSS, OBS, COS, Azblob), file-like backends (FS, WebHDFS, HDFS), as well as HuggingFace
+    /// and IPFS locations. HTTP locations render the expanded glob patterns (if any), so the
+    /// output can differ from the original shorthand. Backends that don't carry enough context
+    /// (Memory, Moka, None) return `None`.
+    pub fn url(&self) -> Option<String> {
+        match self {
+            StorageParams::Azblob(cfg) => bucket_style_url("azblob", &cfg.container, &cfg.root),
+            StorageParams::Fs(cfg) => {
+                Some(format!("fs://{}", normalized_dir_path(&cfg.root, false)))
+            }
+            StorageParams::Ftp(cfg) => {
+                if cfg.endpoint.is_empty() {
+                    None
+                } else {
+                    Some(concat_endpoint_and_root(&cfg.endpoint, &cfg.root))
+                }
+            }
+            StorageParams::Gcs(cfg) => bucket_style_url("gcs", &cfg.bucket, &cfg.root),
+            StorageParams::Hdfs(cfg) => {
+                if cfg.name_node.is_empty() {
+                    None
+                } else {
+                    let host = cfg
+                        .name_node
+                        .strip_prefix("hdfs://")
+                        .unwrap_or(cfg.name_node.as_str())
+                        .trim_end_matches('/');
+                    if host.is_empty() {
+                        None
+                    } else {
+                        Some(format!(
+                            "hdfs://{}{}",
+                            host,
+                            normalized_dir_path(&cfg.root, true)
+                        ))
+                    }
+                }
+            }
+            StorageParams::Http(cfg) => {
+                if cfg.paths.is_empty() {
+                    None
+                } else {
+                    Some(render_http_url(cfg))
+                }
+            }
+            StorageParams::Ipfs(cfg) => {
+                let suffix = cfg.root.strip_prefix("/ipfs").unwrap_or(cfg.root.as_str());
+                Some(format!("ipfs://ipfs{}", normalized_dir_path(suffix, true)))
+            }
+            StorageParams::Memory => None,
+            StorageParams::Moka(_) => None,
+            StorageParams::Obs(cfg) => bucket_style_url("obs", &cfg.bucket, &cfg.root),
+            StorageParams::Oss(cfg) => bucket_style_url("oss", &cfg.bucket, &cfg.root),
+            StorageParams::S3(cfg) => bucket_style_url("s3", &cfg.bucket, &cfg.root),
+            StorageParams::Webhdfs(cfg) => {
+                let host = strip_scheme(&cfg.endpoint_url).trim_end_matches('/');
+                if host.is_empty() {
+                    None
+                } else {
+                    Some(format!(
+                        "webhdfs://{}{}",
+                        host,
+                        normalized_dir_path(&cfg.root, true)
+                    ))
+                }
+            }
+            StorageParams::Cos(cfg) => bucket_style_url("cos", &cfg.bucket, &cfg.root),
+            StorageParams::Huggingface(cfg) => {
+                let (owner, repo) = cfg.repo_id.split_once('/')?;
+                Some(format!(
+                    "hf://{}/{}{}",
+                    owner,
+                    repo,
+                    normalized_dir_path(&cfg.root, true)
+                ))
+            }
+            StorageParams::None => None,
+        }
+    }
+
+    /// Return the endpoint URL if this storage exposes one.
+    pub fn endpoint(&self) -> Option<String> {
+        fn some_if_not_empty(s: &str) -> Option<String> {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        }
+
+        match self {
+            StorageParams::Azblob(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ftp(cfg) => some_if_not_empty(&cfg.endpoint),
+            StorageParams::Gcs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Http(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Ipfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Obs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Oss(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::S3(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Cos(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Webhdfs(cfg) => some_if_not_empty(&cfg.endpoint_url),
+            StorageParams::Hdfs(cfg) => some_if_not_empty(&cfg.name_node),
+            _ => None,
+        }
+    }
+
+    /// Return true if this storage params contains any embedded credentials.
+    pub fn has_credentials(&self) -> bool {
+        match self {
+            StorageParams::Azblob(cfg) => {
+                !cfg.account_name.is_empty() || !cfg.account_key.is_empty()
+            }
+            StorageParams::Ftp(cfg) => !cfg.username.is_empty() || !cfg.password.is_empty(),
+            StorageParams::Gcs(cfg) => !cfg.credential.is_empty(),
+            StorageParams::Obs(cfg) => {
+                !cfg.access_key_id.is_empty() || !cfg.secret_access_key.is_empty()
+            }
+            StorageParams::Oss(cfg) => {
+                !cfg.access_key_id.is_empty() || !cfg.access_key_secret.is_empty()
+            }
+            StorageParams::S3(cfg) => {
+                !cfg.access_key_id.is_empty()
+                    || !cfg.secret_access_key.is_empty()
+                    || !cfg.security_token.is_empty()
+                    || !cfg.role_arn.is_empty()
+                    || !cfg.external_id.is_empty()
+            }
+            StorageParams::Cos(cfg) => !cfg.secret_id.is_empty() || !cfg.secret_key.is_empty(),
+            StorageParams::Huggingface(cfg) => !cfg.token.is_empty(),
+            StorageParams::Webhdfs(cfg) => !cfg.delegation.is_empty(),
+            StorageParams::Fs(_)
+            | StorageParams::Hdfs(_)
+            | StorageParams::Http(_)
+            | StorageParams::Ipfs(_)
+            | StorageParams::Memory
+            | StorageParams::Moka(_)
+            | StorageParams::None => false,
+        }
+    }
+
+    /// Return true if this storage params has any user-provided encryption key material.
+    pub fn has_encryption_key(&self) -> bool {
+        match self {
+            StorageParams::S3(cfg) => !cfg.master_key.is_empty(),
+            StorageParams::Oss(cfg) => {
+                !cfg.server_side_encryption.is_empty()
+                    || !cfg.server_side_encryption_key_id.is_empty()
+            }
+            _ => false,
+        }
+    }
 }
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
 impl Display for StorageParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            StorageParams::Memory => write!(f, "memory"),
+            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
+            StorageParams::None => write!(f, "none"),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
                 v.container, v.root, v.endpoint_url
             ),
             StorageParams::Fs(v) => write!(f, "fs | root={}", v.root),
-            StorageParams::Ftp(v) => {
-                write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint)
-            }
+            StorageParams::Ftp(v) => write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint),
             StorageParams::Gcs(v) => write!(
                 f,
                 "gcs | bucket={},root={},endpoint={}",
@@ -243,8 +458,6 @@ impl Display for StorageParams {
             StorageParams::Ipfs(c) => {
                 write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
-            StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs | bucket={},root={},endpoint={}",
@@ -281,11 +494,71 @@ impl Display for StorageParams {
                     v.repo_type, v.repo_id, v.root
                 )
             }
-            StorageParams::None => {
-                write!(f, "none",)
-            }
         }
     }
+}
+
+fn normalized_dir_path(root: &str, absolute: bool) -> String {
+    if root.is_empty() {
+        return "/".to_string();
+    }
+    let mut normalized = root.to_string();
+    if absolute && !normalized.starts_with('/') {
+        normalized.insert(0, '/');
+    }
+    if !normalized.ends_with('/') {
+        normalized.push('/');
+    }
+    normalized
+}
+
+fn bucket_style_url(protocol: &str, name: &str, root: &str) -> Option<String> {
+    if name.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "{}://{}{}",
+            protocol,
+            name,
+            normalized_dir_path(root, true)
+        ))
+    }
+}
+
+fn concat_endpoint_and_root(endpoint: &str, root: &str) -> String {
+    let endpoint = endpoint.trim_end_matches('/');
+    format!("{}{}", endpoint, normalized_dir_path(root, true))
+}
+
+fn ensure_path_prefix(path: &str) -> String {
+    if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("/{}", path)
+    }
+}
+
+fn render_http_url(cfg: &StorageHttpConfig) -> String {
+    let endpoint = cfg.endpoint_url.trim_end_matches('/');
+    if cfg.paths.len() <= 1 {
+        let path = cfg.paths.first().map(|p| p.as_str()).unwrap_or("/");
+        format!("{}{}", endpoint, ensure_path_prefix(path))
+    } else {
+        let joined = cfg
+            .paths
+            .iter()
+            .map(|p| ensure_path_prefix(p))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}{{{}}}", endpoint, joined)
+    }
+}
+
+fn strip_scheme(endpoint: &str) -> &str {
+    endpoint
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(endpoint)
 }
 
 /// Config for storage backend azblob.
