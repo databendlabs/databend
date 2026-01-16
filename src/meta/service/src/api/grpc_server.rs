@@ -233,6 +233,7 @@ impl Stoppable for GrpcServer {
         &mut self,
         force: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> Result<(), Self::Error> {
-        Ok(self.do_stop(force).await)
+        let _: () = self.do_stop(force).await;
+        Ok(())
     }
 }

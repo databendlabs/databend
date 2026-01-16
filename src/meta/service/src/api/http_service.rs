@@ -151,6 +151,7 @@ impl Stoppable for HttpService {
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
-        Ok(self.do_stop(force).await)
+        let _: () = self.do_stop(force).await;
+        Ok(())
     }
 }
