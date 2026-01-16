@@ -3502,6 +3502,7 @@ dependencies = [
  "prost-build",
  "semver",
  "serde",
+ "tokio",
  "tonic 0.13.1",
  "tonic-build",
  "tower 0.5.2",
