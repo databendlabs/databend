@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -45,17 +44,18 @@ impl LockManager {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
-        GlobalIORuntime::instance().spawn({
-            let active_locks = lock_manager.active_locks.clone();
+        let active_locks_clone = lock_manager.active_locks.clone();
+        GlobalIORuntime::instance().spawn(
             async move {
                 while let Some(revision) = rx.recv().await {
                     metrics_inc_shutdown_lock_holder_nums();
-                    if let Some(lock) = active_locks.write().remove(&revision) {
+                    if let Some(lock) = active_locks_clone.write().remove(&revision) {
                         lock.shutdown();
                     }
                 }
-            }
-        });
+            },
+            None,
+        );
         GlobalInstance::set(Arc::new(lock_manager));
         Ok(())
     }

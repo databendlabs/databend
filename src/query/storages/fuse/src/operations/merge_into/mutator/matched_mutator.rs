@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -337,19 +336,22 @@ impl MatchedAggregator {
                 ));
             }
 
-            let handle = io_runtime.spawn(async move {
-                let mutation_log_entry = aggregation_ctx
-                    .apply_update_and_deletion_to_data_block(
-                        segment_idx,
-                        block_idx,
-                        &block_meta,
-                        modified_offsets,
-                    )
-                    .await?;
+            let handle = io_runtime.spawn(
+                async move {
+                    let mutation_log_entry = aggregation_ctx
+                        .apply_update_and_deletion_to_data_block(
+                            segment_idx,
+                            block_idx,
+                            &block_meta,
+                            modified_offsets,
+                        )
+                        .await?;
 
-                drop(permit);
-                Ok::<_, ErrorCode>(mutation_log_entry)
-            });
+                    drop(permit);
+                    Ok::<_, ErrorCode>(mutation_log_entry)
+                },
+                None,
+            );
             mutation_log_handlers.push(handle);
         }
 
@@ -434,17 +436,20 @@ impl AggregationContext {
         let origin_stats = block_meta.cluster_stats.clone();
 
         let serialized = GlobalIORuntime::instance()
-            .spawn(async move {
-                block_builder.build(res_block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+            .spawn(
+                async move {
+                    block_builder.build(res_block, |block, generator| {
+                        let cluster_stats =
+                            generator.gen_with_origin_stats(&block, origin_stats.clone())?;
                         info!(
                             "[MERGE-INTO] Serializing block with cluster stats: {:?}",
                             cluster_stats
                         );
                         Ok((cluster_stats, block))
                     })
-                })
+                },
+                None,
+            )
             .await
             .map_err(|e| {
                 ErrorCode::Internal(

@@ -19,7 +19,6 @@ use std::time::Instant;
 use std::vec;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
@@ -611,15 +610,18 @@ impl CompactTaskBuilder {
         for segment in compact_segments.into_iter().rev() {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let op = self.dal.clone();
-            let handler = runtime.spawn(async move {
-                let stats = match segment.summary.additional_stats_loc() {
-                    Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
-                    _ => None,
-                };
-                let blocks = segment.block_metas()?;
-                drop(permit);
-                Ok::<_, ErrorCode>((blocks, segment.summary.clone(), stats))
-            });
+            let handler = runtime.spawn(
+                async move {
+                    let stats = match segment.summary.additional_stats_loc() {
+                        Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
+                        _ => None,
+                    };
+                    let blocks = segment.block_metas()?;
+                    drop(permit);
+                    Ok::<_, ErrorCode>((blocks, segment.summary.clone(), stats))
+                },
+                None,
+            );
             handlers.push(handler);
         }
 

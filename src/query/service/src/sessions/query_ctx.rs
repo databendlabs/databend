@@ -46,7 +46,6 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -2342,15 +2341,16 @@ impl TableContext for QueryContext {
     }
 }
 
-impl TrySpawn for QueryContext {
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+impl QueryContext {
+    /// Tries to spawn a new asynchronous task, returning a JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
+    #[track_caller]
+    pub fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.shared.try_get_runtime()?.try_spawn(task, name)
+        Ok(self.shared.try_get_runtime()?.spawn(task, name))
     }
 }
 

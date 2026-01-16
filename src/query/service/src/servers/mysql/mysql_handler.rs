@@ -17,7 +17,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::StreamExt;
@@ -106,13 +105,16 @@ impl MySQLHandler {
         keepalive: TcpKeepalive,
         tls: Option<Arc<ServerConfig>>,
     ) {
-        executor.spawn(async move {
-            if let Err(error) =
-                MySQLConnection::run_on_stream(session_manager, socket, keepalive, tls).await
-            {
-                error!("Unexpected error occurred during query: {:?}", error);
-            }
-        });
+        executor.spawn(
+            async move {
+                if let Err(error) =
+                    MySQLConnection::run_on_stream(session_manager, socket, keepalive, tls).await
+                {
+                    error!("Unexpected error occurred during query: {:?}", error);
+                }
+            },
+            None,
+        );
     }
 }
 

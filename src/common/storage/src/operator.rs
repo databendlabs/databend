@@ -22,7 +22,6 @@ use std::time::Duration;
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_exception::ErrorCode;
@@ -642,14 +641,17 @@ pub async fn check_operator(
     let op = operator.clone();
 
     GlobalIORuntime::instance()
-        .spawn(async move {
-            let res = op.stat("databend_storage_checker").await;
-            match res {
-                Ok(_) => Ok(()),
-                Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
-                Err(e) => Err(e),
-            }
-        })
+        .spawn(
+            async move {
+                let res = op.stat("databend_storage_checker").await;
+                match res {
+                    Ok(_) => Ok(()),
+                    Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
+                    Err(e) => Err(e),
+                }
+            },
+            None,
+        )
         .await
         .expect("join must succeed")
         .map_err(|cause| {

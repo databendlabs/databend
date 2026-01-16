@@ -20,7 +20,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -215,6 +214,7 @@ impl ExecutorWorkerContext {
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
                     ProcessorAsyncTask,
                 >())),
+                None,
             );
         }
         Ok(None)

@@ -25,7 +25,6 @@ use chrono::SecondsFormat;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -162,34 +161,37 @@ impl HttpQueryManager {
         // it may cannot destroy with final or kill when we hold ref of Arc<HttpQuery>
         let http_query_weak = Arc::downgrade(&query);
 
-        GlobalIORuntime::instance().spawn(async move {
-            loop {
-                let expire_res = match http_query_weak.upgrade() {
-                    None => {
-                        break;
-                    }
-                    Some(query) => query.check_timeout().await,
-                };
+        GlobalIORuntime::instance().spawn(
+            async move {
+                loop {
+                    let expire_res = match http_query_weak.upgrade() {
+                        None => {
+                            break;
+                        }
+                        Some(query) => query.check_timeout().await,
+                    };
 
-                match expire_res {
-                    TimeoutResult::TimedOut => {
-                        _ = self_clone
-                            .close_query(&query_id_clone, CloseReason::TimedOut, &None, false)
-                            .await
-                            .ok();
-                    }
-                    TimeoutResult::Sleep(t) => {
-                        sleep(t).await;
-                    }
-                    TimeoutResult::Remove => {
-                        let mut queries = self_clone.queries.write();
-                        queries.remove(&query_id_clone);
-                        log::info!("Query {query_id_clone} removed");
-                        break;
+                    match expire_res {
+                        TimeoutResult::TimedOut => {
+                            _ = self_clone
+                                .close_query(&query_id_clone, CloseReason::TimedOut, &None, false)
+                                .await
+                                .ok();
+                        }
+                        TimeoutResult::Sleep(t) => {
+                            sleep(t).await;
+                        }
+                        TimeoutResult::Remove => {
+                            let mut queries = self_clone.queries.write();
+                            queries.remove(&query_id_clone);
+                            log::info!("Query {query_id_clone} removed");
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            },
+            None,
+        );
         Ok(query)
     }
 
@@ -231,16 +233,19 @@ impl HttpQueryManager {
         let deleter = {
             let self_clone = self.clone();
             let last_query_id_clone = last_query_id.clone();
-            GlobalIORuntime::instance().spawn(async move {
-                sleep(Duration::from_secs(timeout_secs)).await;
-                if self_clone.get_txn(&last_query_id_clone).is_some() {
-                    log::info!(
-                        "Transaction timed out after {} seconds, last_query_id = {}",
-                        timeout_secs,
-                        last_query_id_clone
-                    );
-                }
-            })
+            GlobalIORuntime::instance().spawn(
+                async move {
+                    sleep(Duration::from_secs(timeout_secs)).await;
+                    if self_clone.get_txn(&last_query_id_clone).is_some() {
+                        log::info!(
+                            "Transaction timed out after {} seconds, last_query_id = {}",
+                            timeout_secs,
+                            last_query_id_clone
+                        );
+                    }
+                },
+                None,
+            )
         };
         txn_managers.insert(last_query_id, (txn_mgr, deleter));
     }

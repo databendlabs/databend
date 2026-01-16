@@ -32,7 +32,6 @@ use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -176,7 +175,7 @@ impl TaskService {
         };
         GlobalInstance::set(Arc::new(instance));
 
-        runtime.clone().try_spawn(
+        runtime.clone().spawn(
             async move {
                 let task_service = TaskService::instance();
                 loop {
@@ -194,7 +193,7 @@ impl TaskService {
                 }
             },
             None,
-        )?;
+        );
         Ok(())
     }
 
@@ -308,7 +307,9 @@ impl TaskService {
                                         if let Err(err) = fn_work().await {
                                             error!("interval schedule failed due to {}", err);
                                         }
-                                    });
+                                    },
+                                    None,
+                                );
                             }
                             ScheduleType::CronType => {
                                 let task_mgr = task_mgr.clone();
@@ -356,7 +357,9 @@ impl TaskService {
                                         if let Err(err) = fn_work().await {
                                             error!("cron schedule failed due to {}", err);
                                         }
-                                    });
+                                    },
+                                    None,
+                                );
                             }
                         }
                         let _ = scheduled_tasks.insert(task_name_clone, token);
@@ -390,7 +393,7 @@ impl TaskService {
                     let tenant = tenant.clone();
                     let owner = Self::get_task_owner(&task, &tenant).await?;
 
-                    runtime.try_spawn(
+                    runtime.spawn(
                         async move {
                             let mut fn_work = async move || {
                                 while task_run.attempt_number >= 0 {
@@ -457,7 +460,7 @@ impl TaskService {
                             }
                         },
                         None,
-                    )?;
+                    );
                 }
                 TaskMessage::DeleteTask(task_name, _) => {
                     if let Some(token) = scheduled_tasks.remove(&task_name) {

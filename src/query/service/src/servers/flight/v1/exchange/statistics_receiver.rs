@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use futures_util::future::Either;
@@ -49,80 +48,85 @@ impl StatisticsReceiver {
 
         for (source_target, exchange) in statistics_exchanges.into_iter() {
             let rx = exchange.convert_to_receiver();
-            exchange_handler.push(runtime.spawn({
-                let ctx = ctx.clone();
-                let shutdown_rx = shutdown_tx.subscribe();
-                let node_memory_updater = ctx.get_node_memory_updater(&source_target);
+            exchange_handler.push(runtime.spawn(
+                {
+                    let ctx = ctx.clone();
+                    let shutdown_rx = shutdown_tx.subscribe();
+                    let node_memory_updater = ctx.get_node_memory_updater(&source_target);
 
-                async move {
-                    let mut shutdown_rx = shutdown_rx;
-                    let mut recv = Box::pin(rx.recv());
-                    let mut notified = Box::pin(shutdown_rx.recv());
+                    async move {
+                        let mut shutdown_rx = shutdown_rx;
+                        let mut recv = Box::pin(rx.recv());
+                        let mut notified = Box::pin(shutdown_rx.recv());
 
-                    loop {
-                        match select(notified, recv).await {
-                            Either::Left((Ok(true /* has error */), _))
-                            | Either::Left((Err(_), _)) => {
-                                return Ok(());
-                            }
-                            Either::Left((Ok(false), recv)) => {
-                                match StatisticsReceiver::recv_data(
-                                    &ctx,
-                                    &source_target,
-                                    &node_memory_updater,
-                                    recv.await,
-                                ) {
-                                    Ok(true) => {
-                                        return Ok(());
-                                    }
-                                    Err(cause) => {
-                                        ctx.get_current_session().force_kill_query(cause.clone());
-                                        return Err(cause);
-                                    }
-                                    _ => loop {
-                                        match StatisticsReceiver::recv_data(
-                                            &ctx,
-                                            &source_target,
-                                            &node_memory_updater,
-                                            rx.recv().await,
-                                        ) {
-                                            Ok(true) => {
-                                                return Ok(());
-                                            }
-                                            Err(cause) => {
-                                                ctx.get_current_session()
-                                                    .force_kill_query(cause.clone());
-                                                return Err(cause);
-                                            }
-                                            _ => {}
-                                        }
-                                    },
+                        loop {
+                            match select(notified, recv).await {
+                                Either::Left((Ok(true /* has error */), _))
+                                | Either::Left((Err(_), _)) => {
+                                    return Ok(());
                                 }
-                            }
-                            Either::Right((res, left)) => {
-                                match StatisticsReceiver::recv_data(
-                                    &ctx,
-                                    &source_target,
-                                    &node_memory_updater,
-                                    res,
-                                ) {
-                                    Ok(true) => {
-                                        return Ok(());
+                                Either::Left((Ok(false), recv)) => {
+                                    match StatisticsReceiver::recv_data(
+                                        &ctx,
+                                        &source_target,
+                                        &node_memory_updater,
+                                        recv.await,
+                                    ) {
+                                        Ok(true) => {
+                                            return Ok(());
+                                        }
+                                        Err(cause) => {
+                                            ctx.get_current_session()
+                                                .force_kill_query(cause.clone());
+                                            return Err(cause);
+                                        }
+                                        _ => loop {
+                                            match StatisticsReceiver::recv_data(
+                                                &ctx,
+                                                &source_target,
+                                                &node_memory_updater,
+                                                rx.recv().await,
+                                            ) {
+                                                Ok(true) => {
+                                                    return Ok(());
+                                                }
+                                                Err(cause) => {
+                                                    ctx.get_current_session()
+                                                        .force_kill_query(cause.clone());
+                                                    return Err(cause);
+                                                }
+                                                _ => {}
+                                            }
+                                        },
                                     }
-                                    Ok(false) => {
-                                        notified = left;
-                                        recv = Box::pin(rx.recv());
-                                    }
-                                    Err(cause) => {
-                                        ctx.get_current_session().force_kill_query(cause.clone());
-                                        return Err(cause);
-                                    }
-                                };
+                                }
+                                Either::Right((res, left)) => {
+                                    match StatisticsReceiver::recv_data(
+                                        &ctx,
+                                        &source_target,
+                                        &node_memory_updater,
+                                        res,
+                                    ) {
+                                        Ok(true) => {
+                                            return Ok(());
+                                        }
+                                        Ok(false) => {
+                                            notified = left;
+                                            recv = Box::pin(rx.recv());
+                                        }
+                                        Err(cause) => {
+                                            ctx.get_current_session()
+                                                .force_kill_query(cause.clone());
+                                            return Err(cause);
+                                        }
+                                    };
+                                }
                             }
                         }
                     }
-                }
-            }));
+                },
+                None,
+            ));
         }
 
         Ok(StatisticsReceiver {

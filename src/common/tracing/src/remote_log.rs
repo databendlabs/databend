@@ -35,7 +35,6 @@ use async_channel::bounded;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::spawn;
 use databend_common_exception::Result;
 use jiff::Timestamp;
@@ -123,7 +122,7 @@ impl RemoteLog {
             warehouse_id,
             buffer: Arc::new(LogBuffer::new(tx.clone(), interval as u64)),
         };
-        rt.spawn(async move { RemoteLog::work(rx, &stage_name).await });
+        rt.spawn(async move { RemoteLog::work(rx, &stage_name).await }, None);
         let guard = RemoteLogGuard {
             _rt: rt,
             buffer: remote_log.buffer.clone(),

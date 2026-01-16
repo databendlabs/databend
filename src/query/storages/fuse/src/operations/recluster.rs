@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
@@ -190,17 +189,20 @@ impl FuseTable {
                 let mutator_clone = mutator.clone();
                 let tx_clone = tx.clone();
                 let permit = acquire_task_permit(semaphore.clone()).await?;
-                let handle = runtime.spawn(async move {
-                    let seg_num = selected_segs.len() as u64;
-                    let (block_num, parts) = mutator_clone
-                        .target_select(selected_segs, ReclusterMode::Recluster)
-                        .await?;
-                    drop(permit);
-                    if !parts.is_empty() {
-                        let _ = tx_clone.send((seg_num, block_num, parts)).await;
-                    }
-                    Ok::<_, ErrorCode>(())
-                });
+                let handle = runtime.spawn(
+                    async move {
+                        let seg_num = selected_segs.len() as u64;
+                        let (block_num, parts) = mutator_clone
+                            .target_select(selected_segs, ReclusterMode::Recluster)
+                            .await?;
+                        drop(permit);
+                        if !parts.is_empty() {
+                            let _ = tx_clone.send((seg_num, block_num, parts)).await;
+                        }
+                        Ok::<_, ErrorCode>(())
+                    },
+                    None,
+                );
                 handles.push(handle);
                 block_count = 0;
             }
@@ -264,14 +266,17 @@ impl FuseTable {
             remain -= gap_size;
 
             let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(pruning_ctx.pruning_runtime.spawn({
-                let segment_pruner = segment_pruner.clone();
+            works.push(pruning_ctx.pruning_runtime.spawn(
+                {
+                    let segment_pruner = segment_pruner.clone();
 
-                async move {
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
-                    Result::<_>::Ok(pruned_segments)
-                }
-            }));
+                    async move {
+                        let pruned_segments = segment_pruner.pruning(batch).await?;
+                        Result::<_>::Ok(pruned_segments)
+                    }
+                },
+                None,
+            ));
         }
 
         let mut metas = vec![];

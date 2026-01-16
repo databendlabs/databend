@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
@@ -98,21 +97,27 @@ async fn apply_snapshot_pruning(
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
         // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-        GlobalIORuntime::instance().spawn(async move {
-            // avoid block global io runtime
-            let runtime = Runtime::with_worker_threads(2, None)?;
-            let join_handler = runtime.spawn(async move {
-                for segment in segment_locs {
-                    let _ = segment_tx.send(segment).await;
-                }
+        GlobalIORuntime::instance().spawn(
+            async move {
+                // avoid block global io runtime
+                let runtime = Runtime::with_worker_threads(2, None)?;
+                let join_handler = runtime.spawn(
+                    async move {
+                        for segment in segment_locs {
+                            let _ = segment_tx.send(segment).await;
+                        }
+                        Ok::<_, ErrorCode>(())
+                    },
+                    None,
+                );
+                join_handler
+                    .await
+                    .unwrap()
+                    .expect("Join error while in prune pipeline");
                 Ok::<_, ErrorCode>(())
-            });
-            join_handler
-                .await
-                .unwrap()
-                .expect("Join error while in prune pipeline");
-            Ok::<_, ErrorCode>(())
-        });
+            },
+            None,
+        );
         Ok(())
     });
 

@@ -26,7 +26,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_exception::ErrorCode;
@@ -320,17 +319,21 @@ impl QueryPipelineExecutor {
             let this = Arc::downgrade(self);
             let max_execute_time_in_seconds = self.settings.max_execute_time_in_seconds;
             let finished_notify = self.finished_notify.clone();
-            self.async_runtime.spawn(async move {
-                let finished_future = Box::pin(finished_notify.notified());
-                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
-                if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                    if let Some(executor) = this.upgrade() {
-                        executor.finish(Some(ErrorCode::AbortedQuery(
-                            "Query aborted due to execution time exceeding maximum limit",
-                        )));
+            self.async_runtime.spawn(
+                async move {
+                    let finished_future = Box::pin(finished_notify.notified());
+                    let max_execute_future =
+                        Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                    if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                        if let Some(executor) = this.upgrade() {
+                            executor.finish(Some(ErrorCode::AbortedQuery(
+                                "Query aborted due to execution time exceeding maximum limit",
+                            )));
+                        }
                     }
-                }
-            });
+                },
+                None,
+            );
         }
 
         Ok(())

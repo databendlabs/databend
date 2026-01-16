@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -155,40 +154,44 @@ impl MySQLConnection {
                 reject_connection_on_dbname_absence: false,
             };
 
-            let join_handle = query_executor.spawn(async move {
-                let run_result = match (tls_clone, use_ssl) {
-                    (Some(config), true) => {
-                        secure_run_with_options(
-                            interactive_worker,
-                            writer,
-                            opts,
-                            config,
-                            init_params,
-                        )
+            let join_handle = query_executor.spawn(
+                async move {
+                    let run_result = match (tls_clone, use_ssl) {
+                        (Some(config), true) => {
+                            secure_run_with_options(
+                                interactive_worker,
+                                writer,
+                                opts,
+                                config,
+                                init_params,
+                            )
+                            .await
+                        }
+                        _ => {
+                            plain_run_with_options(interactive_worker, writer, opts, init_params)
+                                .await
+                        }
+                    };
+
+                    run_result.ok();
+
+                    let tenant = session.get_current_tenant();
+                    let session_id = session.get_id();
+                    let user = session.get_current_user()?.name;
+                    UserApiProvider::instance()
+                        .client_session_api(&tenant)
+                        .drop_client_session_id(&session_id, &user)
                         .await
-                    }
-                    _ => {
-                        plain_run_with_options(interactive_worker, writer, opts, init_params).await
-                    }
-                };
-
-                run_result.ok();
-
-                let tenant = session.get_current_tenant();
-                let session_id = session.get_id();
-                let user = session.get_current_user()?.name;
-                UserApiProvider::instance()
-                    .client_session_api(&tenant)
-                    .drop_client_session_id(&session_id, &user)
+                        .ok();
+                    drop_all_temp_tables(
+                        &format!("{user}/{session_id}"),
+                        session.temp_tbl_mgr(),
+                        "mysql",
+                    )
                     .await
-                    .ok();
-                drop_all_temp_tables(
-                    &format!("{user}/{session_id}"),
-                    session.temp_tbl_mgr(),
-                    "mysql",
-                )
-                .await
-            });
+                },
+                None,
+            );
 
             let _ = futures::executor::block_on(join_handle);
         });

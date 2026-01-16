@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -245,34 +244,38 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
                         let ctx = ctx.clone();
                         let table = table.clone();
-                        let handler = runtime.spawn(async move {
-                            let mut reason = "".to_string();
-                            let mut has_data = false;
-                            // safe unwrap.
-                            let stream_table = StreamTable::try_from_table(table.as_ref()).unwrap();
-                            match stream_table.source_table(ctx).await {
-                                Ok(source) => {
-                                    // safe unwrap, has been checked in source_table.
-                                    let fuse_table =
-                                        FuseTable::try_from_table(source.as_ref()).unwrap();
-                                    if let Some(location) = stream_table.snapshot_loc() {
-                                        reason = fuse_table
-                                            .changes_read_offset_snapshot(&location)
-                                            .await
-                                            .err()
-                                            .map_or("".to_string(), |e| e.display_text());
+                        let handler = runtime.spawn(
+                            async move {
+                                let mut reason = "".to_string();
+                                let mut has_data = false;
+                                // safe unwrap.
+                                let stream_table =
+                                    StreamTable::try_from_table(table.as_ref()).unwrap();
+                                match stream_table.source_table(ctx).await {
+                                    Ok(source) => {
+                                        // safe unwrap, has been checked in source_table.
+                                        let fuse_table =
+                                            FuseTable::try_from_table(source.as_ref()).unwrap();
+                                        if let Some(location) = stream_table.snapshot_loc() {
+                                            reason = fuse_table
+                                                .changes_read_offset_snapshot(&location)
+                                                .await
+                                                .err()
+                                                .map_or("".to_string(), |e| e.display_text());
+                                        }
+                                        if let Some(ver) = offset {
+                                            has_data = fuse_table.get_table_info().ident.seq != ver;
+                                        }
                                     }
-                                    if let Some(ver) = offset {
-                                        has_data = fuse_table.get_table_info().ident.seq != ver;
+                                    Err(e) => {
+                                        reason = e.display_text();
                                     }
                                 }
-                                Err(e) => {
-                                    reason = e.display_text();
-                                }
-                            }
-                            drop(permit);
-                            (reason, has_data)
-                        });
+                                drop(permit);
+                                (reason, has_data)
+                            },
+                            None,
+                        );
                         handlers.push(handler);
                     }
                 }

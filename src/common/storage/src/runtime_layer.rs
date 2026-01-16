@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use opendal::Buffer;
 use opendal::Metadata;
 use opendal::Result;
@@ -104,7 +103,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(async move { op.create_dir(&path, args).await })
+            .spawn(async move { op.create_dir(&path, args).await }, None)
             .await
             .expect("join must success")
     }
@@ -114,7 +113,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let path = path.to_string();
 
         self.runtime
-            .spawn(async move { op.read(&path, args).await })
+            .spawn(async move { op.read(&path, args).await }, None)
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -127,7 +126,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(async move { op.write(&path, args).await })
+            .spawn(async move { op.write(&path, args).await }, None)
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -140,7 +139,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(async move { op.stat(&path, args).await })
+            .spawn(async move { op.stat(&path, args).await }, None)
             .await
             .expect("join must success")
     }
@@ -149,7 +148,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
 
         self.runtime
-            .spawn(async move { op.delete().await })
+            .spawn(async move { op.delete().await }, None)
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -162,7 +161,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(async move { op.list(&path, args).await })
+            .spawn(async move { op.list(&path, args).await }, None)
             .await
             .expect("join must success")
             .map(|(rp, r)| {
@@ -175,7 +174,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime
-            .spawn(async move { op.presign(&path, args).await })
+            .spawn(async move { op.presign(&path, args).await }, None)
             .await
             .expect("join must success")
     }
@@ -211,14 +210,13 @@ impl<R: oio::Read> oio::Read for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.read().await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -232,14 +230,13 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.write(bs).await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -251,14 +248,13 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.close().await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -270,14 +266,13 @@ impl<R: oio::Write> oio::Write for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.abort().await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -291,14 +286,13 @@ impl<R: oio::List> oio::List for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.next().await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);
@@ -316,14 +310,13 @@ impl<R: oio::Delete> oio::Delete for RuntimeIO<R> {
         let runtime = self.runtime.clone();
 
         let (r, res) = runtime
-            .try_spawn(
+            .spawn(
                 async move {
                     let res = r.flush().await;
                     (r, res)
                 },
                 Some(self.spawn_task_name.clone()),
             )
-            .expect("spawn must success")
             .await
             .expect("join must success");
         self.inner = Some(r);

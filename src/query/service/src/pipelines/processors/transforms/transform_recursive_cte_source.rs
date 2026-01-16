@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -164,10 +163,13 @@ impl TransformRecursiveCteSource {
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
         let isolate_runtime = Runtime::with_worker_threads(2, Some("r-cte-source".to_string()))?;
-        let join_handle = isolate_runtime.spawn(async move {
-            let stream = PullingExecutorStream::create(pulling_executor)?;
-            stream.try_collect::<Vec<DataBlock>>().await
-        });
+        let join_handle = isolate_runtime.spawn(
+            async move {
+                let stream = PullingExecutorStream::create(pulling_executor)?;
+                stream.try_collect::<Vec<DataBlock>>().await
+            },
+            None,
+        );
         let data_blocks = join_handle.await.flatten()?;
         Ok((data_blocks, cte_scan_tables))
     }

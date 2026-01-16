@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use ahash::AHashMap;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table::Table;
@@ -371,13 +370,21 @@ impl ReplaceIntoOperationAggregator {
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
                 // self.aggregation_ctx.
-                let handle = io_runtime.spawn(async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_deletion_to_data_block(segment_idx, block_index, &block_meta, &keys)
-                        .await?;
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                });
+                let handle = io_runtime.spawn(
+                    async move {
+                        let mutation_log_entry = aggregation_ctx
+                            .apply_deletion_to_data_block(
+                                segment_idx,
+                                block_index,
+                                &block_meta,
+                                &keys,
+                            )
+                            .await?;
+                        drop(permit);
+                        Ok::<_, ErrorCode>(mutation_log_entry)
+                    },
+                    None,
+                );
                 mutation_log_handlers.push(handle)
             }
         }
@@ -560,13 +567,16 @@ impl AggregationContext {
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
         let serialized = GlobalIORuntime::instance()
-            .spawn(async move {
-                block_builder.build(new_block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block))
-                })
-            })
+            .spawn(
+                async move {
+                    block_builder.build(new_block, |block, generator| {
+                        let cluster_stats =
+                            generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                        Ok((cluster_stats, block))
+                    })
+                },
+                None,
+            )
             .await
             .map_err(|e| {
                 ErrorCode::Internal(
@@ -652,17 +662,20 @@ impl AggregationContext {
         let block_meta_ptr = block_meta.clone();
         let reader = reader.clone();
         GlobalIORuntime::instance()
-            .spawn(async move {
-                let column_chunks = merged_io_read_result.columns_chunks()?;
-                reader.deserialize_chunks(
-                    block_meta_ptr.location.0.as_str(),
-                    block_meta_ptr.row_count as usize,
-                    &block_meta_ptr.compression,
-                    &block_meta_ptr.col_metas,
-                    column_chunks,
-                    &storage_format,
-                )
-            })
+            .spawn(
+                async move {
+                    let column_chunks = merged_io_read_result.columns_chunks()?;
+                    reader.deserialize_chunks(
+                        block_meta_ptr.location.0.as_str(),
+                        block_meta_ptr.row_count as usize,
+                        &block_meta_ptr.compression,
+                        &block_meta_ptr.col_metas,
+                        column_chunks,
+                        &storage_format,
+                    )
+                },
+                None,
+            )
             .await
             .map_err(|e| {
                 ErrorCode::Internal(

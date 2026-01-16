@@ -19,7 +19,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
@@ -32,34 +31,46 @@ async fn test_runtime() -> Result<()> {
 
     let runtime = Runtime::with_default_worker_threads()?;
     let runtime_counter = Arc::clone(&counter);
-    let runtime_header = runtime.spawn(async move {
-        let rt1 = Runtime::with_default_worker_threads().unwrap();
-        let rt1_counter = Arc::clone(&runtime_counter);
-        let rt1_header = rt1.spawn(async move {
-            let rt2 = Runtime::with_worker_threads(1, None).unwrap();
-            let rt2_counter = Arc::clone(&rt1_counter);
-            let rt2_header = rt2.spawn(async move {
-                let rt3 = Runtime::with_default_worker_threads().unwrap();
-                let rt3_counter = Arc::clone(&rt2_counter);
-                let rt3_header = rt3.spawn(async move {
-                    let mut num = rt3_counter.lock().unwrap();
+    let runtime_header = runtime.spawn(
+        async move {
+            let rt1 = Runtime::with_default_worker_threads().unwrap();
+            let rt1_counter = Arc::clone(&runtime_counter);
+            let rt1_header = rt1.spawn(
+                async move {
+                    let rt2 = Runtime::with_worker_threads(1, None).unwrap();
+                    let rt2_counter = Arc::clone(&rt1_counter);
+                    let rt2_header = rt2.spawn(
+                        async move {
+                            let rt3 = Runtime::with_default_worker_threads().unwrap();
+                            let rt3_counter = Arc::clone(&rt2_counter);
+                            let rt3_header = rt3.spawn(
+                                async move {
+                                    let mut num = rt3_counter.lock().unwrap();
+                                    *num += 1;
+                                },
+                                None,
+                            );
+                            rt3_header.await.unwrap();
+
+                            let mut num = rt2_counter.lock().unwrap();
+                            *num += 1;
+                        },
+                        None,
+                    );
+                    rt2_header.await.unwrap();
+
+                    let mut num = rt1_counter.lock().unwrap();
                     *num += 1;
-                });
-                rt3_header.await.unwrap();
+                },
+                None,
+            );
+            rt1_header.await.unwrap();
 
-                let mut num = rt2_counter.lock().unwrap();
-                *num += 1;
-            });
-            rt2_header.await.unwrap();
-
-            let mut num = rt1_counter.lock().unwrap();
+            let mut num = runtime_counter.lock().unwrap();
             *num += 1;
-        });
-        rt1_header.await.unwrap();
-
-        let mut num = runtime_counter.lock().unwrap();
-        *num += 1;
-    });
+        },
+        None,
+    );
     runtime_header.await.unwrap();
 
     let result = *counter.lock().unwrap();
@@ -72,9 +83,12 @@ async fn test_runtime() -> Result<()> {
 async fn test_shutdown_long_run_runtime() -> Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
-    runtime.spawn(async move {
-        tokio::time::sleep(Duration::from_secs(6)).await;
-    });
+    runtime.spawn(
+        async move {
+            tokio::time::sleep(Duration::from_secs(6)).await;
+        },
+        None,
+    );
 
     let instant = Instant::now();
     drop(runtime);

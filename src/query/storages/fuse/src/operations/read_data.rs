@@ -17,7 +17,6 @@ use std::sync::Arc;
 use async_channel::Receiver;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
@@ -157,41 +156,47 @@ impl FuseTable {
             let (tx, rx) = async_channel::bounded(max_io_requests);
             pipeline.set_on_init(move || {
                 // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-                GlobalIORuntime::instance().spawn(async move {
-                    // avoid block global io runtime
-                    let runtime =
-                        Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
-                    let handler = runtime.spawn(async move {
-                        match table
-                            .prune_snapshot_blocks(
-                                ctx,
-                                push_downs,
-                                table_schema,
-                                lazy_init_segments,
-                                0,
-                            )
-                            .await
-                        {
-                            Ok((_, partitions)) => {
-                                for part in partitions.partitions {
-                                    // the sql may be killed or early stop, ignore the error
-                                    if let Err(_e) = tx.send(Ok(part)).await {
-                                        break;
+                GlobalIORuntime::instance().spawn(
+                    async move {
+                        // avoid block global io runtime
+                        let runtime =
+                            Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
+                        let handler = runtime.spawn(
+                            async move {
+                                match table
+                                    .prune_snapshot_blocks(
+                                        ctx,
+                                        push_downs,
+                                        table_schema,
+                                        lazy_init_segments,
+                                        0,
+                                    )
+                                    .await
+                                {
+                                    Ok((_, partitions)) => {
+                                        for part in partitions.partitions {
+                                            // the sql may be killed or early stop, ignore the error
+                                            if let Err(_e) = tx.send(Ok(part)).await {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Err(err) => {
+                                        let _ = tx.send(Err(err)).await;
                                     }
                                 }
-                            }
-                            Err(err) => {
-                                let _ = tx.send(Err(err)).await;
-                            }
+                            },
+                            None,
+                        );
+
+                        if let Err(cause) = handler.await {
+                            log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
                         }
-                    });
 
-                    if let Err(cause) = handler.await {
-                        log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
-                    }
-
-                    Result::Ok(())
-                });
+                        Result::Ok(())
+                    },
+                    None,
+                );
 
                 Ok(())
             });

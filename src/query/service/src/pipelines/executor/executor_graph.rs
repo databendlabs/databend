@@ -32,7 +32,6 @@ use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
 use databend_common_base::runtime::TrackingPayload;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -583,6 +582,7 @@ impl ScheduleQueue {
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
                     ProcessorAsyncTask,
                 >())),
+                None,
             );
         }
     }
@@ -686,6 +686,7 @@ impl ScheduleQueue {
                 .in_span(Span::enter_with_local_parent(std::any::type_name::<
                     ProcessorAsyncTask,
                 >())),
+                None,
             );
         }
     }

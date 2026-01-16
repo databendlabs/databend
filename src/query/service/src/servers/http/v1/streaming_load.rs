@@ -23,7 +23,6 @@ use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -240,12 +239,12 @@ async fn streaming_load_handler_inner(
                 *streaming_load.receiver.lock() = Some(rx);
 
                 let format = streaming_load.file_format.clone();
-                let handler = query_context.spawn(execute_query(
-                    http_context.clone(),
-                    query_context.clone(),
-                    plan,
-                    mem_stat,
-                ));
+                let handler = query_context
+                    .try_spawn(
+                        execute_query(http_context.clone(), query_context.clone(), plan, mem_stat),
+                        None,
+                    )
+                    .map_err(InternalServerError)?;
                 read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
                 match handler.await {

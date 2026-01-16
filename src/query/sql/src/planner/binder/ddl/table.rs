@@ -63,7 +63,6 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
@@ -2378,7 +2377,7 @@ pub async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     };
 
     GlobalIORuntime::instance()
-        .spawn(verification_task)
+        .spawn(verification_task, None)
         .await
         .expect("join must succeed")
 }

@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
@@ -463,20 +462,23 @@ async fn test_concurrent_create_warehouse() -> Result<()> {
 
         runtimes.push(runtime.clone());
 
-        join_handler.push(runtime.spawn({
-            let barrier = barrier.clone();
-            let warehouse_manager = warehouse_manager.clone();
-            async move {
-                let _ = barrier.wait().await;
+        join_handler.push(runtime.spawn(
+            {
+                let barrier = barrier.clone();
+                let warehouse_manager = warehouse_manager.clone();
+                async move {
+                    let _ = barrier.wait().await;
 
-                let create_warehouse = warehouse_manager.create_warehouse(
-                    format!("warehouse_{}", idx),
-                    vec![SelectedNode::Random(None); 1],
-                );
+                    let create_warehouse = warehouse_manager.create_warehouse(
+                        format!("warehouse_{}", idx),
+                        vec![SelectedNode::Random(None); 1],
+                    );
 
-                create_warehouse.await.is_ok()
-            }
-        }));
+                    create_warehouse.await.is_ok()
+                }
+            },
+            None,
+        ));
     }
 
     let create_res = futures::future::try_join_all(join_handler).await?;
@@ -954,19 +956,22 @@ async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
 
         runtimes.push(runtime.clone());
 
-        join_handler.push(runtime.spawn({
-            let barrier = barrier.clone();
-            let warehouse_manager = warehouse_manager.clone();
-            async move {
-                let _ = barrier.wait().await;
+        join_handler.push(runtime.spawn(
+            {
+                let barrier = barrier.clone();
+                let warehouse_manager = warehouse_manager.clone();
+                async move {
+                    let _ = barrier.wait().await;
 
-                let node_id = GlobalUniqName::unique();
-                let start_node = warehouse_manager.start_node(system_managed_node(&node_id));
+                    let node_id = GlobalUniqName::unique();
+                    let start_node = warehouse_manager.start_node(system_managed_node(&node_id));
 
-                let seq_node = start_node.await.unwrap();
-                seq_node.id.clone()
-            }
-        }));
+                    let seq_node = start_node.await.unwrap();
+                    seq_node.id.clone()
+                }
+            },
+            None,
+        ));
     }
 
     let start_res = futures::future::try_join_all(join_handler).await?;
@@ -1350,20 +1355,23 @@ async fn test_concurrent_rename_to_warehouse() -> Result<()> {
 
         runtimes.push(runtime.clone());
 
-        join_handler.push(runtime.spawn({
-            let barrier = barrier.clone();
-            let warehouse_manager = warehouse_manager.clone();
-            async move {
-                let _ = barrier.wait().await;
+        join_handler.push(runtime.spawn(
+            {
+                let barrier = barrier.clone();
+                let warehouse_manager = warehouse_manager.clone();
+                async move {
+                    let _ = barrier.wait().await;
 
-                let rename_warehouse = warehouse_manager.rename_warehouse(
-                    String::from("test_warehouse"),
-                    format!("test_warehouse_{}", idx),
-                );
+                    let rename_warehouse = warehouse_manager.rename_warehouse(
+                        String::from("test_warehouse"),
+                        format!("test_warehouse_{}", idx),
+                    );
 
-                rename_warehouse.await.is_ok()
-            }
-        }));
+                    rename_warehouse.await.is_ok()
+                }
+            },
+            None,
+        ));
     }
 
     let rename_res = futures::future::try_join_all(join_handler).await?;
@@ -1388,26 +1396,29 @@ async fn test_concurrent_rename_from_warehouse() -> Result<()> {
 
         runtimes.push(runtime.clone());
 
-        join_handler.push(runtime.spawn({
-            let barrier = barrier.clone();
-            let warehouse_manager = warehouse_manager.clone();
-            async move {
-                let create_warehouse = warehouse_manager.create_warehouse(
-                    format!("test_warehouse_{}", idx),
-                    vec![SelectedNode::Random(None); 1],
-                );
-                create_warehouse.await.unwrap();
+        join_handler.push(runtime.spawn(
+            {
+                let barrier = barrier.clone();
+                let warehouse_manager = warehouse_manager.clone();
+                async move {
+                    let create_warehouse = warehouse_manager.create_warehouse(
+                        format!("test_warehouse_{}", idx),
+                        vec![SelectedNode::Random(None); 1],
+                    );
+                    create_warehouse.await.unwrap();
 
-                let _ = barrier.wait().await;
+                    let _ = barrier.wait().await;
 
-                let rename_warehouse = warehouse_manager.rename_warehouse(
-                    format!("test_warehouse_{}", idx),
-                    String::from("test_warehouse"),
-                );
+                    let rename_warehouse = warehouse_manager.rename_warehouse(
+                        format!("test_warehouse_{}", idx),
+                        String::from("test_warehouse"),
+                    );
 
-                rename_warehouse.await.is_ok()
-            }
-        }));
+                    rename_warehouse.await.is_ok()
+                }
+            },
+            None,
+        ));
     }
 
     let rename_res = futures::future::try_join_all(join_handler).await?;
@@ -1438,18 +1449,21 @@ async fn test_concurrent_drop_warehouse() -> Result<()> {
 
         runtimes.push(runtime.clone());
 
-        join_handler.push(runtime.spawn({
-            let barrier = barrier.clone();
-            let warehouse_manager = warehouse_manager.clone();
-            async move {
-                let _ = barrier.wait().await;
+        join_handler.push(runtime.spawn(
+            {
+                let barrier = barrier.clone();
+                let warehouse_manager = warehouse_manager.clone();
+                async move {
+                    let _ = barrier.wait().await;
 
-                let drop_warehouse =
-                    warehouse_manager.drop_warehouse(String::from("test_warehouse"));
+                    let drop_warehouse =
+                        warehouse_manager.drop_warehouse(String::from("test_warehouse"));
 
-                drop_warehouse.await.is_ok()
-            }
-        }));
+                    drop_warehouse.await.is_ok()
+                }
+            },
+            None,
+        ));
     }
 
     let drop_res = futures::future::try_join_all(join_handler).await?;

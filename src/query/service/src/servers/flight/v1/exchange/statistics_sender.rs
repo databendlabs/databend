@@ -21,7 +21,6 @@ use databend_common_base::JoinHandle;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -58,83 +57,91 @@ impl StatisticsSender {
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
-        let handle = spawner.spawn({
-            let query_id = query_id.to_string();
+        let handle = spawner
+            .try_spawn(
+                {
+                    let query_id = query_id.to_string();
 
-            async move {
-                let mut cnt = 0;
-                let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
-                let mut notified = Box::pin(shutdown_flag_receiver.recv());
+                    async move {
+                        let mut cnt = 0;
+                        let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
+                        let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
-                let mem_stat = ctx.get_query_memory_tracking();
+                        let mem_stat = ctx.get_query_memory_tracking();
 
-                loop {
-                    match futures::future::select(sleep_future, notified).await {
-                        Either::Right((Err(_), _)) => {
-                            break;
-                        }
-                        Either::Right((Ok(None), _)) => {
-                            break;
-                        }
-                        Either::Right((Ok(Some(error_code)), _recv)) => {
-                            let data = DataPacket::ErrorCode(error_code);
-                            if let Err(error_code) = tx.send(data).await {
-                                warn!(
-                                    "Cannot send data via flight exchange, cause: {:?}",
-                                    error_code
-                                );
-                            }
+                        loop {
+                            match futures::future::select(sleep_future, notified).await {
+                                Either::Right((Err(_), _)) => {
+                                    break;
+                                }
+                                Either::Right((Ok(None), _)) => {
+                                    break;
+                                }
+                                Either::Right((Ok(Some(error_code)), _recv)) => {
+                                    let data = DataPacket::ErrorCode(error_code);
+                                    if let Err(error_code) = tx.send(data).await {
+                                        warn!(
+                                            "Cannot send data via flight exchange, cause: {:?}",
+                                            error_code
+                                        );
+                                    }
 
-                            return;
-                        }
-                        Either::Left((_, right)) => {
-                            notified = right;
-                            sleep_future = Box::pin(sleep(Duration::from_millis(100)));
+                                    return;
+                                }
+                                Either::Left((_, right)) => {
+                                    notified = right;
+                                    sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                            if let Err(cause) = Self::send_progress(&ctx, &mem_stat, &tx).await {
-                                ctx.get_exchange_manager()
-                                    .shutdown_query(&query_id, Some(cause));
-                                return;
-                            }
+                                    if let Err(cause) =
+                                        Self::send_progress(&ctx, &mem_stat, &tx).await
+                                    {
+                                        ctx.get_exchange_manager()
+                                            .shutdown_query(&query_id, Some(cause));
+                                        return;
+                                    }
 
-                            cnt += 1;
+                                    cnt += 1;
 
-                            if cnt % 5 == 0 {
-                                // send profiles per 500 millis
-                                if let Err(error) = Self::send_profile(&executor, &tx, false).await
-                                {
-                                    warn!("Profiles send has error, cause: {:?}.", error);
+                                    if cnt % 5 == 0 {
+                                        // send profiles per 500 millis
+                                        if let Err(error) =
+                                            Self::send_profile(&executor, &tx, false).await
+                                        {
+                                            warn!("Profiles send has error, cause: {:?}.", error);
+                                        }
+                                    }
                                 }
                             }
                         }
+
+                        if let Err(error) = Self::send_final_profile(profile_rx, &tx).await {
+                            warn!("Final profiles send has error, cause: {:?}.", error);
+                        }
+
+                        if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
+                            warn!("CopyStatus send has error, cause: {:?}.", error);
+                        }
+
+                        if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
+                            warn!("MutationStatus send has error, cause: {:?}.", error);
+                        }
+
+                        if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
+                            warn!("Statistics send has error, cause: {:?}.", error);
+                        }
+
+                        if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
+                            warn!("Perf send has error, cause: {:?}.", error);
+                        }
+
+                        if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
+                            warn!("PartStatistics send has error, cause: {:?}.", error);
+                        }
                     }
-                }
-
-                if let Err(error) = Self::send_final_profile(profile_rx, &tx).await {
-                    warn!("Final profiles send has error, cause: {:?}.", error);
-                }
-
-                if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
-                    warn!("CopyStatus send has error, cause: {:?}.", error);
-                }
-
-                if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
-                    warn!("MutationStatus send has error, cause: {:?}.", error);
-                }
-
-                if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
-                    warn!("Statistics send has error, cause: {:?}.", error);
-                }
-
-                if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
-                    warn!("Perf send has error, cause: {:?}.", error);
-                }
-
-                if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
-                    warn!("PartStatistics send has error, cause: {:?}.", error);
-                }
-            }
-        });
+                },
+                None,
+            )
+            .unwrap();
 
         StatisticsSender {
             _spawner: spawner,

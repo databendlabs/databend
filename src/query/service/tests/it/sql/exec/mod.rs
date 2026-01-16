@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -143,7 +142,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         Ok::<(), ErrorCode>(())
     };
 
-    let query_handler = runtime.spawn(query_task);
+    let query_handler = runtime.spawn(query_task, None);
 
     let compact_task = async move {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
@@ -161,7 +160,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     };
 
     // b. thread2: optimize table
-    let compact_handler = runtime.spawn(compact_task);
+    let compact_handler = runtime.spawn(compact_task, None);
 
     query_handler.await.unwrap()?;
     compact_handler.await.unwrap()?;

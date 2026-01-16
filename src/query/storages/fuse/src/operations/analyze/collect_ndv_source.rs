@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
@@ -352,14 +351,17 @@ impl Processor for AnalyzeCollectNDVSource {
                     let storage_format = self.storage_format;
                     let block_meta = segment_with_hll.block_metas[idx].clone();
                     let ndv_columns_map = self.ndv_columns_map.clone();
-                    let handler = runtime.spawn(async move {
-                        let block = block_reader
-                            .read_by_meta(&settings, &block_meta, &storage_format)
-                            .await?;
-                        let column_hlls = build_column_hlls(&block, &ndv_columns_map)?;
-                        drop(permit);
-                        Ok::<_, ErrorCode>(column_hlls)
-                    });
+                    let handler = runtime.spawn(
+                        async move {
+                            let block = block_reader
+                                .read_by_meta(&settings, &block_meta, &storage_format)
+                                .await?;
+                            let column_hlls = build_column_hlls(&block, &ndv_columns_map)?;
+                            drop(permit);
+                            Ok::<_, ErrorCode>(column_hlls)
+                        },
+                        None,
+                    );
                     handlers.push(handler);
                 }
 

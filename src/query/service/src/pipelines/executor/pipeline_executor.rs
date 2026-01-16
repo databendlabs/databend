@@ -20,7 +20,6 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
 use databend_common_exception::ErrorCode;
@@ -218,19 +217,23 @@ impl PipelineExecutor {
         if !max_execute_time_in_seconds.is_zero() {
             let this_graph = Arc::downgrade(&query_wrapper.graph);
             let finished_notify = query_wrapper.finished_notify.clone();
-            GlobalIORuntime::instance().spawn(async move {
-                let finished_future = Box::pin(finished_notify.notified());
-                let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
-                if let Either::Left(_) = select(max_execute_future, finished_future).await {
-                    if let Some(graph) = this_graph.upgrade() {
-                        graph
-                            .should_finish(Err(ErrorCode::AbortedQuery(
-                                "Query aborted due to execution time exceeding maximum limit",
-                            )))
-                            .expect("Failed to send timeout error message");
+            GlobalIORuntime::instance().spawn(
+                async move {
+                    let finished_future = Box::pin(finished_notify.notified());
+                    let max_execute_future =
+                        Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
+                    if let Either::Left(_) = select(max_execute_future, finished_future).await {
+                        if let Some(graph) = this_graph.upgrade() {
+                            graph
+                                .should_finish(Err(ErrorCode::AbortedQuery(
+                                    "Query aborted due to execution time exceeding maximum limit",
+                                )))
+                                .expect("Failed to send timeout error message");
+                        }
                     }
-                }
-            });
+                },
+                None,
+            );
         }
 
         Ok(())

@@ -16,7 +16,6 @@ use std::cmp::max;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -349,102 +348,110 @@ impl FusePruner {
 
             let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
             let inverse_range_index = self.get_inverse_range_index();
-            works.push(self.pruning_ctx.pruning_runtime.spawn({
-                let block_pruner = block_pruner.clone();
-                let segment_pruner = segment_pruner.clone();
-                let pruning_ctx = self.pruning_ctx.clone();
-                let push_down = self.push_down.clone();
+            works.push(self.pruning_ctx.pruning_runtime.spawn(
+                {
+                    let block_pruner = block_pruner.clone();
+                    let segment_pruner = segment_pruner.clone();
+                    let pruning_ctx = self.pruning_ctx.clone();
+                    let push_down = self.push_down.clone();
 
-                async move {
-                    // Build pruning tasks.
-                    if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
-                        batch = batch
-                            .into_iter()
-                            .filter(|segment| {
-                                internal_column_pruner
-                                    .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
-                            })
-                            .collect::<Vec<_>>();
-                    }
-
-                    let mut res = vec![];
-                    let mut deleted_segments = vec![];
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
-
-                    if delete_pruning {
-                        for (segment_location, compact_segment_info) in &pruned_segments {
-                            if let Some(range_index) = &inverse_range_index {
-                                if !range_index
-                                    .should_keep(&compact_segment_info.summary.col_stats, None)
-                                {
-                                    deleted_segments.push(DeletedSegmentInfo {
-                                        index: segment_location.segment_idx,
-                                        summary: compact_segment_info.summary.clone(),
-                                    });
-                                    continue;
-                                };
-                            }
-                            // do not populate the block meta cache for deletion operations,
-                            // since block metas touched by deletion are not likely to
-                            // be accessed soon.
-                            let populate_block_meta_cache = false;
-                            let block_metas = Self::extract_block_metas(
-                                &segment_location.location.0,
-                                compact_segment_info,
-                                populate_block_meta_cache,
-                            )?;
-                            res.extend(
-                                block_pruner
-                                    .pruning(segment_location.clone(), block_metas)
-                                    .await?,
-                            );
+                    async move {
+                        // Build pruning tasks.
+                        if let Some(internal_column_pruner) = &pruning_ctx.internal_column_pruner {
+                            batch = batch
+                                .into_iter()
+                                .filter(|segment| {
+                                    internal_column_pruner
+                                        .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                                })
+                                .collect::<Vec<_>>();
                         }
-                    } else {
-                        let sample_probability = table_sample(&push_down)?;
-                        for (location, info) in pruned_segments {
-                            let mut block_metas =
-                                Self::extract_block_metas(&location.location.0, &info, true)?;
-                            if let Some(probability) = sample_probability {
-                                if block_metas.len() <= SMALL_DATASET_SAMPLE_THRESHOLD {
-                                    // Deterministic sampling for small datasets
-                                    // Ensure at least one block is sampled for small datasets
-                                    let sample_size = max(
-                                        1,
-                                        (block_metas.len() as f64 * probability).round() as usize,
-                                    );
-                                    let mut rng = thread_rng();
-                                    block_metas = Arc::new(
-                                        block_metas
-                                            .choose_multiple(&mut rng, sample_size)
-                                            .cloned()
-                                            .collect(),
-                                    );
-                                } else {
-                                    // Random sampling for larger datasets
-                                    let mut sample_block_metas =
-                                        Vec::with_capacity(block_metas.len());
-                                    let mut rng = thread_rng();
-                                    let bernoulli = Bernoulli::new(probability).unwrap();
-                                    for block in block_metas.iter() {
-                                        if bernoulli.sample(&mut rng) {
-                                            sample_block_metas.push(block.clone());
-                                        }
-                                    }
-                                    // Ensure at least one block is sampled for large datasets too
-                                    if sample_block_metas.is_empty() && !block_metas.is_empty() {
-                                        // Safe to unwrap, because we've checked that block_metas is not empty
-                                        sample_block_metas
-                                            .push(block_metas.choose(&mut rng).unwrap().clone());
-                                    }
-                                    block_metas = Arc::new(sample_block_metas);
+
+                        let mut res = vec![];
+                        let mut deleted_segments = vec![];
+                        let pruned_segments = segment_pruner.pruning(batch).await?;
+
+                        if delete_pruning {
+                            for (segment_location, compact_segment_info) in &pruned_segments {
+                                if let Some(range_index) = &inverse_range_index {
+                                    if !range_index
+                                        .should_keep(&compact_segment_info.summary.col_stats, None)
+                                    {
+                                        deleted_segments.push(DeletedSegmentInfo {
+                                            index: segment_location.segment_idx,
+                                            summary: compact_segment_info.summary.clone(),
+                                        });
+                                        continue;
+                                    };
                                 }
+                                // do not populate the block meta cache for deletion operations,
+                                // since block metas touched by deletion are not likely to
+                                // be accessed soon.
+                                let populate_block_meta_cache = false;
+                                let block_metas = Self::extract_block_metas(
+                                    &segment_location.location.0,
+                                    compact_segment_info,
+                                    populate_block_meta_cache,
+                                )?;
+                                res.extend(
+                                    block_pruner
+                                        .pruning(segment_location.clone(), block_metas)
+                                        .await?,
+                                );
                             }
-                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                        } else {
+                            let sample_probability = table_sample(&push_down)?;
+                            for (location, info) in pruned_segments {
+                                let mut block_metas =
+                                    Self::extract_block_metas(&location.location.0, &info, true)?;
+                                if let Some(probability) = sample_probability {
+                                    if block_metas.len() <= SMALL_DATASET_SAMPLE_THRESHOLD {
+                                        // Deterministic sampling for small datasets
+                                        // Ensure at least one block is sampled for small datasets
+                                        let sample_size = max(
+                                            1,
+                                            (block_metas.len() as f64 * probability).round()
+                                                as usize,
+                                        );
+                                        let mut rng = thread_rng();
+                                        block_metas = Arc::new(
+                                            block_metas
+                                                .choose_multiple(&mut rng, sample_size)
+                                                .cloned()
+                                                .collect(),
+                                        );
+                                    } else {
+                                        // Random sampling for larger datasets
+                                        let mut sample_block_metas =
+                                            Vec::with_capacity(block_metas.len());
+                                        let mut rng = thread_rng();
+                                        let bernoulli = Bernoulli::new(probability).unwrap();
+                                        for block in block_metas.iter() {
+                                            if bernoulli.sample(&mut rng) {
+                                                sample_block_metas.push(block.clone());
+                                            }
+                                        }
+                                        // Ensure at least one block is sampled for large datasets too
+                                        if sample_block_metas.is_empty() && !block_metas.is_empty()
+                                        {
+                                            // Safe to unwrap, because we've checked that block_metas is not empty
+                                            sample_block_metas.push(
+                                                block_metas.choose(&mut rng).unwrap().clone(),
+                                            );
+                                        }
+                                        block_metas = Arc::new(sample_block_metas);
+                                    }
+                                }
+                                res.extend(
+                                    block_pruner.pruning(location.clone(), block_metas).await?,
+                                );
+                            }
                         }
+                        Result::<_>::Ok((res, deleted_segments))
                     }
-                    Result::<_>::Ok((res, deleted_segments))
-                }
-            }));
+                },
+                None,
+            ));
         }
 
         let workers = futures::future::try_join_all(works).await?;
@@ -502,25 +509,28 @@ impl FusePruner {
             remain -= gap_size;
 
             let batch = block_metas.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(self.pruning_ctx.pruning_runtime.spawn({
-                let block_pruner = block_pruner.clone();
-                async move {
-                    // Build pruning tasks.
-                    let res = block_pruner
-                        .pruning(
-                            // unused segment location.
-                            SegmentLocation {
-                                segment_idx,
-                                location: ("".to_string(), 0),
-                                snapshot_loc: None,
-                            },
-                            Arc::new(batch),
-                        )
-                        .await?;
+            works.push(self.pruning_ctx.pruning_runtime.spawn(
+                {
+                    let block_pruner = block_pruner.clone();
+                    async move {
+                        // Build pruning tasks.
+                        let res = block_pruner
+                            .pruning(
+                                // unused segment location.
+                                SegmentLocation {
+                                    segment_idx,
+                                    location: ("".to_string(), 0),
+                                    snapshot_loc: None,
+                                },
+                                Arc::new(batch),
+                            )
+                            .await?;
 
-                    Result::<_>::Ok(res)
-                }
-            }));
+                        Result::<_>::Ok(res)
+                    }
+                },
+                None,
+            ));
             segment_idx += 1;
         }
 

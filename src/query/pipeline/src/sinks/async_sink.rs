@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -74,19 +73,22 @@ impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
         drop_guard(move || {
             if !self.called_on_start || !self.called_on_finish {
                 if let Some(mut inner) = self.inner.take() {
-                    GlobalIORuntime::instance().spawn({
-                        let called_on_start = self.called_on_start;
-                        let called_on_finish = self.called_on_finish;
-                        async move {
-                            if !called_on_start {
-                                let _ = inner.on_start().await;
-                            }
+                    GlobalIORuntime::instance().spawn(
+                        {
+                            let called_on_start = self.called_on_start;
+                            let called_on_finish = self.called_on_finish;
+                            async move {
+                                if !called_on_start {
+                                    let _ = inner.on_start().await;
+                                }
 
-                            if !called_on_finish {
-                                let _ = inner.on_finish().await;
+                                if !called_on_finish {
+                                    let _ = inner.on_finish().await;
+                                }
                             }
-                        }
-                    });
+                        },
+                        None,
+                    );
                 }
             }
         })

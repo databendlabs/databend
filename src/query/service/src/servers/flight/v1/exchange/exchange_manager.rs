@@ -30,7 +30,6 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -251,11 +250,13 @@ impl DataExchangeManager {
 
                 if let Some(query_info) = query_info.as_mut() {
                     let query_id = env.query_id.clone();
-                    query_info.remove_leak_query_worker =
-                        Some(GlobalIORuntime::instance().spawn(async move {
+                    query_info.remove_leak_query_worker = Some(GlobalIORuntime::instance().spawn(
+                        async move {
                             let _ = tokio::time::sleep(Duration::from_secs(180)).await;
                             DataExchangeManager::instance().remove_if_leak_query(query_id);
-                        }));
+                        },
+                        None,
+                    ));
                 }
 
                 let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -369,7 +370,7 @@ impl DataExchangeManager {
             task.await
         } else {
             GlobalIORuntime::instance()
-                .spawn(task)
+                .spawn(task, None)
                 .await
                 .expect("create client future must be joined successfully")
         }

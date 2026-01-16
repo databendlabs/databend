@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -187,47 +186,50 @@ impl LockHolder {
         let delete_table_lock_req = DeleteLockRevReq::new(lock_key.clone(), revision);
         let extend_table_lock_req = ExtendLockRevReq::new(lock_key.clone(), revision, ttl, false);
 
-        GlobalIORuntime::instance().spawn({
-            let self_clone = self.clone();
-            async move {
-                let mut notified = Box::pin(self_clone.shutdown_notify.notified());
-                while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
-                    let rand_sleep_duration = {
-                        let mut rng = thread_rng();
-                        rng.gen_range(sleep_range.clone())
-                    };
+        GlobalIORuntime::instance().spawn(
+            {
+                let self_clone = self.clone();
+                async move {
+                    let mut notified = Box::pin(self_clone.shutdown_notify.notified());
+                    while !self_clone.shutdown_flag.load(Ordering::SeqCst) {
+                        let rand_sleep_duration = {
+                            let mut rng = thread_rng();
+                            rng.gen_range(sleep_range.clone())
+                        };
 
-                    let sleep_range = Box::pin(sleep(rand_sleep_duration));
-                    match select(notified, sleep_range).await {
-                        Either::Left((_, _)) => {
-                            // shutdown.
-                            break;
-                        }
-                        Either::Right((_, new_notified)) => {
-                            notified = new_notified;
-                            if let Err(e) = self_clone
-                                .try_extend_lock(
-                                    catalog.clone(),
-                                    extend_table_lock_req.clone(),
-                                    Some(ttl - rand_sleep_duration),
-                                )
-                                .await
-                            {
-                                // Force kill the query if extend lock failure.
-                                if let Some(session) =
-                                    SessionManager::instance().get_session_by_id(&query_id)
+                        let sleep_range = Box::pin(sleep(rand_sleep_duration));
+                        match select(notified, sleep_range).await {
+                            Either::Left((_, _)) => {
+                                // shutdown.
+                                break;
+                            }
+                            Either::Right((_, new_notified)) => {
+                                notified = new_notified;
+                                if let Err(e) = self_clone
+                                    .try_extend_lock(
+                                        catalog.clone(),
+                                        extend_table_lock_req.clone(),
+                                        Some(ttl - rand_sleep_duration),
+                                    )
+                                    .await
                                 {
-                                    session.force_kill_query(e.clone());
+                                    // Force kill the query if extend lock failure.
+                                    if let Some(session) =
+                                        SessionManager::instance().get_session_by_id(&query_id)
+                                    {
+                                        session.force_kill_query(e.clone());
+                                    }
+                                    return Err(e);
                                 }
-                                return Err(e);
                             }
                         }
                     }
-                }
 
-                Self::try_delete_lock(catalog, delete_table_lock_req, Some(ttl)).await
-            }
-        });
+                    Self::try_delete_lock(catalog, delete_table_lock_req, Some(ttl)).await
+                }
+            },
+            None,
+        );
 
         Ok(revision)
     }

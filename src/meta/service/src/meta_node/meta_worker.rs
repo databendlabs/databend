@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_version::BUILD_INFO;
 use log::error;
@@ -46,41 +45,44 @@ impl MetaWorker {
 
         let (ret_tx, ret_rx) = oneshot::channel();
 
-        meta_io_rt.spawn(async move {
-            let (handle_tx, worker_rx) = mpsc::channel(1024);
+        meta_io_rt.spawn(
+            async move {
+                let (handle_tx, worker_rx) = mpsc::channel(1024);
 
-            let res = MetaNode::start(&config, &BUILD_INFO).await;
-            let meta_node = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    error!("Failed to start MetaNode: {}", e);
-                    return;
-                }
-            };
+                let res = MetaNode::start(&config, &BUILD_INFO).await;
+                let meta_node = match res {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Failed to start MetaNode: {}", e);
+                        return;
+                    }
+                };
 
-            let id = meta_node.raft_store.id;
-            let version = meta_node.version;
+                let id = meta_node.raft_store.id;
+                let version = meta_node.version;
 
-            let worker = MetaWorker {
-                worker_rx,
-                meta_node,
-            };
+                let worker = MetaWorker {
+                    worker_rx,
+                    meta_node,
+                };
 
-            let handle = MetaHandle::new(id, version, handle_tx, rt);
+                let handle = MetaHandle::new(id, version, handle_tx, rt);
 
-            ret_tx
-                .send(handle)
-                .inspect_err(|_meta_handle| {
-                    error!("MetaWorker::work stopped before sending handle")
-                })
-                .ok();
+                ret_tx
+                    .send(handle)
+                    .inspect_err(|_meta_handle| {
+                        error!("MetaWorker::work stopped before sending handle")
+                    })
+                    .ok();
 
-            info!("MetaWorker.run() starting");
+                info!("MetaWorker.run() starting");
 
-            worker.run().await;
+                worker.run().await;
 
-            info!("MetaWorker.run() finished");
-        });
+                info!("MetaWorker.run() finished");
+            },
+            None,
+        );
 
         let meta_handle = ret_rx.await.map_err(|e| {
             MetaStartupError::MetaServiceError(format!(

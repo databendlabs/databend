@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use databend_common_base::base::short_sql;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

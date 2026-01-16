@@ -24,7 +24,6 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -5893,44 +5892,47 @@ impl SchemaApiTestSuite {
             let create_table_req = create_table_req.clone();
             let arc_mt = mt.clone();
 
-            let handle = runtime.spawn(async move {
-                let resp = arc_mt.create_table(create_table_req.clone()).await;
+            let handle = runtime.spawn(
+                async move {
+                    let resp = arc_mt.create_table(create_table_req.clone()).await;
 
-                // assert that when create table concurrently with correct params return error,
-                // the error MUST be TxnRetryMaxTimes
-                if resp.is_err() {
-                    assert!(matches!(
-                        resp.unwrap_err(),
-                        KVAppError::AppError(AppError::TxnRetryMaxTimes(_))
-                    ));
-                    return;
-                }
-
-                let resp = resp.unwrap();
-
-                let commit_table_req = CommitTableMetaReq {
-                    name_ident: create_table_req.name_ident.clone(),
-                    db_id: *db_id,
-                    table_id: resp.table_id,
-                    prev_table_id: resp.prev_table_id,
-                    orphan_table_name: resp.orphan_table_name.clone(),
-                };
-                let resp = arc_mt.commit_table_meta(commit_table_req).await;
-
-                // assert that when commit_table_meta concurrently with correct params return error,
-                // the error MUST be TxnRetryMaxTimes or CommitTableMetaError(prev table id has been changed)
-                if resp.is_err() {
-                    assert!(
-                        matches!(
-                            resp.clone().unwrap_err(),
-                            KVAppError::AppError(AppError::TxnRetryMaxTimes(_))
-                        ) || matches!(
+                    // assert that when create table concurrently with correct params return error,
+                    // the error MUST be TxnRetryMaxTimes
+                    if resp.is_err() {
+                        assert!(matches!(
                             resp.unwrap_err(),
-                            KVAppError::AppError(AppError::CommitTableMetaError(_))
-                        )
-                    );
-                }
-            });
+                            KVAppError::AppError(AppError::TxnRetryMaxTimes(_))
+                        ));
+                        return;
+                    }
+
+                    let resp = resp.unwrap();
+
+                    let commit_table_req = CommitTableMetaReq {
+                        name_ident: create_table_req.name_ident.clone(),
+                        db_id: *db_id,
+                        table_id: resp.table_id,
+                        prev_table_id: resp.prev_table_id,
+                        orphan_table_name: resp.orphan_table_name.clone(),
+                    };
+                    let resp = arc_mt.commit_table_meta(commit_table_req).await;
+
+                    // assert that when commit_table_meta concurrently with correct params return error,
+                    // the error MUST be TxnRetryMaxTimes or CommitTableMetaError(prev table id has been changed)
+                    if resp.is_err() {
+                        assert!(
+                            matches!(
+                                resp.clone().unwrap_err(),
+                                KVAppError::AppError(AppError::TxnRetryMaxTimes(_))
+                            ) || matches!(
+                                resp.unwrap_err(),
+                                KVAppError::AppError(AppError::CommitTableMetaError(_))
+                            )
+                        );
+                    }
+                },
+                None,
+            );
             handles.push(handle);
         }
 

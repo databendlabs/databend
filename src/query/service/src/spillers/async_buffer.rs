@@ -29,7 +29,6 @@ use bytes::BytesMut;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -181,6 +180,7 @@ impl SpillsBufferPool {
                         background.recv(op).in_span(span).await;
                     }
                 }),
+                None,
             );
         }
 

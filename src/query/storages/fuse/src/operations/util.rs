@@ -19,7 +19,6 @@ use std::time::Duration;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -152,17 +151,20 @@ pub async fn read_block(
     let reader = reader.clone();
 
     GlobalIORuntime::instance()
-        .spawn(async move {
-            let column_chunks = merged_io_read_result.columns_chunks()?;
-            reader.deserialize_chunks(
-                block_meta_ptr.location.0.as_str(),
-                block_meta_ptr.row_count as usize,
-                &block_meta_ptr.compression,
-                &block_meta_ptr.col_metas,
-                column_chunks,
-                &storage_format,
-            )
-        })
+        .spawn(
+            async move {
+                let column_chunks = merged_io_read_result.columns_chunks()?;
+                reader.deserialize_chunks(
+                    block_meta_ptr.location.0.as_str(),
+                    block_meta_ptr.row_count as usize,
+                    &block_meta_ptr.compression,
+                    &block_meta_ptr.col_metas,
+                    column_chunks,
+                    &storage_format,
+                )
+            },
+            None,
+        )
         .await
         .map_err(|e| {
             ErrorCode::Internal("unexpected, failed to read block for merge into")
