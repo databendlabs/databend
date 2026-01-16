@@ -81,7 +81,7 @@ query TTTTIIITT
 select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet') order by column_name;
 ----
 t_parquet Parquet c1 INT NULL (INT32) NULL 57 48 plain,rle,rle_dictionary zstd
-t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
+t_parquet Parquet c2 INT NULL (INT32) NULL 37 37 rle,delta_binary_packed zstd
 
 query TTTTIIITT
 select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet', 'c2');
