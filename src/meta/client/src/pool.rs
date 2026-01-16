@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -65,8 +64,6 @@ where Mgr: ItemManager + Debug
 
     manager: Mgr,
 
-    err_type: PhantomData<Mgr::Error>,
-
     n_retries: u32,
 }
 
@@ -82,7 +79,6 @@ where
             initial_retry_interval,
             items: Default::default(),
             manager,
-            err_type: Default::default(),
             n_retries: 3,
         }
     }
@@ -91,11 +87,6 @@ where
     pub fn with_retries(mut self, retries: u32) -> Self {
         self.n_retries = retries;
         self
-    }
-
-    #[allow(dead_code)]
-    pub fn item_manager(&self) -> &Mgr {
-        &self.manager
     }
 
     /// Return a raw pool item.
@@ -140,12 +131,16 @@ where
         }
 
         let mut interval = self.initial_retry_interval;
+        let mut last_err = None;
 
         for i in 0..self.n_retries {
+            if i > 0 {
+                sleep(interval).await;
+                interval *= 2;
+            }
+
             debug!("build new item of key: {:?}", key);
-
             let new_item = self.manager.build(key).await;
-
             debug!("build new item of key res: {:?}", new_item);
 
             match new_item {
@@ -154,18 +149,13 @@ where
                     return Ok(x);
                 }
                 Err(err) => {
-                    warn!("MetaGrpcClient Pool build new item failed: {:?}", err);
-                    if i == self.n_retries - 1 {
-                        return Err(err);
-                    }
+                    warn!("Pool build new item failed: {:?}", err);
+                    last_err = Some(err);
                 }
             }
-
-            sleep(interval).await;
-            interval *= 2;
         }
 
-        unreachable!("the loop should always return!");
+        Err(last_err.unwrap())
     }
 }
 
