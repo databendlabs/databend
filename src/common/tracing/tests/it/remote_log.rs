@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use async_channel::bounded;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_tracing::Config;
 use databend_common_tracing::GlobalLogger;

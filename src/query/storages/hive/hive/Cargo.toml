@@ -34,6 +34,7 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 recursive = { workspace = true }
 serde = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 volo-thrift = { workspace = true }
 

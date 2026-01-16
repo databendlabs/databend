@@ -19,7 +19,6 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowType;
 use arrow_schema::Field;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;

@@ -14,7 +14,6 @@
 
 use std::collections::VecDeque;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;

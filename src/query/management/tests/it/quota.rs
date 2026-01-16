@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_api::deserialize_struct;

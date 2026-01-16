@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;

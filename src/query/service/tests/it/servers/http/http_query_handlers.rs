@@ -21,7 +21,6 @@ use std::time::Duration;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
-use databend_common_base::base::tokio;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;

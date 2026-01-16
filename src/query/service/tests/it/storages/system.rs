@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::block_debug::box_render;

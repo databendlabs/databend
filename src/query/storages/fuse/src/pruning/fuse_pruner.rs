@@ -15,7 +15,6 @@
 use std::cmp::max;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
@@ -59,6 +58,7 @@ use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use tokio::sync::Semaphore;
 
 use crate::io::BloomIndexRebuilder;
 use crate::operations::DeletedSegmentInfo;

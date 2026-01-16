@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;

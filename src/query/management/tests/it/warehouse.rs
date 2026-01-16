@@ -19,8 +19,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalUniqName;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
@@ -34,6 +32,7 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
+use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_id_with_self_managed() -> Result<()> {

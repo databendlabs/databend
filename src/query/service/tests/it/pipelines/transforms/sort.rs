@@ -15,9 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
-use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -40,6 +37,8 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use rand::Rng;
 use rand::rngs::ThreadRng;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::channel;
 
 fn create_source_pipe(ctx: Arc<QueryContext>, data: Vec<Vec<DataBlock>>) -> Result<Pipe> {
     use std::sync::Mutex;

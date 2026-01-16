@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactionLimits;

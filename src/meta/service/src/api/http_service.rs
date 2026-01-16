@@ -123,6 +123,23 @@ impl HttpService {
             .await?;
         Ok(())
     }
+
+    pub async fn do_start(&mut self) -> Result<(), HttpError> {
+        let conf = self.cfg.clone();
+        let listening = conf
+            .admin_api_address
+            .parse::<SocketAddr>()
+            .map_err(|e| HttpError::BadAddressFormat(AnyError::new(&e)))?;
+
+        match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
+            true => self.start_without_tls(listening).await,
+            false => self.start_with_tls(listening).await,
+        }
+    }
+
+    pub async fn do_stop(&mut self, force: Option<broadcast::Receiver<()>>) {
+        self.shutdown_handler.stop(force).await;
+    }
 }
 
 #[async_trait::async_trait]
@@ -130,23 +147,11 @@ impl Stoppable for HttpService {
     type Error = AnyError;
 
     async fn start(&mut self) -> Result<(), Self::Error> {
-        let conf = self.cfg.clone();
-        let listening = conf
-            .admin_api_address
-            .parse::<SocketAddr>()
-            .map_err(|e| AnyError::new(&e))?;
-
-        let res =
-            match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
-                true => self.start_without_tls(listening).await,
-                false => self.start_with_tls(listening).await,
-            };
-
-        res.map_err(|e| AnyError::new(&e))
+        self.do_start().await.map_err(|e| AnyError::new(&e))
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
-        self.shutdown_handler.stop(force).await;
+        let _: () = self.do_stop(force).await;
         Ok(())
     }
 }

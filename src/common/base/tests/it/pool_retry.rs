@@ -17,7 +17,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use databend_common_base::base::tokio;
 use databend_common_base::containers::ItemManager;
 use databend_common_base::containers::Pool;
 

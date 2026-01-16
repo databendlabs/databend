@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_users::JwkKeyStore;
 use databend_common_users::PubKey;

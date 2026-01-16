@@ -23,11 +23,11 @@ use chrono::Duration;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
-use databend_common_base::base::uuid;
-use databend_common_base::base::uuid::NoContext;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use uuid;
+use uuid::NoContext;
+use uuid::Uuid;
 
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
@@ -186,7 +186,7 @@ pub fn trim_object_prefix(key: &str) -> &str {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use chrono::Duration;
-    use databend_common_base::base::uuid::Uuid;
+    use uuid::Uuid;
 
     use crate::meta::VACUUM2_OBJECT_KEY_PREFIX;
     use crate::meta::trim_object_prefix;

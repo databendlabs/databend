@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;

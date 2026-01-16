@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;

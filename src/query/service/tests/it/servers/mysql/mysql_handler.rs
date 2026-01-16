@@ -17,7 +17,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;

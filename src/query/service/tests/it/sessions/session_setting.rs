@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_query::test_kits::ConfigBuilder;

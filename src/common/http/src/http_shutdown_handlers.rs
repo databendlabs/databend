@@ -16,10 +16,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::broadcast;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::task::JoinHandle;
 use futures::FutureExt;
 use futures::future::Either;
 use log::error;
@@ -31,6 +27,9 @@ use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
 use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use crate::HttpError;
 

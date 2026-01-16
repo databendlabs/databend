@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;

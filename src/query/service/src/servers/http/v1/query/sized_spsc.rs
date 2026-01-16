@@ -21,8 +21,6 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::Notify;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -31,6 +29,7 @@ use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
 use log::debug;
 use log::info;
+use tokio::sync::Notify;
 
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;

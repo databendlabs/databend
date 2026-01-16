@@ -24,7 +24,6 @@ use std::time::SystemTime;
 use chrono::SecondsFormat;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
@@ -33,6 +32,7 @@ use databend_common_exception::Result;
 use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tokio::time::sleep;
 
 use crate::servers::http::v1::query::http_query::ClientStateClosed;
 use crate::servers::http::v1::query::http_query::HttpQuery;

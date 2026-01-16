@@ -78,7 +78,9 @@ impl GrpcServer {
             .unwrap()
     }
 
-    async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+    pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+        info!("GrpcServer::start");
+
         let conf = self.conf.clone();
         let meta_handle = self.meta_handle.clone().unwrap();
         // For sending signal when server started.
@@ -154,10 +156,13 @@ impl GrpcServer {
         self.join_handle = Some(j);
         self.stop_grpc_tx = Some(stop_grpc_tx);
 
+        info!("Done GrpcServer::start");
         Ok(())
     }
 
-    async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+    pub async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+        info!("GrpcServer::stop");
+
         let meta_handle = self.meta_handle.take();
         let Some(meta_handle) = meta_handle else {
             info!("GrpcServer::do_stop: already stopped");
@@ -198,6 +203,8 @@ impl GrpcServer {
             Arc::strong_count(&meta_handle)
         );
         drop(meta_handle);
+
+        info!("Done GrpcServer::stop");
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
@@ -219,21 +226,14 @@ impl Stoppable for GrpcServer {
     type Error = AnyError;
 
     async fn start(&mut self) -> Result<(), Self::Error> {
-        info!("GrpcServer::start");
-        let res = self.do_start().await;
-
-        res.map_err(|e: MetaNetworkError| AnyError::new(&e))?;
-        info!("Done GrpcServer::start");
-        Ok(())
+        self.do_start().await.map_err(|e| AnyError::new(&e))
     }
 
     async fn stop(
         &mut self,
         force: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> Result<(), Self::Error> {
-        info!("GrpcServer::stop");
-        self.do_stop(force).await;
-        info!("Done GrpcServer::stop");
+        let _: () = self.do_stop(force).await;
         Ok(())
     }
 }

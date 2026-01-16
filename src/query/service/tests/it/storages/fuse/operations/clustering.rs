@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;

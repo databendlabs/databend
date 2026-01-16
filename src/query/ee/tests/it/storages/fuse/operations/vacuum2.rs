@@ -14,7 +14,6 @@
 
 use std::path::Path;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_enterprise_query::test_kits::context::EESetup;

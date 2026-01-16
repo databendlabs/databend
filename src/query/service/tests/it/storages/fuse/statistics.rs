@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;

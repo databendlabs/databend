@@ -17,7 +17,6 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_ast::ast::AuthType;
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;

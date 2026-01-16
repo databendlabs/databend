@@ -22,7 +22,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -34,6 +33,7 @@ use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use log::warn;
 use petgraph::prelude::NodeIndex;
+use tokio::time::sleep;
 
 use crate::pipelines::executor::CompletedAsyncTask;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;

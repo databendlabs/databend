@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

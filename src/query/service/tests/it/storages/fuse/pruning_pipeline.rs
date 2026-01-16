@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;

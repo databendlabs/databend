@@ -28,7 +28,6 @@ use arrow_ipc::writer;
 use arrow_schema::Schema as ArrowSchema;
 use async_stream::stream;
 use bytes::Bytes;
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;

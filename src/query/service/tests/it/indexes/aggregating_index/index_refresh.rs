@@ -23,7 +23,6 @@ use chrono::Utc;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

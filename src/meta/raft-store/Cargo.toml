@@ -27,7 +27,6 @@ display-more = { workspace = true }
 fastrace = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
-futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
 hostname = { workspace = true }
 log = { workspace = true }

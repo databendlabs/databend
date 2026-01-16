@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio::time::timeout;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -27,6 +26,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::IndexType;
+use tokio::time::timeout;
 
 pub struct TransformRuntimeFilterWait {
     ctx: Arc<dyn TableContext>,

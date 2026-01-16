@@ -18,7 +18,6 @@ use std::str::FromStr;
 
 use arrow_flight::Empty;
 use arrow_flight::flight_service_client::FlightServiceClient;
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;

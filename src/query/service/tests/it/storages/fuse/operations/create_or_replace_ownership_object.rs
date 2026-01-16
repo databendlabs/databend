@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

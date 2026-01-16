@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use databend_common_base::base::tokio;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::http::CLICKHOUSE_VERSION;
 use databend_query::servers::http::middleware::EndpointKind;

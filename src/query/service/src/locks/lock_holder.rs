@@ -19,9 +19,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
-use databend_common_base::base::tokio::sync::Notify;
-use databend_common_base::base::tokio::time::sleep;
-use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
@@ -45,6 +42,9 @@ use futures::future::select;
 use futures_util::StreamExt;
 use rand::Rng;
 use rand::thread_rng;
+use tokio::sync::Notify;
+use tokio::time::sleep;
+use tokio::time::timeout;
 
 use crate::sessions::SessionManager;
 

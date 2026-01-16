@@ -14,7 +14,6 @@
 
 use std::str::FromStr;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;

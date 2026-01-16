@@ -14,6 +14,14 @@
 
 use std::io::Write;
 
+// use databend_common_exception::Result;
+use databend_common_expression::block_debug::box_render;
+// use databend_common_sql::dataframe::Dataframe;
+use databend_common_sql::Planner;
+use databend_query::interpreters::InterpreterFactory;
+// use databend_query::sessions::QueryContext;
+use databend_query::test_kits::TestFixture;
+use goldenfile::Mint;
 // use std::sync::Arc;
 
 // use databend_common_ast::ast::BinaryOperator;
@@ -24,15 +32,6 @@ use std::io::Write;
 // use databend_common_ast::ast::JoinCondition;
 // use databend_common_ast::ast::JoinOperator;
 // use databend_common_ast::ast::Literal;
-use databend_common_base::base::tokio;
-// use databend_common_exception::Result;
-use databend_common_expression::block_debug::box_render;
-// use databend_common_sql::dataframe::Dataframe;
-use databend_common_sql::Planner;
-use databend_query::interpreters::InterpreterFactory;
-// use databend_query::sessions::QueryContext;
-use databend_query::test_kits::TestFixture;
-use goldenfile::Mint;
 use tokio_stream::StreamExt;
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

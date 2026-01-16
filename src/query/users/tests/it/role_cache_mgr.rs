@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;

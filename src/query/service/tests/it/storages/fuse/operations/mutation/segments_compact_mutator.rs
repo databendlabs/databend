@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;

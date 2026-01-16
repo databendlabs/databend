@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::UpsertKV;
@@ -101,8 +100,8 @@ async fn test_kv_list_no_quorum_no_leader() -> anyhow::Result<()> {
 
     let remaining_addr = tcs[2].config.grpc_api_address.clone();
 
-    tcs[0].grpc_srv.take().unwrap().stop(None).await?;
-    tcs[1].grpc_srv.take().unwrap().stop(None).await?;
+    tcs[0].grpc_srv.take().unwrap().do_stop(None).await;
+    tcs[1].grpc_srv.take().unwrap().do_stop(None).await;
 
     // Wait for quorum loss detection
     tokio::time::sleep(Duration::from_secs(10)).await;

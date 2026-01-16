@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,7 @@ use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
+use tokio::time::sleep;
 
 use super::diff::SegmentsDiff;
 use crate::FuseTable;
