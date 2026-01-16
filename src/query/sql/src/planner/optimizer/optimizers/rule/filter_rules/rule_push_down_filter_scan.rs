@@ -21,6 +21,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TableEntry;
 use crate::binder::ColumnBindingBuilder;
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
@@ -29,7 +30,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
-use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::SecureFilter;
 use crate::plans::SubqueryExpr;
@@ -45,36 +45,11 @@ impl RulePushDownFilterScan {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterScan,
-            // Input:
-            // (1)    Filter
-            //          \
-            //          Scan
-            // (2)    Filter
-            //          \
-            //          SecureFilter
-            //            \
-            //            Scan
-            //
-            // Output:
-            // Preserve the original plan structure, but write Filter.predicates into Scan.push_down_predicates.
+            // Input:  Filter -> Scan  or  Filter -> SecureFilter -> Scan
+            // Output: Preserve the original plan structure, but write Filter.predicates into Scan.push_down_predicates.
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::SecureFilter,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                },
+                match_op!(Filter -> Scan),
+                match_op!(Filter -> SecureFilter -> Scan),
             ],
             metadata,
         }

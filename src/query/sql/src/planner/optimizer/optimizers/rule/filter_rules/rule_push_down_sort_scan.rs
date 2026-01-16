@@ -42,17 +42,10 @@ impl RulePushDownSortScan {
         Self {
             id: RuleID::PushDownSortScan,
             matchers: vec![
-                // Sort -> Scan
-                match_op!(Sort, match_op!(Scan)),
-                // Sort -> SecureFilter -> Scan
-                match_op!(Sort, match_op!(SecureFilter, match_op!(Scan))),
-                // Sort -> EvalScalar -> Scan
-                match_op!(Sort, match_op!(EvalScalar, match_op!(Scan))),
-                // Sort -> EvalScalar -> SecureFilter -> Scan
-                match_op!(
-                    Sort,
-                    match_op!(EvalScalar, match_op!(SecureFilter, match_op!(Scan)))
-                ),
+                match_op!(Sort -> Scan),
+                match_op!(Sort -> SecureFilter -> Scan),
+                match_op!(Sort -> EvalScalar -> Scan),
+                match_op!(Sort -> EvalScalar -> SecureFilter -> Scan),
             ],
         }
     }

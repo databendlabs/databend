@@ -43,32 +43,39 @@ pub enum Matcher {
     Leaf,
 }
 
-/// Macro to construct `Matcher::MatchOp` patterns concisely.
+/// Build [`Matcher`] trees with a compact DSL.
 ///
-/// # Examples
-/// ```ignore
-/// // Leaf node
-/// match_op!(Scan)
-///
-/// // With children
-/// match_op!(Filter, match_op!(Scan))
-///
-/// // Nested
-/// match_op!(Sort, match_op!(EvalScalar, match_op!(Scan)))
-/// ```
+/// * Use `->` to describe a unary chain: `match_op!(EvalScalar -> Aggregate -> *)`.
+/// * Use `*` for [`Matcher::Leaf`], meaning "any subtree".
+/// * Use brackets for explicit child lists: `match_op!(Join[*, *])` or
+///   `match_op!(Join[(EvalScalar -> *), (Aggregate -> *)])`.
+/// * Because the macro returns a single [`Matcher`], wrap multiple patterns in
+///   `vec![match_op!(...), match_op!(...)]`.
 #[macro_export]
 macro_rules! match_op {
-    ($op:ident) => {
+    (@node *) => {
+        $crate::optimizer::ir::Matcher::Leaf
+    };
+    (@node $op:ident [$($child:tt),* $(,)?]) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![$(match_op!($child)),*],
+        }
+    };
+    (@node $op:ident -> $($rest:tt)+) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![match_op!(@node $($rest)+)],
+        }
+    };
+    (@node $op:ident) => {
         $crate::optimizer::ir::Matcher::MatchOp {
             op_type: $crate::plans::RelOp::$op,
             children: vec![],
         }
     };
-    ($op:ident, $($child:expr),+ $(,)?) => {
-        $crate::optimizer::ir::Matcher::MatchOp {
-            op_type: $crate::plans::RelOp::$op,
-            children: vec![$($child),+],
-        }
+    ($($pattern:tt)+) => {
+        match_op!(@node $($pattern)+)
     };
 }
 
