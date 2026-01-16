@@ -1,36 +1,21 @@
-query error
+query T?I
 select metadata$filename, $1, metadata$file_row_number  from @data_s3/ndjson/ts.ndjson (file_format=>'ndjson')
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/ndjson/ts.ndjson
-   called: http_util::Client::send
-   service: s3
-   path: ndjson/ts.ndjson
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/ndjson/ts.ndjson): client error (Connect): tcp connect error: Connection refused (os error 111)
-
+testbucket/data/ndjson/ts.ndjson {"t":1736305864} 0
+testbucket/data/ndjson/ts.ndjson {"t":1736305865000} 1
+testbucket/data/ndjson/ts.ndjson {"t":1736305866000000} 2
 
 statement ok
 create or replace table t(file_name string, value variant,  `row` int)
 
-query error
+query TIITI
 copy into t from (select metadata$filename, $1, metadata$file_row_number + 1  from @data_s3/ndjson/ts.ndjson) file_format=(type=ndjson)
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/ndjson/ts.ndjson
-   called: http_util::Client::send
-   service: s3
-   path: ndjson/ts.ndjson
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/ndjson/ts.ndjson): client error (Connect): tcp connect error: Connection refused (os error 111)
-
+ndjson/ts.ndjson 3 0 NULL NULL
 
 query T?I
 select * from t
 ----
+testbucket/data/ndjson/ts.ndjson {"t":1736305864} 1
+testbucket/data/ndjson/ts.ndjson {"t":1736305865000} 2
+testbucket/data/ndjson/ts.ndjson {"t":1736305866000000} 3

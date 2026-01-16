@@ -1,36 +1,19 @@
-query error
+query TTII
 select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/csv/it.csv (file_format=>'csv')
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/it.csv
-   called: http_util::Client::send
-   service: s3
-   path: csv/it.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/it.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
-
+testbucket/data/csv/it.csv b 0 1
+testbucket/data/csv/it.csv d 1 2
 
 statement ok
 create or replace table t(file_name string, c2 string,  `row` int, c1 int)
 
-query error
+query TIITI
 copy into t from (select metadata$filename, $2, metadata$file_row_number + 1, $1 from @data_s3/csv/it.csv) file_format=(type=csv)
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/it.csv
-   called: http_util::Client::send
-   service: s3
-   path: csv/it.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/it.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
-
+csv/it.csv 2 0 NULL NULL
 
 query TTII
 select * from t
 ----
+testbucket/data/csv/it.csv b 1 1
+testbucket/data/csv/it.csv d 2 2

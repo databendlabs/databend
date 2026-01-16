@@ -17,79 +17,28 @@ create or replace stage data_root url='s3://testbucket/data/' connection=(connec
 statement ok
 create or replace stage data_csv url='s3://testbucket/data/csv/' connection=(connection_name='c1') FILE_FORMAT = (type = csv);
 
-query error
+query TIITI
 copy into t1 from @data_root/csv/ii_100.csv file_format=(type=csv)
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv
-   called: http_util::Client::send
-   service: s3
-   path: csv/ii_100.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
+csv/ii_100.csv 100 0 NULL NULL
 
 
-
-query error
+query TIITI
 copy into t1 from @data_csv/ii_100.csv
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
 
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv
-   called: http_util::Client::send
-   service: s3
-   path: ii_100.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
-
-
-query error
+query TIITI
 copy into t1 from @data_csv/ii_100.csv force=true
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv
-   called: http_util::Client::send
-   service: s3
-   path: ii_100.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
+ii_100.csv 100 0 NULL NULL
 
 
-
-query error
+query TIITI
 copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv)
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv
-   called: http_util::Client::send
-   service: s3
-   path: data/csv/ii_100.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
 
 
-
-query error
+query TIITI
 copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv) force=true
 ----
-Databend sqllogictests error: http query error: code: 4000, Text: Unexpected (persistent) at stat => send http request
-
-Context:
-   url: http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv
-   called: http_util::Client::send
-   service: s3
-   path: data/csv/ii_100.csv
-
-Source:
-   error sending request for url (http://127.0.0.1:9900/testbucket/data/csv/ii_100.csv): client error (Connect): tcp connect error: Connection refused (os error 111)
+data/csv/ii_100.csv 100 0 NULL NULL
