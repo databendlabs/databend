@@ -81,7 +81,6 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
@@ -366,16 +365,11 @@ impl SbbfAtomic {
             let hashes = hashes.clone();
             let builder = builder.clone();
 
-            let handler = runtime
-                .try_spawn(
-                    async move {
-                        for hash in &hashes[start..end] {
-                            builder.insert_hash(*hash);
-                        }
-                    },
-                    None,
-                )
-                .expect("failed to spawn runtime task for inserting bloom filter hashes");
+            let handler = runtime.spawn(async move {
+                for hash in &hashes[start..end] {
+                    builder.insert_hash(*hash);
+                }
+            });
             join_handlers.push(handler);
         }
 

@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

@@ -21,7 +21,6 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -459,27 +458,24 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn(
-            {
-                let ctx = context.clone();
-                async move {
-                    let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                    observe_mysql_interpreter_used_time(instant.elapsed());
+        let query_result = context.try_spawn({
+            let ctx = context.clone();
+            async move {
+                let mut data_stream = interpreter.execute(ctx.clone()).await?;
+                observe_mysql_interpreter_used_time(instant.elapsed());
 
-                    // Wrap the data stream, log finish event at the end of stream
-                    let intercepted_stream = async_stream::stream! {
+                // Wrap the data stream, log finish event at the end of stream
+                let intercepted_stream = async_stream::stream! {
 
-                        while let Some(item) = data_stream.next().await {
-                            yield item
-                        };
+                    while let Some(item) = data_stream.next().await {
+                        yield item
                     };
+                };
 
-                    Ok::<_, ErrorCode>(intercepted_stream.boxed())
-                }
-                .in_span(Span::enter_with_local_parent(func_path!()))
-            },
-            None,
-        )?;
+                Ok::<_, ErrorCode>(intercepted_stream.boxed())
+            }
+            .in_span(Span::enter_with_local_parent(func_path!()))
+        })?;
 
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,
