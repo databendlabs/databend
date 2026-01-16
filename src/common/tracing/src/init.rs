@@ -28,7 +28,6 @@ use opendal::Operator;
 use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::WithTonicConfig;
-use tokio;
 use tokio::sync::RwLock;
 
 use crate::Config;

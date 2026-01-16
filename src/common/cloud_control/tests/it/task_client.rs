@@ -38,7 +38,6 @@ use databend_common_cloud_control::pb::task_service_server::TaskService;
 use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
 use databend_common_exception::Result;
 use hyper_util::rt::TokioIo;
-use tokio;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;

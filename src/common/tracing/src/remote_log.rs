@@ -49,7 +49,6 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
-use uuid;
 
 use crate::Config;
 use crate::GlobalLogger;
