@@ -46,7 +46,6 @@ use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::txn_op_response::Response;
 use log::error;
 use log::info;
-use tokio;
 
 use crate::warehouse::WarehouseApi;
 use crate::warehouse::warehouse_api::SelectedNode;

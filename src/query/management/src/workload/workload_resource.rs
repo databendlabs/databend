@@ -328,7 +328,6 @@ mod tests {
     use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
     use databend_common_base::runtime::workload_group::WorkloadGroup;
     use databend_common_meta_store::MetaStore;
-    use tokio;
 
     use super::*;
 
