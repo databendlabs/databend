@@ -31,7 +31,6 @@ use log::Level;
 use log::Record;
 use opendal::Operator;
 use opendal::services;
-use tokio;
 
 fn setup() -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
     let mut labels = BTreeMap::new();
