@@ -21,7 +21,6 @@ use poem::Request;
 use poem::Route;
 use poem::get;
 use pretty_assertions::assert_eq;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_health() -> databend_common_exception::Result<()> {
