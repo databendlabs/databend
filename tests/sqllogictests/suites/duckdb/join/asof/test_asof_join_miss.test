@@ -8,7 +8,7 @@
 # * Probe equality missing (no match)
 # * More than 64 valid probe entries (mask => SV construction)
 # * First radix bin empty.
-# * First payload bin empty
+# * First payload bin empty 
 # * Multiple scanned payload blocks
 
 # Check results against IEJoin

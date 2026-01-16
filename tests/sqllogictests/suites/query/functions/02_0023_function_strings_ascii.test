@@ -12,3 +12,4 @@ query I
 select ascii('-1')
 ----
 45
+

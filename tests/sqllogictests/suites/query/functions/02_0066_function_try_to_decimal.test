@@ -21,3 +21,4 @@ SELECT try_to_decimal(72, 70)(a) FROM test;
 
 statement ok
 DROP TABLE test
+

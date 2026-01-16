@@ -1,8 +1,8 @@
-query I
+query
 select * from @data/invalid_orc/alltypes.zstd.orc (file_format=>'orc')
 ----
 
-query BI?R?
+query
 select boolean, int8, binary, decimal, date32 from @data/orc/alltypes.zstd.orc (file_format=>'orc')
 ----
 NULL NULL NULL NULL NULL
@@ -17,7 +17,7 @@ NULL NULL NULL NULL NULL
 0 53 F09FA494 0.99999 1900-01-01
 NULL NULL NULL NULL NULL
 
-query I
+query
 select int8 from @data/orc/alltypes.zstd.orc (file_format => 'orc') where boolean is not null;
 ----
 0
@@ -30,7 +30,7 @@ select int8 from @data/orc/alltypes.zstd.orc (file_format => 'orc') where boolea
 52
 53
 
-query ?
+query
 select * from @data/orc/nested_array.orc  (file_format=>'orc')
 ----
 [1,NULL,3,43,5]
@@ -39,7 +39,7 @@ select * from @data/orc/nested_array.orc  (file_format=>'orc')
 NULL
 [3,NULL]
 
-query ?
+query
 select * from @data/orc/nested_map.orc  (file_format=>'orc')
 ----
 {"zero":0,"one":1}
@@ -47,7 +47,7 @@ NULL
 {"two":2,"tree":3}
 {"one":1,"two":2,"nill":NULL}
 
-query ?
+query
 select * from @data/orc/nested_struct.orc  (file_format=>'orc')
 ----
 (1.0,1)
@@ -55,3 +55,5 @@ select * from @data/orc/nested_struct.orc  (file_format=>'orc')
 (NULL,NULL)
 NULL
 (-3.0,NULL)
+
+

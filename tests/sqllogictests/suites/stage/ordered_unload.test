@@ -5,7 +5,7 @@ create or replace stage s1;
 statement ok
 copy /*+ set_var(max_block_size=10) */ INTO @s1 from (select * from numbers(10000)) file_format=(type=csv) max_file_size=100;
 
-query B
+query
 SELECT COUNT(*)<10000 FROM (SELECT $1 AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, $1) AS rank FROM '@s1' ( FILE_FORMAT => 'csv', )) WHERE a + 1 = rank
 ----
 1
@@ -18,13 +18,13 @@ remove @s1;
 statement ok
 copy /*+ set_var(max_block_size=10) */ INTO @s1 from (select * from numbers(10000) order by number) file_format=(type=csv) max_file_size=100;
 
-query I
+query
 SELECT COUNT(*) FROM (SELECT $1 AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, $1) AS rank FROM '@s1' ( FILE_FORMAT => 'csv', )) WHERE a + 1 = rank
 ----
 10000
 
 # data_af2ab6dc872546e5a6013dad9c512769_0000_00000770.csv
-query TITTT
+query
 SELECT * from list_stage(location => '@s1') where substr(replace(name, '-', ''), 39, 4) != '0000'
 ----
 
@@ -37,7 +37,7 @@ remove @s1;
 statement ok
 copy /*+ set_var(max_block_size=10) */ INTO @s1 from (select * from numbers(10000) order by number) file_format=(type=parquet) max_file_size=100;
 
-query I
+query
 SELECT COUNT(*) FROM (SELECT number AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, number) AS rank FROM '@s1' ( FILE_FORMAT => 'parquet', )) WHERE a + 1 = rank
 ----
 10000
@@ -50,7 +50,7 @@ remove @s1;
 statement ok
 copy /*+ set_var(max_block_size=10) */ INTO @s1 from (select * from numbers(10000) order by number) file_format=(type=ndjson) max_file_size=100;
 
-query I
+query
 SELECT COUNT(*) FROM (SELECT $1:number::int AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, a) AS rank FROM '@s1' ( FILE_FORMAT => 'ndjson', )) WHERE a + 1 = rank
 ----
 10000

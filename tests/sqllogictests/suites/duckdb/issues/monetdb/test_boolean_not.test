@@ -56,3 +56,4 @@ query B
 SELECT f1 FROM BOOLTBL1 WHERE NOT f1 = TRUE
 ----
 0
+

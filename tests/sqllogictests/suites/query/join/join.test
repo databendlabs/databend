@@ -309,3 +309,4 @@ drop table if exists t1;
 
 statement ok
 with v2 as (SELECT 'xx' || cast(number as string) AS invoice_nr FROM numbers(135) group by invoice_nr order by invoice_nr) select v2.invoice_nr from v2 where EXISTS (SELECT cast(number as string) AS invoice_nr FROM numbers(800) where v2.invoice_nr = cast(number as string)) ignore_result;
+

@@ -64,3 +64,4 @@ query T
 select substr(version(), 1, 6);
 ----
 8.0.90
+

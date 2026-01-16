@@ -70,3 +70,4 @@ DROP USER IF EXISTS 'test-h'
 
 statement ok
 DROP USER IF EXISTS 'test-i'
+

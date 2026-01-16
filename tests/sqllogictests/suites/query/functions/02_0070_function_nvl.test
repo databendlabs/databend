@@ -100,3 +100,4 @@ NULL NULL NULL
 
 statement ok
 DROP TABLE t
+

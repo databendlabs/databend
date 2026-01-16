@@ -85,7 +85,7 @@ select * from distributed_target_test order by a;
 10 l
 
 ## corner case test
-## when a node matched all source, it will give a empty block,
+## when a node matched all source, it will give a empty block, 
 ## so in this case, we should not insert anything.
 statement ok
 drop table if exists corner_target_table;

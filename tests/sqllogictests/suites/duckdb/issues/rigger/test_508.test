@@ -20,3 +20,4 @@ query II
 SELECT * FROM t1 LEFT JOIN t0 ON t0.c0=t1.c0
 ----
 NULL NULL
+

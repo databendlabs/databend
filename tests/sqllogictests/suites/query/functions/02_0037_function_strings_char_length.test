@@ -37,3 +37,4 @@ query I
 SELECT CHARACTER_LENGTH('早ab')
 ----
 3
+

@@ -43,4 +43,3 @@ SELECT c0, exp(c0) FROM t1 order by c0
 
 query R
 SELECT c0 FROM t1 WHERE exp(c0) IS NULL
-----

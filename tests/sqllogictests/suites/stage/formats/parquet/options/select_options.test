@@ -1,4 +1,4 @@
-query I
+query
 select id from @data/parquet/ (files => ('alltypes_plain.parquet')) a;
 ----
 4

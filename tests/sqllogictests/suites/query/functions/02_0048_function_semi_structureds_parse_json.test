@@ -261,3 +261,5 @@ select to_variant(a), to_variant(b), to_variant(c) from t3
 
 statement ok
 DROP DATABASE db1
+
+

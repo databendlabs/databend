@@ -21,3 +21,4 @@ DROP TABLE t
 
 statement ok
 DROP database db12_0002
+

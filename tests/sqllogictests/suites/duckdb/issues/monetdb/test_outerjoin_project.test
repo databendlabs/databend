@@ -17,3 +17,4 @@ query II
 select * from a left join (select a, 20 from b) as x using (a)
 ----
 1 NULL
+

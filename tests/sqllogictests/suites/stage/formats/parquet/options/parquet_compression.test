@@ -16,7 +16,7 @@ copy into @data/unload/parquet_compression/none.parquet from (select * from numb
 statement ok
 copy into @data/unload/parquet_compression/zstd.parquet from (select * from numbers(3))
 
-query I
+query
 select * from @data/unload/parquet_compression/snappy.parquet
 ----
 0

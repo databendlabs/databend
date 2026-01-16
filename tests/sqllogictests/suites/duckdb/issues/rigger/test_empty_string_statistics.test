@@ -31,3 +31,4 @@ query I
 SELECT COUNT(*) FROM t0 WHERE NOT((t0.c0)>('!9t'))
 ----
 1
+

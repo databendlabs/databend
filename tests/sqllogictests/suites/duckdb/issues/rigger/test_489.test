@@ -19,3 +19,4 @@ query B
 SELECT NOT(NULL OR TRUE)
 ----
 0
+

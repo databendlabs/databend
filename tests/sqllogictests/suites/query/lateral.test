@@ -71,7 +71,6 @@ select test_mm.payload payload from test_mm,
 lateral flatten(payload:key) walks
 where create_date > date_add(hour, -6, current_timestamp())
 and walks.value:source_person_id::varchar = 'xvcvz'  limit 1;
-----
 
 statement ok
 CREATE TABLE user_activities(user_id int, activities variant)

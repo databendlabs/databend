@@ -1,14 +1,14 @@
-query TTBTI
+query
 select * from infer_schema(location => '@data/invalid_xxx/tuple.parquet')
 ----
 
-query TTBTI
+query
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
 id INT 0 parquet/tuple.parquet 0
 t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
 
-query TTBTI
+query
 select * from infer_schema(location => '@data/parquet/complex.parquet')
 ----
 resourceType VARCHAR 1 parquet/complex.parquet 0
@@ -43,13 +43,13 @@ yy__us_core_race VARCHAR 1 parquet/complex.parquet 28
 yy__us_core_ethnicity VARCHAR 1 parquet/complex.parquet 29
 yy__us_core_birthsex TUPLE(VALUECODE STRING,) 1 parquet/complex.parquet 30
 
-query TTBTI
+query
 select * from infer_schema(location => '@data/parquet/variant.parquet')
 ----
 a INT 0 parquet/variant.parquet 0
 b VARIANT 0 parquet/variant.parquet 1
 
-query TTBTI
+query
 select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
 id INT 0 parquet/tuple.parquet 0

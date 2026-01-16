@@ -122,3 +122,5 @@ with
 
 statement error 1001
 ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'invalid');
+
+

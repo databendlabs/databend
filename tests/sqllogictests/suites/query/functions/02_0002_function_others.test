@@ -66,3 +66,4 @@ query ?
 SELECT array(1);
 ----
 [1]
+

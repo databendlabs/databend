@@ -17,3 +17,4 @@ query I
 select to_yyyymm('2021-04-15 14:55:17.915000'::timestamp)
 ----
 202104
+

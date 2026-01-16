@@ -39,3 +39,4 @@ SELECT g, SUM(i), COUNT(*), COUNT(i), SUM(g) FROM integers GROUP BY g ORDER BY 1
 ----
 0 3 2 2 0
 1 3 2 1 2
+

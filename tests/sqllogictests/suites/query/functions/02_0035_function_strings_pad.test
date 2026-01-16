@@ -279,3 +279,4 @@ SELECT RPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDE
 22
 333
 4444
+

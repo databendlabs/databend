@@ -571,3 +571,4 @@ USE default
 
 statement ok
 DROP DATABASE array_func_test
+

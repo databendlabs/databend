@@ -82,3 +82,5 @@ use default
 
 statement ok
 drop database test_gram_index
+
+

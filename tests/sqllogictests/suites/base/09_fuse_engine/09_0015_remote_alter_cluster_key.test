@@ -79,3 +79,4 @@ DROP TABLE t09_0015_1
 
 statement ok
 DROP DATABASE db1
+

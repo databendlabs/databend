@@ -9,3 +9,4 @@ INSERT INTO t0(c0) VALUES (NULL)
 
 statement ok
 SELECT * FROM t0 WHERE c0 = c0
+

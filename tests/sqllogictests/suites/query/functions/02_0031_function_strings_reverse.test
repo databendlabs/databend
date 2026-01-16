@@ -10,3 +10,4 @@ query T
 SELECT REVERSE('abc')
 ----
 cba
+

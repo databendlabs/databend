@@ -9,3 +9,6 @@ query B
 SELECT 1::BOOL
 ----
 1
+
+
+

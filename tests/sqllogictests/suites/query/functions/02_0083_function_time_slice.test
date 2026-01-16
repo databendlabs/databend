@@ -66,3 +66,4 @@ select time_slice('2022-02-02'::date, 0, 'week');
 
 statement error 1006
 select time_slice('2022-02-02'::date, 1, 'week', 'err_string');
+

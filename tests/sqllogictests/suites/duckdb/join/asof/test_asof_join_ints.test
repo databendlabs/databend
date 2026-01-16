@@ -29,7 +29,7 @@ CREATE TABLE probe0 AS
 	FROM range(0,10) vals(v))
 ;
 
-# This is not implemented yet because it requires a dedicated operator
+# This is not implemented yet because it requires a dedicated operator 
 # instead of LEAD(...infinity::INTEGER)
 
 # INNER ON inequality only

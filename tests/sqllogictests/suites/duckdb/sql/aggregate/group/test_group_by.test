@@ -114,3 +114,4 @@ INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
 # query II
 # SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
+

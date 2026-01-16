@@ -590,3 +590,5 @@ use default
 
 statement ok
 drop database test_inverted_index
+
+

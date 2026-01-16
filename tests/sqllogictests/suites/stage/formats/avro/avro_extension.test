@@ -1,10 +1,10 @@
 
-query TT
+query 
 select json_typeof($1:c_date), json_typeof($1:c_uuid)  from @data/avro/extension.avro(file_format=>'avro');
 ----
 DATE STRING
 
-query ?T
+query 
 select $1:c_date::date, $1:c_uuid::string  from @data/avro/extension.avro(file_format=>'avro');
 ----
 2025-05-20 778d0e8a-7369-4531-8736-c610970d016c

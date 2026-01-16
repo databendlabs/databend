@@ -63,3 +63,4 @@ SELECT * FROM t2
 
 statement ok
 DROP DATABASE IF EXISTS db1
+

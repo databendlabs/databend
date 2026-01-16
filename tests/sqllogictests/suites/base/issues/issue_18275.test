@@ -25,3 +25,5 @@ select * from product_test order by id;
 ----
 6 Keyboard Electronics 79.99 25
 7 Table Furniture 399.99 3
+
+

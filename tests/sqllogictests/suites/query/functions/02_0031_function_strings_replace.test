@@ -95,3 +95,4 @@ SELECT REPLACE(to_varchar(number * 10), to_varchar(number), to_varchar(number)) 
 20
 30
 40
+

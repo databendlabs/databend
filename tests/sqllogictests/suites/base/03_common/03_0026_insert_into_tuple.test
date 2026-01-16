@@ -134,3 +134,4 @@ select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from v5
 
 statement ok
 DROP DATABASE db1
+

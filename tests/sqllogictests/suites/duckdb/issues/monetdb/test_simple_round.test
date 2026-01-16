@@ -36,3 +36,4 @@ query R
 select round(col1, 4) from test
 ----
 2.887
+

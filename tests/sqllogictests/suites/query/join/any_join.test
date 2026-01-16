@@ -51,7 +51,7 @@ SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 ON t1.id = t2.id AND t2
 ----
 1 a1 x2
 
-query ITT
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id) WHERE t1.id IS NULL OR t2.id IS NULL;
 ----
 
@@ -139,11 +139,11 @@ SELECT t3.id, t3.val1, t4.val2 FROM t3 INNER ANY JOIN t4 USING(id);
 statement ok
 CREATE OR REPLACE TABLE empty (id Int32, val String);
 
-query ITT
+query ITT rowsort
 SELECT * FROM t1 INNER ANY JOIN empty USING(id);
 ----
 
-query ITT
+query ITT rowsort
 SELECT * FROM empty LEFT ANY JOIN t1 USING(id);
 ----
 

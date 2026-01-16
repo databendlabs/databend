@@ -93,3 +93,4 @@ EOF while parsing a value, pos 3 [1,
 
 statement ok
 DROP DATABASE db1
+

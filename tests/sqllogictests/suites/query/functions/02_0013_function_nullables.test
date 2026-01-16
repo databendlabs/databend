@@ -36,3 +36,4 @@ SELECT to_nullable(3), to_nullable(4)
 
 statement ok
 DROP TABLE IF EXISTS nullable_test
+

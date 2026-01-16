@@ -167,3 +167,4 @@ select sum(amount1)a ,  sum(amount2) b , a  +  b, a - b, a * b, a / b from test3
 
 statement ok
 drop table test3
+

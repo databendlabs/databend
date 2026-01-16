@@ -3,4 +3,3 @@
 
 query I
 SELECT * FROM NUMBERS(1000) IGNORE_RESULT
-----

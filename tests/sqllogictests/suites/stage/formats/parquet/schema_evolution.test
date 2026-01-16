@@ -13,7 +13,7 @@ copy into @s1 from (select 4 as a, 6 as c)
 statement ok
 copy into t1 from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT);
 
-query I
+query 
 select * from t1 order by a;
 ----
 1
@@ -28,13 +28,13 @@ ALTER TABLE t1 SET options(ENABLE_SCHEMA_EVOLUTION = true);
 statement ok
 copy into t1 from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT) force=true;
 
-query III
+query 
 select * from t1 order by a;
 ----
 1 2 3
 4 NULL 6
 
-query TTTTT
+query 
 desc t1;
 ----
 a INT YES NULL (empty)

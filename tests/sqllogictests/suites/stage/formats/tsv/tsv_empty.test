@@ -9,7 +9,7 @@ copy into it from @data/tsv/empty.tsv file_format = (type = TSV, field_delimiter
 ----
 tsv/empty.tsv 1 0 NULL NULL
 
-query IIIII
+query 
 select * from it;
 ----
 1 2 NULL 0 5

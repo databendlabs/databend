@@ -28,3 +28,4 @@ query I
 select * from t;
 ----
 1
+

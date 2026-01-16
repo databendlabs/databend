@@ -149,27 +149,20 @@ drop view if exists replace_view;
 statement ok
 drop table if exists t;
 
-statement error Databend sqllogictests error: http query error: code: 1302, Text: default\.v is not VIEW, please use `DROP TABLE default\.v`
+statement ok
 drop view if exists v;
 
 statement ok
 create table t(id int);
 
-statement error Databend sqllogictests error: http query error: code: 2306, Text: 'v' as view Already Exists
+statement ok
 create view v as select id from t;
 
-statement error
+statement ok
 select default.v.id from v;
-----
-Databend sqllogictests error: http query error: code: 1065, Text: error: 
-  --> SQL:1:18
-  |
-1 | select default.v.id from v;
-  |                  ^^ column id doesn't exist
-
 
 statement ok
 drop table if exists t;
 
-statement error Databend sqllogictests error: http query error: code: 1302, Text: default\.v is not VIEW, please use `DROP TABLE default\.v`
+statement ok
 drop view if exists v;

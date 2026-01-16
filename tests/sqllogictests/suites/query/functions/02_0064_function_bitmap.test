@@ -86,3 +86,4 @@ query ?
 SELECT bitmap_to_array(build_bitmap([1, 2, 3, 100, 10000]));
 ----
 [1,2,3,100,10000]
+

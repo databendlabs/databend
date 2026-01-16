@@ -3,3 +3,4 @@ SELECT * FROM ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) a JOIN ( SEL
 ----
 apple apple NULL
 banana banana 1
+

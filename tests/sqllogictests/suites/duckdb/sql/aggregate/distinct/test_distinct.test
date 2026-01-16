@@ -48,3 +48,4 @@ query I
 SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test
 ----
 11
+

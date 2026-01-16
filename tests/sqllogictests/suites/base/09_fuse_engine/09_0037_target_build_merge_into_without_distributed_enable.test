@@ -241,3 +241,4 @@ SELECT id, float_col FROM t2 ORDER BY id;
 
 statement ok
 drop database if exists db;
+

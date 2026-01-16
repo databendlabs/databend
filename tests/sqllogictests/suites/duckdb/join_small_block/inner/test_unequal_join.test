@@ -91,3 +91,4 @@ select count(*) from a,b where i <> j
 
 statement ok
 set max_block_size = 65536;
+

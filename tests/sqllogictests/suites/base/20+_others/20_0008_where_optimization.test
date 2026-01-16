@@ -32,7 +32,6 @@ select * from t_where_optimizer where a = b order by a
 
 query II
 select * from t_where_optimizer where a < 1
-----
 
 
 # One part will be filtered out

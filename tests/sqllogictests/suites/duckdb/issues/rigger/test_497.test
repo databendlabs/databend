@@ -18,3 +18,4 @@ INSERT INTO t0(c0) VALUES (0)
 
 statement ok
 SELECT t0.c0 FROM t0, t1 WHERE t1.c0 < t0.c0
+

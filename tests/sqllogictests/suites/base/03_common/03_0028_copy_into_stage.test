@@ -88,3 +88,4 @@ drop table if EXISTS world
 
 statement ok
 DROP DATABASE db1
+

@@ -79,3 +79,7 @@ DROP table employees;
 
 statement ok
 DROP DATABASE issue_10861;
+
+
+
+

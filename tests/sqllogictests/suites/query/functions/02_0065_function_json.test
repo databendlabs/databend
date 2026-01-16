@@ -1695,3 +1695,4 @@ query I
 SELECT array_unique(parse_json('["a", "b", "a", null, "c"]'))
 ----
 4
+

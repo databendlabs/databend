@@ -37,3 +37,4 @@ select * from "E" left outer join "I" on "E"."intCol" = "I"."intCol" or ("E"."in
 0 zero NULL NULL
 1 one NULL NULL
 2 two 2 due
+

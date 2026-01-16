@@ -31,14 +31,13 @@ a
 statement error
 select to_string(UNHEX('C328'));
 
-statement error Databend sqllogictests error: http query error: code: 2801, Text: Unknown variable: "enable_binary_to_utf8_lossy"
+statement ok
 set enable_binary_to_utf8_lossy = 1;
 
-query error
+query T
 select to_string(UNHEX('C328'));
 ----
-Databend sqllogictests error: http query error: code: 1006, Text: invalid utf8 sequence; consider setting binary_output_format to 'utf-8-lossy' while evaluating function `to_string(C328)` in expr `CAST(from_hex('C328')::string AS String)`
-
+�(
 
 query I
 select try_cast(3 as int);

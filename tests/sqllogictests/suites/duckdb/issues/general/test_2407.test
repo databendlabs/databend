@@ -35,3 +35,4 @@ query II
 select arg_min(i, d), arg_min(d, i) from test2
 ----
 1 -9223372036854775807
+

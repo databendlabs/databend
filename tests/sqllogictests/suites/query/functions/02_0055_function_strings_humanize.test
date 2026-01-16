@@ -117,3 +117,4 @@ query ?
 SELECT HUMANIZE_NUMBER(NULL)
 ----
 NULL
+

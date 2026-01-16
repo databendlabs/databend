@@ -133,3 +133,4 @@ DROP TABLE d1
 
 statement ok
 DROP DATABASE db_09_004
+

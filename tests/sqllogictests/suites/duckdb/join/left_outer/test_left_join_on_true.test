@@ -42,3 +42,5 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i, j, k, l
 2	3	2	20
 3	4	1	10
 3	4	2	20
+
+

@@ -48,3 +48,4 @@ SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database 
 
 statement ok
 DROP database db_12_0001
+

@@ -105,3 +105,4 @@ query TT
 select arg_min(name,salary),arg_max(name,salary)  from names
 ----
 Pedro Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+

@@ -53,3 +53,4 @@ DROP SCHEMA `test`
 
 # statement ok
 # DROP SCHEMA `datafuselabs`
+

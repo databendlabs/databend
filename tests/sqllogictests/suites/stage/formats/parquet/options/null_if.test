@@ -26,7 +26,7 @@ remove @data/unload/parquet/null_if/
 statement ok
 copy into @data/unload/parquet/null_if from string
 
-query T
+query
 select a from  @data/unload/parquet/null_if order by a
 ----
 (empty)
@@ -42,11 +42,11 @@ create file format parquet_null_if type=parquet null_if=('', 'null')
 query error 1006.*fail to auto cast column a
 copy into int from @data/unload/parquet/null_if/
 
-query TIITI
+query
 copy into int from @data/unload/parquet/null_if/ file_format=(format_name='parquet_null_if') force=true  RETURN_FAILED_ONLY=TRUE
 ----
 
-query I
+query
 select * from int
 ----
 NULL
@@ -60,11 +60,11 @@ truncate table int
 query error 1006.*fail to auto cast column a
 copy into int from (select a from @data/unload/parquet/null_if/)  file_format=(format_name='parquet_null_if') force=true
 
-query TIITI
+query
 copy into int from (select if(a in ('', 'null'), null, a) from @data/unload/parquet/null_if/) file_format=(type='parquet') force=true RETURN_FAILED_ONLY=TRUE
 ----
 
-query I
+query
 select * from int
 ----
 NULL

@@ -27,3 +27,4 @@ query IIII
 SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i+integers2.k+9<>integers.j+integers2.l ORDER BY 1, 2, 3, 4
 ----
 1	1	NULL	NULL
+

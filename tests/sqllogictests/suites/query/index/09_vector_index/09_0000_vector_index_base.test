@@ -323,3 +323,4 @@ use default
 
 statement ok
 drop database test_vector_index
+

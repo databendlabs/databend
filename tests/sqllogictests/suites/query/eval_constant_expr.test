@@ -17,3 +17,4 @@ SELECT count(1) FROM test WHERE test IS NOT NULL AND test != '2024-01-01' AND NO
 
 statement ok
 drop table test;
+

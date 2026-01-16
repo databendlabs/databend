@@ -13,3 +13,4 @@ SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i
 2 4
 3 4
 NULL 4
+

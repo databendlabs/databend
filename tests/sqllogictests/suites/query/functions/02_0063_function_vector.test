@@ -91,3 +91,4 @@ NULL NULL
 
 statement ok
 DROP TABLE vectors;
+

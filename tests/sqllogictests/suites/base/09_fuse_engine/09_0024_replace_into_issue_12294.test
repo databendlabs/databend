@@ -124,3 +124,7 @@ drop table t1;
 
 statement ok
 DROP DATABASE issue_12294
+
+
+
+

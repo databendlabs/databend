@@ -11,3 +11,4 @@ select 1 where 2 + all(select 2)
 
 statement ok
 select 1 where 2 > any(select 2)
+

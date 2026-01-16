@@ -9,20 +9,6 @@ show dictionaries
 ----
 default d1 ["c1"] ["INT"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 default d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
-default mysql_dic_active ["active"] ["BOOLEAN NULL"] ["id","name","age","salary"] ["INT NULL","VARCHAR NULL","SMALLINT UNSIGNED NULL","FLOAT NULL"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default mysql_dic_age ["age"] ["SMALLINT UNSIGNED NULL"] ["id","name","salary","active"] ["INT NULL","VARCHAR NULL","FLOAT NULL","BOOLEAN NULL"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default mysql_dic_id ["id"] ["INT NULL"] ["name","age","salary","active"] ["VARCHAR NULL","SMALLINT UNSIGNED NULL","FLOAT NULL","BOOLEAN NULL"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default mysql_dic_id_not_null ["id"] ["INT"] ["name","age","salary","active"] ["VARCHAR","SMALLINT UNSIGNED","FLOAT","BOOLEAN"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default mysql_dic_name ["name"] ["VARCHAR NULL"] ["id","age","salary","active"] ["INT NULL","SMALLINT UNSIGNED NULL","FLOAT NULL","BOOLEAN NULL"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default mysql_dic_salary ["salary"] ["FLOAT NULL"] ["id","name","age","active"] ["INT NULL","VARCHAR NULL","SMALLINT UNSIGNED NULL","BOOLEAN NULL"] mysql(db=test host=localhost password=[hidden] port=3306 table=user username=root) (empty)
-default redis_d1 ["key"] ["VARCHAR"] ["value"] ["VARCHAR"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d2 ["key"] ["VARCHAR"] ["value"] ["VARCHAR NULL"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d3 ["key"] ["VARCHAR NULL"] ["value"] ["VARCHAR"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d4 ["key"] ["VARCHAR NULL"] ["value"] ["VARCHAR NULL"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d5 ["key"] ["VARCHAR"] ["value"] ["VARCHAR"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d6 ["key"] ["VARCHAR"] ["value"] ["VARCHAR NULL"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d7 ["key"] ["VARCHAR NULL"] ["value"] ["VARCHAR"] redis(host=127.0.0.1 port=6379) (empty)
-default redis_d8 ["key"] ["VARCHAR NULL"] ["value"] ["VARCHAR NULL"] redis(host=127.0.0.1 port=6379) (empty)
 
 statement ok
 DROP DATABASE IF EXISTS show_dictionary

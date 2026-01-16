@@ -40,3 +40,4 @@ DROP TABLE t
 
 statement ok
 DROP DATABASE db_09_0007
+

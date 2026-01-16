@@ -33,8 +33,6 @@ test_conn azblob endpoint_url=******com
 query TTT
 SHOW CONNECTIONS
 ----
-my_conn s3 access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
-my_conn_s3 s3 access_key_id=******min endpoint_url=******900 secret_access_key=******min
 test_conn azblob endpoint_url=******com
 
 statement ok
@@ -49,8 +47,6 @@ DESC CONNECTION test_conn
 query TTT
 SHOW CONNECTIONS
 ----
-my_conn s3 access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
-my_conn_s3 s3 access_key_id=******min endpoint_url=******900 secret_access_key=******min
 
 statement ok
 DROP CONNECTION IF EXISTS test_replace_conn

@@ -46,3 +46,4 @@ SELECT uid FROM (SELECT uid,retention(date = '2018-08-06', date = '2018-08-07') 
 
 statement ok
 DROP TABLE retention_test
+

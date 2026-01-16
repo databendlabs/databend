@@ -4,18 +4,18 @@ create or replace table t1(c1 int, c2 string);
 statement ok
 set variable pt='it.csv';
 
-query T
+query 
 select $1 from @data/csv/ (pattern => $pt, file_format=>'csv')
 ----
 1
 2
 
-query TIITI
+query 
 copy into t1 from @data/csv/ pattern= $pt file_format=(type=csv)
 ----
 csv/it.csv 2 0 NULL NULL
 
-query IT
+query
 select * from t1
 ----
 1 b

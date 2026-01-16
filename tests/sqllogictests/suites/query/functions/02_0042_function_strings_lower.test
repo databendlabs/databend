@@ -12,3 +12,4 @@ query ?
 SELECT LOWER(NULL)
 ----
 NULL
+

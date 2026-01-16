@@ -63,3 +63,4 @@ query RRR
 SELECT AVG(i), AVG(j), AVG(k) FROM vals
 ----
 NULL NULL NULL
+

@@ -4,13 +4,13 @@ drop table if exists ti
 statement ok
 create table ti (b string, c int)
 
-query TIITI
+query 
 copy /*+ set_var(max_threads=1) */ into ti from @data/tsv/ pattern = 'wrong_sample.*[.]tsv' file_format = (type = TSV) ON_ERROR=continue
 ----
 tsv/wrong_sample.tsv 4 2 Invalid value 'b' for column 1 (c Int32 NULL): invalid text for number 4
 tsv/wrong_sample2.tsv 4 2 Number of columns in file (1) does not match that of the corresponding table (2) 3
 
-query TI
+query 
 select * from ti order by c
 ----
 "a 1

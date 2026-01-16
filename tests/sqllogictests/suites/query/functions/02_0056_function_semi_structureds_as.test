@@ -251,3 +251,4 @@ select id, v, is_null_value(v), is_boolean(v), is_integer(v), is_float(v), is_st
 
 statement ok
 DROP DATABASE db1
+

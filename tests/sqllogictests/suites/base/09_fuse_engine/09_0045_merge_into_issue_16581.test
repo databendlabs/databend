@@ -15,3 +15,4 @@ select * from test_merge order by col1;
 2 abc 2
 3 abc 3
 4 update 44
+

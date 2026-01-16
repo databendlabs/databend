@@ -4,14 +4,14 @@ drop table if exists t1
 statement ok
 create table t1 (c1 int, c2 int, c3 int64, c4 string default 'ok')
 
-query TTBTI
+query 
 select * from infer_schema(location => '@data/parquet/diff_schema/f1.parquet')
 ----
 c1 BIGINT 1 parquet/diff_schema/f1.parquet 0
 c2 SMALLINT 1 parquet/diff_schema/f1.parquet 1
 c3 BIGINT 1 parquet/diff_schema/f1.parquet 2
 
-query TTBTI
+query 
 select * from infer_schema(location => '@data/parquet/diff_schema/f2.parquet')
 ----
 c6 BIGINT 1 parquet/diff_schema/f2.parquet 0
@@ -22,13 +22,13 @@ c4 VARCHAR 1 parquet/diff_schema/f2.parquet 3
 query error
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet) pattern='.*[.]parquet'
 
-query TIITI
+query 
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT) pattern='.*[.]parquet'
 ----
 parquet/diff_schema/f1.parquet 10 0 NULL NULL
 parquet/diff_schema/f2.parquet 10 0 NULL NULL
 
-query IIIT
+query 
 select * from t1 order by c1,c2,c3,c4
 ----
 110 120 130 ok
@@ -52,6 +52,6 @@ NULL 227 NULL 247
 NULL 228 NULL 248
 NULL 229 NULL 249
 
-query TIITI
+query 
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet  missing_field_as = FIELD_DEFAULT) pattern='.*[.]parquet'
 ----

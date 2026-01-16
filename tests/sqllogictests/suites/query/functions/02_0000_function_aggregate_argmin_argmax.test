@@ -25,3 +25,4 @@ query I
 SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name)
 ----
 1
+

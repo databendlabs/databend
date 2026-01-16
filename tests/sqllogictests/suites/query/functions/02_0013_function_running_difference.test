@@ -20,3 +20,4 @@ select d, running_difference(d) from running_difference_test
 
 statement ok
 DROP TABLE IF EXISTS running_difference_test
+

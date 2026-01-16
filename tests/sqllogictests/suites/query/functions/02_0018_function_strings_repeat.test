@@ -167,3 +167,4 @@ select repeat(s, 0) from strings_repeat_sample_3
 
 statement ok
 drop table strings_repeat_sample_3
+

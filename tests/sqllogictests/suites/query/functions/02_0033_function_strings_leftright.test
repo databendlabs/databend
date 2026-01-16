@@ -139,3 +139,4 @@ SELECT RIGHT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
 00
 000
 0000
+
