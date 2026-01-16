@@ -21,7 +21,6 @@ use std::time::Duration;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalSequence;
-use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -151,7 +150,7 @@ impl LocalMetaService {
         let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
         let meta_handle = Arc::new(meta_handle);
         let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
-        grpc_server.start().await?;
+        grpc_server.do_start().await?;
 
         let client = Self::grpc_client(&config, version).await?;
 

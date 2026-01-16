@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use databend_common_base::base::Stoppable;
+use databend_base::shutdown::Graceful;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
 use databend_common_http::health_handler;
@@ -25,6 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_meta_types::MetaNetworkError;
+use futures::future::BoxFuture;
 use log::info;
 use log::warn;
 use poem::Endpoint;
@@ -32,7 +33,6 @@ use poem::EndpointExt;
 use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
-use tokio::sync::broadcast;
 
 use crate::configs::Config;
 use crate::meta_node::meta_handle::MetaHandle;
@@ -137,21 +137,17 @@ impl HttpService {
         }
     }
 
-    pub async fn do_stop(&mut self, force: Option<broadcast::Receiver<()>>) {
+    pub async fn do_stop(&mut self, force: Option<BoxFuture<'static, ()>>) {
         self.shutdown_handler.stop(force).await;
     }
 }
 
 #[async_trait::async_trait]
-impl Stoppable for HttpService {
+impl Graceful for HttpService {
     type Error = AnyError;
 
-    async fn start(&mut self) -> Result<(), Self::Error> {
-        self.do_start().await.map_err(|e| AnyError::new(&e))
-    }
-
-    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
-        let _: () = self.do_stop(force).await;
+    async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {
+        self.do_stop(force).await;
         Ok(())
     }
 }
