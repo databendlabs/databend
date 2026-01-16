@@ -335,18 +335,46 @@ where
     }
 
     fn finalize(self) -> Result<ColumnStatistics> {
-        let min = if let Some(v) = self.min {
+        Self::build_statistics(
+            self.min,
+            self.max,
+            self.null_count,
+            self.in_memory_size,
+            &self.data_type,
+        )
+    }
+
+    fn peek(&self) -> Result<Option<ColumnStatistics>> {
+        if self.min.is_none() && self.max.is_none() && self.null_count == 0 {
+            return Ok(None);
+        }
+        let stats = Self::build_statistics(
+            self.min.clone(),
+            self.max.clone(),
+            self.null_count,
+            self.in_memory_size,
+            &self.data_type,
+        )?;
+        Ok(Some(stats))
+    }
+
+    fn build_statistics(
+        min: Option<A::Value>,
+        max: Option<A::Value>,
+        null_count: usize,
+        in_memory_size: usize,
+        data_type: &DataType,
+    ) -> Result<ColumnStatistics> {
+        let min = if let Some(v) = min {
             let v = A::value_to_scalar(v);
-            // Safe unwrap: `Trim for Scalar` always returns Some<> (strings are truncated, numerics passthrough)
-            T::upcast_scalar_with_type(v, &self.data_type)
-                .trim_min()
-                .unwrap()
+            // Safe unwrap: `Trim for Scalar` always returns Some (strings truncate, numerics passthrough).
+            T::upcast_scalar_with_type(v, data_type).trim_min().unwrap()
         } else {
             Scalar::Null
         };
-        let max = if let Some(v) = self.max {
+        let max = if let Some(v) = max {
             let v = A::value_to_scalar(v);
-            if let Some(v) = T::upcast_scalar_with_type(v, &self.data_type).trim_max() {
+            if let Some(v) = T::upcast_scalar_with_type(v, data_type).trim_max() {
                 v
             } else {
                 return Err(ErrorCode::Internal(
@@ -360,67 +388,33 @@ where
         Ok(ColumnStatistics::new(
             min,
             max,
-            self.null_count as u64,
-            self.in_memory_size as u64,
+            null_count as u64,
+            in_memory_size as u64,
             None,
         ))
-    }
-
-    fn snapshot(&self) -> Result<Option<ColumnStatistics>> {
-        if self.min.is_none() && self.max.is_none() && self.null_count == 0 {
-            return Ok(None);
-        }
-        let min = if let Some(v) = &self.min {
-            let v = A::value_to_scalar(v.clone());
-            // Safe unwrap: `Trim for Scalar` always returns Some (strings truncate, numerics passthrough)
-            T::upcast_scalar_with_type(v, &self.data_type)
-                .trim_min()
-                .unwrap()
-        } else {
-            Scalar::Null
-        };
-        let max = if let Some(v) = &self.max {
-            let v = A::value_to_scalar(v.clone());
-            if let Some(v) = T::upcast_scalar_with_type(v, &self.data_type).trim_max() {
-                v
-            } else {
-                return Err(ErrorCode::Internal(
-                    "Unable to trim string: first 16 chars are all replacement_point".to_string(),
-                ));
-            }
-        } else {
-            Scalar::Null
-        };
-        Ok(Some(ColumnStatistics::new(
-            min,
-            max,
-            self.null_count as u64,
-            self.in_memory_size as u64,
-            None,
-        )))
     }
 }
 
 impl ColumnStatsPeek for ColumnStatisticsBuilder {
     fn peek(&self) -> Result<Option<ColumnStatistics>> {
         match self {
-            ColumnStatisticsBuilder::Int8(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Int16(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Int32(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Int64(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::UInt8(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::UInt16(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::UInt32(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::UInt64(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Float32(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Float64(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::String(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Date(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Timestamp(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::TimestampTz(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Decimal64(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Decimal128(inner) => inner.snapshot(),
-            ColumnStatisticsBuilder::Decimal256(inner) => inner.snapshot(),
+            ColumnStatisticsBuilder::Int8(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Int16(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Int32(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Int64(inner) => inner.peek(),
+            ColumnStatisticsBuilder::UInt8(inner) => inner.peek(),
+            ColumnStatisticsBuilder::UInt16(inner) => inner.peek(),
+            ColumnStatisticsBuilder::UInt32(inner) => inner.peek(),
+            ColumnStatisticsBuilder::UInt64(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Float32(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Float64(inner) => inner.peek(),
+            ColumnStatisticsBuilder::String(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Date(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Timestamp(inner) => inner.peek(),
+            ColumnStatisticsBuilder::TimestampTz(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Decimal64(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Decimal128(inner) => inner.peek(),
+            ColumnStatisticsBuilder::Decimal256(inner) => inner.peek(),
         }
     }
 }

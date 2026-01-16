@@ -18605,7 +18605,7 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 [[package]]
 name = "xorfilter-rs"
 version = "0.5.2"
-source = "git+https://github.com/datafuse-extras/xorfilter?rev=16e2c7a#16e2c7a4b354094c3e53219b5d2c28ecebcdeaef"
+source = "git+https://github.com/datafuse-extras/xorfilter?rev=2e434bc#2e434bc543d6005b4a0aa0b135d8a11474c41285"
 dependencies = [
  "cbordata",
 ]
