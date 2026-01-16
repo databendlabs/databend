@@ -132,7 +132,7 @@ CREATE TABLE r (r INT)
 statement ok
 INSERT INTO r VALUES (1)
 
-query II
+query IB
 SELECT *, true FROM (SELECT l FROM l WHERE l NOT IN (SELECT r FROM r))
 ----
 2 1

@@ -25,7 +25,7 @@ CREATE TABLE probe0 AS
 	FROM range(0,10) vals(v));
 
 # INNER ON inequality only
-query II nosort
+query ?I nosort
 SELECT p.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin >= e.begin

@@ -5,7 +5,7 @@ statement ok
 create table it(a int null, b string null)
 
 
-query 
+query ?????
 copy into it from (select $1, $2 from @data/csv t2) files=('select.csv') file_format = (type = CSV)
 ----
 csv/select.csv 3 0 NULL NULL

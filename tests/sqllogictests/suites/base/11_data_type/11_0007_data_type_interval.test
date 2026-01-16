@@ -16,7 +16,7 @@ statement ok
 insert into t values('1 year'),('1 months'),('1 day'),('1 hour'),('1 minute'),('1 second'),('1 microsecond');
 
 skipif mysql
-query T
+query ?
 select * from t order by c;
 ----
 0:00:00.000001
@@ -28,13 +28,13 @@ select * from t order by c;
 1 year
 
 skipif mysql
-query T
+query ?
 select sum(c) from t;
 ----
 9385:01:01.000001
 
 skipif mysql
-query T
+query ?
 select sum(c) from t where c <= interval '1 day';
 ----
 25:01:01.000001
@@ -43,49 +43,49 @@ statement ok
 drop table t;
 
 skipif mysql
-query T
+query R
 select EXTRACT(epoch from '1 day 2 hours 3 minutes'::INTERVAL);
 ----
 93780.0
 
 skipif mysql
-query T
+query I
 select EXTRACT(minute from '1 day 2 hours 3 minutes'::INTERVAL);
 ----
 3
 
 skipif mysql
-query T
+query I
 select EXTRACT(hour from '1 day 48 hours 3600 minutes'::INTERVAL);
 ----
 108
 
 skipif mysql
-query T
+query I
 select EXTRACT(day from '1 day 48 hours 3600 minutes'::INTERVAL);
 ----
 1
 
 skipif mysql
-query T
+query R
 select EXTRACT(second from '1 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
 ----
 20.0001
 
 skipif mysql
-query T
+query I
 select EXTRACT(microsecond from '1 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
 ----
 20000100
 
 skipif mysql
-query T
+query I
 select EXTRACT(month from '3 months 60 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
 ----
 3
 
 skipif mysql
-query T
+query I
 select EXTRACT(year from '1 years 13 months 60 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
 ----
 2

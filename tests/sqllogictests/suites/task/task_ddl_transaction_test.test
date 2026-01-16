@@ -21,12 +21,12 @@ CREATE TASK transactionTask
   END;
 
 
-query SSSS
+query TTT?
 select name, warehouse, schedule, SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
 ----
 transactionTask mywh CRON 0 0 0 1 1 ? 2100 ["BEGIN","SELECT 1;","BEGIN;","DELETE FROM t WHERE c = ';';","VACUUM TABLE t ;","MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;","COMMIT;","END;"]
 
-query S
+query T
 select state from system.tasks where name = 'transactionTask'
 ----
 Suspended
@@ -34,7 +34,7 @@ Suspended
 statement ok
 ALTER TASK transactionTask RESUME
 
-query S
+query T
 select state from system.tasks where name = 'transactionTask'
 ----
 Started
@@ -42,7 +42,7 @@ Started
 statement ok
 ALTER TASK transactionTask SUSPEND
 
-query S
+query T
 select state from system.tasks where name = 'transactionTask'
 ----
 Suspended

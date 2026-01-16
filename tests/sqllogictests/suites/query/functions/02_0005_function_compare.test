@@ -24,7 +24,7 @@ select number from numbers_mt(10) where number not between 4 + 0.1  and 8 - 0.1 
 8
 9
 
-query III
+query BBI
 select 1 = '1', 1::Int16 = '1', number from numbers(10) where number = '1'
 ----
 1 1 1
@@ -146,12 +146,12 @@ select '' like '' escape '!'
 ----
 1
 
-query B
+query ?
 select NULL like 'abc' escape '!'
 ----
 NULL
 
-query B
+query ?
 select 'abc' like NULL escape '!'
 ----
 NULL
@@ -161,7 +161,7 @@ select 'a%b_c\d' like 'a!%b!_c!\\d' escape '!'
 ----
 1
 
-query B
+query TBBBBBB
 select ('PROMO' || number::string) a, a like 'PROMO%',
 	a < 'PROMO1', a > 'PROMO1',
 	a <= 'PROMO1' , a >= 'PROMO1',

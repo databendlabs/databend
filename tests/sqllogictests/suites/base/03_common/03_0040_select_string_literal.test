@@ -18,7 +18,7 @@ SELECT "t"  FROM test.t
 ----
 1
 
-query I
+query T
 SELECT 't'  FROM test.t
 ----
 t
@@ -26,7 +26,7 @@ t
 statement error (?s)1065.*column x doesn't exist, do you mean 'x'?
 SELECT "x"  FROM test.t
 
-query I
+query T
 SELECT 'x'  FROM test.t
 ----
 x
@@ -34,7 +34,7 @@ x
 statement error (?s)1065.*column t doesn't exist, do you mean 't'?
 SELECT "t"
 
-query I
+query T
 SELECT 't'
 ----
 t

@@ -2021,7 +2021,7 @@ where c>d
     or d not between 110 and 150
 order by col2,col3,col1
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -2057,7 +2057,7 @@ NULL
 NULL
 NULL
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -3791,7 +3791,7 @@ NULL NULL NULL NULL 204 NULL 402
 2 -2 1030 4 173 514 1700
 NULL NULL NULL 3 237 711 2360
 
-query FIII
+query RIII
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        e as col3,
@@ -3830,7 +3830,7 @@ NULL 116 117 NULL
 NULL 203 204 NULL
 NULL 207 NULL NULL
 
-query FIII
+query RIII
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        e as col3,

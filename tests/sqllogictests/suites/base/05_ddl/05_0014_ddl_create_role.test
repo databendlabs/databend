@@ -53,7 +53,7 @@ create role r1;
 statement ok
 grant select on *.* to role r1;
 
-query T
+query TTTTTT
 show grants for role r1;
 ----
 SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
@@ -62,7 +62,7 @@ SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
 statement ok
 create role if not exists r1;
 
-query T
+query TTTTTT
 show grants for role r1;
 ----
 SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
@@ -71,7 +71,7 @@ SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
 statement error 2216
 CREATE ROLE r1
 
-query T
+query TTTTTT
 show grants for role r1;
 ----
 SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`

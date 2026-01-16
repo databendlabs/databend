@@ -32,7 +32,7 @@ SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) 
 5200|5200|4500|6000|4200
 6000|4200
 
-query T rowsort
+query IIT rowsort
 SELECT salary, ord, listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY ord DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
 ----
 3500 1 3900|3500
@@ -47,7 +47,7 @@ SELECT salary, ord, listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY
 6000 4 6000|4200
 
 
-query T rowsort
+query IIT rowsort
 SELECT salary, ord, listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY ord DESC NULLS FIRST) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
 ----
 3500 1 3900|3500
@@ -61,7 +61,7 @@ SELECT salary, ord, listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY
 5200 3 4200|6000|4500|5200|5200
 6000 4 4200|6000
 
-query T rowsort
+query IIT rowsort
 SELECT salary, ord, listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY ord DESC NULLS LAST) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
 ----
 3500 1 3900|3500

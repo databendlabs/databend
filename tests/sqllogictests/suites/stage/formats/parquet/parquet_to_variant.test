@@ -1,12 +1,12 @@
 statement ok
 create or replace table t(a variant, b int, c string);
 
-query 
+query ?????
 copy into t from (select $1, metadata$file_row_number, metadata$filename from @data/parquet/tuple.parquet);
 ----
 parquet/tuple.parquet 3 0 NULL NULL
 
-query 
+query ???
 select * from t order by b;
 ----
 {"id":1,"t":{"A":1,"B":"a"}} 0 parquet/tuple.parquet
@@ -25,17 +25,17 @@ insert into t1(b) values(1);
 statement ok
 copy into @s1 from t1;
 
-query 
+query ?
 select $1 from @s1;
 ----
 {"a":null,"b":1}
 
-query 
+query ??
 select * from @s1;
 ----
 NULL 1
 
-query 
+query ???
 select $1, metadata$file_row_number as r, metadata$filename as f from @data/parquet/diff_schema/(pattern=>'.*[.]parquet') order by f,r;
 ----
 {"c1":110,"c2":120,"c3":130} 0 parquet/diff_schema/f1.parquet
@@ -59,14 +59,14 @@ select $1, metadata$file_row_number as r, metadata$filename as f from @data/parq
 {"c2":228,"c4":"248","c5":258,"c6":268} 8 parquet/diff_schema/f2.parquet
 {"c2":229,"c4":"249","c5":259,"c6":269} 9 parquet/diff_schema/f2.parquet
 
-query 
+query ?
 select $1 from @data/parquet/tuple.parquet;
 ----
 {"id":1,"t":{"A":1,"B":"a"}}
 {"id":2,"t":{"A":3,"B":"b"}}
 {"id":3,"t":{"A":3,"B":"c"}}
 
-query 
+query ?
 select $1 from @data/parquet/alltypes_plain.parquet;
 ----
 {"bigint_col":0,"bool_col":true,"date_string_col":"03/01/09","double_col":0.0,"float_col":0.0,"id":4,"int_col":0,"smallint_col":0,"string_col":"0","timestamp_col":"2009-03-01 00:00:00.000000","tinyint_col":0}
@@ -84,7 +84,7 @@ select $1,id from @data/parquet/tuple.parquet;
 query error position
 select $2 from @data/parquet/tuple.parquet;
 
-query 
+query ?
 select $1 from @data/parquet/complex.parquet;
 ----
 {"active":true,"address":[{"city":"Verona","country":"US","district":"DANE","extension":null,"id":null,"line":["1979 Milky Way",""],"period":null,"postalCode":"53593","state":"WI","text":null,"type":null,"use":"home"}],"birthDate":"1964-02-05","communication":[{"extension":null,"id":null,"language":{"coding":[{"code":"en","display":"English","extension":null,"id":null,"system":"urn:ietf:bcp:47","userSelected":null,"version":null}],"extension":null,"id":null,"text":"English"},"modifierExtension":null,"preferred":true}],"contact":[{"address":{"city":"Verona","country":"US","district":"DANE","extension":null,"id":null,"line":["1979 Milky Way",""],"period":null,"postalCode":"53593","state":"WI","text":null,"type":null,"use":"home"},"extension":null,"gender":null,"id":null,"modifierExtension":null,"name":{"extension":null,"family":null,"given":null,"id":null,"period":null,"prefix":null,"suffix":null,"text":"Jenny Inf Validate","use":"usual"},"organization":null,"period":null,"relationship":[{"coding":[{"code":"C","display":"Emergency Contact","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0131","userSelected":null,"version":null}],"extension":null,"id":null,"text":null}],"telecom":[{"extension":null,"id":null,"period":null,"rank":null,"system":"phone","use":"temp","value":"608-986-4254"}]}],"contained":null,"deceasedBoolean":false,"deceasedDateTime":null,"extension":["{\"extension\":[{\"valueCoding\":{\"system\":\"http://terminology.hl7.org/CodeSystem/v3-NullFlavor\",\"code\":\"UNK\",\"display\":\"Unknown\"},\"url\":\"ombCategory\"},{\"valueString\":\"Unknown\",\"url\":\"text\"}],\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-race\"}","{\"extension\":[{\"valueString\":\"Unknown\",\"url\":\"text\"}],\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity\"}","{\"valueCodeableConcept\":{\"coding\":[{\"system\":\"urn:oid:1.2.840.114350.1.13.0.1.7.10.698084.130.657370.19999000\",\"code\":\"female\"}]},\"url\":\"http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex\"}","{\"valueCodeableConcept\":{\"coding\":[{\"system\":\"urn:oid:1.2.840.114350.1.13.0.1.7.10.698084.130.657370.19999000\",\"code\":\"female\"}]},\"url\":\"http://open.epic.com/FHIR/StructureDefinition/extension/sex-for-clinical-use\"}","{\"valueCode\":\"F\",\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex\"}"],"gender":"female","generalPractitioner":null,"id":"eTplvxRvcd-eT1nEI8BvQRQ3","identifier":[{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:2.16.840.1.113883.4.1","type":null,"use":"usual","value":"234-98-7197"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.1","type":{"coding":null,"extension":null,"id":null,"text":"EPIC"},"use":"usual","value":"E3480"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.13.0.1.7.2.698084","type":{"coding":null,"extension":null,"id":null,"text":"EXTERNAL"},"use":"usual","value":"Z5337"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://open.epic.com/FHIR/StructureDefinition/patient-dstu2-fhir-id","type":{"coding":null,"extension":null,"id":null,"text":"FHIR"},"use":"usual","value":"TkxuGNMCpBMIkhR5bO0UFliCEuV9bS6E9zUmYP0aN7HgB"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://open.epic.com/FHIR/StructureDefinition/patient-fhir-id","type":{"coding":null,"extension":null,"id":null,"text":"FHIR STU3"},"use":"usual","value":"eTplvxRvcd-eT1nEI8BvQRQ3"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.13.0.1.7.2.698084","type":{"coding":null,"extension":null,"id":null,"text":"INTERNAL"},"use":"usual","value":"     Z5337"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14","type":{"coding":null,"extension":null,"id":null,"text":"MRN"},"use":"usual","value":"203235"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.13.0.1.7.3.878082.110","type":{"coding":null,"extension":null,"id":null,"text":"MYCHARTLOGIN"},"use":"usual","value":"ICONJENNIFER"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:1.2.840.114350.1.13.0.1.7.2.878082","type":{"coding":null,"extension":null,"id":null,"text":"WPRINTERNAL"},"use":"usual","value":"280"}],"implicitRules":null,"language":null,"link":null,"managingOrganization":{"display":"Epic Hospital System","extension":null,"id":null,"identifier":null,"reference":"Organization/enRyWnSP963FYDpoks4NHOA3","type":null},"maritalStatus":{"coding":null,"extension":null,"id":null,"text":"Unknown"},"meta":null,"modifierExtension":null,"multipleBirthBoolean":null,"multipleBirthInteger":null,"name":[{"extension":null,"family":"Infection Control","given":["Jennifer"],"id":null,"period":null,"prefix":null,"suffix":null,"text":"Jennifer Infection Control","use":"official"},{"extension":null,"family":"Infection Control","given":["Jennifer"],"id":null,"period":null,"prefix":null,"suffix":null,"text":"Jennifer Infection Control","use":"usual"}],"photo":null,"resourceType":"Patient","telecom":[{"extension":null,"id":null,"period":null,"rank":null,"system":"phone","use":"home","value":"608-986-4254"}],"text":null,"yy__us_core_birthsex":null,"yy__us_core_ethnicity":null,"yy__us_core_race":null,"yy__version":null}
@@ -98,14 +98,14 @@ select $1 from @data/parquet/complex.parquet;
 {"active":null,"address":[{"city":"Belmont","country":"US","district":null,"extension":["{\"url\":\"http://hl7.org/fhir/StructureDefinition/geolocation\",\"extension\":[{\"url\":\"latitude\",\"valueDecimal\":42.43884801250347},{\"url\":\"longitude\",\"valueDecimal\":-71.14121105733896}]}"],"id":null,"line":["1047 Beier Park Unit 7"],"period":null,"postalCode":"02478","state":"MA","text":null,"type":null,"use":null}],"birthDate":"1961-10-27","communication":[{"extension":null,"id":null,"language":{"coding":[{"code":"en-US","display":"English","extension":null,"id":null,"system":"urn:ietf:bcp:47","userSelected":null,"version":null}],"extension":null,"id":null,"text":"English"},"modifierExtension":null,"preferred":null}],"contact":null,"contained":null,"deceasedBoolean":null,"deceasedDateTime":null,"extension":["{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-race\",\"extension\":[{\"url\":\"ombCategory\",\"valueCoding\":{\"system\":\"urn:oid:2.16.840.1.113883.6.238\",\"code\":\"2106-3\",\"display\":\"White\"}},{\"url\":\"text\",\"valueString\":\"White\"}]}","{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity\",\"extension\":[{\"url\":\"ombCategory\",\"valueCoding\":{\"system\":\"urn:oid:2.16.840.1.113883.6.238\",\"code\":\"2186-5\",\"display\":\"Not Hispanic or Latino\"}},{\"url\":\"text\",\"valueString\":\"Not Hispanic or Latino\"}]}","{\"url\":\"http://hl7.org/fhir/StructureDefinition/patient-mothersMaidenName\",\"valueString\":\"Kara173 Botsford977\"}","{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex\",\"valueCode\":\"F\"}","{\"url\":\"http://hl7.org/fhir/StructureDefinition/patient-birthPlace\",\"valueAddress\":{\"city\":\"Methuen\",\"state\":\"Massachusetts\",\"country\":\"US\"}}","{\"url\":\"http://synthetichealth.github.io/synthea/disability-adjusted-life-years\",\"valueDecimal\":13.34103765187151}","{\"url\":\"http://synthetichealth.github.io/synthea/quality-adjusted-life-years\",\"valueDecimal\":45.65896234812849}"],"gender":"female","generalPractitioner":null,"id":"d94a1af1-bf9b-a705-bc54-2d0009c39981","identifier":[{"assigner":null,"extension":null,"id":null,"period":null,"system":"AmbulatoryEHR1","type":null,"use":null,"value":"d94a1af1-bf9b-a705-bc54-2d0009c39981"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://hospital.smarthealthit.org","type":{"coding":[{"code":"MR","display":"Medical Record Number","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Medical Record Number"},"use":null,"value":"d94a1af1-bf9b-a705-bc54-2d0009c39981"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://hl7.org/fhir/sid/us-ssn","type":{"coding":[{"code":"SS","display":"Social Security Number","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Social Security Number"},"use":null,"value":"999-12-5825"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"urn:oid:2.16.840.1.113883.4.3.25","type":{"coding":[{"code":"DL","display":"Driver's License","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Driver's License"},"use":null,"value":"S99943233"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://standardhealthrecord.org/fhir/StructureDefinition/passportNumber","type":{"coding":[{"code":"PPN","display":"Passport Number","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Passport Number"},"use":null,"value":"X40077261X"}],"implicitRules":null,"language":null,"link":null,"managingOrganization":null,"maritalStatus":{"coding":[{"code":"M","display":"M","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v3-MaritalStatus","userSelected":null,"version":null}],"extension":null,"id":null,"text":"M"},"meta":{"extension":null,"id":null,"lastUpdated":null,"profile":["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"],"security":null,"source":null,"tag":null,"versionId":null},"modifierExtension":null,"multipleBirthBoolean":false,"multipleBirthInteger":null,"name":[{"extension":null,"family":"Buckridge80","given":["Shane235"],"id":null,"period":null,"prefix":["Mrs."],"suffix":null,"text":null,"use":"official"},{"extension":null,"family":"Leannon79","given":["Shane235"],"id":null,"period":null,"prefix":["Mrs."],"suffix":null,"text":null,"use":"maiden"}],"photo":null,"resourceType":"Patient","telecom":[{"extension":null,"id":null,"period":null,"rank":null,"system":"phone","use":"home","value":"555-575-1128"}],"text":{"div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Generated by <a href=\"AmbulatoryEHR1\">Synthea</a>.Version identifier: 9f5ff46\n .   Person seed: 3390461079555467149  Population seed: 960411</div>","extension":null,"id":null,"status":"generated"},"yy__us_core_birthsex":null,"yy__us_core_ethnicity":null,"yy__us_core_race":null,"yy__version":null}
 {"active":null,"address":[{"city":"Fairhaven","country":"US","district":null,"extension":["{\"url\":\"http://hl7.org/fhir/StructureDefinition/geolocation\",\"extension\":[{\"url\":\"latitude\",\"valueDecimal\":41.66838505766839},{\"url\":\"longitude\",\"valueDecimal\":-70.8618566603759}]}"],"id":null,"line":["588 Berge Quay Suite 84"],"period":null,"postalCode":null,"state":"MA","text":null,"type":null,"use":null}],"birthDate":"2014-01-22","communication":[{"extension":null,"id":null,"language":{"coding":[{"code":"en-US","display":"English","extension":null,"id":null,"system":"urn:ietf:bcp:47","userSelected":null,"version":null}],"extension":null,"id":null,"text":"English"},"modifierExtension":null,"preferred":null}],"contact":null,"contained":null,"deceasedBoolean":null,"deceasedDateTime":null,"extension":["{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-race\",\"extension\":[{\"url\":\"ombCategory\",\"valueCoding\":{\"system\":\"urn:oid:2.16.840.1.113883.6.238\",\"code\":\"2106-3\",\"display\":\"White\"}},{\"url\":\"text\",\"valueString\":\"White\"}]}","{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity\",\"extension\":[{\"url\":\"ombCategory\",\"valueCoding\":{\"system\":\"urn:oid:2.16.840.1.113883.6.238\",\"code\":\"2186-5\",\"display\":\"Not Hispanic or Latino\"}},{\"url\":\"text\",\"valueString\":\"Not Hispanic or Latino\"}]}","{\"url\":\"http://hl7.org/fhir/StructureDefinition/patient-mothersMaidenName\",\"valueString\":\"Ana972 Kiehn525\"}","{\"url\":\"http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex\",\"valueCode\":\"F\"}","{\"url\":\"http://hl7.org/fhir/StructureDefinition/patient-birthPlace\",\"valueAddress\":{\"city\":\"Amherst\",\"state\":\"Massachusetts\",\"country\":\"US\"}}","{\"url\":\"http://synthetichealth.github.io/synthea/disability-adjusted-life-years\",\"valueDecimal\":0.006828050454379106}","{\"url\":\"http://synthetichealth.github.io/synthea/quality-adjusted-life-years\",\"valueDecimal\":5.993171949545621}"],"gender":"female","generalPractitioner":null,"id":"7f217143-f36c-707a-b77c-f4a1cf70f952","identifier":[{"assigner":null,"extension":null,"id":null,"period":null,"system":"AmbulatoryEHR1","type":null,"use":null,"value":"7f217143-f36c-707a-b77c-f4a1cf70f952"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://hospital.smarthealthit.org","type":{"coding":[{"code":"MR","display":"Medical Record Number","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Medical Record Number"},"use":null,"value":"7f217143-f36c-707a-b77c-f4a1cf70f952"},{"assigner":null,"extension":null,"id":null,"period":null,"system":"http://hl7.org/fhir/sid/us-ssn","type":{"coding":[{"code":"SS","display":"Social Security Number","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v2-0203","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Social Security Number"},"use":null,"value":"999-69-3793"}],"implicitRules":null,"language":null,"link":null,"managingOrganization":null,"maritalStatus":{"coding":[{"code":"S","display":"Never Married","extension":null,"id":null,"system":"http://terminology.hl7.org/CodeSystem/v3-MaritalStatus","userSelected":null,"version":null}],"extension":null,"id":null,"text":"Never Married"},"meta":{"extension":null,"id":null,"lastUpdated":null,"profile":["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"],"security":null,"source":null,"tag":null,"versionId":null},"modifierExtension":null,"multipleBirthBoolean":false,"multipleBirthInteger":null,"name":[{"extension":null,"family":"Volkman526","given":["Luana867"],"id":null,"period":null,"prefix":null,"suffix":null,"text":null,"use":"official"}],"photo":null,"resourceType":"Patient","telecom":[{"extension":null,"id":null,"period":null,"rank":null,"system":"phone","use":"home","value":"555-207-7879"}],"text":{"div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Generated by <a href=\"AmbulatoryEHR1\">Synthea</a>.Version identifier: 9f5ff46\n .   Person seed: 165098197321413909  Population seed: 960411</div>","extension":null,"id":null,"status":"generated"},"yy__us_core_birthsex":null,"yy__us_core_ethnicity":null,"yy__us_core_race":null,"yy__version":null}
 
-query 
+query ?
 select /*+set_var(parquet_fast_read_bytes=1 )*/ $1 from @data/parquet/tuple.parquet;
 ----
 {"id":1,"t":{"A":1,"B":"a"}}
 {"id":2,"t":{"A":3,"B":"b"}}
 {"id":3,"t":{"A":3,"B":"c"}}
 
-query 
+query ??
 select $1:address.0.city::string , $1:birthDate::date as dt from @data/parquet/complex.parquet order by dt;
 ----
 Belmont 1961-10-27
@@ -122,12 +122,12 @@ Fairhaven 2014-01-22
 statement ok
 create or replace table t3(a string, b date);
 
-query 
+query ?????
 copy into t3 from (select $1:address.0.city, $1:birthDate from @data/parquet/complex.parquet)
 ----
 parquet/complex.parquet 10 0 NULL NULL
 
-query 
+query ??
 select * from t3 order by b
 ----
 Belmont 1961-10-27

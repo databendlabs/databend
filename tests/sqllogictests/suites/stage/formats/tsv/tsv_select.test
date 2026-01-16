@@ -4,11 +4,11 @@ drop table if exists it
 statement ok
 create table it (a int null, b string null)
 
-query 
+query T
 select $2 from @data/csv/select.tsv (file_format => 'tsv') order by $1
 ----
 
-query 
+query T
 select a.$1 from @data/csv/select.tsv (file_format => 'tsv') a order by $1
 ----
 
@@ -18,7 +18,7 @@ select * from @data/tsv/select.tsv (file_format => 'tsv') a order by $1
 query error 1065.*select \* from file only support Parquet format
 select *, $1 from @data/tsv/select.tsv (file_format => 'tsv')
 
-query 
+query ?????
 copy into it from (select $1, $2 from @data/tsv t2) files=('select.tsv') file_format = (type = TSV)
 ----
 tsv/select.tsv 3 0 NULL NULL

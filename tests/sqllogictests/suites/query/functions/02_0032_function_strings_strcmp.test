@@ -1,14 +1,14 @@
-query T
+query ?
 SELECT STRCMP(NULL, 'a')
 ----
 NULL
 
-query T
+query ?
 SELECT STRCMP('a', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT STRCMP(NULL, NULL)
 ----
 NULL

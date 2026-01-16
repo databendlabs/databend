@@ -1,12 +1,12 @@
 statement ok
 set group_by_shuffle_mode = 'before_partial';
 
-query TIFS
+query I
 SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number);
 ----
 100000
 
-query TIFS
+query I
 SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number, number);
 ----
 100000
@@ -14,12 +14,12 @@ SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number, numb
 statement ok
 set group_by_shuffle_mode = 'before_merge';
 
-query TIFS
+query I
 SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number);
 ----
 100000
 
-query TIFS
+query I
 SELECT COUNT() FROM (SELECT number FROM numbers_mt(100000) GROUP BY number, number);
 ----
 100000

@@ -27,7 +27,7 @@ SELECT 8 // 0
 statement error 1006
 SELECT 20 DIV 0
 
-query I
+query IIRRR?
 SELECT 20 DIV 8, intdiv(20, 8), div0(20, 8), div0(20, 0), divnull(20, 8), divnull(20, 0)
 ----
 2 2 2.5 0.0 2.5 NULL
@@ -77,7 +77,7 @@ SELECT typeof(-to_uint32(1)), typeof(-to_uint64(1)), typeof(-to_int32(1)), typeo
 ----
 TINYINT TINYINT TINYINT FLOAT TINYINT UNSIGNED
 
-query TTTT
+query ????
 SELECT Null + 1, Null - 1, Null * 1, Null / 1
 ----
 NULL NULL NULL NULL
@@ -137,7 +137,7 @@ SELECT 1<<2, 3<<1, 4<<3
 ----
 4 6 32
 
-query III
+query IIII
 SELECT 4>>1, 8>>2, 16>>3, '333' + 4
 ----
 2 2 2 337
@@ -160,7 +160,7 @@ statement ok
 insert into test3 values('30.606168460000000000','30.60616846');
 
 
-query TTTTTT
+query RRRRRR
 select sum(amount1)a ,  sum(amount2) b , a  +  b, a - b, a * b, a / b from test3;
 ----
 30.606168460000000000 30.60616846 61.212336920000000000 0.000000000000000000 936.737547801898771600 1.000000000000000000

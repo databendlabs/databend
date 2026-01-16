@@ -12,7 +12,7 @@ SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY
 19
 4999
 
-query II
+query I
 select number from numbers(10) where number::String  in (1,2) ORDER BY number
 ----
 1
@@ -31,12 +31,12 @@ SELECT number from numbers_mt(10) WHERE number+1 not IN (2, 3 ,20, 5000) ORDER B
 8
 9
 
-query T
+query ?
 SELECT NULL IN (1, 2, 3)
 ----
 NULL
 
-query BB
+query B?
 SELECT 1 IN (1, 2, NULL), (true IN (false, (NULL NOT BETWEEN NULL AND NULL)))
 ----
 1 NULL
@@ -47,7 +47,7 @@ SELECT 1::Int64 IN (0,10,1.1), 0::Float32 IN (0, 10, 1.1)
 ----
 0 1
 
-query B
+query ?
 SELECT 1 IN (2, 3, NULL)
 ----
 NULL
@@ -98,7 +98,7 @@ select true in (true, false)
 
 
 
-query B
+query ?
 select true in (NULL, false)
 ----
 NULL
@@ -126,7 +126,7 @@ SELECT to_date(18869) in (to_date(18869), NULL)
 
 
 
-query T
+query ?
 SELECT NULL in ('2021-08-30')
 ----
 NULL
@@ -175,12 +175,12 @@ CREATE TABLE t2(date DATE, datetime DATETIME null) Engine = Fuse
 statement ok
 INSERT INTO t2 VALUES ('2022-04-23', '2022-04-23 01:48:19'), ('2022-04-24', NULL)
 
-query TT
+query ??
 SELECT * FROM t2 WHERE date in ('2022-04-23'::Date)
 ----
 2022-04-23 2022-04-23 01:48:19.000000
 
-query TT
+query ??
 SELECT * FROM t2 WHERE datetime in ('2022-04-23 01:48:19'::TIMESTAMP, NULL)
 ----
 2022-04-23 2022-04-23 01:48:19.000000

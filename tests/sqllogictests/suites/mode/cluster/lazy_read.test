@@ -16,7 +16,7 @@ insert into t_lazy select (number + 1) * 1000, 1.1, '1.1', (1,2), '2020-01-01' f
 statement ok
 insert into t_lazy select (number + 1) * 100000, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
 
-query T
+query ???
 select count(), count(distinct _block_name), count(distinct _segment_name) from t_lazy
 ----
 300 3 3

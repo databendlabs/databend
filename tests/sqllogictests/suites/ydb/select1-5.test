@@ -139,7 +139,7 @@ order by col1
 239
 245
 
-query IIIIIF
+query IIIIIR
 select a+b*2+c*3+d*4+e*5 as col1,
        c as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -226,7 +226,7 @@ select (a+b+c+d+e)/5 as col1,
 from t1
 order by col6,col7,col2,col4,col1,col5,col3
 
-query IIFIIII
+query IIRIIII
 select d as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -628,7 +628,7 @@ order by col1
 4
 4
 
-query IFI
+query IRI
 select a as col1,
        (a+b+c+d+e)/5 as col2,
        c as col3
@@ -709,7 +709,7 @@ order by col1
 711
 723
 
-query FI
+query RI
 select (a+b+c+d+e)/5 as col1,
        d-e as col2
 from t1
@@ -881,7 +881,7 @@ order by col1
 3
 4
 
-query IIIIFI
+query IIIIRI
 select a+b*2+c*3 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        b as col3,
@@ -1135,7 +1135,7 @@ order by col1,col2
 1670 502
 1700 514
 
-query IIIIFI
+query IIIIRI
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        e as col2,
@@ -1278,7 +1278,7 @@ order by col1,col2,col3
 235 2368 239
 247 2476 245
 
-query FIIIIII
+query RIIIIII
 select (a+b+c+d+e)/5 as col1,
        b as col2,
        a+b*2+c*3+d*4+e*5 as col3,
@@ -1482,7 +1482,7 @@ from t1
 where c between b-2 and d+2
 order by col5,col2,col4,col1,col3,col6
 
-query IIF
+query IIR
 select a as col1,
        a+b*2+c*3 as col2,
        (a+b+c+d+e)/5 as col3

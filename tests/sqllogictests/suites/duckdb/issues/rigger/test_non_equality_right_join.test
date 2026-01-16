@@ -43,7 +43,7 @@ CREATE TABLE t6(c0 DOUBLE NULL, c1 INT DEFAULT(CAST('1969-12-27' AS DATE)))
 statement ok
 INSERT INTO t6 VALUES(NULL,0)
 
-query ITT
+query IR?
 SELECT t0.actual_rowid, t6.c0, t0.c0 FROM t0 RIGHT JOIN t6 ON ((t0.actual_rowid)>=(((((t6.c0)<=(t6.c0))) IS NOT NULL)::INTEGER)) GROUP BY t0.actual_rowid, t6.c0, t0.c0 order by actual_rowid
 ----
 0 NULL 1969-12-16

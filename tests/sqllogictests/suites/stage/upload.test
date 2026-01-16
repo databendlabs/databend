@@ -12,12 +12,12 @@ copy into @data/unload/upload.test/case1/ from (select 1, 'a') file_format=(type
 statement ok
 insert into t1 from @data/unload/upload.test/case1 file_format=(type='csv')
 
-query 
+query ??
 select *  from t1
 ----
 1 a
 
-query 
+query TITTT
 list @data/unload/upload.test/
 ----
 
@@ -32,12 +32,12 @@ copy into @data/unload/upload.test/case2/ from (select 2, 'a') file_format=(type
 statement ok
 insert into t1 VALUES from @data/unload/upload.test/case2 file_format=(type='csv')
 
-query
+query ??
 select *  from t1
 ----
 2 a
 
-query
+query TITTT
 list @data/unload/upload.test/case1
 ----
 
@@ -52,12 +52,12 @@ copy into @data/unload/upload.test/case3/ from (select 'a') file_format=(type=cs
 statement ok
 insert into t1 VALUES (3, ?) from @data/unload/upload.test/case3 file_format=(type='csv')
 
-query
+query ??
 select *  from t1
 ----
 3 a
 
-query
+query TITTT
 list @data/unload/upload.test/case1
 ----
 

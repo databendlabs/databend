@@ -17,28 +17,28 @@ create or replace stage data_root url='s3://testbucket/data/' connection=(connec
 statement ok
 create or replace stage data_csv url='s3://testbucket/data/csv/' connection=(connection_name='c1') FILE_FORMAT = (type = csv);
 
-query
+query ?????
 copy into t1 from @data_root/csv/ii_100.csv file_format=(type=csv)
 ----
 csv/ii_100.csv 100 0 NULL NULL
 
 
-query
+query TIITI
 copy into t1 from @data_csv/ii_100.csv
 ----
 
-query
+query ?????
 copy into t1 from @data_csv/ii_100.csv force=true
 ----
 ii_100.csv 100 0 NULL NULL
 
 
-query
+query TIITI
 copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv)
 ----
 
 
-query
+query ?????
 copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv) force=true
 ----
 data/csv/ii_100.csv 100 0 NULL NULL

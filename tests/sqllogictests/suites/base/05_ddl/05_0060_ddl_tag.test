@@ -63,7 +63,7 @@ statement ok
 SHOW TAGS WHERE name = 'owner_tag'
 
 ## SHOW TAGS with WHERE condition returning no results
-query TTTA
+query TTT?
 SHOW TAGS WHERE name = 'nonexistent'
 ----
 

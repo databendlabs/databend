@@ -3,7 +3,7 @@ select get(parse_json('[2.71, 3.14]'), 0)
 ----
 2.71
 
-query T
+query ?
 select get(parse_json('[2.71, 3.14]'), 2)
 ----
 NULL
@@ -13,7 +13,7 @@ select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'aA')
 ----
 2
 
-query T
+query ?
 select get(parse_json('{"aa": 1, "aA": 2, "Aa": 3}'), 'AA')
 ----
 NULL
@@ -23,7 +23,7 @@ select get(parse_json('{"aa": null, "aA": 2, "Aa": 3}'), 'aa')
 ----
 null
 
-query T
+query ?
 select get(null, 'aa')
 ----
 NULL
@@ -33,7 +33,7 @@ select parse_json('[2.71, 3.14]')->0
 ----
 2.71
 
-query T
+query ?
 select parse_json('[2.71, 3.14]')->2
 ----
 NULL
@@ -48,7 +48,7 @@ select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'aA'
 ----
 2
 
-query T
+query ?
 select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'AA'
 ----
 NULL
@@ -58,7 +58,7 @@ select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->'aa'
 ----
 null
 
-query T
+query ?
 select parse_json(null)->'aa'
 ----
 NULL
@@ -69,7 +69,7 @@ select parse_json('[2.71, 3.14]')->>0
 ----
 2.71
 
-query T
+query ?
 select parse_json('[2.71, 3.14]')->>2
 ----
 NULL
@@ -84,22 +84,22 @@ select parse_json('{"aa": 1, "aA": "text", "Aa": {"a":1}}')->>'Aa'
 ----
 {"a":1}
 
-query T
+query ?
 select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->>'AA'
 ----
 NULL
 
-query T
+query ?
 select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->>'aa'
 ----
 NULL
 
-query T
+query ?
 select parse_json(null)->>'aa'
 ----
 NULL
 
-query T
+query ?
 select parse_json('{"key1":null}')->>'key1'
 ----
 NULL
@@ -159,7 +159,7 @@ select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["
 ----
 "ext"
 
-query T
+query ?
 select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["extras"][2]')
 ----
 NULL
@@ -196,7 +196,7 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 ----
 ext
 
-query T
+query ?
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["extras"][2]')
 ----
 NULL
@@ -206,37 +206,37 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 ----
 {"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
 
-query T
+query ?
 select json_extract_path_text('{"attr":null}', 'attr')
 ----
 NULL
 
-query T
+query ?
 select NULL#>'{0}'
 ----
 NULL
 
-query T
+query ?
 select parse_json('false')#>'{0}'
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1, 2, 3]')#>NULL
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1, 2, 3]')#>'{a}'
 ----
 NULL
 
-query I
+query T
 select parse_json('[1, 2, 3]')#>'{1}'
 ----
 2
 
-query T
+query ?
 select parse_json('[1, 2, 3]')#>'{3}'
 ----
 NULL
@@ -246,7 +246,7 @@ select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1}'
 ----
 [1,2]
 
-query T
+query ?
 select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1, 0, 1}'
 ----
 NULL
@@ -256,7 +256,7 @@ select parse_json('[1, {"a": 1, "b": 2}, 3]')#>'{1}'
 ----
 {"a":1,"b":2}
 
-query I
+query T
 select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>'{1, b, 2, k1}'
 ----
 1
@@ -266,27 +266,27 @@ select '[1, 2, 3, null]'::json#>'{3}'
 ----
 null
 
-query T
+query ?
 select NULL#>>'{0}'
 ----
 NULL
 
-query T
+query ?
 select parse_json('false')#>>'{0}'
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1, 2, 3]')#>>'{a}'
 ----
 NULL
 
-query I
+query T
 select parse_json('[1, 2, 3]')#>>'{1}'
 ----
 2
 
-query T
+query ?
 select parse_json('[1, 2, 3]')#>>'{3}'
 ----
 NULL
@@ -296,7 +296,7 @@ select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1}'
 ----
 [1,2]
 
-query T
+query ?
 select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1, 0, 1}'
 ----
 NULL
@@ -306,17 +306,17 @@ select parse_json('[1, {"a": 1, "b": 2}, 3]')#>>'{1}'
 ----
 {"a":1,"b":2}
 
-query I
+query T
 select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>'{1, b, 2, k1}'
 ----
 1
 
-query T
+query ?
 select '[1, 2, 3, null]'::json#>>'{3}'
 ----
 NULL
 
-query T
+query ?
 select [][0]
 ----
 NULL
@@ -536,7 +536,7 @@ select id, get(arr, 'a') from t4
 statement ok
 set max_block_size = 2;
 
-query IT?
+query ITT
 select id, json_path_query(arr, '$[2, 1 to last -1]'), typeof(json_path_query(arr, '$[2, 1 to last -1]')) from t1
 ----
 1 3 INTEGER
@@ -579,7 +579,7 @@ select id, json_path_query(obj, '$.b?(@.c == 2)') from t2
 ----
 1 {"c":2}
 
-query IT
+query I?
 select id, json_path_query(obj, '$.b?(@.c > 2)') from t2
 ----
 
@@ -801,7 +801,7 @@ SELECT arr #> '{3,1}' FROM t1;
 ----
 "b"
 
-query I
+query T
 SELECT obj #> '{a}' FROM t2;
 ----
 1
@@ -816,7 +816,7 @@ SELECT arr #>> '{3,1}' FROM t1;
 ----
 b
 
-query I
+query T
 SELECT obj #>> '{a}' FROM t2;
 ----
 1

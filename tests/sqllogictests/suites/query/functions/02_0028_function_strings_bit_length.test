@@ -14,7 +14,7 @@ SELECT BIT_LENGTH('кириллица and latin')
 ----
 224
 
-query T
+query ?
 SELECT BIT_LENGTH(NULL)
 ----
 NULL

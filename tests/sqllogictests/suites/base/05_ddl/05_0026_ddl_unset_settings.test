@@ -68,7 +68,7 @@ statement ok
 set global load_file_metadata_expire_hours=12;
 
 skipif mysql
-query TT
+query TTTTTTT
 show settings like 'load_file_metadata_expire_hours';
 ----
 load_file_metadata_expire_hours 12 24 [0, 18446744073709551615] GLOBAL Sets the hours that the metadata of files you load data from with COPY INTO will expire in. UInt64

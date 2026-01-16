@@ -31,7 +31,7 @@ insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
 statement ok
 insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
 
-query TT
+query IT
 select * from distributed_target_test order by a;
 ----
 1 a
@@ -68,13 +68,13 @@ remove @distributed_source_parquet;
 statement ok
 copy into @distributed_source_parquet from (select * from distributed_source_test);
 
-query TTT
+query III
 merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @distributed_source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
 when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
 ----
 2 4 8
 
-query TT
+query IT
 select * from distributed_target_test order by a;
 ----
 3 f
@@ -114,7 +114,7 @@ insert into corner_source_table values(1,'a6','b6'),(2,'a7','b7');
 statement ok
 insert into corner_source_table values(3,'a8','b8');
 
-query TTT
+query ITT
 select * from corner_target_table order by a,b;
 ----
 1 a1 b1
@@ -123,19 +123,19 @@ select * from corner_target_table order by a,b;
 2 a4 b4
 3 a5 b5
 
-query TTT
+query ITT
 select * from corner_source_table order by a,b;
 ----
 1 a6 b6
 2 a7 b7
 3 a8 b8
 
-query TTT
+query II
 merge into corner_target_table as t1 using (select * from corner_source_table) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
 0 5
 
-query TTT
+query ITT
 select * from corner_target_table order by a,b;
 ----
 1 a6 b6
@@ -212,7 +212,7 @@ insert into orders2 values(2,'a2','b2');
 statement ok
 insert into orders2 values(3,'a3','b3');
 
-query T
+query I
 MERGE INTO orders2 USING (
     SELECT o.a,o.b,a.avg_quantity
     FROM orders2 o
@@ -227,7 +227,7 @@ MERGE INTO orders2 USING (
 ----
 3
 
-query TTT
+query ITT
 select * from orders2 order by a,b,c;
 ----
 2 a1 b1

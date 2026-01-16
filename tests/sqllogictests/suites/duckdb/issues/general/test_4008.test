@@ -1,7 +1,7 @@
 statement error 1065
 select 1 - any(select 1)
 
-query I
+query B
 select 1 = all(select 1)
 ----
 1

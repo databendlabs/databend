@@ -1,7 +1,7 @@
 statement ok
 SET enable_parallel_union_all = 1;
 
-query III
+query I
 select * from (select number as a from numbers(1) union all select number as b from numbers(3) union all select number as c from numbers(10)) order by a;
 ----
 0
@@ -22,7 +22,7 @@ select * from (select number as a from numbers(1) union all select number as b f
 statement ok
 SET enable_parallel_union_all = 0;
 
-query III
+query I
 select * from (select number as a from numbers(1) union all select number as b from numbers(3) union all select number as c from numbers(10)) order by a;
 ----
 0

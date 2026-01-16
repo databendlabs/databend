@@ -53,7 +53,7 @@ SELECT typeof(number::UInt64) FROM numbers_mt(1)
 ----
 BIGINT UNSIGNED
 
-query F
+query R
 SELECT CAST(1 + 1, Float64)
 ----
 2.0
@@ -204,7 +204,7 @@ SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000
 statement error 1006
 SELECT to_timestamp('2020.10.')
 
-query T
+query ?
 select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
 ----
 2021-12-20 17:01:01.000000 +0000
@@ -217,7 +217,7 @@ select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))::STRING
 ----
 2021-12-20 09:01:01.000000 +0800
 
-query T
+query ?
 select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0000'))
 ----
 2021-12-21 01:01:01.000000
@@ -225,32 +225,32 @@ select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0000'))
 statement ok
 set timezone='UTC'
 
-query T
+query ?
 select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0000'))
 ----
 2021-12-20 17:01:01.000000
 
-query T
+query ?
 select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
 ----
 2021-12-20 09:01:01.000000
 
-query T
+query ?
 select to_timestamp_tz('2024-04-16 12:34:56.789 +0600')
 ----
 2024-04-16 12:34:56.789000 +0600
 
-query T
+query ?
 settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789 +0600')
 ----
 2024-04-16 12:34:56.789000 +0600
 
-query T
+query ?
 settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789 +0800')
 ----
 2024-04-16 12:34:56.789000 +0800
 
-query T
+query ?
 settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789')
 ----
 2024-04-16 12:34:56.789000 +0800
@@ -286,7 +286,7 @@ statement error 1006
 SELECT to_variant(1)::boolean
 
 
-query T
+query B
 SELECT parse_json('null')::boolean
 ----
 NULL
@@ -420,27 +420,27 @@ statement error 1006
 SELECT parse_json('"test"')::int64
 
 
-query T
+query I
 SELECT parse_json('null')::int64
 ----
 NULL
 
-query F
+query R
 SELECT to_variant(12.34)::float32
 ----
 12.34
 
-query F
+query R
 SELECT to_variant(1234.5678)::float64
 ----
 1234.5678
 
-query F
+query R
 SELECT parse_json('"12.34"')::float32
 ----
 12.34
 
-query F
+query R
 SELECT parse_json('"1234.5678"')::float64
 ----
 1234.5678
@@ -454,22 +454,22 @@ statement error 1006
 SELECT parse_json('"test"')::float64
 
 
-query T
+query R
 SELECT parse_json('null')::float64
 ----
 NULL
 
-query T
+query ?
 SELECT parse_json('"2022-01-01"')::date
 ----
 2022-01-01
 
-query T
+query ?
 SELECT parse_json('"2022-01-01 01:01:01"')::datetime
 ----
 2022-01-01 01:01:01.000000
 
-query T
+query ?
 SELECT parse_json('"2022-01-01 01:01:01 +0800"')::timestamp_tz
 ----
 2022-01-01 01:01:01.000000 +0800
@@ -486,12 +486,12 @@ statement error 1006
 SELECT parse_json('"test"')::timestamp_tz
 
 
-query T
+query ?
 SELECT parse_json('null')::datetime
 ----
 NULL
 
-query T
+query ?
 SELECT parse_json('null')::timestamp_tz
 ----
 NULL
@@ -501,18 +501,18 @@ SELECT as_array(parse_json('[1,2,3]'))
 ----
 [1,2,3]
 
-query T
+query ?
 SELECT as_array(to_variant(1))
 ----
 NULL
 
-query T
+query ?
 SELECT as_array(parse_json('"ab"'))
 ----
 NULL
 
 
-query T
+query ?
 SELECT as_array(parse_json('null'))
 ----
 NULL
@@ -559,37 +559,37 @@ select cast(position as String), cast(trim as String), cast(substring as String)
 ----
 3 3 3
 
-query TTT
+query TTB
 select '[1,2,"3"]'::Variant a, a::Array(Variant) b, b::Variant = a;
 ----
 [1,2,"3"] [1,2,"3"] 1
 
-query TTT
+query TTB
 select '{"k1":"v1","k2":"v2"}'::Variant a, a::Map(String, String) b, b::Variant = a;
 ----
 {"k1":"v1","k2":"v2"} {"k1":"v1","k2":"v2"} 1
 
-query TTT
+query TTB
 select '{"a":1,"b":2}'::Variant a, a::Map(String, Int) b, b::Variant = a;
 ----
 {"a":1,"b":2} {"a":1,"b":2} 1
 
-query TTT
+query ???
 select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));
 ----
 4000000210000004100000041000000420000002646174617465737462656E645064 80000003200000022000000220000002500150025003 20000000200000025064
 
-query TT
+query ??
 SELECT to_binary(to_bitmap('100,200,300')), to_binary(to_bitmap('1,2,3,4,5'));
 ----
 48420100036400000000000000C8000000000000002C01000000000000 484201000501000000000000000200000000000000030000000000000004000000000000000500000000000000
 
-query TT
+query ??
 SELECT to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)')), to_binary(st_geometryfromwkt('SRID=4326;LINESTRING(1.0 2.0, 3.0 4.0, 10.1 11.2)'));
 ----
 0101000020E6100000000000000000F03F0000000000000040 0102000020E610000003000000000000000000F03F00000000000000400000000000000840000000000000104033333333333324406666666666662640
 
-query TT
+query ??
 SELECT to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')), to_binary(st_geographyfromewkt('SRID=4326;LINESTRING(-122.35 37.5, -151.55 39.25)'));
 ----
 0101000020E61000006666666666965EC06666666666C64240 0102000020E6100000020000006666666666965EC00000000000C042409A99999999F162C00000000000A04340

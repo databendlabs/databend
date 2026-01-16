@@ -7,7 +7,7 @@ drop table if exists args
 statement error 1028
 select arg_min()
 
-query I
+query ?
 select arg_min(NULL,NULL)
 ----
 NULL
@@ -29,7 +29,7 @@ select arg_min(*)
 statement error 1028
 select arg_max()
 
-query T
+query ?
 select arg_max(NULL,NULL)
 ----
 NULL

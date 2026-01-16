@@ -12,13 +12,13 @@ SET force_aggregate_data_spill = 1;
 
 
 skipif mysql
-query T
+query I
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
 ----
 100000
 
 skipif mysql
-query T
+query B
 SELECT (SELECT COUNT() FROM system.temp_files) > 1;
 ----
 1

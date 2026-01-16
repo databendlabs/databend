@@ -37,7 +37,7 @@ drop table tbl1
 statement ok
 CREATE TABLE tbl1 AS SELECT 'hello' UNION ALL SELECT 'world'
 
-query I
+query T
 SELECT * FROM tbl1 order by `'hello'`
 ----
 hello

@@ -23,14 +23,14 @@ ss
 ss1
 ss2
 
-query TT
+query TTT
 SHOW FULL DATABASES like 'ss%';
 ----
 default account_admin ss
 default account_admin ss1
 default account_admin ss2
 
-query TT
+query TTT
 SHOW FULL DATABASES FROM default like 'ss%';
 ----
 default account_admin ss

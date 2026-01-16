@@ -24,7 +24,7 @@ INSERT INTO test_table VALUES('test_text4');
 statement ok
 SET enable_distributed_pruning = 1;
 
-query TTTTT
+query I
 SELECT COUNT() FROM test_table;
 ----
 4
@@ -32,7 +32,7 @@ SELECT COUNT() FROM test_table;
 statement ok
 SET enable_distributed_pruning = 0;
 
-query TTTTT
+query I
 SELECT COUNT() FROM test_table;
 ----
 4

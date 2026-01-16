@@ -3,7 +3,7 @@ SELECT CONCAT('My', 'S', 'QL')
 ----
 MySQL
 
-query T
+query ?
 SELECT CONCAT('My', NULL, 'QL')
 ----
 NULL
@@ -25,7 +25,7 @@ select CONCAT(to_varchar(number), 'a') || to_varchar(number+1) from numbers(3) o
 1a2
 2a3
 
-query T
+query ?
 SELECT CONCAT(to_varchar(number), NULL) from numbers(4)
 ----
 NULL

@@ -91,7 +91,7 @@ VALUES ('Org','Org'),('Org','Global'),('Global','North'),
 ('Global','South'),('Global','East'),('Global','West'),
 ('Global','Org detail'),('North','North East'),('North','North West');
 
-query I
+query TT
 WITH RECURSIVE tree_values
     (parent, child)
 AS (

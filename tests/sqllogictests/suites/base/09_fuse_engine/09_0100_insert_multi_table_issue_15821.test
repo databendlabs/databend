@@ -29,7 +29,7 @@ create or replace table target1 ( id int, customer int, purchased_item string, p
 statement ok
 create or replace table target2 ( id int, customer int, purchased_item string, price float, dummy int);
 
-query TT
+query II
 INSERT
 first
     WHEN
@@ -56,13 +56,13 @@ FROM (
 2 2
 
 
-query TTTTT
+query IITRI
 select * from target1 order by purchased_item;
 ----
 101 1 coffee 6.0 3
 101 1 donut 5.0 1
 
-query TTTTT
+query IITRI
 select * from target2 order by purchased_item;
 ----
 102 2 bagel 5.0 2

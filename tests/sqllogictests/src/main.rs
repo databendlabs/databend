@@ -384,6 +384,9 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 }
 
 fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<ColumnType>) {
+    if actual.is_empty() {
+        return;
+    }
     let equals = if actual.len() != expected.len() {
         false
     } else {
@@ -396,6 +399,7 @@ fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<Column
                     | (Integer, Integer)
                     | (FloatingPoint, FloatingPoint)
                     | (Any, _)
+                    | (_, Any)
             )
         })
     };

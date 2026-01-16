@@ -34,14 +34,14 @@ insert into merge_source_0 values(5,'a4'),(6,'b6');
 
 ## test window,agg,join
 ## 1. join test
-query TT
+query II
 merge into merge_target_0 as t1 using 
 (select t2.a,t3.b from merge_source_0 as t2 inner join merge_source_0 as t3 on t2.a = t3.a) as t4
 on t4.a = t1.a when matched then update * when not matched then insert *;
 ----
 2 2
 
-query TT
+query IT
 select * from merge_target_0 order by a,b;
 ----
 1 a3
@@ -57,20 +57,20 @@ truncate table merge_source_0;
 statement ok
 insert into merge_source_0 values(1,'c7'),(3,'c7');
 
-query TT
+query IT
 select * from merge_source_0 order by a,b;
 ----
 1 c7
 3 c7
 
 ## 2. agg test
-query TT
+query II
 merge into merge_target_0 as t1 using (select avg(a) as a,b from merge_source_0 group by b) as t2 on t1.a = t2.a
 when matched then update * when not matched then insert *;
 ----
 0 1
 
-query TT
+query IT
 select * from merge_target_0 order by a,b;
 ----
 1 a3
@@ -81,13 +81,13 @@ select * from merge_target_0 order by a,b;
 6 b6
 
 ## 2. window func test
-query TT
+query II
 merge into merge_target_0 as t1 using (select row_number() OVER (PARTITION BY b ORDER BY a) as a,'d1' as b from merge_source_0) as t2 on t1.a = t2.a
 when matched then update * when not matched then insert *;
 ----
 0 2
 
-query TT
+query IT
 select * from merge_target_0 order by a,b;
 ----
 1 d1

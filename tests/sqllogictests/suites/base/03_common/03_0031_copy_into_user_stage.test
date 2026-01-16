@@ -22,7 +22,7 @@ copy into @~ from test_table FILE_FORMAT = (type = CSV)
 statement ok
 copy into test_table from @~ FILE_FORMAT = (type = CSV)
 
-query A
+query I
 SELECT COUNT() FROM test_table
 ----
 4

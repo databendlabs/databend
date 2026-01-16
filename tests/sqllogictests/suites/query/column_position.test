@@ -13,7 +13,7 @@ select $1, $2, a, b from t1
 1 a 1 a
 2 b 2 b
 
-query ITIT
+query I
 select $1 + a + 1 from t1
 ----
 3

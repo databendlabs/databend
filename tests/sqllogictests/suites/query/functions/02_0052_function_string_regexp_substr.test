@@ -3,7 +3,7 @@ SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2)
 ----
 def
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('abc def GHI', '[a-z]+', 1, 3, 'c')
 ----
 NULL
@@ -33,32 +33,32 @@ SELECT REGEXP_SUBSTR('周 周周 周周周 周周周周', '周+', 2, 3)
 ----
 周周周周
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('周 周周', '周+', 5)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_SUBSTR(NULL, '')
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('abc def ghi', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1, 2, NULL)
 ----
 NULL

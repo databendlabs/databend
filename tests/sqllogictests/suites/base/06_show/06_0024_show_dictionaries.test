@@ -4,7 +4,7 @@ CREATE OR REPLACE DICTIONARY d1(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KE
 statement ok
 CREATE OR REPLACE DICTIONARY d2(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
-query T
+query TT????TT
 show dictionaries
 ----
 default d1 ["c1"] ["INT"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
@@ -28,28 +28,28 @@ CREATE OR REPLACE DICTIONARY show_dictionary.d2(a int NOT NULL, b int NOT NULL) 
 statement ok
 CREATE OR REPLACE DICTIONARY show_dictionary.d3(`a` int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
 
-query T
+query TT????TT
 show dictionaries from show_dictionary
 ----
 show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d3 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 
-query T
+query TT????TT
 show dictionaries from show_dictionary like 'd%'
 ----
 show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d3 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 
-query T
+query TT????TT
 show dictionaries from show_dictionary WHERE name = 'd2' OR 1 = 1
 ----
 show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d3 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 
-query T
+query TT????TT
 show dictionaries from show_dictionary WHERE name = 'd2' AND 1 = 1
 ----
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
@@ -57,7 +57,7 @@ show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost passw
 statement ok
 show dictionaries WHERE name='d2' AND 1=0
 
-query T
+query TT????TT
 show dictionaries
 ----
 show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)

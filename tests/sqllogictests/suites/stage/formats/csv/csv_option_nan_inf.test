@@ -19,16 +19,16 @@ query error Invalid CSV option value
 copy into @s1 from tt file_format = (type = CSV nan_display='may_nan')
 
 # nan_display is unload only, not affect load
-query 
+query ???
 copy into @s1 from tt file_format = (type = CSV nan_display='null')
 ----
 3 39 39
 
-query 
+query TIITI
 copy into ff from @s1 file_format = (type = CSV) return_failed_only=true
 ----
 
-query 
+query ??
 select * from ff order by a
 ----
 1.0 2.0
@@ -40,12 +40,12 @@ NaN Infinity
 statement ok
 remove @s1
 
-query 
+query ???
 copy into @s1 from ff file_format = (type = CSV)
 ----
 3 34 34
 
-query 
+query ??
 select $1, $2 from @s1 (file_format=>'csv') order by $1
 ----
 1.0 2.0
@@ -55,12 +55,12 @@ NaN Infinity
 statement ok
 remove @s1
 
-query 
+query ???
 copy into @s1 from ff file_format = (type = CSV nan_display='null')
 ----
 3 36 36
 
-query 
+query ??
 select $1, $2 from @s1 (file_format=>'csv') order by $1
 ----
 1.0 2.0

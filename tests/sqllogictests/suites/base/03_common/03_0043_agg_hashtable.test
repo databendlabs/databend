@@ -21,7 +21,7 @@ SELECT number%3 as c1, sum(c1) FROM numbers_mt(10) where number > 2 group by num
 1 2
 2 4
 
-query IIII
+query IIIII
 SELECT a,b,sum(a),sum(b),count() from (SELECT cast((number%6) AS bigint) as a, cast((number%15) AS bigint) as b from numbers(1000)) group by a,b order by a,b limit 3
 ----
 0 0 0 0 34
@@ -83,14 +83,14 @@ CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32)
 statement ok
 insert into t_datetime select to_date('2024-04-01') + number % 3, to_datetime('2024-04-01 00:00:00') + number % 3, 1 from numbers(10)
 
-query TI
+query ?I
 select created_at, sum(count) from t_datetime group by created_at order by created_at
 ----
 2024-04-01 4
 2024-04-02 3
 2024-04-03 3
 
-query TI
+query ?I
 select created_time, sum(count) from t_datetime group by created_time order by created_time
 ----
 2024-04-01 00:00:00.000000 4
@@ -109,7 +109,7 @@ SELECT number, count(*) FROM numbers_mt(10) group by number order by number limi
 3 1
 4 1
 
-query IIIF
+query IIIR
 SELECT number % 3 as a, number%4 as b, sum(a),avg(b) FROM numbers_mt(10000000) group by a,b order by a,b limit 5
 ----
 0 0 0 0.0
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS t_variant(id Int null, var Variant null) Engine = Fus
 statement ok
 INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')), (2, parse_json('{"k":"v"}')), (3, parse_json('"abcd"')), (4, parse_json('"abcd"')), (5, parse_json('12')), (6, parse_json('12')), (7, parse_json('[1,2,3]')), (8, parse_json('[1,2,3]'))
 
-query IIT
+query II?
 SELECT max(id) as n, min(id), var FROM t_variant GROUP BY var ORDER BY n ASC
 ----
 2 1 {"k":"v"}
@@ -163,7 +163,7 @@ select count() from numbers(10) group by to_nullable('ab')
 
 ## Decimal
 
-query III
+query RRI
 select (number % 3)::Decimal(19, 2) a ,(number % 4)::Decimal(36, 4) b , count() from numbers(100) group by a,b order by a,b limit 5
 ----
 0.00 0.0000 9
@@ -172,21 +172,21 @@ select (number % 3)::Decimal(19, 2) a ,(number % 4)::Decimal(36, 4) b , count() 
 0.00 3.0000 9
 1.00 0.0000 8
 
-query ITI
+query RTI
 select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from numbers(100) group by c,d order by c, d ;
 ----
 0.00 0 34
 1.00 1 33
 2.00 2 33
 
-query TI
+query ?I
 select number::Variant a, count() from numbers(3) group by a order by a
 ----
 0 1
 1 1
 2 1
 
-query TI
+query ?II
 select number::Variant a, number as b, count() from numbers(3) group by a, b order by a
 ----
 0 0 1
@@ -203,7 +203,7 @@ select number % 3 a, max(number) - 10, number % 2 b, sum(number) + 10 from numbe
 2 999988 0 83333500010
 2 999985 1 83333000010
 
-query TTT rowsort
+query ? rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
 (NULL,18,"1970-01-01")

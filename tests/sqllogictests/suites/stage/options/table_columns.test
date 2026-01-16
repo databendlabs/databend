@@ -4,12 +4,12 @@ drop table if exists tit
 statement ok
 create table tit(a string default 'bend', b int, c string)
 
-query 
+query ?????
 copy into tit (b, c) from @data/csv/it.csv FILE_FORMAT = (type = CSV)
 ----
 csv/it.csv 2 0 NULL NULL
 
-query 
+query ???
 select * from tit order by b
 ----
 bend 1 b
@@ -18,12 +18,12 @@ bend 2 d
 statement ok
 truncate table tit
 
-query 
+query ?????
 copy into tit (c, b) from (select $2, $1 + 1 from @data/csv/it.csv ) FILE_FORMAT = (type = CSV) force = true
 ----
 csv/it.csv 2 0 NULL NULL
 
-query 
+query ???
 select * from tit order by b
 ----
 bend 2 b

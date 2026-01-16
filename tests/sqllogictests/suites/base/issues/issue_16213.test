@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS test_table_double (ID INT, Name VARCHAR(50), Age INT,
 statement ok
 INSERT INTO test_table_double (ID, Name, Age, City, Score) VALUES (1, 'Alice', 25, 'Toroto', 'inf')
 
-query
+query ?????
 SELECT * FROM test_table_double
 ----
 1 Alice 25 Toroto Infinity
@@ -27,7 +27,7 @@ insert into test_inf_nan select '-inf' from numbers(100)
 statement ok
 insert into test_inf_nan select 'nan' from numbers(100)
 
-query
+query ?
 select max(a) from test_inf_nan
 ----
 NaN

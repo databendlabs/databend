@@ -1,4 +1,4 @@
-query I
+query T
 select $2 from @data/csv (files=>('select.csv'), file_format=>'csv') order by $1
 ----
 NULL
@@ -25,7 +25,7 @@ drop file format if exists csv1
 statement ok
 create file format csv1 type = 'CSV' field_delimiter = ',' skip_header = 1 compression= 'auto'
 
-query
+query ?
 select /*+ set_var(input_read_buffer_size=100) */ count($1) from @data/ontime_200.csv (file_format=>'csv1' pattern=>'') limit 1
 ----
 199

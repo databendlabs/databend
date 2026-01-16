@@ -12,37 +12,37 @@ create table rand(name String not null, id int, flag bool) Engine = random max_s
 statement ok
 create table t1 engine=fuse row_per_block = $RAND_30000_100000 as select * from rand limit $RAND_100000_300000
 
-query III
+query BBB
 select min(length(name)) <= 5,  max(length(name)) <= 5,  count(name) >= 100000 from t1
 ----
 1 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 0)
 ----
 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 1)
 ----
 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 2)
 ----
 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 3)
 ----
 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 4)
 ----
 1 1
 
-query III
+query BB
 select a is null or (a <= 5), b is null or (b <= 5) from  (select min(length(name))  as a,  max(length(name))  as b from t1 where id % 5 = 5)
 ----
 1 1

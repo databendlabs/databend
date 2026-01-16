@@ -10,7 +10,7 @@ SELECT IFNULL(2, 1)
 ----
 2
 
-query I
+query I??
 SELECT IFNULL(1, 2), IFNULL(null), NVL(NULL)
 ----
 1 NULL NULL
@@ -50,7 +50,7 @@ SELECT IFNULL(NULL, 'a')
 ----
 a
 
-query T
+query ?
 SELECT IFNULL(NULL, NULL)
 ----
 NULL

@@ -1,4 +1,4 @@
-query T
+query ?
 select to_variant(null)
 ----
 NULL
@@ -79,7 +79,7 @@ select parse_json('+1'), parse_json('0000012'), parse_json('1.'), parse_json('.2
 ----
 1 12 1 0.2
 
-query TTTT
+query TTT
 select parse_json('[1,2, ,4]'), parse_json('[,2]'), parse_json('[1,]')
 ----
 [1,2,null,4] [null,2] [1,null]
@@ -128,7 +128,7 @@ select '==try_parse_json=='
 ----
 ==try_parse_json==
 
-query T
+query ?
 select try_to_variant(null)
 ----
 NULL
@@ -188,12 +188,12 @@ select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 ----
 {"x":"abc","y":false,"z":10}
 
-query T
+query ?
 select try_parse_json('[1,')
 ----
 NULL
 
-query T
+query ?
 select try_parse_json('"ab')
 ----
 NULL

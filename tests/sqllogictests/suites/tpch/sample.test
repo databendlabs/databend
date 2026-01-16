@@ -49,7 +49,7 @@ statement ok
 set enable_cbo = 1;
 
 # use `join.test` to test dynamic sample framework without error
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -116,7 +116,7 @@ from
 103
 103
 
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -152,7 +152,7 @@ order by c_custkey
 20 0
 
 
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -306,7 +306,7 @@ order by o_custkey
 4
 4
 
-query I
+query T
 select
     o_comment
 from
@@ -375,7 +375,7 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 3
 
 # LEFT OUTER / LEFT SINGEL / FULL
-query I
+query I?I
 select l_orderkey, o_orderdate, o_shippriority from lineitem left join orders on l_orderkey = o_orderkey  and o_orderdate < to_date('1995-03-15') order by o_orderdate, l_orderkey limit 5;
 ----
 3271 1992-01-01 0
@@ -399,7 +399,7 @@ select o_custkey from orders where not exists (select * from customer where subs
 4
 4
 
-query I
+query TTIR
 select
     supp_nation,
     cust_nation,
@@ -445,7 +445,7 @@ FRANCE GERMANY 1996 54633083.307
 GERMANY FRANCE 1995 52531746.669
 GERMANY FRANCE 1996 52520549.022
 
-query I
+query IR
 select
     o_year,
     truncate(sum(case
@@ -487,7 +487,7 @@ order by
 1995 0.03443589
 1996 0.04148552
 
-query I
+query TIR
 select
     nation,
     o_year,

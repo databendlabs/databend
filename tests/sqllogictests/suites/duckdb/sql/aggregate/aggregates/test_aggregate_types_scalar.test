@@ -9,7 +9,7 @@ SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT('1992-02-
 statement error 1028
 SELECT COUNT(1, 2)
 
-query ITF
+query I?R
 SELECT SUM(1), SUM(NULL), SUM(33.3)
 ----
 1 NULL 33.3
@@ -29,7 +29,7 @@ SELECT SUM()
 statement error 1028
 SELECT SUM(1, 2)
 
-query ITFTITT
+query I?RTB??
 SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN('1992-02-02'::DATE), MIN('2008-01-01 00:00:01'::TIMESTAMP)
 ----
 1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
@@ -40,7 +40,7 @@ SELECT MIN()
 statement error 1028
 SELECT MIN(1, 2)
 
-query ITFTITT
+query I?RTB??
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX('1992-02-02'::DATE), MAX('2008-01-01 00:00:01'::TIMESTAMP)
 ----
 1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
@@ -51,7 +51,7 @@ SELECT MAX()
 statement error 1028
 SELECT MAX(1, 2)
 
-query FTF
+query R?R
 SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----
 1.0 NULL 33.3000000

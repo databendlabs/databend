@@ -21,13 +21,13 @@ INSERT INTO t2 VALUES
 (4, 'z1'),
 (NULL, 'n2');
 
-query IT rowsort
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id);
 ----
 1 a1 x2
 3 c1 y1
 
-query IT rowsort
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 LEFT ANY JOIN t2 USING(id);
 ----
 1 a1 x2
@@ -37,7 +37,7 @@ SELECT t1.id, t1.val1, t2.val2 FROM t1 LEFT ANY JOIN t2 USING(id);
 5 e1 NULL
 NULL n1 NULL
 
-query IT rowsort
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 RIGHT ANY JOIN t2 ON t1.id = t2.id;
 ----
 1 a1 x1
@@ -46,12 +46,12 @@ SELECT t1.id, t1.val1, t2.val2 FROM t1 RIGHT ANY JOIN t2 ON t1.id = t2.id;
 NULL NULL n2
 NULL NULL z1
 
-query IT rowsort
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 ON t1.id = t2.id AND t2.val2 = 'x2';
 ----
 1 a1 x2
 
-query IT rowsort
+query ITT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id) WHERE t1.id IS NULL OR t2.id IS NULL;
 ----
 
@@ -82,13 +82,13 @@ INSERT INTO t2_str VALUES
 (4, 'z1'),
 (NULL, 'n2');
 
-query IT rowsort
+query TTT rowsort
 SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str INNER ANY JOIN t2_str USING(id);
 ----
 1 a1 x2
 3 c1 y1
 
-query IT rowsort
+query TTT rowsort
 SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str LEFT ANY JOIN t2_str USING(id);
 ----
 1 a1 x2
@@ -98,7 +98,7 @@ SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str LEFT ANY JOIN t2_str USIN
 5 e1 NULL
 NULL n1 NULL
 
-query IT rowsort
+query TTT rowsort
 SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str RIGHT ANY JOIN t2_str ON t1_str.id = t2_str.id;
 ----
 1 a1 x1
@@ -129,7 +129,7 @@ INSERT INTO t4 VALUES
 (1, 'x1'),
 (1, 'x2');
 
-query IT rowsort
+query ITT rowsort
 SELECT t3.id, t3.val1, t4.val2 FROM t3 INNER ANY JOIN t4 USING(id);
 ----
 1 a1 x2
@@ -139,11 +139,11 @@ SELECT t3.id, t3.val1, t4.val2 FROM t3 INNER ANY JOIN t4 USING(id);
 statement ok
 CREATE OR REPLACE TABLE empty (id Int32, val String);
 
-query IT rowsort
+query ITT rowsort
 SELECT * FROM t1 INNER ANY JOIN empty USING(id);
 ----
 
-query IT rowsort
+query ITT rowsort
 SELECT * FROM empty LEFT ANY JOIN t1 USING(id);
 ----
 
@@ -167,7 +167,7 @@ INSERT INTO t6 VALUES
 (2, 10, 'x2'),
 (2, 11, 'x3');
 
-query IT rowsort
+query IITT rowsort
 SELECT t5.a, t5.b, t5.val1, t6.val2 FROM t5 INNER ANY JOIN t6 USING(a, b);
 ----
 1 10 a1 x1

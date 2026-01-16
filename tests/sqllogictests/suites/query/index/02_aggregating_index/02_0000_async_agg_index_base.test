@@ -43,7 +43,7 @@ CREATE ASYNC AGGREGATING INDEX testi AS select a, b from t where b > 1
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query T
+query II
 select a, b from t where b > 2
 ----
 
@@ -220,7 +220,7 @@ CREATE ASYNC AGGREGATING INDEX testi AS select b, sum(a), max(c) from t where c 
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query II
+query III
 SELECT b, SUM(a), MAX(c) from t WHERE c > 1 GROUP BY b ORDER BY b
 ----
 1 1 4
@@ -251,7 +251,7 @@ UPDATE t SET c = 3 where b = -1
 statement ok
 REFRESH AGGREGATING INDEX testi
 
-query TI rowsort
+query II rowsort
 SELECT ABS(b) as bs, SUM(a) from t WHERE c > 1 GROUP BY bs
 ----
 1 2
