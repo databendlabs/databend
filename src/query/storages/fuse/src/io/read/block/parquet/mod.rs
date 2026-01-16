@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -71,7 +72,11 @@ impl BlockReader {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
-            return Ok(DataBlock::new(vec![], result_rows));
+            return Ok(DataBlock::empty_with_rows(result_rows));
+        }
+
+        if result_rows == 0 {
+            return Ok(DataBlock::empty_with_schema(Arc::new(self.data_schema())));
         }
 
         let has_selection = selection.is_some();
