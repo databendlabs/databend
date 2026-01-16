@@ -877,15 +877,15 @@ impl BloomIndexBuilder {
         self.bloom_columns.len() + self.ngram_columns.len()
     }
 
-    /// Peek the column distinct counts before finalizing the bloom index.
+    /// Peek the column digest counts before finalizing the bloom index.
     ///
-    /// This provides accurate NDV from the filter builders' digest sets,
-    /// which can be used for encoding decisions before building the filters.
+    /// This provides approximate NDV based on distinct digests.
+    /// Use this for encoding decisions before building the filters.
     pub fn peek_column_distinct_count(&self) -> HashMap<ColumnId, usize> {
         let mut result = HashMap::with_capacity(self.bloom_columns.len());
         for column in &self.bloom_columns {
             if let FilterImplBuilder::Xor(builder) = &column.builder {
-                if let Some(len) = builder.peek_len() {
+                if let Some(len) = builder.peek_digest_count() {
                     result.insert(column.field.column_id, len);
                 }
             }
