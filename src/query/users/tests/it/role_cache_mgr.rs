@@ -29,7 +29,6 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_version::BUILD_INFO;
-use tokio;
 
 pub const CATALOG_DEFAULT: &str = "default";
 

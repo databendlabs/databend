@@ -503,7 +503,6 @@ mod test {
     use parquet::file::metadata::RowGroupMetaData;
     use parquet::schema::types::*;
     use rand::Rng;
-    use tokio;
 
     use super::*;
 

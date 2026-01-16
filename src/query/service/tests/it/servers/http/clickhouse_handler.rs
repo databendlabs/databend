@@ -34,7 +34,6 @@ use poem::middleware::CookieJarManager;
 use poem::middleware::CookieJarManagerEndpoint;
 use poem::web::headers::Authorization;
 use pretty_assertions::assert_eq;
-use tokio;
 
 macro_rules! assert_error {
     ($body:expr, $msg:expr$(,)?) => {{

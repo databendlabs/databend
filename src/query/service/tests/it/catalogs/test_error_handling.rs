@@ -34,7 +34,6 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::catalogs::Catalog;
-use tokio;
 
 use crate::tests::create_catalog;
 

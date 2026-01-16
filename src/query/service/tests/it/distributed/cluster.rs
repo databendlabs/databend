@@ -21,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_query::servers::flight::FlightService;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
-use tokio;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 
 #[test]

@@ -35,7 +35,6 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::TryStreamExt;
-use tokio;
 
 #[test]
 fn test_to_partitions() -> Result<()> {

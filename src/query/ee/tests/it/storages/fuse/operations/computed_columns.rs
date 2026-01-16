@@ -16,7 +16,6 @@ use databend_common_exception::Result;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {

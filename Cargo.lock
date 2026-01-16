@@ -3367,7 +3367,6 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
- "databend-common-base",
  "http 1.3.1",
  "tempfile",
  "tokio",
@@ -3990,7 +3989,6 @@ dependencies = [
 name = "databend-common-meta-app-storage"
 version = "0.1.0"
 dependencies = [
- "databend-common-base",
  "databend-common-exception",
  "opendal",
  "serde",
@@ -4154,7 +4152,6 @@ dependencies = [
  "fastrace",
  "fs_extra",
  "futures",
- "futures-async-stream",
  "futures-util",
  "hostname",
  "log",
@@ -5901,7 +5898,6 @@ dependencies = [
  "bincode 1.3.3",
  "bytes",
  "chrono",
- "databend-common-base",
  "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",

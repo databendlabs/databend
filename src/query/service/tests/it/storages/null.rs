@@ -25,7 +25,6 @@ use databend_common_storages_basic::NullTable;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {

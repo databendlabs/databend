@@ -24,7 +24,6 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::tenant::Tenant;
 use log::warn;
 use parking_lot::RwLock;
-use tokio;
 use tokio::task::JoinHandle;
 
 use crate::UserApiProvider;

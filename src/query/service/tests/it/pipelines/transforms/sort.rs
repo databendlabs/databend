@@ -37,7 +37,6 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use rand::Rng;
 use rand::rngs::ThreadRng;
-use tokio;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::channel;
 

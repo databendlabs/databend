@@ -18,7 +18,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {

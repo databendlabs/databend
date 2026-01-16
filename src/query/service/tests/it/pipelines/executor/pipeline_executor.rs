@@ -33,7 +33,6 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
-use tokio;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;

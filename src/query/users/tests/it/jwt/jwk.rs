@@ -7,7 +7,6 @@ use databend_common_users::PubKey;
 use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
 use parking_lot::Mutex;
-use tokio;
 
 struct MockJwksLoader {
     keys: Mutex<HashMap<String, PubKey>>,

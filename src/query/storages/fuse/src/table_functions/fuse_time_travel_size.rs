@@ -33,7 +33,6 @@ use databend_common_expression::types::UInt64Type;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
-use tokio;
 
 use super::parse_opt_opt_args;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;

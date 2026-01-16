@@ -50,7 +50,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
-use tokio;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,

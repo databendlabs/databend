@@ -24,7 +24,6 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {

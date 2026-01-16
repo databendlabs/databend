@@ -36,7 +36,6 @@ use poem::Request;
 use poem::Route;
 use poem::get;
 use pretty_assertions::assert_eq;
-use tokio;
 use tokio_stream::StreamExt;
 
 async fn get_status(ep: &Route) -> InstanceStatus {

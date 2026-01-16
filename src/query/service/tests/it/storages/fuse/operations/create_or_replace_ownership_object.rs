@@ -25,7 +25,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storages_fuse::TableContext;
 use databend_common_version::BUILD_INFO;
 use databend_query::test_kits::*;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {

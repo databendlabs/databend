@@ -27,7 +27,6 @@ use futures::future::Abortable;
 use log::error;
 use rustls::ServerConfig;
 use socket2::TcpKeepalive;
-use tokio;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::TcpListenerStream;

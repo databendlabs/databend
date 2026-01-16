@@ -22,7 +22,6 @@ use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::ECDSAP256KeyPairLike;
 use jwt_simple::prelude::UnixTimeStamp;
-use tokio;
 
 fn build_custom_claims(
     license_type: String,

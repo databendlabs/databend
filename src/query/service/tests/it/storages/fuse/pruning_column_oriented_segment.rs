@@ -59,7 +59,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
-use tokio;
 
 async fn apply_snapshot_pruning(
     table_snapshot: Arc<TableSnapshot>,

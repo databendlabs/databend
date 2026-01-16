@@ -25,7 +25,6 @@ use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_query::servers::flight::FlightService;
 use databend_query::test_kits::*;
-use tokio;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;

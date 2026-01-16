@@ -45,7 +45,6 @@ use databend_common_expression::udf_client::UDFFlightClient;
 use futures::Stream;
 use futures::StreamExt;
 use futures::stream;
-use tokio;
 use tokio::time::timeout;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::Request;

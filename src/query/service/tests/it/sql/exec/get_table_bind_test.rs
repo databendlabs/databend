@@ -161,7 +161,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use tokio;
 
 type MetaType = (String, String, String);
 

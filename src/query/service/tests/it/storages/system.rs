@@ -64,7 +64,6 @@ use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use goldenfile::Mint;
-use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

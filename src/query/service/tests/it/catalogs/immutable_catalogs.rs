@@ -21,7 +21,6 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::catalogs::Catalog;
 use databend_query::catalogs::default::ImmutableCatalog;
-use tokio;
 
 use crate::tests::create_catalog;
 

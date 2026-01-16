@@ -24,7 +24,6 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeCompactBlockInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
-use tokio;
 
 #[test]
 pub fn test_format_field_name() {

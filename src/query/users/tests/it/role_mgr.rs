@@ -30,7 +30,6 @@ use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {

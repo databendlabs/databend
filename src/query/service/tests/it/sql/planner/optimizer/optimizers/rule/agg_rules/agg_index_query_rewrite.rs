@@ -38,7 +38,6 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use tokio;
 
 use super::test_utils::raw_plan;
 

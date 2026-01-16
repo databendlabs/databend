@@ -165,7 +165,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use tokio;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]

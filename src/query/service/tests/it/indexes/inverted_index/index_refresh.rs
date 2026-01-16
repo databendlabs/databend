@@ -40,7 +40,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use tantivy::schema::IndexRecordOption;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> Result<()> {

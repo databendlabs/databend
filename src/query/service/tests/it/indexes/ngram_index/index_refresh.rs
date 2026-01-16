@@ -18,7 +18,6 @@ use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bl
 use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
 use futures_util::StreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_ngram_index() -> Result<()> {

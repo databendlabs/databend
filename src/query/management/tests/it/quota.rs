@@ -23,7 +23,6 @@ use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_version::BUILD_INFO;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_update_quota_from_json_to_pb() -> Result<()> {

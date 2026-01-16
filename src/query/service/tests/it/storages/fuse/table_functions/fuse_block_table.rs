@@ -16,7 +16,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_query::test_kits::*;
-use tokio;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]

@@ -36,7 +36,6 @@ use goldenfile::Mint;
 use hyper_util::rt::TokioIo;
 use log::debug;
 use tempfile::NamedTempFile;
-use tokio;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tokio_stream::wrappers::UnixListenerStream;

@@ -219,7 +219,6 @@ mod tests {
     use std::path::Path;
 
     use opendal::Scheme;
-    use tokio;
 
     use super::*;
 

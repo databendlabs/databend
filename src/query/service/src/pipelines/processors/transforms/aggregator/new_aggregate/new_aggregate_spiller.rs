@@ -454,7 +454,6 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
-    use tokio;
 
     use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
     use crate::pipelines::processors::transforms::aggregator::new_aggregate::LocalPartitionStream;

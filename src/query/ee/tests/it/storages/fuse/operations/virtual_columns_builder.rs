@@ -27,7 +27,6 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use jsonb::OwnedJsonb;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> Result<()> {

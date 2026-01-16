@@ -17,7 +17,6 @@ use std::net::TcpListener;
 use databend_common_exception::Result;
 use databend_query::servers::FlightSQLServer;
 use databend_query::test_kits::ConfigBuilder;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_sql_server_port_used() -> Result<()> {

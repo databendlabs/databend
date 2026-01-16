@@ -49,7 +49,6 @@ use opendal::Operator;
 use parquet::format::FileMetaData;
 use sysinfo::System;
 use sysinfo::get_current_pid;
-use tokio;
 use uuid::Uuid;
 
 // NOTE:

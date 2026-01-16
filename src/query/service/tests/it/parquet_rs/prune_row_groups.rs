@@ -19,7 +19,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
 use databend_common_storages_parquet::ParquetPruner;
 use parquet::file::metadata::ParquetMetaDataReader;
-use tokio;
 
 use super::data::Scenario;
 use super::data::make_test_file_rg;

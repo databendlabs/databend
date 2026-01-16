@@ -9,7 +9,6 @@ edition = { workspace = true }
 [dependencies]
 base64 = { workspace = true }
 chrono = { workspace = true }
-databend-common-base = { workspace = true }
 http = { workspace = true }
 tokio = { workspace = true }
 

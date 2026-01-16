@@ -32,7 +32,6 @@ use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_vector_index() -> Result<()> {

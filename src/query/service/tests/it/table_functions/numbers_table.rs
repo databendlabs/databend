@@ -25,7 +25,6 @@ use databend_query::table_functions::generate_numbers_parts;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {

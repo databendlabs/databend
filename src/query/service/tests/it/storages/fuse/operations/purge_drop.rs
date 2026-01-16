@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_query::test_kits::*;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {

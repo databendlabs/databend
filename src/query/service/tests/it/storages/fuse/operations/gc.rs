@@ -24,7 +24,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use tokio;
 use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::compact_segment;

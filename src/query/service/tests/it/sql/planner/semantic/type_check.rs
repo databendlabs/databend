@@ -16,7 +16,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::parse_exprs;
 use databend_query::test_kits::TestFixture;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_overflow() -> Result<()> {

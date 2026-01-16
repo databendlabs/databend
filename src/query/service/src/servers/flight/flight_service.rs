@@ -21,7 +21,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
-use tokio;
 use tokio::sync::Notify;
 use tonic::transport::Identity;
 use tonic::transport::Server;

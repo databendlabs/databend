@@ -42,7 +42,6 @@ use futures::StreamExt;
 use prost::bytes;
 use serde::Deserialize;
 use serde::Serialize;
-use tokio;
 use tonic::Status;
 
 use super::DoGetStream;

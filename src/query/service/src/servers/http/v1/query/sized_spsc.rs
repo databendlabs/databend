@@ -29,7 +29,6 @@ use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
 use log::debug;
 use log::info;
-use tokio;
 use tokio::sync::Notify;
 
 use super::blocks_serializer::BlocksCollector;

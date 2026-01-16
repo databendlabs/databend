@@ -32,7 +32,6 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
-use tokio;
 use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

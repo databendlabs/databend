@@ -16,7 +16,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {

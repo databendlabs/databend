@@ -45,7 +45,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 use rand::Rng;
 use rand::thread_rng;
-use tokio;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 

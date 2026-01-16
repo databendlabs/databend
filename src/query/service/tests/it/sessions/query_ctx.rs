@@ -19,7 +19,6 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

@@ -57,7 +57,6 @@ use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::OpStat;
 use opendal::raw::RpStat;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {

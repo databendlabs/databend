@@ -18,7 +18,6 @@ use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_cluster_discovery() -> Result<()> {

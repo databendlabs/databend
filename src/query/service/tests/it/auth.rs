@@ -26,7 +26,6 @@ use databend_query::auth::Credential;
 use databend_query::test_kits::*;
 use jwt_simple::prelude::*;
 use p256::EncodedPoint;
-use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

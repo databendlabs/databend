@@ -24,7 +24,6 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> Result<()> {

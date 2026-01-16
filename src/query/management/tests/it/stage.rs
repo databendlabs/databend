@@ -29,7 +29,6 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
 use fastrace::func_name;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_stage() -> Result<()> {

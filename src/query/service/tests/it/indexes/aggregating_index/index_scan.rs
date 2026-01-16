@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_expression::block_debug::pretty_format_blocks;

@@ -22,7 +22,6 @@ use databend_common_users::EnsureUser;
 use databend_common_users::JwtAuthenticator;
 use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
-use tokio;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;

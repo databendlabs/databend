@@ -20,7 +20,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
-use tokio;
 use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {

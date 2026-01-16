@@ -1627,7 +1627,6 @@ mod tests {
     use databend_common_pipeline::core::Processor;
     use databend_common_pipeline::core::port::connect;
     use databend_common_sql::plans::WindowFuncFrameUnits;
-    use tokio;
 
     use super::*;
 

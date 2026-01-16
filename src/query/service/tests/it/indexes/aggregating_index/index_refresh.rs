@@ -42,7 +42,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use derive_visitor::DriveMut;
 use futures_util::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_agg_index() -> Result<()> {

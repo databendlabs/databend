@@ -25,7 +25,6 @@ use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Result<()> {

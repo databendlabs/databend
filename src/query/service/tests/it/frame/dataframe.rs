@@ -32,7 +32,6 @@ use goldenfile::Mint;
 // use databend_common_ast::ast::JoinCondition;
 // use databend_common_ast::ast::JoinOperator;
 // use databend_common_ast::ast::Literal;
-use tokio;
 use tokio_stream::StreamExt;
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

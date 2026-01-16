@@ -43,7 +43,6 @@ use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
-use tokio;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorWorkerContext;

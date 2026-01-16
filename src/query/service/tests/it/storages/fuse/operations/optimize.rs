@@ -18,7 +18,6 @@ use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
-use tokio;
 
 use crate::storages::fuse::utils::do_purge_test;
 

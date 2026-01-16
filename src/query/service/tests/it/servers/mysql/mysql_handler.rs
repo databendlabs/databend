@@ -31,7 +31,6 @@ use mysql_async::Row;
 use mysql_async::SslOpts;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
-use tokio;
 use tokio::sync::Barrier;
 
 use crate::tests::tls_constants::*;

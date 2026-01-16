@@ -25,7 +25,6 @@ use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_navigate() -> Result<()> {

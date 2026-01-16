@@ -30,7 +30,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> Result<()> {

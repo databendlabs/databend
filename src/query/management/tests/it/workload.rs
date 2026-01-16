@@ -23,7 +23,6 @@ use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_version::BUILD_INFO;
-use tokio;
 
 async fn create_workload_mgr() -> WorkloadMgr {
     let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;

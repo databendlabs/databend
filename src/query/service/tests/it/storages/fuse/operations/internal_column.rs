@@ -43,7 +43,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
-use tokio;
 
 fn expected_data_block(
     parts: &Vec<PartInfoPtr>,

@@ -63,7 +63,6 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentB
 use futures_util::TryStreamExt;
 use rand::Rng;
 use rand::thread_rng;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {

@@ -22,7 +22,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
-use tokio;
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {

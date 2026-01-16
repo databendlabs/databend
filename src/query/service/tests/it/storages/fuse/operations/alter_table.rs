@@ -45,7 +45,6 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures_util::TryStreamExt;
-use tokio;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,

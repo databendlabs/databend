@@ -22,7 +22,6 @@ use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
-use tokio;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_normal_case() -> Result<()> {
