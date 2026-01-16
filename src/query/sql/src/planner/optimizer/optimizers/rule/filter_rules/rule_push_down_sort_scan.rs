@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SecureFilter;
@@ -35,21 +35,6 @@ use crate::plans::Sort;
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,
-}
-
-macro_rules! match_op {
-    ($op:ident) => {
-        Matcher::MatchOp {
-            op_type: RelOp::$op,
-            children: vec![],
-        }
-    };
-    ($op:ident, $($child:expr),+) => {
-        Matcher::MatchOp {
-            op_type: RelOp::$op,
-            children: vec![$($child),+],
-        }
-    };
 }
 
 impl RulePushDownSortScan {

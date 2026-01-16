@@ -43,6 +43,35 @@ pub enum Matcher {
     Leaf,
 }
 
+/// Macro to construct `Matcher::MatchOp` patterns concisely.
+///
+/// # Examples
+/// ```ignore
+/// // Leaf node
+/// match_op!(Scan)
+///
+/// // With children
+/// match_op!(Filter, match_op!(Scan))
+///
+/// // Nested
+/// match_op!(Sort, match_op!(EvalScalar, match_op!(Scan)))
+/// ```
+#[macro_export]
+macro_rules! match_op {
+    ($op:ident) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![],
+        }
+    };
+    ($op:ident, $($child:expr),+ $(,)?) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![$($child),+],
+        }
+    };
+}
+
 impl Matcher {
     /// Check if the `SExpr` can be matched by the `Matcher`.
     #[recursive::recursive]

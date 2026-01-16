@@ -203,12 +203,23 @@ impl Rule for RulePushDownFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let i = self
+            .matchers
+            .iter()
+            .position(|matcher| matcher.matches(s_expr))
+            .unwrap();
+        self.apply_matcher(i, s_expr, state)
+    }
 
+    fn apply_matcher(&self, idx: usize, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        let filter: Filter = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
-        let (mut scan, secure_filter) = match child.plan() {
-            crate::plans::RelOperator::Scan(_) => (child.plan().clone().try_into()?, None),
-            crate::plans::RelOperator::SecureFilter(_) => {
+
+        let (mut scan, secure_filter): (Scan, Option<SecureFilter>) = match idx {
+            // Filter -> Scan
+            0 => (child.plan().clone().try_into()?, None),
+            // Filter -> SecureFilter -> Scan
+            1 => {
                 let secure_filter: SecureFilter = child.plan().clone().try_into()?;
                 let scan: Scan = child.child(0)?.plan().clone().try_into()?;
                 (scan, Some(secure_filter))
