@@ -3982,7 +3982,6 @@ dependencies = [
 name = "databend-common-meta-app-storage"
 version = "0.1.0"
 dependencies = [
- "databend-common-base",
  "databend-common-exception",
  "opendal",
  "serde",
@@ -4146,7 +4145,6 @@ dependencies = [
  "fastrace",
  "fs_extra",
  "futures",
- "futures-async-stream",
  "futures-util",
  "hostname",
  "log",

@@ -7,7 +7,6 @@ publish.workspace = true
 edition.workspace = true
 
 [dependencies]
-databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
