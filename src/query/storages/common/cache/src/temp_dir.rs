@@ -28,9 +28,9 @@ use std::sync::Once;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_config::SpillConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -225,7 +225,7 @@ impl TempDir {
     // It should be ensured that the actual size is less than or equal to
     // the reserved size as much as possible, otherwise the limit may be exceeded.
     pub fn new_file_with_size(&self, size: usize) -> Result<Option<TempPath>> {
-        let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
+        let path = self.path.join(GlobalUniq::unique()).into_boxed_path();
 
         if self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
             || self

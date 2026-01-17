@@ -18,6 +18,7 @@ ignored = ["strum"]
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+databend-base = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }

@@ -3257,8 +3257,8 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.2"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.2#a2714ece292137d19c404ac241199e8a4ef428a3"
+version = "0.2.3"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.3#71428e7e39971212eb1e2fea0a6f8f93d942ae66"
 dependencies = [
  "async-trait",
  "ctrlc",
@@ -3266,6 +3266,7 @@ dependencies = [
  "log",
  "pin-project-lite",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -3390,6 +3391,7 @@ dependencies = [
  "chrono",
  "concurrent-queue",
  "crc32fast",
+ "databend-base",
  "databend-common-exception",
  "enquote",
  "futures",
@@ -3454,6 +3456,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap 6.1.0",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -3557,6 +3560,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "databend-base",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",
@@ -3894,6 +3898,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "cron",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
@@ -4140,6 +4145,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode 2.0.1",
+ "databend-base",
  "databend-common-base",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
@@ -4252,7 +4258,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "databend-common-base",
+ "databend-base",
  "databend-common-grpc",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -4369,6 +4375,7 @@ dependencies = [
  "async-trait",
  "bumpalo",
  "bytesize 2.0.1",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
@@ -5537,6 +5544,7 @@ dependencies = [
  "cron",
  "ctor",
  "dashmap 6.1.0",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-cache",
@@ -5759,6 +5767,7 @@ dependencies = [
  "bytes",
  "crc32fast",
  "crossbeam-channel",
+ "databend-base",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-catalog",

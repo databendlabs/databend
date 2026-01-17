@@ -973,7 +973,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
 
-    use databend_common_base::base::GlobalUniqName;
+    use databend_base::uniq_id::GlobalUniq;
     use databend_common_expression::Column;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
@@ -1432,7 +1432,7 @@ mod tests {
     #[async_trait::async_trait]
     impl DataBlockSpill for MockSpiller {
         async fn spill(&self, data_block: DataBlock) -> Result<Location> {
-            let name = GlobalUniqName::unique();
+            let name = GlobalUniq::unique();
             self.map.lock().unwrap().insert(name.clone(), data_block);
             Ok(Location::Remote(name))
         }

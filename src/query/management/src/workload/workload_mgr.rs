@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
@@ -119,7 +119,7 @@ impl WorkloadApi for WorkloadMgr {
             ));
         }
 
-        let group_id = GlobalUniqName::unique();
+        let group_id = GlobalUniq::unique();
         let mut create_workload = TxnRequest::default();
 
         group.id = group_id.clone();

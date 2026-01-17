@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -55,7 +55,7 @@ impl PayloadWriter {
         let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
+        let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
         let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
 
         Ok(PayloadWriter {
