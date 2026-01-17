@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::io::Cursor;
 
 use aho_corasick::AhoCorasick;
-use databend_common_exception::Result;
 use databend_common_io::cursor_ext::*;
 
 #[test]

@@ -17,7 +17,6 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;

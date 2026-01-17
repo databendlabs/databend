@@ -14,7 +14,6 @@
 
 use std::io::Cursor;
 
-use databend_common_exception::Result;
 use databend_common_io::cursor_ext::*;
 
 #[test]

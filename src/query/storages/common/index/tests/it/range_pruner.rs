@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;

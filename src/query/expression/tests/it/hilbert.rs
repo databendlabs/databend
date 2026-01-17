@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::hilbert_decompress;
 use databend_common_expression::hilbert_decompress_state_list;
