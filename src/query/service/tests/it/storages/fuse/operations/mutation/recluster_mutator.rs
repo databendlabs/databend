@@ -19,7 +19,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -166,7 +165,7 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let need_recluster = !parts.is_empty();
     assert!(need_recluster);
     let ReclusterParts::Recluster { tasks, .. } = parts else {
-        return Err(ErrorCode::Internal("Logical error, it's a bug"));
+        anyhow::bail!("Logical error, it's a bug");
     };
     assert_eq!(tasks.len(), 1);
     let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();

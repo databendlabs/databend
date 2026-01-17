@@ -15,7 +15,6 @@
 use std::assert_matches::assert_matches;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;

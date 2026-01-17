@@ -24,7 +24,6 @@ use databend_common_config::CatalogHiveConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::ThriftProtocol;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use pretty_assertions::assert_eq;
 
 // From env, defaulting.

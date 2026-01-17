@@ -63,12 +63,14 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
 #[test]
 fn test_data_block_nullable() -> anyhow::Result<()> {
-    test_data_block(true)
+    test_data_block(true)?;
+    Ok(())
 }
 
 #[test]
 fn test_data_block_not_nullable() -> anyhow::Result<()> {
-    test_data_block(false)
+    test_data_block(false)?;
+    Ok(())
 }
 
 #[test]

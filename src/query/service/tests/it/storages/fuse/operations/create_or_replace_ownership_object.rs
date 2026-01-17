@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
 use databend_common_config::MetaConfig;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::OwnershipObject;

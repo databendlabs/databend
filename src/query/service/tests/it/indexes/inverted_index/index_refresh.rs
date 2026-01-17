@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::types::DataType;

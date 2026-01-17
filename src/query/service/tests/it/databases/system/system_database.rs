@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_query::catalogs::InMemoryMetas;
 use databend_query::databases::SystemDatabase;
 use databend_query::test_kits::*;

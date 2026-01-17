@@ -21,7 +21,6 @@ use arrow_schema::Field;
 use chrono::Utc;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;

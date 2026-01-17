@@ -14,7 +14,6 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;

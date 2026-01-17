@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::TestFixture;

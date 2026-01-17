@@ -14,7 +14,6 @@
 
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::sessions::TableContext;

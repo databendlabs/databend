@@ -1,6 +1,5 @@
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::TestFixture;

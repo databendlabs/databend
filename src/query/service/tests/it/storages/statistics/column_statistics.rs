@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;

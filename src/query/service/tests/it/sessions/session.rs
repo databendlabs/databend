@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;

@@ -17,7 +17,6 @@ use std::time::Duration;
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::storages::fuse::FuseTable;

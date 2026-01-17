@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
@@ -23,12 +22,14 @@ use crate::storages::fuse::utils::do_purge_test;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_purge() -> anyhow::Result<()> {
-    do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1, 1).await
+    do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1, 1).await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_all() -> anyhow::Result<()> {
-    do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1, 1).await
+    do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1, 1).await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

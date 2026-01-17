@@ -14,7 +14,6 @@
 
 use std::default::Default;
 
-use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::storages::fuse::FuseTable;

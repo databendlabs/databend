@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_sql::parse_exprs;
 use databend_query::test_kits::TestFixture;
 

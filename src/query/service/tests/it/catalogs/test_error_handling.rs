@@ -20,7 +20,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;

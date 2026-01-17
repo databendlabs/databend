@@ -19,7 +19,6 @@ use std::str::FromStr;
 use arrow_flight::Empty;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
