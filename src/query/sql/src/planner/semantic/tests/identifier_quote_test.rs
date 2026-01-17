@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_identifier_preserves_quotes() -> Result<()> {
+    fn test_normalize_identifier_preserves_quotes() -> anyhow::Result<()> {
         // Create a context where case sensitivity is off for both quoted and unquoted identifiers
         let context = NameResolutionContext {
             unquoted_ident_case_sensitive: false,
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_normalizations() -> Result<()> {
+    fn test_multiple_normalizations() -> anyhow::Result<()> {
         // This test simulates the scenario where an identifier is normalized multiple times
         // which could happen during multiple parsing/planning phases
 
