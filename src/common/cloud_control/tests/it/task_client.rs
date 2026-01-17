@@ -36,7 +36,6 @@ use databend_common_cloud_control::pb::task::Status::Suspended;
 use databend_common_cloud_control::pb::task_service_client::TaskServiceClient;
 use databend_common_cloud_control::pb::task_service_server::TaskService;
 use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
-use databend_common_exception::Result;
 use hyper_util::rt::TokioIo;
 use tonic::Request;
 use tonic::Response;
