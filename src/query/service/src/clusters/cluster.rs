@@ -24,10 +24,10 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_flight::flight_service_client::FlightServiceClient;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_cache::Cache;
@@ -643,7 +643,7 @@ impl ClusterDiscovery {
             cache_id = match tokio::fs::read_to_string(path.clone()).await {
                 Ok(content) => content,
                 Err(e) if e.kind() == tokio::io::ErrorKind::NotFound => {
-                    let cache_id = GlobalUniqName::unique();
+                    let cache_id = GlobalUniq::unique();
                     if let Err(e) = tokio::fs::write(path, cache_id.clone()).await {
                         return Err(ErrorCode::TokioError(format!(
                             "Cannot write cache id file, cause: {:?}",

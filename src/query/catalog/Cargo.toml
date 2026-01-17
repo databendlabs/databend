@@ -12,7 +12,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-
+databend-base = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }

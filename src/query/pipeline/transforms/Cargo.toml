@@ -12,6 +12,7 @@ async-channel = { workspace = true }
 async-trait = { workspace = true }
 bumpalo = { workspace = true }
 bytesize = { workspace = true }
+databend-base = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }

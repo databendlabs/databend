@@ -542,7 +542,8 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
 
-    use crate::base::GlobalUniqName;
+    use databend_base::uniq_id::GlobalUniq;
+
     use crate::mem_allocator::DefaultAllocator;
     use crate::mem_allocator::tracker::META_TRACKER_THRESHOLD;
     use crate::mem_allocator::tracker::MetaTrackerAllocator;
@@ -565,7 +566,7 @@ mod tests {
     ) -> R {
         {
             let mem_stat = MemStat::create_child(
-                Some(GlobalUniqName::unique()),
+                Some(GlobalUniq::unique()),
                 0,
                 ParentMemStat::Normal(global.clone()),
             );

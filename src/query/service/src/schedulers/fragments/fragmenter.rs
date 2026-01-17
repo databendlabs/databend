@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -224,8 +224,7 @@ impl FragmentDeriveHandle {
                 let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
                 for destination in &destination_ids {
-                    destination_channels
-                        .push((destination.clone(), vec![GlobalUniqName::unique()]));
+                    destination_channels.push((destination.clone(), vec![GlobalUniq::unique()]));
                 }
 
                 Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {

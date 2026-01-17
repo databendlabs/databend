@@ -17,9 +17,9 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::runtime::profile::Profile;
@@ -166,7 +166,7 @@ impl<A> SpillerInner<A> {
     }
 
     pub fn create_unique_location(&self) -> String {
-        format!("{}/{}", self.location_prefix, GlobalUniqName::unique())
+        format!("{}/{}", self.location_prefix, GlobalUniq::unique())
     }
 
     async fn read_unmanage_spilled_file(

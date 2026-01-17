@@ -16,7 +16,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::DropCallback;
+use databend_base::drop_guard::DropGuard;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -44,7 +44,7 @@ impl WriterAcquirer {
         let permit = self.sem.acquire_owned().await.unwrap();
         info!("WriterPermit-Acquire: total: {:?}", start.elapsed());
         WriterPermit {
-            _drop: DropCallback::new(move || {
+            _drop: DropGuard::new(move || {
                 info!("WriterPermit-Drop: total: {:?}", start.elapsed());
             }),
             _permit: permit,
@@ -63,5 +63,5 @@ impl WriterAcquirer {
 /// The permit is automatically released when dropped.
 pub struct WriterPermit {
     _permit: OwnedSemaphorePermit,
-    _drop: DropCallback,
+    _drop: DropGuard,
 }

@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use databend_common_base::base::GlobalSequence;
+use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -112,7 +112,7 @@ pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, Cre
 }
 
 pub fn next_port() -> u16 {
-    29000u16 + (GlobalSequence::next() as u16)
+    29000u16 + (GlobalSeq::next() as u16)
 }
 
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.

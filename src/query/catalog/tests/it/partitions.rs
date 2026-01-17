@@ -20,7 +20,7 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
@@ -77,7 +77,7 @@ fn gen_parts(kind: PartitionsShuffleKind, size: usize) -> Partitions {
 
 fn create_node(cache_id: String) -> Arc<NodeInfo> {
     Arc::new(NodeInfo::create(
-        GlobalUniqName::unique(),
+        GlobalUniq::unique(),
         String::new(),
         String::new(),
         String::new(),

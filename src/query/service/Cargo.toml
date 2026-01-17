@@ -21,6 +21,7 @@ io-uring = [
 
 [dependencies]
 anyhow = { workspace = true }
+databend-base = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-csv = { workspace = true }

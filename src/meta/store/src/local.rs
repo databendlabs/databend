@@ -19,7 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::GlobalSequence;
+use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -233,7 +233,7 @@ impl LocalMetaService {
 
 fn next_port() -> u16 {
     let base = get_machine_unique_base_port();
-    let sequence = GlobalSequence::next() as u16;
+    let sequence = GlobalSeq::next() as u16;
 
     let port_offset = sequence % 10_000;
     let candidate_port = base.saturating_add(port_offset).max(19_000);
