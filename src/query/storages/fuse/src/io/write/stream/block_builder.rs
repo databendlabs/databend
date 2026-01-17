@@ -40,6 +40,8 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_blocks::collect_delta_ordering_stats;
+use databend_storages_common_blocks::DeltaOrderingStats;
 use databend_storages_common_blocks::EncodingStatsProvider;
 use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::NdvProvider;
@@ -155,6 +157,7 @@ impl ArrowParquetWriter {
 pub struct ColumnsNdvInfo {
     cols_ndv: HashMap<ColumnId, usize>,
     cols_stats: StatisticsOfColumns,
+    delta_ordering_stats: HashMap<ColumnId, DeltaOrderingStats>,
     num_rows: usize,
 }
 
@@ -163,16 +166,22 @@ impl ColumnsNdvInfo {
         num_rows: usize,
         cols_ndv: HashMap<ColumnId, usize>,
         cols_stats: StatisticsOfColumns,
+        delta_ordering_stats: HashMap<ColumnId, DeltaOrderingStats>,
     ) -> Self {
         Self {
             cols_ndv,
             cols_stats,
+            delta_ordering_stats,
             num_rows,
         }
     }
 
     fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
         self.cols_stats.get(column_id)
+    }
+
+    fn column_delta_stats(&self, column_id: &ColumnId) -> Option<&DeltaOrderingStats> {
+        self.delta_ordering_stats.get(column_id)
     }
 }
 impl NdvProvider for ColumnsNdvInfo {
@@ -184,6 +193,10 @@ impl NdvProvider for ColumnsNdvInfo {
 impl EncodingStatsProvider for ColumnsNdvInfo {
     fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
         self.column_stats(column_id)
+    }
+
+    fn column_delta_stats(&self, column_id: &ColumnId) -> Option<&DeltaOrderingStats> {
+        self.column_delta_stats(column_id)
     }
 }
 
@@ -417,8 +430,15 @@ impl StreamBlockBuilder {
             }
 
             let cols_stats = self.column_stats_state.peek_column_stats()?;
+            let delta_stats =
+                collect_delta_ordering_stats(&self.properties.source_schema, &block)?;
             self.block_writer
-                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv, cols_stats))?;
+                .start(ColumnsNdvInfo::new(
+                    block.num_rows(),
+                    cols_ndv,
+                    cols_stats,
+                    delta_stats,
+                ))?;
         }
 
         self.block_writer
