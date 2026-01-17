@@ -152,10 +152,7 @@ pub fn blocks_to_parquet_with_stats(
     let column_metrics = if let Some(stats) = column_stats {
         if options.enable_delta_binary_packed_heuristic_rule {
             let delta_stats = collect_delta_ordering_stats(table_schema, &blocks[0])?;
-            Some(ColumnStatsWithDelta {
-                stats,
-                delta_stats,
-            })
+            Some(ColumnStatsWithDelta { stats, delta_stats })
         } else {
             None
         }
