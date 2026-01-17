@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::metrics::BUCKET_MILLISECONDS;
 use databend_common_base::runtime::metrics::BUCKET_SECONDS;
@@ -50,7 +50,7 @@ fn assert_contain_metrics(samples: Vec<MetricSample>, expected: Vec<MetricSample
 
 #[test]
 fn test_tracking_scoped_counter_metrics() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let counter = register_counter(&uniq_metric_name);
     let uniq_metric_name = format!("{}_total", uniq_metric_name);
     counter.inc();
@@ -97,7 +97,7 @@ fn test_tracking_scoped_counter_metrics() -> Result<()> {
 
 #[test]
 fn test_tracking_scoped_gauge_metrics() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let gauge = register_gauge(&uniq_metric_name);
     gauge.inc();
 
@@ -143,7 +143,7 @@ fn test_tracking_scoped_gauge_metrics() -> Result<()> {
 
 #[test]
 fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let histogram = register_histogram_in_seconds(&uniq_metric_name);
     histogram.observe(28801.0);
 
@@ -203,7 +203,7 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
 
 #[test]
 fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let histogram = register_histogram_in_milliseconds(&uniq_metric_name);
     histogram.observe(28800001.0);
 
@@ -263,7 +263,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
 
 #[test]
 fn test_tracking_histogram_inf() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let histogram = register_histogram_in_seconds(&uniq_metric_name);
     // observe a value that exceed the max bucket of the histogram
     histogram.observe(3600.0 * 355.0);
@@ -276,7 +276,7 @@ fn test_tracking_histogram_inf() -> Result<()> {
 
 #[test]
 fn test_tracking_scoped_family_counter_metrics() -> Result<()> {
-    let uniq_metric_name = GlobalUniqName::unique();
+    let uniq_metric_name = GlobalUniq::unique();
     let counter = register_counter_family::<Vec<(&'static str, u64)>>(&uniq_metric_name);
     let uniq_metric_name = format!("{}_total", uniq_metric_name);
     counter.get_or_create(&vec![("TEST_LABEL1", 1)]).inc();

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_management::*;
@@ -37,7 +37,7 @@ use tokio::sync::Barrier;
 async fn test_empty_id_with_self_managed() -> Result<()> {
     let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_secs(60), 0).await?;
 
-    let mut node = system_managed_node(&GlobalUniqName::unique());
+    let mut node = system_managed_node(&GlobalUniq::unique());
     node.node_type = NodeType::SelfManaged;
     node.warehouse_id = String::new();
     node.cluster_id = String::from("test_cluster_id");
@@ -46,7 +46,7 @@ async fn test_empty_id_with_self_managed() -> Result<()> {
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().code(), 2403);
 
-    let mut node = system_managed_node(&GlobalUniqName::unique());
+    let mut node = system_managed_node(&GlobalUniq::unique());
     node.node_type = NodeType::SelfManaged;
     node.cluster_id = String::new();
     node.warehouse_id = String::from("test_cluster_id");
@@ -417,7 +417,7 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
     assert_eq!(create_warehouse.await.unwrap_err().code(), 2404);
 
     // mock node online
-    let new_node = GlobalUniqName::unique();
+    let new_node = GlobalUniq::unique();
     warehouse_manager
         .start_node(system_managed_node(&new_node))
         .await?;
@@ -607,7 +607,7 @@ async fn test_recovery_with_suspended_warehouse() -> Result<()> {
 
     assert_eq!(list_warehouse_nodes.await?.len(), 0);
 
-    let node_1 = GlobalUniqName::unique();
+    let node_1 = GlobalUniq::unique();
     let start_node_1 = warehouse_manager.start_node(system_managed_node(&node_1));
     assert!(start_node_1.await.is_ok());
 
@@ -645,7 +645,7 @@ async fn test_recovery_create_warehouse() -> Result<()> {
 
     assert_eq!(list_warehouse_nodes.await?.len(), 0);
 
-    let node_1 = GlobalUniqName::unique();
+    let node_1 = GlobalUniq::unique();
     let start_node_1 = warehouse_manager.start_node(system_managed_node(&node_1));
     assert!(start_node_1.await.is_ok());
 
@@ -660,7 +660,7 @@ async fn test_recovery_create_warehouse() -> Result<()> {
     assert_eq!(nodes.len(), 1);
     assert!(nodes.contains(&node_1));
 
-    let node_2 = GlobalUniqName::unique();
+    let node_2 = GlobalUniq::unique();
     let mut node_info_2 = system_managed_node(&node_2);
     node_info_2.node_group = Some(String::from("test_group"));
     let start_node_2 = warehouse_manager.start_node(node_info_2);
@@ -679,7 +679,7 @@ async fn test_recovery_create_warehouse() -> Result<()> {
     assert!(nodes.contains(&node_2));
 
     // warehouse is fixed
-    let node_3 = GlobalUniqName::unique();
+    let node_3 = GlobalUniq::unique();
     let start_node_3 = warehouse_manager.start_node(system_managed_node(&node_3));
     assert!(start_node_3.await.is_ok());
 
@@ -825,11 +825,11 @@ async fn test_unassign_nodes_for_warehouse() -> Result<()> {
 
     create_warehouse.await?;
 
-    let mut node_1 = system_managed_node(&GlobalUniqName::unique());
+    let mut node_1 = system_managed_node(&GlobalUniq::unique());
     node_1.node_group = Some(String::from("test_node_group"));
     warehouse_manager.start_node(node_1.clone()).await?;
 
-    let mut node_2 = system_managed_node(&GlobalUniqName::unique());
+    let mut node_2 = system_managed_node(&GlobalUniq::unique());
     node_2.node_group = Some(String::from("test_node_group"));
     warehouse_manager.start_node(node_2.clone()).await?;
 
@@ -885,11 +885,11 @@ async fn test_unassign_nodes_for_warehouse() -> Result<()> {
 
     assert_eq!(nodes.len(), 1);
 
-    let mut node_3 = system_managed_node(&GlobalUniqName::unique());
+    let mut node_3 = system_managed_node(&GlobalUniq::unique());
     node_3.node_group = Some(String::from("test_node_group_1"));
     warehouse_manager.start_node(node_3.clone()).await?;
 
-    let mut node_4 = system_managed_node(&GlobalUniqName::unique());
+    let mut node_4 = system_managed_node(&GlobalUniq::unique());
     node_4.node_group = Some(String::from("test_node_group_1"));
     warehouse_manager.start_node(node_4.clone()).await?;
 
@@ -959,7 +959,7 @@ async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
             async move {
                 let _ = barrier.wait().await;
 
-                let node_id = GlobalUniqName::unique();
+                let node_id = GlobalUniq::unique();
                 let start_node = warehouse_manager.start_node(system_managed_node(&node_id));
 
                 let seq_node = start_node.await.unwrap();
@@ -1045,7 +1045,7 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     drop_warehouse.await?;
 
     // online node
-    let online_node_id = GlobalUniqName::unique();
+    let online_node_id = GlobalUniq::unique();
     warehouse_manager
         .start_node(system_managed_node(&online_node_id))
         .await?;
@@ -1066,7 +1066,7 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
     drop_warehouse.await?;
 
-    let online_node_id = GlobalUniqName::unique();
+    let online_node_id = GlobalUniq::unique();
     warehouse_manager
         .start_node(system_managed_node(&online_node_id))
         .await?;
@@ -1088,7 +1088,7 @@ async fn test_list_warehouses() -> Result<()> {
 
     assert_eq!(warehouse_manager.list_warehouses().await?, vec![]);
 
-    let self_managed_node_1 = GlobalUniqName::unique();
+    let self_managed_node_1 = GlobalUniq::unique();
     warehouse_manager
         .start_node(self_managed_node(&self_managed_node_1))
         .await?;
@@ -1122,7 +1122,7 @@ async fn test_list_warehouses() -> Result<()> {
         })])
     );
 
-    let self_managed_node_2 = GlobalUniqName::unique();
+    let self_managed_node_2 = GlobalUniq::unique();
     let mut self_managed_node = self_managed_node(&self_managed_node_2);
     self_managed_node.warehouse_id = String::from("test_warehouse_2");
     warehouse_manager.start_node(self_managed_node).await?;
@@ -1222,7 +1222,7 @@ async fn test_rename_not_exists_warehouses() -> Result<()> {
 async fn test_rename_warehouses() -> Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 1).await?;
 
-    let self_managed_node_1 = GlobalUniqName::unique();
+    let self_managed_node_1 = GlobalUniq::unique();
     warehouse_manager
         .start_node(self_managed_node(&self_managed_node_1))
         .await?;
@@ -1290,7 +1290,7 @@ async fn test_rename_warehouses() -> Result<()> {
         })])
     );
 
-    let system_managed_node_2 = GlobalUniqName::unique();
+    let system_managed_node_2 = GlobalUniq::unique();
     warehouse_manager
         .start_node(system_managed_node(&system_managed_node_2))
         .await?;
@@ -1495,7 +1495,7 @@ async fn test_drop_warehouse_cluster_failure() -> Result<()> {
     assert_eq!(drop_warehouse_cluster.await.unwrap_err().code(), 2408);
 
     warehouse_manager
-        .start_node(self_managed_node(&GlobalUniqName::unique()))
+        .start_node(self_managed_node(&GlobalUniq::unique()))
         .await?;
 
     let drop_warehouse_cluster = warehouse_manager.drop_warehouse_cluster(
@@ -1551,7 +1551,7 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 
     let mut nodes = Vec::with_capacity(size);
     for _index in 0..size {
-        let name = GlobalUniqName::unique();
+        let name = GlobalUniq::unique();
         cluster_manager
             .start_node(system_managed_node(&name))
             .await?;

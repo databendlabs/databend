@@ -21,8 +21,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
@@ -82,8 +82,8 @@ impl InnerConfig {
         let mut cfg: Self = cfg.try_into()?;
 
         // Handle the node_id and node_secret for query node.
-        cfg.query.node_id = GlobalUniqName::unique();
-        cfg.query.node_secret = GlobalUniqName::unique();
+        cfg.query.node_id = GlobalUniq::unique();
+        cfg.query.node_secret = GlobalUniq::unique();
 
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await?;

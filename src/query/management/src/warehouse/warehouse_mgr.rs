@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::time::Duration;
 
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::vec_ext::VecExt;
@@ -1221,7 +1221,7 @@ impl WarehouseApi for WarehouseMgr {
             let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
 
             let warehouse_info = WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                role_id: GlobalUniqName::unique(),
+                role_id: GlobalUniq::unique(),
                 status: "Running".to_string(),
                 id: warehouse.clone(),
                 clusters: HashMap::from([(
