@@ -20,7 +20,7 @@ use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::generate_snapshots;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_stream_create() -> Result<()> {
+async fn test_stream_create() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture.create_default_database().await?;
     fixture.create_normal_table().await?;

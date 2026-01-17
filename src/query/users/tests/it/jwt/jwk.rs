@@ -36,7 +36,7 @@ impl MockJwksLoader {
 }
 
 #[tokio::test]
-async fn test_jwk_store_with_random_keys() -> Result<()> {
+async fn test_jwk_store_with_random_keys() -> anyhow::Result<()> {
     let mock_jwks_loader = Arc::new(MockJwksLoader::new());
     let mock_jwks_loader_cloned = mock_jwks_loader.clone();
     let jwk_store = JwkKeyStore::new("jwks_key".to_string(), &BUILD_INFO)
@@ -72,7 +72,7 @@ async fn test_jwk_store_with_random_keys() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_jwk_store_with_random_keys_and_long_retry_interval() -> Result<()> {
+async fn test_jwk_store_with_random_keys_and_long_retry_interval() -> anyhow::Result<()> {
     let mock_jwks_loader = Arc::new(MockJwksLoader::new());
     let mock_jwks_loader_cloned = mock_jwks_loader.clone();
     let jwk_store = JwkKeyStore::new("jwks_key".to_string(), &BUILD_INFO)

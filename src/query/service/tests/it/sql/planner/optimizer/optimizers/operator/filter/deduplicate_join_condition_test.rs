@@ -203,7 +203,7 @@ fn compare_trees(
 // Optimization: Removes redundant join condition (t2.id = t3.id or t1.id = t3.id) since one can be
 // inferred from the transitive relationship t1.id = t2.id AND t1.id = t3.id (or t1.id = t2.id AND t2.id = t3.id)
 #[test]
-fn test_basic_deduplication() -> Result<()> {
+fn test_basic_deduplication() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -295,7 +295,7 @@ Join [t2.id = t3.id]
 // where t1.id is INT32, t2.id is INT64, and t3.id is FLOAT64
 // This tests if the optimizer correctly handles join conditions with different data types
 #[test]
-fn test_different_data_types() -> Result<()> {
+fn test_different_data_types() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -397,7 +397,7 @@ fn test_different_data_types() -> Result<()> {
 //
 // Optimization: No change since the conditions are on different columns and not redundant
 #[test]
-fn test_no_redundant_conditions() -> Result<()> {
+fn test_no_redundant_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -492,7 +492,7 @@ Join [t1.id = t2.id, t1.name = t2.name]
 // Optimization: Removes 5 redundant join conditions, keeping only the minimum spanning tree
 // of join conditions (t1.id = t2.id, t2.id = t3.id, t3.id = t4.id)
 #[test]
-fn test_complex_transitive_conditions() -> Result<()> {
+fn test_complex_transitive_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -619,7 +619,7 @@ Join [t3.id = t4.id]
 // Optimization: Removes redundant IS NOT DISTINCT FROM condition (t1.id IS NOT DISTINCT FROM t3.id)
 // since it can be inferred from the transitive relationship
 #[test]
-fn test_null_equal_conditions() -> Result<()> {
+fn test_null_equal_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -723,7 +723,7 @@ Join [t2.id IS NOT DISTINCT FROM t3.id]
 //
 // Optimization: Removes redundant condition with mixed IS NOT DISTINCT FROM and equality operators
 #[test]
-fn test_mixed_null_equal_conditions() -> Result<()> {
+fn test_mixed_null_equal_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -827,7 +827,7 @@ Join [t2.id = t3.id]
 //
 // Optimization: No change for non-inner joins since removing conditions could change semantics
 #[test]
-fn test_non_inner_join_types() -> Result<()> {
+fn test_non_inner_join_types() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -918,7 +918,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
 // Optimization: Removes duplicate join condition (t1.id = t2.id appears twice),
 // but keeps the non-duplicate condition (t1.name = t2.name).
 #[test]
-fn test_multiple_conditions_same_tables() -> Result<()> {
+fn test_multiple_conditions_same_tables() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1011,7 +1011,7 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
 //
 // Optimization: No change since there are no conditions to deduplicate
 #[test]
-fn test_empty_conditions() -> Result<()> {
+fn test_empty_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -1066,7 +1066,7 @@ Join []
 //
 // Optimization: Removes duplicate identical join condition
 #[test]
-fn test_duplicate_identical_conditions() -> Result<()> {
+fn test_duplicate_identical_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1151,7 +1151,7 @@ Join [t1.id = t2.id]
 // Optimization: Removes redundant condition (t3.id = t1.id) that creates a circular dependency
 // since it can be inferred from the transitive relationship
 #[test]
-fn test_commutative_and_circular_conditions() -> Result<()> {
+fn test_commutative_and_circular_conditions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1266,7 +1266,7 @@ Join [t2.id = t3.id]
 // Optimization: Removes redundant condition (t1.id = t5.id) in a deeply nested join tree
 // since it can be inferred from the chain of transitive relationships
 #[test]
-fn test_deep_nested_join_tree() -> Result<()> {
+fn test_deep_nested_join_tree() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1395,7 +1395,7 @@ Join [t4.id = t5.id]
 // Optimization: No change in the LEFT JOIN conditions since removing conditions from
 // non-inner joins could change semantics, but inner join conditions are optimized
 #[test]
-fn test_mixed_join_types() -> Result<()> {
+fn test_mixed_join_types() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1476,7 +1476,7 @@ Join [t2.id = t3.id, t1.id = t3.id]
 // Inner child builds t1.id = t2.id; upper LEFT SEMI has both t2.id = t3.id
 // and t1.id = t3.id. One of them should be removed.
 #[test]
-fn test_left_semi_deduplication() -> Result<()> {
+fn test_left_semi_deduplication() -> anyhow::Result<()> {
     let mut builder = ExprBuilder::new();
 
     let t1_id = builder.column(
@@ -1546,7 +1546,7 @@ Join [t2.id = t3.id]
 // Inner child builds t1.id = t2.id; upper RIGHT ANTI has both t3.id = t1.id
 // and t3.id = t2.id. One of them should be removed.
 #[test]
-fn test_right_anti_deduplication() -> Result<()> {
+fn test_right_anti_deduplication() -> anyhow::Result<()> {
     let mut builder = ExprBuilder::new();
 
     let t1_id = builder.column(
@@ -1616,7 +1616,7 @@ Join [t3.id = t1.id]
 // Child LEFT ANTI has t1.id = t2.id, parent INNER joins on both t1.id = t3.id and t2.id = t3.id.
 // These two predicates must not be deduplicated using child's equality.
 #[test]
-fn test_anti_equivalence_not_leaking() -> Result<()> {
+fn test_anti_equivalence_not_leaking() -> anyhow::Result<()> {
     let mut builder = ExprBuilder::new();
 
     let t1_id = builder.column(
@@ -1686,7 +1686,7 @@ Join [t1.id = t3.id, t2.id = t3.id]
 // Child LEFT SEMI has t1.id = t2.id, parent INNER joins on both t1.id = t3.id and t2.id = t3.id.
 // These two predicates must not be deduplicated using child's equality.
 #[test]
-fn test_semi_equivalence_not_leaking() -> Result<()> {
+fn test_semi_equivalence_not_leaking() -> anyhow::Result<()> {
     let mut builder = ExprBuilder::new();
 
     let t1_id = builder.column(

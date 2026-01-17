@@ -362,7 +362,7 @@ fn check_ambiguity() {
 }
 
 #[test]
-fn test_if_function() -> Result<()> {
+fn test_if_function() -> anyhow::Result<()> {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::*;

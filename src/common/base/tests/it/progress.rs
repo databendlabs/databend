@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use databend_common_base::base::*;
-use databend_common_exception::Result;
 
 #[test]
-fn test_progress() -> Result<()> {
+fn test_progress() -> anyhow::Result<()> {
     let progress = Progress::create();
     let values = ProgressValues { rows: 2, bytes: 10 };
 

@@ -17,7 +17,7 @@ use databend_common_expression::block_debug::assert_blocks_eq;
 use databend_query::servers::MySQLFederated;
 
 #[test]
-fn test_mysql_federated() -> Result<()> {
+fn test_mysql_federated() -> anyhow::Result<()> {
     let federated = MySQLFederated::create();
 
     //

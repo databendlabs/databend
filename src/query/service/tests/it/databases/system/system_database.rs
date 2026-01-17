@@ -20,7 +20,7 @@ use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
 #[test]
-fn test_disable_system_table() -> Result<()> {
+fn test_disable_system_table() -> anyhow::Result<()> {
     let mut conf = ConfigBuilder::create().build();
 
     // Normal.

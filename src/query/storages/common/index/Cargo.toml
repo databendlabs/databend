@@ -53,8 +53,8 @@ xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 divan = { workspace = true }
-
 rand = { workspace = true }
 
 [[bench]]

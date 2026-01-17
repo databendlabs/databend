@@ -27,7 +27,7 @@ use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_null_table() -> Result<()> {
+async fn test_null_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 

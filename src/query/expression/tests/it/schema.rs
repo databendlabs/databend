@@ -28,7 +28,7 @@ use databend_common_expression::types::NumberDataType;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_project_schema_from_tuple() -> Result<()> {
+fn test_project_schema_from_tuple() -> anyhow::Result<()> {
     let b1 = TableDataType::Tuple {
         fields_name: vec!["b11".to_string(), "b12".to_string()],
         fields_type: vec![TableDataType::Boolean, TableDataType::String],
@@ -195,7 +195,7 @@ fn test_project_schema_from_tuple() -> Result<()> {
 }
 
 #[test]
-fn test_schema_from_simple_type() -> Result<()> {
+fn test_schema_from_simple_type() -> anyhow::Result<()> {
     let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
     let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
     let field3 = TableField::new(
@@ -229,7 +229,7 @@ fn test_schema_from_simple_type() -> Result<()> {
 }
 
 #[test]
-fn test_field_leaf_default_values() -> Result<()> {
+fn test_field_leaf_default_values() -> anyhow::Result<()> {
     let b1 = TableDataType::Tuple {
         fields_name: vec!["b11".to_string(), "b12".to_string()],
         fields_type: vec![TableDataType::Boolean, TableDataType::String],
@@ -283,7 +283,7 @@ fn test_field_leaf_default_values() -> Result<()> {
 }
 
 #[test]
-fn test_schema_from_struct() -> Result<()> {
+fn test_schema_from_struct() -> anyhow::Result<()> {
     let schema = create_test_complex_schema();
     let flat_column_ids = schema.to_leaf_column_ids();
 
@@ -421,7 +421,7 @@ fn test_schema_from_struct() -> Result<()> {
 }
 
 #[test]
-fn test_schema_modify_field() -> Result<()> {
+fn test_schema_modify_field() -> anyhow::Result<()> {
     let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
     let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
     let field3 = TableField::new("c", TableDataType::Number(NumberDataType::UInt64));
@@ -599,7 +599,7 @@ fn test_schema_modify_field() -> Result<()> {
 }
 
 #[test]
-fn test_leaf_columns_of() -> Result<()> {
+fn test_leaf_columns_of() -> anyhow::Result<()> {
     let fields = vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
         TableField::new("b", TableDataType::Tuple {

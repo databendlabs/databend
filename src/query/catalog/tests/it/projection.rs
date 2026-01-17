@@ -23,7 +23,7 @@ use databend_common_expression::types::NumberDataType;
 use parquet::arrow::ArrowSchemaConverter;
 
 #[test]
-fn test_to_projection_mask() -> Result<()> {
+fn test_to_projection_mask() -> anyhow::Result<()> {
     // Test schema (6 physical columns):
     // a: Int32,            (leave id: 0, path: [0])
     // b: Tuple (

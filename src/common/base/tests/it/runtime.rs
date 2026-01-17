@@ -19,14 +19,13 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_exception::Result;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_runtime() -> Result<()> {
+async fn test_runtime() -> anyhow::Result<()> {
     let counter = Arc::new(Mutex::new(0));
 
     let runtime = Runtime::with_default_worker_threads()?;
@@ -68,7 +67,7 @@ async fn test_runtime() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_shutdown_long_run_runtime() -> Result<()> {
+async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
     runtime.spawn(async move {
@@ -106,7 +105,7 @@ async fn mock_get_page(i: usize) -> Vec<usize> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn test_runtime_try_spawn_batch() -> Result<()> {
+async fn test_runtime_try_spawn_batch() -> anyhow::Result<()> {
     let runtime = Runtime::with_default_worker_threads()?;
 
     let mut futs = vec![];

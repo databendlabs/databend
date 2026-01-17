@@ -29,7 +29,7 @@ use pretty_assertions::assert_eq;
 
 // From env, defaulting.
 #[test]
-fn test_env_config_s3() -> Result<()> {
+fn test_env_config_s3() -> anyhow::Result<()> {
     temp_env::with_vars(
         vec![
             ("LOG_LEVEL", Some("DEBUG")),
@@ -158,7 +158,7 @@ fn test_env_config_s3() -> Result<()> {
 
 // From env, defaulting.
 #[test]
-fn test_env_config_fs() -> Result<()> {
+fn test_env_config_fs() -> anyhow::Result<()> {
     temp_env::with_vars(
         vec![
             ("LOG_LEVEL", Some("DEBUG")),
@@ -284,7 +284,7 @@ fn test_env_config_fs() -> Result<()> {
 }
 
 #[test]
-fn test_env_config_gcs() -> Result<()> {
+fn test_env_config_gcs() -> anyhow::Result<()> {
     temp_env::with_vars(
         vec![
             ("LOG_LEVEL", Some("DEBUG")),
@@ -417,7 +417,7 @@ fn test_env_config_gcs() -> Result<()> {
 }
 
 #[test]
-fn test_env_config_oss() -> Result<()> {
+fn test_env_config_oss() -> anyhow::Result<()> {
     temp_env::with_vars(
         vec![
             ("LOG_LEVEL", Some("DEBUG")),
@@ -560,7 +560,7 @@ fn test_env_config_oss() -> Result<()> {
 }
 
 #[test]
-fn test_env_config_webhdfs() -> Result<()> {
+fn test_env_config_webhdfs() -> anyhow::Result<()> {
     temp_env::with_vars(
         vec![
             ("LOG_LEVEL", Some("DEBUG")),
@@ -699,7 +699,7 @@ fn test_env_config_webhdfs() -> Result<()> {
 
 /// Test whether override works as expected.
 #[test]
-fn test_override_config() -> Result<()> {
+fn test_override_config() -> anyhow::Result<()> {
     let file_path = temp_dir().join("databend_test_config.toml");
 
     let mut f = fs::File::create(&file_path)?;
@@ -889,7 +889,7 @@ path = "_cache"
 
 /// Test old hive catalog
 #[test]
-fn test_override_config_old_hive_catalog() -> Result<()> {
+fn test_override_config_old_hive_catalog() -> anyhow::Result<()> {
     let file_path = temp_dir().join("databend_test_override_config_old_hive_catalog.toml");
 
     let mut f = fs::File::create(&file_path)?;
@@ -927,7 +927,7 @@ protocol = "binary"
 }
 
 #[test]
-fn test_spill_config() -> Result<()> {
+fn test_spill_config() -> anyhow::Result<()> {
     let file_path = temp_dir().join("databend_test_spill_config.toml");
 
     let mut f = fs::File::create(&file_path)?;
@@ -960,7 +960,7 @@ spill_local_disk_path = "/data/spill"
 
 /// Test new hive catalog
 #[test]
-fn test_override_config_new_hive_catalog() -> Result<()> {
+fn test_override_config_new_hive_catalog() -> anyhow::Result<()> {
     let file_path = temp_dir().join("databend_test_override_config_new_hive_catalog.toml");
 
     let mut f = fs::File::create(&file_path)?;
@@ -999,7 +999,7 @@ protocol = "binary"
 }
 
 #[test]
-fn test_env_config_obsoleted() -> Result<()> {
+fn test_env_config_obsoleted() -> anyhow::Result<()> {
     let obsoleted = vec![
         ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("1")),
         ("QUERY_TABLE_META_CACHE_ENABLED", Some("true")),
@@ -1026,7 +1026,7 @@ fn test_env_config_obsoleted() -> Result<()> {
 }
 
 #[test]
-fn test_env_cache_config_and_defaults() -> Result<()> {
+fn test_env_cache_config_and_defaults() -> anyhow::Result<()> {
     // test if one of the cache config option is overridden by environment variable
     // default values of other cache config options are correct
     //

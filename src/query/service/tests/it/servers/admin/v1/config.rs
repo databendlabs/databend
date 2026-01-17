@@ -24,7 +24,7 @@ use poem::get;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_config() -> databend_common_exception::Result<()> {
+async fn test_config() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let cluster_router = Route::new().at("/v1/config", get(config_handler));

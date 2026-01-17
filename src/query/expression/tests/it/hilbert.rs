@@ -19,7 +19,7 @@ use databend_common_expression::hilbert_decompress_state_list;
 use databend_common_expression::hilbert_index;
 
 #[test]
-fn test_hilbert() -> Result<()> {
+fn test_hilbert() -> anyhow::Result<()> {
     let width = 8;
     let point = [1i64, -2, 3, 4, 6]
         .iter()

@@ -25,7 +25,7 @@ use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_decimal_text_exact() -> Result<()> {
+fn test_decimal_text_exact() -> anyhow::Result<()> {
     let cases = vec!["", ".e", ".", ".a", "-", "+", "e1", "a", "1e1e1", "1.1.1"];
 
     for s in cases {
@@ -36,7 +36,7 @@ fn test_decimal_text_exact() -> Result<()> {
 }
 
 #[test]
-fn test_decimal_text() -> Result<()> {
+fn test_decimal_text() -> anyhow::Result<()> {
     let cases = vec![
         ("0#", (0i128, 0, 0, 1)),
         ("+0#", (0i128, 0, 0, 2)),
@@ -79,7 +79,7 @@ fn test_decimal_text() -> Result<()> {
 }
 
 #[test]
-fn test_decimal_with_size_text() -> Result<()> {
+fn test_decimal_with_size_text() -> anyhow::Result<()> {
     let cases = vec![
         ("0#", 0i128),
         ("+0#", 0i128),

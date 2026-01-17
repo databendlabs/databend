@@ -29,7 +29,7 @@ use uuid::Uuid;
 use crate::storages::fuse::operations::mutation::compact_segment;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_normal_case() -> Result<()> {
+async fn test_fuse_purge_normal_case() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -67,7 +67,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
+async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -132,7 +132,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_orphan_retention() -> Result<()> {
+async fn test_fuse_purge_orphan_retention() -> anyhow::Result<()> {
     // verifies that:
     //
     // - snapshots that beyond retention period shall be collected, but
@@ -270,7 +270,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_older_version() -> Result<()> {
+async fn test_fuse_purge_older_version() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_normal_table().await?;

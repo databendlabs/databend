@@ -38,7 +38,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_always_call_on_finished() -> Result<()> {
+async fn test_always_call_on_finished() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let settings = ExecutorSettings {

@@ -17,7 +17,7 @@ use databend_common_storages_fuse::FuseTable;
 use itertools::Itertools;
 
 #[test]
-fn test_partition() -> Result<()> {
+fn test_partition() -> anyhow::Result<()> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     for _ in 0..100 {

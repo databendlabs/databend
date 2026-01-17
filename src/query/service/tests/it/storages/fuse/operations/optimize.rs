@@ -22,17 +22,17 @@ use futures_util::TryStreamExt;
 use crate::storages::fuse::utils::do_purge_test;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
+async fn test_fuse_snapshot_optimize_purge() -> anyhow::Result<()> {
     do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_optimize_all() -> Result<()> {
+async fn test_fuse_snapshot_optimize_all() -> anyhow::Result<()> {
     do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1, 1).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_optimize() -> Result<()> {
+async fn test_fuse_table_optimize() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();

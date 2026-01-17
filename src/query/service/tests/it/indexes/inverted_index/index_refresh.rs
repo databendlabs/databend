@@ -42,7 +42,7 @@ use databend_storages_common_io::ReadSettings;
 use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
+async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture

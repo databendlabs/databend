@@ -135,7 +135,7 @@ fn random_test_data(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_k_way_merge_sort() -> Result<()> {
+async fn test_k_way_merge_sort() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -158,7 +158,7 @@ async fn test_k_way_merge_sort() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_k_way_merge_sort_fuzz() -> Result<()> {
+async fn test_k_way_merge_sort_fuzz() -> anyhow::Result<()> {
     let mut rng = rand::thread_rng();
     let fixture = TestFixture::setup().await?;
 

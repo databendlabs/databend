@@ -62,17 +62,17 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 }
 
 #[test]
-fn test_data_block_nullable() -> Result<()> {
+fn test_data_block_nullable() -> anyhow::Result<()> {
     test_data_block(true)
 }
 
 #[test]
-fn test_data_block_not_nullable() -> Result<()> {
+fn test_data_block_not_nullable() -> anyhow::Result<()> {
     test_data_block(false)
 }
 
 #[test]
-fn test_empty_block() -> Result<()> {
+fn test_empty_block() -> anyhow::Result<()> {
     let format = FormatSettings::default();
     let collector = BlocksCollector::new();
     let serializer = collector.into_serializer(format);

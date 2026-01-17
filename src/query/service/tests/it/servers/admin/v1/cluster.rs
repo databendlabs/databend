@@ -27,7 +27,7 @@ use poem::get;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_cluster() -> Result<()> {
+async fn test_cluster() -> anyhow::Result<()> {
     // Setup.
     let _fixture = TestFixture::setup().await?;
 

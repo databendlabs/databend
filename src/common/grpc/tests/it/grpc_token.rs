@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 
 #[test]
-fn test_flight_token() -> Result<()> {
+fn test_flight_token() -> anyhow::Result<()> {
     let token = GrpcToken::create();
     let user = "batman";
 

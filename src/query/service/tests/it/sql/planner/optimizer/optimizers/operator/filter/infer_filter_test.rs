@@ -28,7 +28,7 @@ fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
 }
 
 #[test]
-fn test_equal_operator_combinations() -> Result<()> {
+fn test_equal_operator_combinations() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -208,7 +208,7 @@ fn test_equal_operator_combinations() -> Result<()> {
 // ===== Test Cases for NotEqual Operator =====
 
 #[test]
-fn test_not_equal_operator_combinations() -> Result<()> {
+fn test_not_equal_operator_combinations() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -449,7 +449,7 @@ fn test_not_equal_operator_combinations() -> Result<()> {
 }
 
 #[test]
-fn test_gt_gte_operator_combinations() -> Result<()> {
+fn test_gt_gte_operator_combinations() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -665,7 +665,7 @@ fn test_gt_gte_operator_combinations() -> Result<()> {
 }
 
 #[test]
-fn test_special_transformations() -> Result<()> {
+fn test_special_transformations() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -777,7 +777,7 @@ fn test_special_transformations() -> Result<()> {
 // ===== Test Cases for Contradiction Detection =====
 
 #[test]
-fn test_contradiction_detection() -> Result<()> {
+fn test_contradiction_detection() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -941,7 +941,7 @@ fn test_contradiction_detection() -> Result<()> {
 
 // ===== Test Cases for Different Data Types =====
 #[test]
-fn test_different_data_types() -> Result<()> {
+fn test_different_data_types() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -1112,7 +1112,7 @@ fn test_different_data_types() -> Result<()> {
 }
 
 #[test]
-fn test_predicate_merging_and_duplication() -> Result<()> {
+fn test_predicate_merging_and_duplication() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 

@@ -31,7 +31,7 @@ use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_io::prelude::borsh_serialize_into_buf;
 
 #[test]
-fn test_serde_column() -> Result<()> {
+fn test_serde_column() -> anyhow::Result<()> {
     #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
     struct Plan {
         column: Column,
@@ -57,7 +57,7 @@ fn test_serde_column() -> Result<()> {
 }
 
 #[test]
-fn test_serde_expr() -> Result<()> {
+fn test_serde_expr() -> anyhow::Result<()> {
     let column = StringType::from_data(vec!["SM CASE", "a", "b", "e", "f", "g"]);
     let expr = RemoteExpr::<usize>::Constant {
         span: None,
@@ -73,7 +73,7 @@ fn test_serde_expr() -> Result<()> {
 }
 
 #[test]
-fn test_serde_bin_column() -> Result<()> {
+fn test_serde_bin_column() -> anyhow::Result<()> {
     let columns = vec![
         StringType::from_data(vec!["SM CASE", "a", "b", "e", "f", "g"]),
         StringType::from_data(vec!["SM CASE", "axx", "bxx", "xxe", "eef", "fg"]),
@@ -88,7 +88,7 @@ fn test_serde_bin_column() -> Result<()> {
 }
 
 #[test]
-fn test_borsh_serde_column() -> Result<()> {
+fn test_borsh_serde_column() -> anyhow::Result<()> {
     #[derive(BorshSerialize, BorshDeserialize, Eq, PartialEq, Debug)]
     struct Plan {
         column: Column,

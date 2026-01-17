@@ -26,7 +26,7 @@ use databend_common_version::BUILD_INFO;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
+async fn test_fuse_db_table_create_replace_clean_ownership_key() -> anyhow::Result<()> {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
     let meta = {

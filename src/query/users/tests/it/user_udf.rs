@@ -27,7 +27,7 @@ use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_lambda_udf() -> Result<()> {
+async fn test_user_lambda_udf() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -103,7 +103,7 @@ async fn test_user_lambda_udf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_udf_server() -> Result<()> {
+async fn test_user_udf_server() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);

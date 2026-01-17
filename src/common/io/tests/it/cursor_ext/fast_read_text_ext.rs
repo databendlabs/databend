@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_io::cursor_ext::*;
 
 #[test]
-fn test_positions() -> Result<()> {
+fn test_positions() -> anyhow::Result<()> {
     let cases = vec![
         (r#"abc"#.to_string(), vec![]),
         (r#"'abcdefg'"#.to_string(), vec![0, 8]),
@@ -44,7 +44,7 @@ fn test_positions() -> Result<()> {
 }
 
 #[test]
-fn test_fast_read_text() -> Result<()> {
+fn test_fast_read_text() -> anyhow::Result<()> {
     let data = r#"'abc','d\'ef','g\\\'hi'"#.to_string();
     let patterns = &["'", "\\"];
     let ac = AhoCorasick::new(patterns).unwrap();

@@ -20,7 +20,7 @@ use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_session_context() -> Result<()> {
+async fn test_session_context() -> anyhow::Result<()> {
     let settings = Settings::create(Tenant::new_literal("default"));
     let session_ctx = SessionContext::try_create(settings, SessionType::MySQL, None)?;
 

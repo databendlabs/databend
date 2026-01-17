@@ -34,7 +34,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_refresh_vector_index() -> Result<()> {
+async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture

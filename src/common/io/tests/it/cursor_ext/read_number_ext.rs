@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use databend_common_io::cursor_ext::*;
 
 #[test]
-fn test_collect_number() -> Result<()> {
+fn test_collect_number() -> anyhow::Result<()> {
     let cases = vec![
         ("81x", (2, 2)),
         ("81.", (3, 2)),
@@ -38,7 +38,7 @@ fn test_collect_number() -> Result<()> {
 }
 
 #[test]
-fn test_read_int() -> Result<()> {
+fn test_read_int() -> anyhow::Result<()> {
     let mut reader = Cursor::new("3,032,+2,-23,00000789.1".as_bytes());
     let expected = vec![3, 32, 2, -23];
     let mut res = vec![];
@@ -54,7 +54,7 @@ fn test_read_int() -> Result<()> {
 }
 
 #[test]
-fn test_read_float() -> Result<()> {
+fn test_read_float() -> anyhow::Result<()> {
     let mut reader = Cursor::new(
         "3,32,789.2,+2,-2.33333,-23,1.903583017e+9,1.903583017e9,1.903583017e-9".as_bytes(),
     );

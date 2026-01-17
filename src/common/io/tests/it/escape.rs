@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_io::escape_string;
 
 #[test]
-fn test_escape() -> Result<()> {
+fn test_escape() -> anyhow::Result<()> {
     assert_eq!(escape_string("\t"), r#"\t"#);
     // '0x20' is space
     assert_eq!(escape_string("\x00_\x1F_ "), r#"\x00_\x1F_ "#);

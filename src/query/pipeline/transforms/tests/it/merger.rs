@@ -224,7 +224,7 @@ async fn async_test_basic(limit: Option<usize>) -> Result<()> {
 }
 
 #[test]
-fn test_basic_with_limit() -> Result<()> {
+fn test_basic_with_limit() -> anyhow::Result<()> {
     test_basic(None)?;
     test_basic(Some(0))?;
     test_basic(Some(1))?;
@@ -246,7 +246,7 @@ async fn async_test_basic_with_limit() -> Result<()> {
 }
 
 #[test]
-fn test_fuzz() -> Result<()> {
+fn test_fuzz() -> anyhow::Result<()> {
     let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
@@ -265,7 +265,7 @@ fn test_fuzz() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz_async() -> Result<()> {
+async fn test_fuzz_async() -> anyhow::Result<()> {
     let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
