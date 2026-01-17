@@ -14,10 +14,10 @@
 
 //! Raft cluster configuration including networking, storage, and performance tuning.
 
+use std::io;
 use std::net::Ipv4Addr;
 use std::path::Path;
 
-use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
@@ -268,14 +268,16 @@ impl RaftConfig {
     }
 
     /// Resolves the advertise host to an endpoint, supporting both IP addresses and hostnames.
-    pub async fn raft_api_addr(&self) -> Result<Endpoint> {
+    pub async fn raft_api_addr(&self) -> Result<Endpoint, io::Error> {
         let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
         match ipv4_addr {
             Ok(addr) => Ok(Endpoint::new(addr, self.raft_api_port)),
             Err(_) => {
-                let _ip_addrs = DNSResolver::instance()?
+                let _ip_addrs = DNSResolver::instance()
+                    .map_err(io::Error::other)?
                     .resolve(self.raft_advertise_host.clone())
-                    .await?;
+                    .await
+                    .map_err(io::Error::other)?;
                 Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
             }
         }
@@ -295,7 +297,7 @@ impl RaftConfig {
     /// - Neither `single` nor `join` is specified
     /// - Both `single` and `join` are specified
     /// - Node tries to join itself (self-reference in join addresses)
-    pub fn check(&self) -> std::result::Result<(), MetaStartupError> {
+    pub fn check(&self) -> Result<(), MetaStartupError> {
         // If just leaving, does not need to check other config
         if !self.leave_via.is_empty() {
             return Ok(());

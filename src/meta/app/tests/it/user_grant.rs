@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::exception::Result;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -20,7 +19,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
 
 #[test]
-fn test_grant_object_contains() -> Result<()> {
+fn test_grant_object_contains() -> anyhow::Result<()> {
     struct Test {
         lhs: GrantObject,
         rhs: GrantObject,
@@ -122,7 +121,7 @@ fn test_grant_object_contains() -> Result<()> {
 }
 
 #[test]
-fn test_user_grant_entry() -> Result<()> {
+fn test_user_grant_entry() -> anyhow::Result<()> {
     let grant = GrantEntry::new(
         GrantObject::Global,
         make_bitflags!(UserPrivilegeType::{Create}),
@@ -182,7 +181,7 @@ fn test_user_grant_entry() -> Result<()> {
 }
 
 #[test]
-fn test_user_grant_set() -> Result<()> {
+fn test_user_grant_set() -> anyhow::Result<()> {
     let mut grants = UserGrantSet::empty();
 
     grants.grant_privileges(

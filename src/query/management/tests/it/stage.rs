@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;

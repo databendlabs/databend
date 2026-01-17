@@ -29,6 +29,7 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 
+use crate::errors::meta_service_error;
 use crate::workload::workload_api::WorkloadApi;
 pub static WORKLOAD_META_KEY_PREFIX: &str = "__fd_workloads";
 
@@ -58,7 +59,12 @@ impl WorkloadMgr {
     pub async fn get_id_by_name(&self, name: &str) -> Result<String> {
         let index_key = format!("{}/{}", self.workload_index_prefix, escape_for_key(name)?);
 
-        let Some(seq) = self.metastore.get_kv(&index_key).await? else {
+        let Some(seq) = self
+            .metastore
+            .get_kv(&index_key)
+            .await
+            .map_err(meta_service_error)?
+        else {
             return Err(ErrorCode::UnknownWorkload(format!(
                 "Unknown workload {}",
                 name
@@ -84,7 +90,12 @@ impl WorkloadMgr {
     async fn get_seq_by_id(&self, id: &str) -> Result<Option<SeqV<WorkloadGroup>>> {
         let workload_key = format!("{}/{}", self.workload_key_prefix, id);
 
-        let Some(seq) = self.metastore.get_kv(&workload_key).await? else {
+        let Some(seq) = self
+            .metastore
+            .get_kv(&workload_key)
+            .await
+            .map_err(meta_service_error)?
+        else {
             return Ok(None);
         };
 
@@ -126,7 +137,12 @@ impl WorkloadApi for WorkloadMgr {
             .if_then
             .push(TxnOp::put(workload_key, serde_json::to_vec(&group)?));
 
-        match self.metastore.transaction(create_workload).await? {
+        match self
+            .metastore
+            .transaction(create_workload)
+            .await
+            .map_err(meta_service_error)?
+        {
             res if res.success => Ok(group),
             _res => Err(ErrorCode::AlreadyExistsWorkload(format!(
                 "The workload {} already exits.",
@@ -152,7 +168,12 @@ impl WorkloadApi for WorkloadMgr {
             .if_then
             .push(TxnOp::delete(workload_index_key));
 
-        match self.metastore.transaction(drop_workload).await? {
+        match self
+            .metastore
+            .transaction(drop_workload)
+            .await
+            .map_err(meta_service_error)?
+        {
             res if res.success => Ok(()),
             _res => Err(ErrorCode::UnknownWorkload(format!(
                 "Unknown workload {}",
@@ -193,7 +214,12 @@ impl WorkloadApi for WorkloadMgr {
             workload.id.clone().into_bytes(),
         ));
 
-        match self.metastore.transaction(rename_workload).await? {
+        match self
+            .metastore
+            .transaction(rename_workload)
+            .await
+            .map_err(meta_service_error)?
+        {
             res if res.success => Ok(()),
             _res => Err(ErrorCode::InvalidWorkload(format!(
                 "Unknown workload {} or workload {} already exists",
@@ -221,7 +247,13 @@ impl WorkloadApi for WorkloadMgr {
                 .if_then
                 .push(TxnOp::put(workload_key, serde_json::to_vec(&workload)?));
 
-            if self.metastore.transaction(alter_workload).await?.success {
+            if self
+                .metastore
+                .transaction(alter_workload)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(());
             }
         }
@@ -255,7 +287,13 @@ impl WorkloadApi for WorkloadMgr {
                 .if_then
                 .push(TxnOp::put(workload_key, serde_json::to_vec(&workload)?));
 
-            if self.metastore.transaction(alter_workload).await?.success {
+            if self
+                .metastore
+                .transaction(alter_workload)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(());
             }
         }
@@ -272,7 +310,8 @@ impl WorkloadApi for WorkloadMgr {
                 "{}/",
                 self.workload_key_prefix
             )))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         let mut workload_groups = Vec::with_capacity(list_reply.len());
 

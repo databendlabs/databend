@@ -24,7 +24,6 @@ io-uring = [
 [dependencies]
 databend-base = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }

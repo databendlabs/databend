@@ -31,6 +31,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 
+use crate::errors::meta_service_error;
 use crate::udf::UdfApiError;
 use crate::udf::UdfError;
 
@@ -127,7 +128,8 @@ impl UdfMgr {
         let strm = self
             .kv_api
             .list_pb_values(ListOptions::unlimited(&key))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         match strm.try_collect().await {
             Ok(udfs) => Ok(udfs),
@@ -143,8 +145,12 @@ impl UdfMgr {
         let strm = self
             .kv_api
             .list_pb_values(ListOptions::unlimited(&dir))
-            .await?;
-        let udfs = strm.try_collect::<Vec<_>>().await?;
+            .await
+            .map_err(meta_service_error)?;
+        let udfs = strm
+            .try_collect::<Vec<_>>()
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(udfs)
     }

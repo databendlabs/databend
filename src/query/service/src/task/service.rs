@@ -55,7 +55,6 @@ use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MetaError;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_sql::Planner;
@@ -73,6 +72,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
+use crate::meta_client_error;
+use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::task::meta::TaskMetaHandle;
@@ -292,7 +293,7 @@ impl TaskService {
                                                             continue;
                                                         }
                                                         fn_new_task_run(&task_service, &task).await?;
-                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
@@ -340,7 +341,7 @@ impl TaskService {
                                                             continue;
                                                         }
                                                         fn_new_task_run(&task_service, &task).await?;
-                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
@@ -359,7 +360,11 @@ impl TaskService {
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
-                    if !task_mgr.accept(&task_key).await? {
+                    if !task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         continue;
                     }
                     let task_name = task.task_name.clone();
@@ -418,7 +423,8 @@ impl TaskService {
                                             {
                                                 task_mgr
                                                     .send(TaskMessage::ExecuteTask(next_task))
-                                                    .await?;
+                                                    .await
+                                                    .map_err(meta_service_error)?;
                                             }
                                         }
                                         break;
@@ -449,7 +455,11 @@ impl TaskService {
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
                     }
-                    if task_mgr.accept(&task_key).await? {
+                    if task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         self.clean_task_afters(&task_name).await?;
                     }
                     task_mgr
@@ -457,10 +467,15 @@ impl TaskService {
                             tenant,
                             TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
                         ))
-                        .await?;
+                        .await
+                        .map_err(meta_service_error)?;
                 }
                 TaskMessage::AfterTask(task) => {
-                    if !task_mgr.accept(&task_key).await? {
+                    if !task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         continue;
                     }
                     match task.status {
@@ -484,7 +499,8 @@ impl TaskService {
             .meta_handle
             .meta_client()
             .watch_with_initialization(watch)
-            .await?;
+            .await
+            .map_err(meta_client_error)?;
 
         Ok(Box::pin(stream.filter_map(|result| {
             result
@@ -500,7 +516,7 @@ impl TaskService {
             return Ok(None);
         };
         let message = decode_seqv::<TaskMessage>(value, || format!("decode value of {}", key))
-            .map_err(MetaError::from)?;
+            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
 
         Ok(Some((key, TaskMessage::clone(message.deref()))))
     }

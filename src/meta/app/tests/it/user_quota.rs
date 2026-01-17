@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::exception::Result;
 use databend_common_meta_app::principal::UserQuota;
 
 #[test]
-fn test_user_quota() -> Result<()> {
+fn test_user_quota() -> anyhow::Result<()> {
     let quota = UserQuota::no_limit();
     assert_eq!(quota.max_cpu, 0);
     assert_eq!(quota.max_memory_in_bytes, 0);

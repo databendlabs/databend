@@ -57,6 +57,8 @@ use databend_common_sql::planner::normalize_identifier;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
+use crate::meta_service_error;
+
 const TAG_REFERENCES_FUNC: &str = "tag_references";
 const TAG_REFERENCES_ENGINE: &str = "TAG_REFERENCES";
 
@@ -345,7 +347,10 @@ async fn collect_tag_references(
     };
 
     // Get object tags
-    let tags = meta.get_object_tags(&tenant, &taggable_object).await?;
+    let tags = meta
+        .get_object_tags(&tenant, &taggable_object)
+        .await
+        .map_err(meta_service_error)?;
 
     if tags.is_empty() {
         return Ok(DataBlock::empty_with_schema(schema));
@@ -357,7 +362,10 @@ async fn collect_tag_references(
         .map(|t| TagIdToNameIdent::new_generic(tenant.clone(), TagId::new(t.tag_id)))
         .collect();
 
-    let tag_names_result = meta.get_pb_values_vec(tag_id_to_name_keys).await?;
+    let tag_names_result = meta
+        .get_pb_values_vec(tag_id_to_name_keys)
+        .await
+        .map_err(meta_service_error)?;
 
     let len = tags.len();
     let mut tag_names = Vec::with_capacity(len);

@@ -33,6 +33,7 @@ use log::warn;
 use passwords::analyzer;
 
 use crate::UserApiProvider;
+use crate::meta_service_error;
 
 // default value of password policy options
 pub const DEFAULT_PASSWORD_MIN_LENGTH: u64 = 8;
@@ -103,7 +104,7 @@ impl UserApiProvider {
             Ok(seq_password_policy) => seq_password_policy,
             Err(e) => match e {
                 CrudError::ApiError(meta_err) => {
-                    return Err(ErrorCode::from(meta_err)
+                    return Err(meta_service_error(meta_err)
                         .add_message_back(" (while alter password policy)"));
                 }
                 CrudError::Business(unknown) => {
@@ -190,9 +191,8 @@ impl UserApiProvider {
             Ok(res) => Ok(res),
             Err(e) => match e {
                 CrudError::ApiError(meta_err) => {
-                    return Err(
-                        ErrorCode::from(meta_err).add_message_back(" (while drop password policy)")
-                    );
+                    return Err(meta_service_error(meta_err)
+                        .add_message_back(" (while drop password policy)"));
                 }
                 CrudError::Business(unknown) => {
                     if if_exists {
@@ -229,8 +229,7 @@ impl UserApiProvider {
     pub async fn get_password_policies(&self, tenant: &Tenant) -> Result<Vec<PasswordPolicy>> {
         let client = self.password_policy_api(tenant);
         let password_policies = client.list(None).await.map_err(|e| {
-            let e = ErrorCode::from(e);
-            e.add_message_back(" (while get password policies).")
+            meta_service_error(e).add_message_back(" (while get password policies).")
         })?;
         Ok(password_policies)
     }

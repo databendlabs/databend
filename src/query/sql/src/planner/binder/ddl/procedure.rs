@@ -51,6 +51,7 @@ use crate::Binder;
 use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::binder::show::get_show_options;
+use crate::meta_service_error;
 use crate::plans::CallProcedurePlan;
 use crate::plans::ConstantExpr;
 use crate::plans::CreateProcedurePlan;
@@ -208,7 +209,11 @@ impl Binder {
         let req = GetProcedureReq {
             inner: ProcedureNameIdent::new(tenant.clone(), procedure_ident.clone()),
         };
-        if let Some(procedure) = procedure_api.get_procedure(&req).await? {
+        if let Some(procedure) = procedure_api
+            .get_procedure(&req)
+            .await
+            .map_err(meta_service_error)?
+        {
             return Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
                 procedure_id: procedure.id,
                 script: procedure.procedure_meta.script,
@@ -218,7 +223,10 @@ impl Binder {
         }
 
         // Exact match failed, try implicit cast resolution.
-        let candidates = procedure_api.list_procedures_by_name(&name_str).await?;
+        let candidates = procedure_api
+            .list_procedures_by_name(&name_str)
+            .await
+            .map_err(meta_service_error)?;
         let mut same_arity_candidates = Vec::new();
         for candidate in candidates {
             let arg_defs = parse_procedure_signature(&candidate.name_ident.procedure_name().args)?;

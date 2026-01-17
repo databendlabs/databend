@@ -33,6 +33,7 @@ use databend_common_meta_types::With;
 use fastrace::func_name;
 
 use super::quota_api::QuotaApi;
+use crate::errors::meta_service_error;
 use crate::serde::Quota;
 use crate::serde::check_and_upgrade_to_pb;
 
@@ -58,7 +59,11 @@ impl<const WRITE_PB: bool> QuotaMgr<WRITE_PB> {
 impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
     #[async_backtrace::framed]
     async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
-        let res = self.kv_api.get_kv(&self.key()).await?;
+        let res = self
+            .kv_api
+            .get_kv(&self.key())
+            .await
+            .map_err(meta_service_error)?;
         match res {
             None => Ok(SeqV::new(0, TenantQuota::default())),
             Some(seq_value) => match seq.match_seq(&seq_value) {
@@ -80,7 +85,8 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                         &seq_value,
                         self.kv_api.as_ref(),
                     )
-                    .await?;
+                    .await
+                    .map_err(meta_service_error)?;
 
                     // Keep the original seq.
                     Ok(SeqV::new_with_meta(seq_value.seq, seq_value.meta, u.data))
@@ -95,7 +101,8 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
             let res = self
                 .kv_api
                 .upsert_pb(&UpsertPB::update(self.ident.clone(), quota.clone()).with(seq))
-                .await?;
+                .await
+                .map_err(meta_service_error)?;
             match res.result {
                 Some(SeqV { seq: s, .. }) => Ok(s),
                 None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
@@ -105,7 +112,8 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
             let res = self
                 .kv_api
                 .upsert_kv(UpsertKV::update(self.key(), &value).with(seq))
-                .await?;
+                .await
+                .map_err(meta_service_error)?;
             match res.result {
                 Some(SeqV { seq: s, .. }) => Ok(s),
                 None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
