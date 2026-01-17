@@ -131,54 +131,43 @@ impl Runtime {
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-
-        #[cfg(debug_assertions)]
-        {
-            // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
-                && let Some(thread_name) = std::thread::current().name()
-            {
-                runtime_builder.thread_name(thread_name);
-            }
-
-            runtime_builder.thread_stack_size(20 * 1024 * 1024);
-        }
-
-        Self::create(
-            None,
-            runtime_builder
-                .enable_all()
-                .on_thread_start(ThreadTracker::init),
-        )
+        Self::create_runtime(None, None)
     }
 
+    pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
+        Self::create_runtime(Some(workers), thread_name)
+    }
+
+    /// Creates a new multi-thread runtime with optional worker count and thread name.
+    ///
+    /// In debug builds with UNIT_TEST=TRUE, overrides thread_name with current thread name
+    /// and sets a larger stack size (20MB) for debugging.
     #[allow(unused_mut)]
-    pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+    fn create_runtime(workers: Option<usize>, mut thread_name: Option<String>) -> Result<Self> {
+        let mut builder = Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
-            // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
-                && let Some(cur_thread_name) = std::thread::current().name()
+            // In unit tests, use the test thread name for better debugging
+            if matches!(std::env::var("UNIT_TEST"), Ok(v) if v == "TRUE")
+                && let Some(name) = std::thread::current().name()
             {
-                thread_name = Some(cur_thread_name.to_string());
+                thread_name = Some(name.to_string());
             }
-
-            runtime_builder.thread_stack_size(20 * 1024 * 1024);
+            builder.thread_stack_size(20 * 1024 * 1024);
         }
 
-        if let Some(thread_name) = &thread_name {
-            runtime_builder.thread_name(thread_name);
+        if let Some(ref name) = thread_name {
+            builder.thread_name(name);
+        }
+
+        if let Some(n) = workers {
+            builder.worker_threads(n);
         }
 
         Self::create(
             thread_name,
-            runtime_builder
-                .enable_all()
-                .on_thread_start(ThreadTracker::init)
-                .worker_threads(workers),
+            builder.enable_all().on_thread_start(ThreadTracker::init),
         )
     }
 
@@ -291,12 +280,7 @@ impl Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        let task = ThreadTracker::tracking_future(task);
-        let location_name = name.into();
-        let task = async_backtrace::location!(location_name).frame(task);
-
-        #[expect(clippy::disallowed_methods)]
-        JoinHandle::create(self.handle.spawn(task))
+        self.spawn_with_name(task, Some(name.into()))
     }
 
     /// Spawns a new asynchronous task, returning a JoinHandle for it.
@@ -306,14 +290,23 @@ impl Runtime {
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
+        self.spawn_with_name(task, None)
+    }
+
+    /// Spawns a new asynchronous task with an optional name, returning a JoinHandle for it.
+    ///
+    /// If `name` is `None`, generates a default name based on the current query context.
+    fn spawn_with_name<T>(&self, task: T, name: Option<String>) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
         let task = ThreadTracker::tracking_future(task);
 
-        let location_name = match ThreadTracker::query_id() {
+        let location_name = name.unwrap_or_else(|| match ThreadTracker::query_id() {
             None => String::from(GLOBAL_TASK_DESC),
-            Some(query_id) => {
-                format!("Running query {} spawn task", query_id)
-            }
-        };
+            Some(query_id) => format!("Running query {} spawn task", query_id),
+        });
 
         let task = async_backtrace::location!(location_name).frame(task);
 
@@ -475,13 +468,11 @@ where
     // TODO: tracking payload
     let future = ThreadTracker::tracking_future(future);
 
-    let frame_name = if let Some(n) = frame_name {
-        n
-    } else {
+    let frame_name = frame_name.unwrap_or_else(|| {
         std::any::type_name::<F>()
             .trim_end_matches("::{{closure}}")
             .to_string()
-    };
+    });
 
     async_backtrace::location!(
         frame_name,
