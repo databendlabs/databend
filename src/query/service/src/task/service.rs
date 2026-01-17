@@ -72,6 +72,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
+use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
@@ -499,7 +500,7 @@ impl TaskService {
             .meta_client()
             .watch_with_initialization(watch)
             .await
-            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+            .map_err(meta_client_error)?;
 
         Ok(Box::pin(stream.filter_map(|result| {
             result

@@ -31,6 +31,7 @@ use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::meta_service_error;
+use crate::meta_txn_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -277,11 +278,7 @@ async fn set_tags(
         taggable_object: object,
         tags: tag_pairs,
     };
-    match meta_client
-        .set_object_tags(req)
-        .await
-        .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?
-    {
+    match meta_client.set_object_tags(req).await.map_err(meta_txn_error)? {
         Ok(_) => Ok(()),
         Err(e) => Err(ErrorCode::from(e)),
     }
