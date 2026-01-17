@@ -781,5 +781,5 @@ FROM test2;
 statement ok
 set enable_experimental_virtual_column = 0;
 
-#statement ok
-#DROP DATABASE test_virtual_column
+statement ok
+DROP DATABASE test_virtual_column
