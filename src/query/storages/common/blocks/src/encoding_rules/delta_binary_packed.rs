@@ -22,12 +22,31 @@ use parquet::basic::Encoding;
 use parquet::file::properties::WriterPropertiesBuilder;
 
 use crate::encoding_rules::ColumnPathsCache;
+use crate::encoding_rules::DeltaOrderingStats;
 use crate::encoding_rules::EncodingStatsProvider;
 
-// NDV must be close to row count (~90%+). Empirical value based on experiments and operational experience.
-const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.9;
-// Span (max - min + 1) should be close to NDV. Empirical value based on experiments and operational experience.
-const DELTA_RANGE_TOLERANCE: f64 = 1.05;
+// NDV must be very close to row count (≥95%) to ensure high cardinality.
+// This filters out columns with many duplicates where delta encoding provides no benefit.
+const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.95;
+
+// Span (max - min + 1) should be very close to NDV (≤1% tolerance).
+// This ensures the range is contiguous with minimal gaps, making deltas small and stable.
+// Example: [1,2,3,4,5] has span=5, NDV=5, ratio=1.0 ✓
+//          [1,3,5,7,9] has span=9, NDV=5, ratio=1.8 ✗
+const DELTA_RANGE_TOLERANCE: f64 = 1.01;
+
+// At least 99% of adjacent pairs should maintain monotonic order (all ↑ or all ↓).
+// This helps reject random permutations of contiguous ranges.
+// Example: [1,2,3,4,5] → monotonic_ratio=1.0 ✓
+//          [3,1,5,2,4] → monotonic_ratio≈0.5 ✗ (shuffled, inefficient for DBP)
+const DELTA_MONOTONIC_RATIO: f64 = 0.99;
+
+// Coefficient of variation for absolute deltas should be ≤0.1 (very stable).
+// CV = stddev(abs_deltas) / mean(abs_deltas). Lower CV means more uniform deltas.
+// This rejects sequences with occasional large jumps that inflate bit-width requirements.
+// Example: [1,2,3,4,5,...]     → deltas=[1,1,1,...], CV=0.0 ✓
+//          [1,2,3,10,11,12,...] → deltas=[1,1,7,1,1,...], CV≈1.2 ✗
+const DELTA_ABS_DELTA_CV_LIMIT: f64 = 0.1;
 
 pub fn apply_delta_binary_packed_heuristic(
     mut builder: WriterPropertiesBuilder,
@@ -54,7 +73,8 @@ pub fn apply_delta_binary_packed_heuristic(
         let Some(ndv) = metrics.column_ndv(&column_id) else {
             continue;
         };
-        if should_apply_delta_binary_packed(stats, ndv, num_rows) {
+        let ordering_stats = metrics.column_delta_stats(&column_id);
+        if should_apply_delta_binary_packed(stats, ndv, num_rows, ordering_stats) {
             let column_paths = column_paths_cache.get_or_build(table_schema);
             if let Some(path) = column_paths.get(&column_id) {
                 builder = builder
@@ -66,37 +86,72 @@ pub fn apply_delta_binary_packed_heuristic(
     builder
 }
 
-/// Evaluate whether Delta Binary Packed (DBP) is worth enabling for a 32-bit integer column.
+/// Decide whether to enable DELTA_BINARY_PACKED encoding for a 32-bit integer column.
 ///
-/// The DBP heuristic rule is intentionally conservative:
-/// - DBP is only considered when the block looks like a contiguous INT32/UINT32 range (no NULLs).
-/// - NDV must be very close to the row count (`DELTA_HIGH_CARDINALITY_RATIO`).
-/// - The `[min, max]` span should be close to NDV (`DELTA_RANGE_TOLERANCE`).
-///   Experiments show that such blocks shrink dramatically after DBP + compression while decode CPU
-///   remains affordable, yielding the best IO + CPU trade-off.
-fn should_apply_delta_binary_packed(stats: &ColumnStatistics, ndv: u64, num_rows: usize) -> bool {
-    // Nulls weaken the contiguous-range signal, so we avoid the heuristic when they exist.
+/// ## Conservative Strategy
+/// DBP has relatively high decode CPU cost, so we only enable it for near-sorted sequences
+/// with stable deltas to ensure the compression benefit outweighs the decode overhead.
+///
+/// ## Checks Performed
+/// 1. No NULLs (weakens contiguous-range signal)
+/// 2. High cardinality: NDV/rows ≥ 0.95 (mostly unique values)
+/// 3. Tight range: (max-min+1)/NDV ≤ 1.01 (contiguous, few gaps)
+/// 4. Monotonic: ≥99% adjacent pairs move in same direction (rejects shuffled data)
+/// 5. Stable deltas: CV(abs_deltas) ≤ 0.1 (rejects sequences with large jumps)
+///
+/// Target use case: auto-increment primary keys, sequential IDs, monotonic sequence numbers.
+fn should_apply_delta_binary_packed(
+    stats: &ColumnStatistics,
+    ndv: u64,
+    num_rows: usize,
+    ordering_stats: Option<&DeltaOrderingStats>,
+) -> bool {
+    // Check 1: Reject if NULLs present (weakens contiguous-range assumption)
     if num_rows == 0 || ndv == 0 || stats.null_count > 0 {
         return false;
     }
+
     let Some(min) = scalar_to_i64(&stats.min) else {
         return false;
     };
     let Some(max) = scalar_to_i64(&stats.max) else {
         return false;
     };
-    // Degenerate spans (single value) already compress well without DBP.
+
+    // Degenerate case: single value already compresses well
     if max <= min {
         return false;
     }
-    // Use ratio-based heuristics instead of absolute NDV threshold to decouple from block size.
+
+    // Check 2: High cardinality (NDV/rows ≥ 0.95)
+    // Filters out columns with many duplicates where DBP provides no benefit
     let ndv_ratio = ndv as f64 / num_rows as f64;
     if ndv_ratio < DELTA_HIGH_CARDINALITY_RATIO {
         return false;
     }
+
+    // Check 3: Tight range ((max-min+1)/NDV ≤ 1.01)
+    // Ensures values form a nearly-contiguous sequence with minimal gaps
     let span = (max - min + 1) as f64;
     let contiguous_ratio = span / ndv as f64;
-    contiguous_ratio <= DELTA_RANGE_TOLERANCE
+    if contiguous_ratio > DELTA_RANGE_TOLERANCE {
+        return false;
+    }
+
+    // Check 4 & 5: Ordering characteristics (only if available)
+    // These checks prevent enabling DBP on shuffled data, which would compress poorly
+    if let Some(ordering_stats) = ordering_stats {
+        // Check 4: Monotonicity (≥99% adjacent pairs in same direction)
+        if ordering_stats.monotonic_ratio < DELTA_MONOTONIC_RATIO {
+            return false;
+        }
+        // Check 5: Stable deltas (CV ≤ 0.1)
+        if ordering_stats.abs_delta_cv > DELTA_ABS_DELTA_CV_LIMIT {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn scalar_to_i64(val: &Scalar) -> Option<i64> {
@@ -106,5 +161,354 @@ fn scalar_to_i64(val: &Scalar) -> Option<i64> {
         Scalar::Number(NumberScalar::Int32(v)) => Some(*v as i64),
         Scalar::Number(NumberScalar::UInt32(v)) => Some(*v as i64),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_common_expression::Scalar;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    fn make_stats(min: i32, max: i32, null_count: u64) -> ColumnStatistics {
+        ColumnStatistics {
+            min: Scalar::Number(NumberScalar::Int32(min)),
+            max: Scalar::Number(NumberScalar::Int32(max)),
+            null_count,
+            in_memory_size: 0,
+            distinct_of_values: None,
+        }
+    }
+
+    // Unit tests: Test decision logic with mocked statistics
+
+    #[test]
+    fn test_perfect_sequential_ids() {
+        // Target scenario: [1, 2, 3, ..., 1000] - auto-increment primary key
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Perfect auto-increment sequence should enable DBP"
+        );
+    }
+
+    #[test]
+    fn test_reject_shuffled_contiguous_range() {
+        // Critical test: [542, 17, 891, 3, ...] - shuffled [1..1000]
+        // NDV=1000, span=1000 (matches criteria) but monotonic_ratio≈0.5
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 0.5,
+            abs_delta_cv: 2.5,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Shuffled sequence should be rejected despite matching NDV+span"
+        );
+    }
+
+    #[test]
+    fn test_reject_with_nulls() {
+        let stats = make_stats(1, 1000, 10); // 10 NULLs
+        let ndv = 990;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Columns with NULLs should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reject_low_cardinality() {
+        // Many duplicates: NDV/rows = 0.5 < 0.95
+        let stats = make_stats(1, 100, 0);
+        let ndv = 50;
+        let num_rows = 100;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Low cardinality (NDV/rows < 0.95) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reject_sparse_range() {
+        // Sparse sequence: [1, 5, 10, 15, ...] - span/NDV = 2.0 > 1.01
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 500; // Only 500 unique values in range [1, 1000]
+        let num_rows = 500;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Sparse range (span/NDV > 1.01) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reject_low_monotonicity() {
+        // Mostly sorted but 5% reversals: monotonic_ratio = 0.95 < 0.99
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 0.95,
+            abs_delta_cv: 0.05,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Low monotonicity (< 0.99) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_reject_high_delta_cv() {
+        // Sequence with occasional large jumps: [1,2,3,10,11,12,20,...]
+        // CV ≈ 1.2 > 0.1
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 1.2,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "High delta CV (> 0.1) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_accept_edge_case_99_percent_monotonic() {
+        // Exactly 99% monotonic (edge case)
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 0.99,
+            abs_delta_cv: 0.05,
+        });
+
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Exactly 99% monotonic with low CV should pass"
+        );
+    }
+
+    #[test]
+    fn test_accept_edge_case_cv_exactly_0_1() {
+        // CV exactly at threshold
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.1,
+        });
+
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "CV exactly at 0.1 threshold should pass"
+        );
+    }
+
+    #[test]
+    fn test_reject_cv_slightly_above_threshold() {
+        // CV just above threshold
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.11,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "CV=0.11 (above threshold) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_degenerate_single_value() {
+        // All values are the same
+        let stats = make_stats(42, 42, 0);
+        let ndv = 1;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "Single value (max=min) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_uint32_range() {
+        // Test with UInt32 values
+        let mut stats = make_stats(1, 1000, 0);
+        stats.min = Scalar::Number(NumberScalar::UInt32(1));
+        stats.max = Scalar::Number(NumberScalar::UInt32(1000));
+        let ndv = 1000;
+        let num_rows = 1000;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.0,
+        });
+
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "UInt32 perfect sequence should enable DBP"
+        );
+    }
+
+    #[test]
+    fn test_edge_case_1_percent_anomaly() {
+        // 99 deltas of 1, and 1 delta of 2
+        // mean ≈ 1.01, stddev ≈ 0.1, CV ≈ 0.099
+        let stats = make_stats(1, 101, 0);
+        let ndv = 100;
+        let num_rows = 100;
+        let ordering = Some(DeltaOrderingStats {
+            monotonic_ratio: 1.0,
+            abs_delta_cv: 0.099,
+        });
+
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, ordering.as_ref()),
+            "1% anomaly (CV≈0.099) should still pass"
+        );
+    }
+
+    // End-to-end integration tests: Test with real data flowing through the entire pipeline
+
+    #[test]
+    fn test_e2e_perfect_auto_increment_sequence() {
+        use crate::encoding_rules::delta_ordering::compute_delta_ordering_stats;
+
+        // Real data: [1, 2, 3, ..., 1000]
+        let values: Vec<i32> = (1..=1000).collect();
+
+        // Compute real ordering stats
+        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+
+        // Verify the computed stats match our expectations
+        assert_eq!(ordering_stats.monotonic_ratio, 1.0, "Should be 100% monotonic");
+        assert_eq!(ordering_stats.abs_delta_cv, 0.0, "All deltas are 1, CV=0");
+
+        // Compute column stats
+        let stats = make_stats(1, 1000, 0);
+        let ndv = 1000;
+        let num_rows = 1000;
+
+        // The decision should enable DBP
+        assert!(
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            "Real auto-increment sequence should enable DBP"
+        );
+    }
+
+    #[test]
+    fn test_e2e_shuffled_sequence_rejected() {
+        use crate::encoding_rules::delta_ordering::compute_delta_ordering_stats;
+
+        // Real data: manually shuffled [1..100] to ensure randomness
+        // Pattern: reverse pairs, then reverse quartets, creating a chaotic sequence
+        let mut values: Vec<i32> = Vec::new();
+        for i in (1..=100).step_by(2) {
+            if i < 100 {
+                values.push(i + 1);
+                values.push(i);
+            } else {
+                values.push(i);
+            }
+        }
+        // values ≈ [2,1, 4,3, 6,5, ...] - heavily shuffled
+
+        // Compute real ordering stats
+        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+
+        // Verify the computed stats show it's not monotonic
+        assert!(
+            ordering_stats.monotonic_ratio < 0.99,
+            "Shuffled data should have low monotonicity, got {}",
+            ordering_stats.monotonic_ratio
+        );
+
+        // Column stats still show contiguous range
+        let stats = make_stats(1, 100, 0);
+        let ndv = 100;
+        let num_rows = 100;
+
+        // Should be rejected due to low monotonicity
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            "Shuffled sequence should be rejected despite matching NDV+span"
+        );
+    }
+
+    #[test]
+    fn test_e2e_sequence_with_large_jumps_rejected() {
+        use crate::encoding_rules::delta_ordering::compute_delta_ordering_stats;
+
+        // Real data: [1,2,3,4,5, 100,101,102,103,104, 200,201,202,203,204, ...]
+        // Has large jumps every 5 values
+        let mut values = Vec::new();
+        for i in 0..20 {
+            for j in 0..5 {
+                values.push(i * 100 + j + 1);
+            }
+        }
+        // values = [1,2,3,4,5, 100,101,102,103,104, ...]
+
+        // Compute real ordering stats
+        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+
+        // Verify monotonic but high CV
+        assert_eq!(ordering_stats.monotonic_ratio, 1.0, "Still monotonic");
+        assert!(
+            ordering_stats.abs_delta_cv > 0.1,
+            "Large jumps should cause high CV, got {}",
+            ordering_stats.abs_delta_cv
+        );
+
+        // Column stats
+        let stats = make_stats(1, 1904, 0); // min=1, max=1904
+        let ndv = 100;
+        let num_rows = 100;
+
+        // Should be rejected due to high CV (or sparse range)
+        assert!(
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            "Sequence with large jumps should be rejected"
+        );
     }
 }

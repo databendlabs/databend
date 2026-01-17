@@ -20,6 +20,8 @@ mod parquet_rs;
 
 pub use encoding_rules::EncodingStatsProvider;
 pub use encoding_rules::NdvProvider;
+pub use encoding_rules::DeltaOrderingStats;
+pub use encoding_rules::delta_ordering::collect_delta_ordering_stats;
 pub use encoding_rules::page_limit::MAX_BATCH_MEMORY_SIZE;
 pub use encoding_rules::page_limit::write_batch_with_page_limit;
 pub use parquet_rs::*;
