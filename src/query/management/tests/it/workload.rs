@@ -25,7 +25,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_version::BUILD_INFO;
 
 async fn create_workload_mgr() -> WorkloadMgr {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semantic.clone()).await;
+    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
     WorkloadMgr::create(test_api.clone(), "test-tenant-id").unwrap()
 }
 

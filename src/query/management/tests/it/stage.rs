@@ -139,7 +139,7 @@ fn create_test_stage_info() -> StageInfo {
 }
 
 async fn new_stage_api() -> Result<(Arc<MetaStore>, StageMgr)> {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semantic.clone()).await;
+    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = StageMgr::create(

@@ -23,7 +23,7 @@ struct MetaNodeUnitTestBuilder {}
 #[async_trait]
 impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> LocalMetaService {
-        LocalMetaService::new("UT-Meta", BUILD_INFO.semantic.clone())
+        LocalMetaService::new("UT-Meta", BUILD_INFO.semver())
             .await
             .unwrap()
     }

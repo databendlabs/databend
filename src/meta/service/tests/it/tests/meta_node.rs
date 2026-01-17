@@ -158,7 +158,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
     dbg!(&tc.config.raft_config.raft_dir);
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semantic.clone()).await?;
+    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semver()).await?;
 
     tc.meta_node = Some(mn.clone());
 
@@ -193,7 +193,7 @@ pub(crate) async fn start_meta_node_non_voter(
 
     let raft_conf = &tc.config.raft_config;
 
-    let mn = MetaNode::open(raft_conf, BUILD_INFO.semantic.clone()).await?;
+    let mn = MetaNode::open(raft_conf, BUILD_INFO.semver()).await?;
 
     // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
     // // Log index becomes non-deterministic.

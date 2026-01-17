@@ -24,6 +24,10 @@ pub struct BuildInfo {
 }
 
 impl BuildInfo {
+    pub fn semver(&self) -> Version {
+        self.semantic.clone()
+    }
+
     pub fn udf_client_user_agent(&self) -> String {
         format!("databend-query/{}", self.semantic)
     }

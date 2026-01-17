@@ -1563,7 +1563,7 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
     let test_api = MetaStore::L(Arc::new(
-        LocalMetaService::new("management-test", BUILD_INFO.semantic.clone())
+        LocalMetaService::new("management-test", BUILD_INFO.semver())
             .await
             .unwrap(),
     ));

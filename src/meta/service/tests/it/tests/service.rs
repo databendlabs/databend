@@ -100,7 +100,7 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
 pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses,
-        BUILD_INFO.semantic.clone(),
+        BUILD_INFO.semver(),
         "root",
         "xxx",
         Some(Duration::from_secs(2)), // timeout
@@ -208,7 +208,7 @@ impl MetaSrvTestContext {
 
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            BUILD_INFO.semantic.clone(),
+            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
@@ -269,7 +269,7 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
 
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            BUILD_INFO.semantic.clone(),
+            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
