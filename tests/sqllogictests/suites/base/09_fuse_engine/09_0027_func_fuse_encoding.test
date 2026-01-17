@@ -86,7 +86,7 @@ t_parquet Parquet c2 INT NULL (INT32) NULL 37 37 rle,delta_binary_packed zstd
 query TTTTIIITT
 select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet', 'c2');
 ----
-t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
+t_parquet Parquet c2 INT NULL (INT32) NULL 37 37 rle,delta_binary_packed zstd
 
 statement ok
 set enable_parquet_delta_binary_packed_heuristic_rule = 1;
