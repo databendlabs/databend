@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -50,6 +49,7 @@ use databend_common_meta_types::sys_data::SysData;
 use display_more::DisplayOptionExt;
 use futures::Stream;
 use futures::stream::BoxStream;
+use semver::Version;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tonic::Status;
@@ -69,7 +69,7 @@ pub type MetaFnOnce<T> = Box<dyn FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 
 #[derive(Clone)]
 pub struct MetaHandle {
     pub id: NodeId,
-    pub version: BuildInfoRef,
+    pub version: Version,
     tx: mpsc::Sender<MetaFnOnce<()>>,
     /// The runtime containing the meta node worker.
     ///
@@ -80,7 +80,7 @@ pub struct MetaHandle {
 impl MetaHandle {
     pub fn new(
         id: NodeId,
-        version: BuildInfoRef,
+        version: Version,
         tx: mpsc::Sender<MetaFnOnce<()>>,
         rt: Arc<Runtime>,
     ) -> Self {

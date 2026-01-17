@@ -52,7 +52,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(
         vec![addr],
-        &BUILD_INFO,
+        BUILD_INFO.semver(),
         "root",
         "xxx",
         None,
@@ -91,7 +91,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
 
     let r = MetaGrpcClient::try_create(
         vec!["addr".to_string()],
-        &BUILD_INFO,
+        BUILD_INFO.semver(),
         "root",
         "xxx",
         None,

@@ -87,7 +87,7 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
+    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
     let client = test_api.deref().clone();
 
     let test_api = Arc::new(test_api);

@@ -19,7 +19,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalSequence;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -33,6 +32,7 @@ use databend_meta::meta_node::meta_worker::MetaWorker;
 use log::debug;
 use log::info;
 use log::warn;
+use semver::Version;
 use tokio::time::sleep;
 
 /// A container for a locally started meta service, mainly for testing purpose.
@@ -85,7 +85,7 @@ impl Drop for LocalMetaService {
 impl LocalMetaService {
     pub async fn new(
         name: impl fmt::Display,
-        version: BuildInfoRef,
+        version: Version,
     ) -> anyhow::Result<LocalMetaService> {
         Self::new_with_fixed_dir(None, name, version).await
     }
@@ -98,7 +98,7 @@ impl LocalMetaService {
     pub async fn new_with_fixed_dir(
         dir: Option<String>,
         name: impl fmt::Display,
-        version: BuildInfoRef,
+        version: Version,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
@@ -180,7 +180,7 @@ impl LocalMetaService {
 
     async fn grpc_client(
         config: &configs::Config,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<ClientHandle>, CreationError> {
         let addr = config.grpc_api_address.clone();
         let client = MetaGrpcClient::try_create(

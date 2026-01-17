@@ -385,7 +385,7 @@ mod tests {
     use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await
+        MetaStore::new_local_testing(databend_common_version::BUILD_INFO.semver()).await
     }
 
     #[tokio::test(flavor = "multi_thread")]

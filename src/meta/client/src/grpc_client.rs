@@ -22,7 +22,6 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::UnlimitedFuture;
@@ -152,7 +151,7 @@ impl MetaGrpcClient {
     pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
-            conf.version,
+            conf.version.semantic.clone(),
             &conf.username,
             &conf.password,
             conf.timeout,
@@ -165,7 +164,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
-        version: BuildInfoRef,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -200,7 +199,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create_with_features(
         endpoints_str: Vec<String>,
-        version: BuildInfoRef,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,

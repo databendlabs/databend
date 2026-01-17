@@ -48,7 +48,7 @@ impl MetaWorker {
         meta_io_rt.spawn(async move {
             let (handle_tx, worker_rx) = mpsc::channel(1024);
 
-            let res = MetaNode::start(&config, &BUILD_INFO).await;
+            let res = MetaNode::start(&config, BUILD_INFO.semver()).await;
             let meta_node = match res {
                 Ok(x) => x,
                 Err(e) => {
@@ -58,7 +58,7 @@ impl MetaWorker {
             };
 
             let id = meta_node.raft_store.id;
-            let version = meta_node.version;
+            let version = meta_node.version.clone();
 
             let worker = MetaWorker {
                 worker_rx,
