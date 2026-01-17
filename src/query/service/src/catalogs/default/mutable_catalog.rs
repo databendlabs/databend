@@ -192,7 +192,7 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version),
+                conf.meta.to_meta_grpc_client_conf(version.semver()),
             ));
 
             provider.create_meta_store().await.map_err(|e| {

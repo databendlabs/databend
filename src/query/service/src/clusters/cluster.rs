@@ -228,7 +228,8 @@ impl ClusterHelper for Cluster {
 impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
+        let meta_api_provider =
+            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(

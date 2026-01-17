@@ -660,7 +660,7 @@ async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     Ok(MetaStoreProvider::new(conf)
         .create_meta_store()
         .await

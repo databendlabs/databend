@@ -30,7 +30,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
     let meta = {
-        let config = meta_config.to_meta_grpc_client_conf(version);
+        let config = meta_config.to_meta_grpc_client_conf(version.semver());
         let provider = Arc::new(MetaStoreProvider::new(config));
         provider.create_meta_store().await?
     };

@@ -16,6 +16,7 @@ hyper = { workspace = true }
 hyper-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

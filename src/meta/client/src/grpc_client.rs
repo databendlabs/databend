@@ -151,7 +151,7 @@ impl MetaGrpcClient {
     pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
-            conf.version.semantic.clone(),
+            conf.version.clone(),
             &conf.username,
             &conf.password,
             conf.timeout,
