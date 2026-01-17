@@ -278,7 +278,11 @@ async fn set_tags(
         taggable_object: object,
         tags: tag_pairs,
     };
-    match meta_client.set_object_tags(req).await.map_err(meta_txn_error)? {
+    match meta_client
+        .set_object_tags(req)
+        .await
+        .map_err(meta_txn_error)?
+    {
         Ok(_) => Ok(()),
         Err(e) => Err(ErrorCode::from(e)),
     }

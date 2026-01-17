@@ -95,7 +95,7 @@ pub(crate) fn meta_txn_error(
 
 /// Convert a meta client error to an ErrorCode.
 pub(crate) fn meta_client_error(
-    e: databend_common_meta_client::MetaClientError,
+    e: databend_common_meta_types::MetaClientError,
 ) -> databend_common_exception::ErrorCode {
     databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
 }

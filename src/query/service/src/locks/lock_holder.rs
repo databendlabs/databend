@@ -45,6 +45,7 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
+use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::sessions::SessionManager;
 
@@ -124,10 +125,7 @@ impl LockHolder {
             // Get the previous revision, watch the delete event.
             let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)
                 .with_filter(FilterType::Delete);
-            let mut watch_stream = meta_api
-                .watch(req)
-                .await
-                .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+            let mut watch_stream = meta_api.watch(req).await.map_err(meta_client_error)?;
 
             let lock_meta = meta_api
                 .get_pb(&watch_delete_ident)
