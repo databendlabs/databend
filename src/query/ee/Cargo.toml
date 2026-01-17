@@ -60,6 +60,7 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 jsonb = { workspace = true }
 tokio = { workspace = true }

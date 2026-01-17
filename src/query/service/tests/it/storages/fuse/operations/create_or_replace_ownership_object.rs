@@ -14,9 +14,8 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use databend_common_config::MetaConfig;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
@@ -33,9 +32,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
     let meta = {
         let config = meta_config.to_meta_grpc_client_conf(version);
         let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await.map_err(|e| {
-            ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-        })?
+        provider.create_meta_store().await?
     };
 
     // Extracts endpoints to communicate with meta service

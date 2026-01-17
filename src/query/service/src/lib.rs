@@ -78,3 +78,17 @@ pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;
 pub use table_functions::get_fuse_table_snapshot;
 pub use table_functions::get_fuse_table_statistics;
+
+/// Convert a meta service error to an ErrorCode.
+pub(crate) fn meta_service_error(
+    e: databend_common_meta_types::MetaError,
+) -> databend_common_exception::ErrorCode {
+    databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
+}
+
+/// Convert a meta transaction error to an ErrorCode.
+pub(crate) fn meta_txn_error(
+    e: databend_common_meta_api::meta_txn_error::MetaTxnError,
+) -> databend_common_exception::ErrorCode {
+    databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
+}

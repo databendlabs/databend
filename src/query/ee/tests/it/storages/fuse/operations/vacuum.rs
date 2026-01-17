@@ -550,7 +550,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -646,7 +646,7 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -733,7 +733,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
+async fn test_gc_in_progress_db_not_undroppable() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -809,7 +809,7 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_drop_create_or_replace() -> Result<()> {
+async fn test_vacuum_drop_create_or_replace() -> anyhow::Result<()> {
     // vacuum dropped tables by specific database names
     test_vacuum_drop_create_or_replace_impl(&[
         "vacuum drop table from db1",
@@ -822,7 +822,7 @@ async fn test_vacuum_drop_create_or_replace() -> Result<()> {
     Ok(())
 }
 
-async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Result<()> {
+async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyhow::Result<()> {
     // Setup
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -907,7 +907,7 @@ async fn new_local_meta() -> MetaStore {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_tag_refs() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_tag_refs() -> anyhow::Result<()> {
     use databend_common_meta_api::tag_api::TagApi;
     use databend_common_meta_app::schema::CreateTagReq;
     use databend_common_meta_app::schema::SetObjectTagsReq;
@@ -1045,7 +1045,7 @@ async fn test_vacuum_dropped_table_clean_tag_refs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_policies() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_policies() -> anyhow::Result<()> {
     use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
     use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
     use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;

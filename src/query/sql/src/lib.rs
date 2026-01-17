@@ -36,3 +36,10 @@ pub mod executor;
 pub mod planner;
 
 pub use planner::*;
+
+/// Convert a meta service error to an ErrorCode.
+pub(crate) fn meta_service_error(
+    e: databend_common_meta_types::MetaError,
+) -> databend_common_exception::ErrorCode {
+    databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
+}

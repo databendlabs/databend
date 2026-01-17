@@ -14,7 +14,6 @@
 
 use std::io;
 
-use databend_common_exception::ErrorCode;
 use tonic::Status;
 
 use crate::ConnectionError;
@@ -67,11 +66,5 @@ impl From<MetaClientError> for io::Error {
 impl From<InvalidReply> for MetaClientError {
     fn from(e: InvalidReply) -> Self {
         Self::NetworkError(e.into())
-    }
-}
-
-impl From<MetaClientError> for ErrorCode {
-    fn from(e: MetaClientError) -> Self {
-        ErrorCode::MetaServiceError(e.to_string())
     }
 }

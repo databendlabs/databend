@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::meta_service_error;
 use crate::sessions::QueryContext;
 
 #[async_backtrace::framed]
@@ -141,7 +142,8 @@ pub async fn validate_grant_object_exists(
             let procedure = UserApiProvider::instance()
                 .procedure_api(&tenant)
                 .get_procedure_by_id(*p)
-                .await?;
+                .await
+                .map_err(meta_service_error)?;
             if procedure.is_none() {
                 return Err(databend_common_exception::ErrorCode::UnknownProcedure(
                     format!("Unknown procedure id {}", p),
@@ -152,7 +154,8 @@ pub async fn validate_grant_object_exists(
             let meta_api = UserApiProvider::instance().get_meta_store_client();
             if meta_api
                 .get_data_mask_by_id(&tenant, *policy_id)
-                .await?
+                .await
+                .map_err(meta_service_error)?
                 .is_none()
             {
                 return Err(databend_common_exception::ErrorCode::UnknownDatamask(
@@ -164,7 +167,8 @@ pub async fn validate_grant_object_exists(
             let meta_api = UserApiProvider::instance().get_meta_store_client();
             if meta_api
                 .get_row_access_policy_by_id(&tenant, *policy_id)
-                .await?
+                .await
+                .map_err(meta_service_error)?
                 .is_none()
             {
                 return Err(

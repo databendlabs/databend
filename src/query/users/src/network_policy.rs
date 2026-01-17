@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
+use crate::meta_service_error;
 
 impl UserApiProvider {
     // Add a new network policy.
@@ -54,9 +55,8 @@ impl UserApiProvider {
             Ok(seq_network_policy) => seq_network_policy,
             Err(e) => match e {
                 CrudError::ApiError(meta_err) => {
-                    return Err(
-                        ErrorCode::from(meta_err).add_message_back(" (while alter network policy)")
-                    );
+                    return Err(meta_service_error(meta_err)
+                        .add_message_back(" (while alter network policy)"));
                 }
                 CrudError::Business(unknown) => {
                     if if_exists {
@@ -116,9 +116,8 @@ impl UserApiProvider {
             Ok(res) => Ok(res),
             Err(e) => match e {
                 CrudError::ApiError(meta_err) => {
-                    return Err(
-                        ErrorCode::from(meta_err).add_message_back(" (while drop network policy)")
-                    );
+                    return Err(meta_service_error(meta_err)
+                        .add_message_back(" (while drop network policy)"));
                 }
                 CrudError::Business(unknown) => {
                     if if_exists {
@@ -155,8 +154,7 @@ impl UserApiProvider {
     pub async fn get_network_policies(&self, tenant: &Tenant) -> Result<Vec<NetworkPolicy>> {
         let client = self.network_policy_api(tenant);
         let network_policies = client.list(None).await.map_err(|e| {
-            let e = ErrorCode::from(e);
-            e.add_message_back(" (while get network policies).")
+            meta_service_error(e).add_message_back(" (while get network policies).")
         })?;
         Ok(network_policies)
     }

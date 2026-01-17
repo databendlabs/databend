@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::Result;
+use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;

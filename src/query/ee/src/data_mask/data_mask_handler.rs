@@ -32,6 +32,8 @@ use databend_common_meta_types::SeqV;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandler;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandlerWrapper;
 
+use crate::meta_service_error;
+
 pub struct RealDatamaskHandler {}
 
 #[async_trait::async_trait]
@@ -74,7 +76,8 @@ impl DatamaskHandler for RealDatamaskHandler {
         let name_ident = DataMaskNameIdent::new(tenant, name);
         let seq_meta = meta_api
             .get_data_mask(&name_ident)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get data mask")))?;
         Ok(seq_meta.data)
     }
@@ -87,7 +90,8 @@ impl DatamaskHandler for RealDatamaskHandler {
     ) -> Result<SeqV<DatamaskMeta>> {
         let res = meta_api
             .get_data_mask_by_id(tenant, policy_id)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| {
                 databend_common_exception::ErrorCode::UnknownMaskPolicy(format!(
                     "Unknown mask policy {}",

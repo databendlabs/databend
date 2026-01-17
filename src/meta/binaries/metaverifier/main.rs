@@ -23,10 +23,10 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
+use anyhow::Result;
+use anyhow::bail;
 use clap::Parser;
 use databend_common_base::runtime;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -102,16 +102,12 @@ async fn main() -> Result<()> {
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {
         println!("grpc_api_address MUST not be empty!");
-        return Err(ErrorCode::MetaServiceError(
-            "grpc_api_address MUST not be empty!".to_string(),
-        ));
+        bail!("grpc_api_address MUST not be empty!");
     }
 
     if config.remove_percent > 100 {
         println!("remove_percent MUST in [0, 100)!");
-        return Err(ErrorCode::MetaServiceError(
-            "remove_percent MUST in [0, 100)!".to_string(),
-        ));
+        bail!("remove_percent MUST in [0, 100)!");
     }
 
     let start = Instant::now();
@@ -147,7 +143,7 @@ async fn main() -> Result<()> {
                 Err(e) => {
                     fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
                     eprintln!("Failed to create client: {}", e);
-                    return Err(ErrorCode::MetaServiceError(e.to_string()));
+                    bail!("Failed to create client: {}", e);
                 }
             };
 
@@ -205,7 +201,7 @@ async fn main() -> Result<()> {
             end.duration_since(start).as_millis()
         );
         fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
-        return Err(ErrorCode::MetaServiceError(e.to_string()));
+        bail!("verifier client error: {}", e);
     }
 
     let end = Instant::now();

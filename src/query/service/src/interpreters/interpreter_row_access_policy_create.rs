@@ -26,6 +26,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
 use crate::interpreters::Interpreter;
+use crate::meta_service_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -60,7 +61,8 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
         let tenant = self.plan.tenant.clone();
         let res = match handler
             .create_row_access_policy(meta_api, self.plan.clone().into())
-            .await?
+            .await
+            .map_err(meta_service_error)?
         {
             Ok(reply) => {
                 if let Some(current_role) = self.ctx.get_current_role() {

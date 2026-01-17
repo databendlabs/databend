@@ -34,6 +34,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 
+use crate::errors::meta_service_error;
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
 use crate::user::user_api::UserApi;
@@ -80,7 +81,8 @@ impl UserApi for UserMgr {
         let seq = MatchSeq::from(*create_option);
         let res = kv_api
             .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
@@ -99,7 +101,7 @@ impl UserApi for UserMgr {
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
         let key = self.user_key(&user.username, &user.hostname);
 
-        let res = self.kv_api.get_kv(&key).await?;
+        let res = self.kv_api.get_kv(&key).await.map_err(meta_service_error)?;
         let seq_value = res.ok_or_else(|| {
             ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
         })?;
@@ -136,7 +138,8 @@ impl UserApi for UserMgr {
         Ok(self
             .kv_api
             .list_kv_collect(ListOptions::unlimited(user_prefix.as_str()))
-            .await?)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     #[async_backtrace::framed]
@@ -176,7 +179,8 @@ impl UserApi for UserMgr {
         let kv_api = self.kv_api.clone();
         let res = kv_api
             .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
@@ -193,7 +197,8 @@ impl UserApi for UserMgr {
         let res = self
             .kv_api
             .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {

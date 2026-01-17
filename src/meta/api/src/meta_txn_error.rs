@@ -46,7 +46,7 @@ impl From<MetaTxnError> for ErrorCode {
     fn from(meta_err: MetaTxnError) -> Self {
         match meta_err {
             MetaTxnError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
-            MetaTxnError::MetaError(err) => ErrorCode::from(err),
+            MetaTxnError::MetaError(err) => ErrorCode::MetaServiceError(err.to_string()),
         }
     }
 }

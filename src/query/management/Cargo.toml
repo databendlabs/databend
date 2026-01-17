@@ -36,6 +36,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-version = { workspace = true }
 

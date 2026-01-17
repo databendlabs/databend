@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
 
+use crate::meta_service_error;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -54,7 +55,10 @@ impl AsyncSystemTable for TagsTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let meta_client = UserApiProvider::instance().get_meta_store_client();
-        let mut tags = meta_client.list_tags(&tenant).await?;
+        let mut tags = meta_client
+            .list_tags(&tenant)
+            .await
+            .map_err(meta_service_error)?;
         tags.sort_by(|a, b| a.name.cmp(&b.name));
 
         let mut names = Vec::with_capacity(tags.len());

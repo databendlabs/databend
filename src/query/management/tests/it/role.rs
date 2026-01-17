@@ -15,6 +15,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
@@ -27,6 +28,7 @@ fn make_role_key(role: &str) -> String {
 }
 
 mod add {
+
     use databend_common_meta_app::principal::RoleInfo;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_types::MatchSeq;
@@ -35,7 +37,7 @@ mod add {
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_json_upgrade_to_pb() -> databend_common_exception::Result<()> {
+    async fn test_json_upgrade_to_pb() -> Result<()> {
         let role_name = "role1";
         {
             let (kv_api, role_api) = new_role_api(true).await?;
@@ -84,7 +86,7 @@ mod add {
 
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
-) -> databend_common_exception::Result<(Arc<MetaStore>, RoleMgr)> {
+) -> Result<(Arc<MetaStore>, RoleMgr)> {
     let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
     let client = test_api.deref().clone();
 

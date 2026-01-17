@@ -20,6 +20,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
+use crate::meta_service_error;
 
 /// user file_format operations.
 impl UserApiProvider {
@@ -57,7 +58,7 @@ impl UserApiProvider {
         let get_file_formats = file_format_api_provider.list(None);
 
         match get_file_formats.await {
-            Err(e) => Err(ErrorCode::from(e).add_message_back(" (while get file_format)")),
+            Err(e) => Err(meta_service_error(e).add_message_back(" (while get file_format)")),
             Ok(seq_file_formats_info) => Ok(seq_file_formats_info),
         }
     }
@@ -75,7 +76,7 @@ impl UserApiProvider {
         match drop_file_format.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                let e = ErrorCode::from(e);
+                let e = ErrorCode::MetaServiceError(e.to_string());
                 if if_exists && e.code() == ErrorCode::UNKNOWN_FILE_FORMAT {
                     Ok(())
                 } else {

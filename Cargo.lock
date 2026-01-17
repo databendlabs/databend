@@ -3888,6 +3888,7 @@ dependencies = [
 name = "databend-common-management"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -4140,7 +4141,6 @@ dependencies = [
  "async-trait",
  "bincode 2.0.1",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
  "databend-common-meta-sled-store",
@@ -4241,7 +4241,6 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "databend-common-exception",
  "serde_json",
  "sled",
  "thiserror 1.0.69",
@@ -4275,7 +4274,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
@@ -4970,6 +4968,7 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-sql",
@@ -5166,6 +5165,7 @@ version = "0.1.0"
 name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "async-trait",
  "base64 0.22.1",
@@ -5473,7 +5473,6 @@ dependencies = [
  "clap",
  "databend-base",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-app",

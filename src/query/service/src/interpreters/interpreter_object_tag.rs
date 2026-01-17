@@ -30,6 +30,7 @@ use databend_common_users::UserApiProvider;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::meta_service_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -236,7 +237,8 @@ async fn resolve_tag_assignments(
         let ident = TagNameIdent::new(tenant, &item.name);
         let tag = meta_client
             .get_tag(&ident)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| ErrorCode::UnknownTag(format!("Tag '{}' not found", item.name)))?;
         resolved.push((*tag.tag_id.data, item.value.clone()));
     }
@@ -253,7 +255,8 @@ async fn resolve_tag_ids(
         let ident = TagNameIdent::new(tenant, tag_name);
         let tag = meta_client
             .get_tag(&ident)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| ErrorCode::UnknownTag(format!("Tag '{}' not found", tag_name)))?;
         resolved.push(*tag.tag_id.data);
     }
@@ -274,7 +277,11 @@ async fn set_tags(
         taggable_object: object,
         tags: tag_pairs,
     };
-    match meta_client.set_object_tags(req).await? {
+    match meta_client
+        .set_object_tags(req)
+        .await
+        .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?
+    {
         Ok(_) => Ok(()),
         Err(e) => Err(ErrorCode::from(e)),
     }
@@ -294,7 +301,10 @@ async fn unset_tags(
         taggable_object: object,
         tags: tag_ids,
     };
-    meta_client.unset_object_tags(req).await?;
+    meta_client
+        .unset_object_tags(req)
+        .await
+        .map_err(meta_service_error)?;
     Ok(())
 }
 
@@ -337,7 +347,10 @@ pub async fn cleanup_object_tags(
     object: TaggableObject,
 ) -> Result<()> {
     let meta_api = UserApiProvider::instance().get_meta_store_client();
-    let tag_values = meta_api.get_object_tags(tenant, &object).await?;
+    let tag_values = meta_api
+        .get_object_tags(tenant, &object)
+        .await
+        .map_err(meta_service_error)?;
     if !tag_values.is_empty() {
         let tag_ids: Vec<u64> = tag_values.iter().map(|v| v.tag_id).collect();
         let req = UnsetObjectTagsReq {
@@ -345,7 +358,10 @@ pub async fn cleanup_object_tags(
             taggable_object: object,
             tags: tag_ids,
         };
-        meta_api.unset_object_tags(req).await?;
+        meta_api
+            .unset_object_tags(req)
+            .await
+            .map_err(meta_service_error)?;
     }
     Ok(())
 }

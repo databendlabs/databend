@@ -104,7 +104,8 @@ impl UserApiProvider {
             .create_meta_store()
             .await
             .map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                ErrorCode::MetaServiceError(e.to_string())
+                    .add_message_back("(while create meta store)")
             })?;
 
         let client = meta_store.deref().clone();
