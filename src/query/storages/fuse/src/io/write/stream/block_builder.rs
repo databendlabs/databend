@@ -391,7 +391,26 @@ impl StreamBlockBuilder {
         if !had_existing_rows {
             // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
             // block's stats to heuristically configure the parquet writer.
-            let cols_stats = self.column_stats_state.peek_column_stats()?;
+
+            // Collect NDV information from various sources
+            let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
+            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+
+            // Override HLL-estimated NDV with accurate counts from bloom index builders
+            // This provides precise cardinality for encoding decisions (e.g., delta_binary_packed)
+            let bloom_ndv = self.bloom_index_builder.peek_column_distinct_count();
+            for (col_id, accurate_ndv) in bloom_ndv {
+                cols_ndv.insert(col_id, accurate_ndv);
+            }
+
+            // Get column statistics and fill in NDV information
+            let mut cols_stats = self.column_stats_state.peek_column_stats()?;
+            for (col_id, ndv) in cols_ndv {
+                if let Some(stats) = cols_stats.get_mut(&col_id) {
+                    stats.distinct_of_values = Some(ndv as u64);
+                }
+            }
+
             let delta_stats = collect_delta_ordering_stats(&self.properties.source_schema, &block)?;
             self.block_writer.start(ColumnsNdvInfo::new(
                 block.num_rows(),
