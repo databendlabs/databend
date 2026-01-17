@@ -178,3 +178,170 @@ impl TryInto<MetaError> for KVAppError {
 fn typ<T>(_v: &T) -> &'static str {
     type_name::<T>()
 }
+
+impl KVAppError {
+    /// Split the error into `AppError` or `MetaError`.
+    ///
+    /// Returns `Ok(AppError)` for application-level errors,
+    /// or `Err(MetaError)` for infrastructure errors.
+    pub fn split(self) -> Result<AppError, MetaError> {
+        match self {
+            KVAppError::AppError(e) => Ok(e),
+            KVAppError::MetaError(e) => Err(e),
+        }
+    }
+}
+
+/// Extension trait to convert `Result<T, KVAppError>` into nested result form.
+///
+/// This allows using the `?` operator to propagate `MetaError` while handling
+/// `AppError` explicitly at call sites.
+///
+/// # Example
+///
+/// ```ignore
+/// use databend_common_meta_api::KVAppResultExt;
+///
+/// // Before: verbose pattern matching
+/// let result = api.create_database(req).await;
+/// match result {
+///     Ok(reply) => { /* handle success */ }
+///     Err(KVAppError::AppError(e)) => { /* handle app error */ }
+///     Err(KVAppError::MetaError(e)) => return Err(e.into()),
+/// }
+///
+/// // After: use ? for MetaError, handle AppError directly
+/// let result = api.create_database(req).await.into_nested()?;
+/// match result {
+///     Ok(reply) => { /* handle success */ }
+///     Err(app_err) => { /* just AppError */ }
+/// }
+/// ```
+pub trait KVAppResultExt<T> {
+    /// Convert `Result<T, KVAppError>` into `Result<Result<T, AppError>, MetaError>`.
+    ///
+    /// - `Ok(v)` becomes `Ok(Ok(v))`
+    /// - `Err(KVAppError::AppError(e))` becomes `Ok(Err(e))`
+    /// - `Err(KVAppError::MetaError(e))` becomes `Err(e)`
+    fn into_nested(self) -> Result<Result<T, AppError>, MetaError>;
+}
+
+impl<T> KVAppResultExt<T> for Result<T, KVAppError> {
+    fn into_nested(self) -> Result<Result<T, AppError>, MetaError> {
+        match self {
+            Ok(v) => Ok(Ok(v)),
+            Err(KVAppError::AppError(e)) => Ok(Err(e)),
+            Err(KVAppError::MetaError(e)) => Err(e),
+        }
+    }
+}
+
+/// Convert nested result back to flat `Result<T, KVAppError>`.
+///
+/// This is the inverse of [`KVAppResultExt::into_nested`].
+pub fn from_nested<T>(nested: Result<Result<T, AppError>, MetaError>) -> Result<T, KVAppError> {
+    match nested {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(app_err)) => Err(KVAppError::AppError(app_err)),
+        Err(meta_err) => Err(KVAppError::MetaError(meta_err)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_app_error() -> AppError {
+        AppError::from(TenantIsEmpty::new("test_context"))
+    }
+
+    fn sample_meta_error() -> MetaError {
+        MetaError::from(MetaNetworkError::GetNodeAddrError("test_error".to_string()))
+    }
+
+    #[test]
+    fn test_split_app_error() {
+        let kv_err = KVAppError::AppError(sample_app_error());
+        let result = kv_err.split();
+        assert!(result.is_ok());
+        assert!(matches!(result.unwrap(), AppError::TenantIsEmpty(_)));
+    }
+
+    #[test]
+    fn test_split_meta_error() {
+        let kv_err = KVAppError::MetaError(sample_meta_error());
+        let result = kv_err.split();
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), MetaError::NetworkError(_)));
+    }
+
+    #[test]
+    fn test_into_nested_ok() {
+        let result: Result<i32, KVAppError> = Ok(42);
+        let nested = result.into_nested();
+        assert!(matches!(nested, Ok(Ok(42))));
+    }
+
+    #[test]
+    fn test_into_nested_app_error() {
+        let result: Result<i32, KVAppError> = Err(KVAppError::AppError(sample_app_error()));
+        let nested = result.into_nested();
+        assert!(nested.is_ok());
+        let inner = nested.unwrap();
+        assert!(inner.is_err());
+        assert!(matches!(inner.unwrap_err(), AppError::TenantIsEmpty(_)));
+    }
+
+    #[test]
+    fn test_into_nested_meta_error() {
+        let result: Result<i32, KVAppError> = Err(KVAppError::MetaError(sample_meta_error()));
+        let nested = result.into_nested();
+        assert!(nested.is_err());
+        assert!(matches!(nested.unwrap_err(), MetaError::NetworkError(_)));
+    }
+
+    #[test]
+    fn test_from_nested_ok() {
+        let nested: Result<Result<i32, AppError>, MetaError> = Ok(Ok(42));
+        let flat = from_nested(nested);
+        assert!(matches!(flat, Ok(42)));
+    }
+
+    #[test]
+    fn test_from_nested_app_error() {
+        let nested: Result<Result<i32, AppError>, MetaError> = Ok(Err(sample_app_error()));
+        let flat = from_nested(nested);
+        assert!(matches!(flat, Err(KVAppError::AppError(_))));
+    }
+
+    #[test]
+    fn test_from_nested_meta_error() {
+        let nested: Result<Result<i32, AppError>, MetaError> = Err(sample_meta_error());
+        let flat = from_nested(nested);
+        assert!(matches!(flat, Err(KVAppError::MetaError(_))));
+    }
+
+    #[test]
+    fn test_round_trip_ok() {
+        let original: Result<i32, KVAppError> = Ok(42);
+        let nested = original.into_nested();
+        let back = from_nested(nested);
+        assert!(matches!(back, Ok(42)));
+    }
+
+    #[test]
+    fn test_round_trip_app_error() {
+        let original: Result<i32, KVAppError> = Err(KVAppError::AppError(sample_app_error()));
+        let nested = original.into_nested();
+        let back = from_nested(nested);
+        assert!(matches!(back, Err(KVAppError::AppError(_))));
+    }
+
+    #[test]
+    fn test_round_trip_meta_error() {
+        let original: Result<i32, KVAppError> = Err(KVAppError::MetaError(sample_meta_error()));
+        let nested = original.into_nested();
+        let back = from_nested(nested);
+        assert!(matches!(back, Err(KVAppError::MetaError(_))));
+    }
+}
