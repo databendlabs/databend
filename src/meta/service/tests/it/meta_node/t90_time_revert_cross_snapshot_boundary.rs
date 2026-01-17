@@ -116,7 +116,7 @@ async fn write_two_logs(
 
         sleep(Duration::from_secs(2)).await;
 
-        meta_node = MetaNode::open(&tc0.config.raft_config, &BUILD_INFO).await?;
+        meta_node = MetaNode::open(&tc0.config.raft_config, BUILD_INFO.semantic.clone()).await?;
     }
 
     // Apply second log

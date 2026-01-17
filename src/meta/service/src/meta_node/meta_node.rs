@@ -22,7 +22,6 @@ use std::sync::atomic::AtomicI32;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::RequestFor;
@@ -85,6 +84,7 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
+use semver::Version;
 use state_machine_api::UserKey;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -146,7 +146,7 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
-    pub version: BuildInfoRef,
+    pub version: Version,
 }
 
 impl Drop for MetaNode {
@@ -268,7 +268,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn open(
         config: &RaftConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
@@ -299,7 +299,7 @@ impl MetaNode {
     pub async fn open_boot(
         config: &RaftConfig,
         initialize_cluster: Option<Node>,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(config, version).await?;
 
@@ -781,7 +781,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn start(
         config: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config, version).await?;
@@ -1062,7 +1062,7 @@ impl MetaNode {
 
     async fn do_start(
         conf: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
@@ -1081,7 +1081,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn boot(
         config: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(&config.raft_config, version).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -1228,7 +1228,7 @@ impl MetaNode {
 
         MetaNodeStatus {
             id: self.raft_store.id,
-            binary_version: self.version.semantic.to_string(),
+            binary_version: self.version.to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.map(|x| x.to_string()),
             raft_log: raft_log_status,

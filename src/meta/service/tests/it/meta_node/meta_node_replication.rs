@@ -69,7 +69,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     tc.config.raft_config.max_applied_log_to_keep = 0;
 
-    let mn = MetaNode::boot(&tc.config, &BUILD_INFO).await?;
+    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semantic.clone()).await?;
 
     tc.assert_raft_server_connection().await?;
 
