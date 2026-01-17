@@ -22,6 +22,7 @@ databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-meta = { workspace = true }
 log = { workspace = true }
+semver = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }

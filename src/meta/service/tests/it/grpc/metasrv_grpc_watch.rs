@@ -652,7 +652,7 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
 fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
     let client = MetaGrpcClient::try_create(
         vec![addr.to_string()],
-        &BUILD_INFO,
+        BUILD_INFO.semantic.clone(),
         "root",
         "xxx",
         None,

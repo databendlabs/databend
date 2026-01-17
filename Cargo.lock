@@ -4062,7 +4062,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "databend-common-base",
  "databend-common-building",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -4076,6 +4075,7 @@ dependencies = [
  "mlua",
  "raft-log",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "tokio",
@@ -4262,6 +4262,7 @@ dependencies = [
  "databend-common-version",
  "databend-meta",
  "log",
+ "semver",
  "tempfile",
  "tokio",
  "tokio-stream",

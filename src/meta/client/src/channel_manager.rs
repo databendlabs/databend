@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -28,6 +27,7 @@ use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient
 use log::info;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+use semver::Version;
 use tonic::async_trait;
 use tonic::transport::Channel;
 
@@ -50,7 +50,7 @@ pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
 
 #[derive(Debug)]
 pub struct MetaChannelManager {
-    version: BuildInfoRef,
+    version: Version,
     username: String,
     password: String,
     timeout: Option<Duration>,
@@ -73,7 +73,7 @@ pub struct MetaChannelManager {
 
 impl MetaChannelManager {
     pub fn new(
-        version: BuildInfoRef,
+        version: Version,
         username: impl ToString,
         password: impl ToString,
         timeout: Option<Duration>,
@@ -110,7 +110,7 @@ impl MetaChannelManager {
 
         let handshake_res = MetaGrpcClient::handshake(
             &mut real_client,
-            &self.version.semantic,
+            &self.version,
             self.required_features,
             &self.username,
             &self.password,

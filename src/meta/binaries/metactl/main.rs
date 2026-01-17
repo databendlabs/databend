@@ -82,8 +82,15 @@ impl App {
 
     async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
-        let client =
-            MetaGrpcClient::try_create(vec![addr], &BUILD_INFO, "root", "xxx", None, None, None)?;
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            BUILD_INFO.semantic.clone(),
+            "root",
+            "xxx",
+            None,
+            None,
+            None,
+        )?;
 
         let res = client.get_cluster_status().await?;
         println!("BinaryVersion: {}", res.binary_version);
@@ -159,7 +166,7 @@ impl App {
             i += 1;
             let client = MetaGrpcClient::try_create(
                 vec![addr.clone()],
-                &BUILD_INFO,
+                BUILD_INFO.semantic.clone(),
                 "root",
                 "xxx",
                 None,
@@ -193,7 +200,8 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args, &BUILD_INFO).await?;
+                export_from_grpc::export_from_running_node(args, BUILD_INFO.semantic.clone())
+                    .await?;
             }
             Some(ref _dir) => {
                 export_from_disk::export_from_dir(args).await?;
@@ -208,7 +216,8 @@ impl App {
     }
 
     async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
-        keys_layout_from_grpc::keys_layout_from_running_node(args, &BUILD_INFO).await?;
+        keys_layout_from_grpc::keys_layout_from_running_node(args, BUILD_INFO.semantic.clone())
+            .await?;
         Ok(())
     }
 
@@ -254,7 +263,7 @@ impl App {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua, &BUILD_INFO)?;
+        lua_support::setup_lua_environment(&lua, BUILD_INFO.semantic.clone())?;
 
         let script = match &args.file {
             Some(path) => std::fs::read_to_string(path)?,
@@ -289,7 +298,9 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script, &BUILD_INFO).await? {
+        match lua_support::run_lua_script_with_result(&lua_script, BUILD_INFO.semantic.clone())
+            .await?
+        {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
@@ -307,7 +318,7 @@ return metrics, nil
     }
 
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        lua_support::new_grpc_client(addresses, &BUILD_INFO)
+        lua_support::new_grpc_client(addresses, BUILD_INFO.semantic.clone())
     }
 
     async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {

@@ -21,7 +21,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -34,6 +33,7 @@ use databend_common_meta_types::protobuf::WatchResponse;
 pub use local::LocalMetaService;
 use log::info;
 use log::warn;
+use semver::Version;
 use tokio::time::Instant;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
@@ -71,7 +71,7 @@ impl MetaStore {
     /// Create a local meta service for testing.
     ///
     /// It is required to assign a base port as the port number range.
-    pub async fn new_local_testing(version: BuildInfoRef) -> Self {
+    pub async fn new_local_testing(version: Version) -> Self {
         MetaStore::L(Arc::new(
             LocalMetaService::new("MetaStore-new-local-testing", version)
                 .await
@@ -198,7 +198,7 @@ impl MetaStoreProvider {
                 LocalMetaService::new_with_fixed_dir(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
-                    self.rpc_conf.version,
+                    self.rpc_conf.version.semantic.clone(),
                 )
                 .await
                 .unwrap(),
