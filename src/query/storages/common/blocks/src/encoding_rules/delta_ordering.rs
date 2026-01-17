@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -28,7 +29,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::number::NumberColumn;
-use databend_common_exception::Result;
 
 use crate::encoding_rules::DeltaOrderingStats;
 
@@ -69,7 +69,12 @@ fn traverse_values_dfs(
                 traverse_scalar_recursive(scalar, data_type, &mut next_column_id)?;
             }
             BlockEntry::Column(column) => {
-                traverse_column_recursive(column, &column.data_type(), &mut next_column_id, leaves)?;
+                traverse_column_recursive(
+                    column,
+                    &column.data_type(),
+                    &mut next_column_id,
+                    leaves,
+                )?;
             }
         }
     }
@@ -116,9 +121,10 @@ fn traverse_column_recursive(
                 } else {
                     column.as_map().unwrap()
                 };
-                let kv_column =
-                    KvPair::<AnyType, AnyType>::try_downcast_column(&map_column.underlying_column())
-                        .unwrap();
+                let kv_column = KvPair::<AnyType, AnyType>::try_downcast_column(
+                    &map_column.underlying_column(),
+                )
+                .unwrap();
                 traverse_column_recursive(
                     &kv_column.keys,
                     &inner_types[0],
@@ -199,7 +205,10 @@ fn column_delta_ordering_stats(column: &Column) -> Option<DeltaOrderingStats> {
     }
 }
 
-pub(crate) fn compute_delta_ordering_stats<T, F>(values: &[T], mut to_i64: F) -> Option<DeltaOrderingStats>
+pub(crate) fn compute_delta_ordering_stats<T, F>(
+    values: &[T],
+    mut to_i64: F,
+) -> Option<DeltaOrderingStats>
 where
     F: FnMut(&T) -> i64,
 {
@@ -238,7 +247,11 @@ where
     } else {
         0.0
     };
-    let abs_delta_cv = if mean == 0.0 { 0.0 } else { variance.sqrt() / mean };
+    let abs_delta_cv = if mean == 0.0 {
+        0.0
+    } else {
+        variance.sqrt() / mean
+    };
     let monotonic_ratio = non_decreasing.max(non_increasing) as f64 / count as f64;
 
     Some(DeltaOrderingStats {
@@ -375,5 +388,4 @@ mod tests {
         // mean = 0, so CV = 0 by definition
         assert_eq!(stats.abs_delta_cv, 0.0);
     }
-
 }

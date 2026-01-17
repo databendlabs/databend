@@ -40,12 +40,12 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::collect_delta_ordering_stats;
 use databend_storages_common_blocks::DeltaOrderingStats;
 use databend_storages_common_blocks::EncodingStatsProvider;
 use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_blocks::collect_delta_ordering_stats;
 use databend_storages_common_blocks::write_batch_with_page_limit;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -430,15 +430,13 @@ impl StreamBlockBuilder {
             }
 
             let cols_stats = self.column_stats_state.peek_column_stats()?;
-            let delta_stats =
-                collect_delta_ordering_stats(&self.properties.source_schema, &block)?;
-            self.block_writer
-                .start(ColumnsNdvInfo::new(
-                    block.num_rows(),
-                    cols_ndv,
-                    cols_stats,
-                    delta_stats,
-                ))?;
+            let delta_stats = collect_delta_ordering_stats(&self.properties.source_schema, &block)?;
+            self.block_writer.start(ColumnsNdvInfo::new(
+                block.num_rows(),
+                cols_ndv,
+                cols_stats,
+                delta_stats,
+            ))?;
         }
 
         self.block_writer
