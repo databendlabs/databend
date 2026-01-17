@@ -123,8 +123,7 @@ fn traverse_column_recursive(
                 };
                 let kv_column = KvPair::<AnyType, AnyType>::try_downcast_column(
                     &map_column.underlying_column(),
-                )
-                .unwrap();
+                )?;
                 traverse_column_recursive(
                     &kv_column.keys,
                     &inner_types[0],
@@ -138,6 +137,7 @@ fn traverse_column_recursive(
                     leaves,
                 )?;
             }
+            // Map types are always encoded as Tuple(key, value)
             _ => unreachable!(),
         },
         _ => {
@@ -190,58 +190,76 @@ fn traverse_scalar_recursive(
 fn column_delta_ordering_stats(column: &Column) -> Option<DeltaOrderingStats> {
     match column {
         Column::Nullable(nullable) => {
-            if nullable.validity().true_count() != nullable.len() {
+            if nullable.validity().null_count() != 0 {
                 return None;
             }
             column_delta_ordering_stats(&nullable.column)
         }
         Column::Number(NumberColumn::Int32(values)) => {
-            compute_delta_ordering_stats(values.as_slice(), |v| *v as i64)
+            compute_delta_ordering_stats_i32(values.as_slice())
         }
         Column::Number(NumberColumn::UInt32(values)) => {
-            compute_delta_ordering_stats(values.as_slice(), |v| *v as i64)
+            compute_delta_ordering_stats_u32(values.as_slice())
         }
         _ => None,
     }
 }
 
-pub(crate) fn compute_delta_ordering_stats<T, F>(
-    values: &[T],
-    mut to_i64: F,
-) -> Option<DeltaOrderingStats>
+/// Computes ordering statistics to guide delta encoding decisions.
+///
+/// Returns `DeltaOrderingStats` with two metrics:
+/// - `monotonic_ratio`: Fraction of adjacent pairs that maintain order (all ↑ or all ↓)
+/// - `abs_delta_cv`: Coefficient of variation of absolute deltas (measures delta stability)
+///
+/// Returns `None` if the column has fewer than 2 values.
+///
+/// Implementation uses Welford's algorithm to compute both metrics in a single pass.
+fn compute_delta_ordering_stats_impl<T, F>(values: &[T], to_i64: F) -> Option<DeltaOrderingStats>
 where
-    F: FnMut(&T) -> i64,
+    T: Copy,
+    F: Fn(T) -> i64,
 {
     if values.len() < 2 {
         return None;
     }
-    let mut prev = to_i64(&values[0]);
+
+    // Track monotonicity (how many adjacent pairs maintain order)
+    let mut prev = to_i64(values[0]);
     let mut non_decreasing = 0usize;
     let mut non_increasing = 0usize;
+
+    // Welford's algorithm state for computing variance of absolute deltas
     let mut mean = 0.0;
     let mut m2 = 0.0;
     let mut count = 0usize;
 
-    for value in &values[1..] {
+    for &value in &values[1..] {
         let curr = to_i64(value);
         let delta = curr - prev;
+
+        // Count monotonic pairs
         if delta >= 0 {
             non_decreasing += 1;
         }
         if delta <= 0 {
             non_increasing += 1;
         }
+
+        // Update variance calculation with this delta
         let abs_delta = delta.abs() as f64;
         count += 1;
         let delta_mean = abs_delta - mean;
         mean += delta_mean / count as f64;
         m2 += delta_mean * (abs_delta - mean);
+
         prev = curr;
     }
 
     if count == 0 {
         return None;
     }
+
+    // Compute coefficient of variation (CV = σ / μ)
     let variance = if count > 1 {
         m2 / (count as f64 - 1.0)
     } else {
@@ -252,12 +270,24 @@ where
     } else {
         variance.sqrt() / mean
     };
+
+    // Monotonic ratio: fraction of pairs in the dominant direction (ascending or descending)
     let monotonic_ratio = non_decreasing.max(non_increasing) as f64 / count as f64;
 
     Some(DeltaOrderingStats {
         monotonic_ratio,
         abs_delta_cv,
     })
+}
+
+/// Computes ordering statistics for Int32 columns.
+pub(crate) fn compute_delta_ordering_stats_i32(values: &[i32]) -> Option<DeltaOrderingStats> {
+    compute_delta_ordering_stats_impl(values, |v| v as i64)
+}
+
+/// Computes ordering statistics for UInt32 columns.
+pub(crate) fn compute_delta_ordering_stats_u32(values: &[u32]) -> Option<DeltaOrderingStats> {
+    compute_delta_ordering_stats_impl(values, |v| v as i64)
 }
 
 #[cfg(test)]
@@ -268,7 +298,7 @@ mod tests {
     fn test_perfect_monotonic_sequence() {
         // [1, 2, 3, 4, 5] - perfect ascending
         let values = vec![1i32, 2, 3, 4, 5];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         assert_eq!(stats.monotonic_ratio, 1.0, "Should be 100% monotonic");
         assert_eq!(stats.abs_delta_cv, 0.0, "All deltas are 1, CV should be 0");
@@ -278,7 +308,7 @@ mod tests {
     fn test_perfect_descending_sequence() {
         // [10, 9, 8, 7, 6] - perfect descending
         let values = vec![10i32, 9, 8, 7, 6];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         assert_eq!(
             stats.monotonic_ratio, 1.0,
@@ -291,7 +321,7 @@ mod tests {
     fn test_shuffled_sequence() {
         // [3, 1, 5, 2, 4] - completely random
         let values = vec![3i32, 1, 5, 2, 4];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Deltas: [-2, 4, -3, 2]
         // non_decreasing: 2 (4, 2)
@@ -315,7 +345,7 @@ mod tests {
     fn test_sequence_with_occasional_jump() {
         // [1, 2, 3, 10, 11, 12] - has one large jump
         let values = vec![1i32, 2, 3, 10, 11, 12];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Deltas: [1, 1, 7, 1, 1]
         // All non-decreasing → monotonic_ratio = 1.0
@@ -338,7 +368,7 @@ mod tests {
         let mut values = (1i32..=100).collect::<Vec<_>>();
         values[50] = 52; // Create one jump of 2 instead of 1
 
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         assert_eq!(stats.monotonic_ratio, 1.0, "Still 100% ascending");
 
@@ -353,7 +383,7 @@ mod tests {
     #[test]
     fn test_uint32_values() {
         let values = vec![1u32, 2, 3, 4, 5];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_u32(&values).unwrap();
 
         assert_eq!(stats.monotonic_ratio, 1.0);
         assert_eq!(stats.abs_delta_cv, 0.0);
@@ -362,7 +392,7 @@ mod tests {
     #[test]
     fn test_single_value() {
         let values = vec![42i32];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64);
+        let stats = compute_delta_ordering_stats_i32(&values);
 
         assert!(stats.is_none(), "Single value should return None");
     }
@@ -370,7 +400,7 @@ mod tests {
     #[test]
     fn test_two_values() {
         let values = vec![1i32, 2];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         assert_eq!(stats.monotonic_ratio, 1.0);
         // Only one delta, variance calculation returns 0
@@ -381,7 +411,7 @@ mod tests {
     fn test_all_same_values() {
         // [5, 5, 5, 5] - all deltas are 0
         let values = vec![5i32, 5, 5, 5];
-        let stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Deltas are all 0, which counts as both non-decreasing AND non-increasing
         assert_eq!(stats.monotonic_ratio, 1.0);
