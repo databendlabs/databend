@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::basic::Encoding;
 use parquet::file::properties::WriterPropertiesBuilder;
 
 use crate::encoding_rules::ColumnPathsCache;
 use crate::encoding_rules::DeltaOrderingStats;
-use crate::encoding_rules::EncodingStatsProvider;
 
 // NDV must be very close to row count (≥95%) to ensure high cardinality.
 // This filters out columns with many duplicates where delta encoding usually brings limited gains.
@@ -50,13 +53,14 @@ const DELTA_ABS_DELTA_CV_LIMIT: f64 = 0.1;
 
 pub fn apply_delta_binary_packed_heuristic(
     mut builder: WriterPropertiesBuilder,
-    metrics: &dyn EncodingStatsProvider,
+    column_stats: &StatisticsOfColumns,
+    delta_stats: &HashMap<ColumnId, DeltaOrderingStats>,
     table_schema: &TableSchema,
     num_rows: usize,
     column_paths_cache: &mut ColumnPathsCache,
 ) -> WriterPropertiesBuilder {
     for field in table_schema.leaf_fields() {
-        // Restrict the DBP heuristic to native INT32/UINT32 columns for now.
+        // Restrict the DBP heuristic to INT32/UINT32 columns for now.
         // INT64 columns with high zero bits already compress well with PLAIN+Zstd, and other
         // widths need more validation before enabling DBP.
         if !matches!(
@@ -67,13 +71,15 @@ pub fn apply_delta_binary_packed_heuristic(
             continue;
         }
         let column_id = field.column_id();
-        let Some(stats) = metrics.column_stats(&column_id) else {
+        let Some(stats) = column_stats.get(&column_id) else {
             continue;
         };
-        let Some(ndv) = metrics.column_ndv(&column_id) else {
+        let Some(ndv) = stats.distinct_of_values else {
             continue;
         };
-        let ordering_stats = metrics.column_delta_stats(&column_id);
+        let Some(ordering_stats) = delta_stats.get(&column_id) else {
+            continue;
+        };
         if should_apply_delta_binary_packed(stats, ndv, num_rows, ordering_stats) {
             let column_paths = column_paths_cache.get_or_build(table_schema);
             if let Some(path) = column_paths.get(&column_id) {
@@ -104,7 +110,7 @@ fn should_apply_delta_binary_packed(
     stats: &ColumnStatistics,
     ndv: u64,
     num_rows: usize,
-    ordering_stats: Option<&DeltaOrderingStats>,
+    ordering_stats: &DeltaOrderingStats,
 ) -> bool {
     // Check 1: Reject if NULLs present (weakens contiguous-range assumption)
     if num_rows == 0 || ndv == 0 || stats.null_count > 0 {
@@ -138,17 +144,14 @@ fn should_apply_delta_binary_packed(
         return false;
     }
 
-    // Check 4 & 5: Ordering characteristics (only if available)
-    // These checks prevent enabling DBP on shuffled data, which would compress poorly
-    if let Some(ordering_stats) = ordering_stats {
-        // Check 4: Monotonicity (≥99% adjacent pairs in same direction)
-        if ordering_stats.monotonic_ratio < DELTA_MONOTONIC_RATIO {
-            return false;
-        }
-        // Check 5: Stable deltas (CV ≤ 0.1)
-        if ordering_stats.abs_delta_cv > DELTA_ABS_DELTA_CV_LIMIT {
-            return false;
-        }
+    // Check 4: Monotonicity (≥99% adjacent pairs in same direction)
+    if ordering_stats.monotonic_ratio < DELTA_MONOTONIC_RATIO {
+        return false;
+    }
+
+    // Check 5: Stable deltas (CV ≤ 0.1)
+    if ordering_stats.abs_delta_cv > DELTA_ABS_DELTA_CV_LIMIT {
+        return false;
     }
 
     true
@@ -205,7 +208,7 @@ mod tests {
 
         // The decision should enable DBP
         assert!(
-            should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            should_apply_delta_binary_packed(&stats, ndv, num_rows, &ordering_stats),
             "Real auto-increment sequence should enable DBP"
         );
     }
@@ -242,7 +245,7 @@ mod tests {
 
         // Should be rejected due to low monotonicity
         assert!(
-            !should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, &ordering_stats),
             "Shuffled sequence should be rejected despite matching NDV+span"
         );
     }
@@ -277,7 +280,7 @@ mod tests {
 
         // Should be rejected due to high CV (or sparse range)
         assert!(
-            !should_apply_delta_binary_packed(&stats, ndv, num_rows, Some(&ordering_stats)),
+            !should_apply_delta_binary_packed(&stats, ndv, num_rows, &ordering_stats),
             "Sequence with large jumps should be rejected"
         );
     }

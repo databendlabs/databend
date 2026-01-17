@@ -343,11 +343,9 @@ impl FuseTable {
         }
     }
 
-    pub fn get_write_settings_with_ctx(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-    ) -> Result<WriteSettings> {
+    pub fn get_write_settings_with_ctx(&self, ctx: &dyn TableContext) -> Result<WriteSettings> {
         let mut settings = self.get_write_settings();
+        // Tweak write settings according to session setting, if necessary
         if matches!(settings.storage_format, FuseStorageFormat::Parquet) {
             settings.enable_parquet_delta_binary_packed_heuristic_rule = ctx
                 .get_settings()

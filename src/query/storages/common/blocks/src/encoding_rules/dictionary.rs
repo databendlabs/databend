@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::file::properties::WriterPropertiesBuilder;
 
 use crate::encoding_rules::ColumnPathsCache;
-use crate::encoding_rules::EncodingStatsProvider;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
 
 pub fn apply_dictionary_high_cardinality_heuristic(
     mut builder: WriterPropertiesBuilder,
-    metrics: &dyn EncodingStatsProvider,
+    column_stats: &StatisticsOfColumns,
     table_schema: &TableSchema,
     num_rows: usize,
     column_paths_cache: &mut ColumnPathsCache,
@@ -33,9 +33,11 @@ pub fn apply_dictionary_high_cardinality_heuristic(
     }
     let column_paths = column_paths_cache.get_or_build(table_schema);
     for (column_id, column_path) in column_paths.iter() {
-        if let Some(ndv) = metrics.column_ndv(column_id) {
-            if (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD {
-                builder = builder.set_column_dictionary_enabled(column_path.clone(), false);
+        if let Some(stats) = column_stats.get(column_id) {
+            if let Some(ndv) = stats.distinct_of_values {
+                if (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD {
+                    builder = builder.set_column_dictionary_enabled(column_path.clone(), false);
+                }
             }
         }
     }
@@ -47,32 +49,30 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::ColumnId;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
     use databend_common_expression::types::number::NumberDataType;
+    use databend_common_expression::types::number::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::StatisticsOfColumns;
     use databend_storages_common_table_meta::table::TableCompression;
     use parquet::schema::types::ColumnPath;
 
-    use super::*;
-    use crate::encoding_rules::NdvProvider;
-
-    struct TestNdvProvider {
-        ndv: HashMap<ColumnId, u64>,
-    }
-
-    impl NdvProvider for TestNdvProvider {
-        fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-            self.ndv.get(column_id).copied()
+    fn make_test_stats(ndv_map: HashMap<ColumnId, u64>) -> StatisticsOfColumns {
+        let mut stats = HashMap::new();
+        for (column_id, ndv) in ndv_map {
+            stats.insert(column_id, ColumnStatistics {
+                min: Scalar::Number(NumberScalar::Int32(0)),
+                max: Scalar::Number(NumberScalar::Int32(1000)),
+                null_count: 0,
+                in_memory_size: 0,
+                distinct_of_values: Some(ndv),
+            });
         }
-    }
-
-    impl EncodingStatsProvider for TestNdvProvider {
-        fn column_stats(&self, _column_id: &ColumnId) -> Option<&ColumnStatistics> {
-            None
-        }
+        stats
     }
 
     fn sample_schema() -> TableSchema {
@@ -112,12 +112,13 @@ mod tests {
             .map(|(id, path)| (id, ColumnPath::from(path)))
             .collect();
 
-        let provider = TestNdvProvider { ndv };
+        let stats = make_test_stats(ndv);
         let props = crate::build_parquet_writer_properties(
             TableCompression::Zstd,
             true,
             false,
-            Some(&provider),
+            Some(&stats),
+            None,
             None,
             1000,
             &schema,
@@ -154,6 +155,7 @@ mod tests {
             TableCompression::Zstd,
             false,
             false,
+            None,
             None,
             None,
             1000,
