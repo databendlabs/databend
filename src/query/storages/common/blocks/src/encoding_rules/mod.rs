@@ -51,7 +51,6 @@ pub struct DeltaOrderingStats {
 
     /// Coefficient of Variation (CV) of absolute deltas between adjacent values.
     ///
-    /// ## What is CV?
     /// The Coefficient of Variation is a normalized measure of dispersion that allows comparing
     /// variability across datasets with different scales. It's defined as the ratio of standard
     /// deviation to mean: `CV = σ / μ`.

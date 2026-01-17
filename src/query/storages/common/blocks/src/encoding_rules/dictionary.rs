@@ -41,3 +41,130 @@ pub fn apply_dictionary_high_cardinality_heuristic(
     }
     builder
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ColumnId;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
+    use databend_common_expression::types::number::NumberDataType;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::table::TableCompression;
+    use parquet::schema::types::ColumnPath;
+
+    use super::*;
+    use crate::encoding_rules::NdvProvider;
+
+    struct TestNdvProvider {
+        ndv: HashMap<ColumnId, u64>,
+    }
+
+    impl NdvProvider for TestNdvProvider {
+        fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+            self.ndv.get(column_id).copied()
+        }
+    }
+
+    impl EncodingStatsProvider for TestNdvProvider {
+        fn column_stats(&self, _column_id: &ColumnId) -> Option<&ColumnStatistics> {
+            None
+        }
+    }
+
+    fn sample_schema() -> TableSchema {
+        TableSchema::new(vec![
+            TableField::new("simple", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("nested", TableDataType::Tuple {
+                fields_name: vec!["leaf".to_string(), "arr".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int64),
+                    TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+                ],
+            }),
+            TableField::new("no_stats", TableDataType::String),
+        ])
+    }
+
+    fn column_id(schema: &TableSchema, name: &str) -> ColumnId {
+        schema
+            .leaf_fields()
+            .into_iter()
+            .find(|field| field.name() == name)
+            .unwrap_or_else(|| panic!("missing field {}", name))
+            .column_id()
+    }
+
+    #[test]
+    fn test_handles_nested_leaves() {
+        let schema = sample_schema();
+
+        let mut ndv = HashMap::new();
+        ndv.insert(column_id(&schema, "simple"), 500);
+        ndv.insert(column_id(&schema, "nested:leaf"), 50);
+        ndv.insert(column_id(&schema, "nested:arr:0"), 400);
+
+        let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(&schema)
+            .into_iter()
+            .map(|(id, path)| (id, ColumnPath::from(path)))
+            .collect();
+
+        let provider = TestNdvProvider { ndv };
+        let props = crate::build_parquet_writer_properties(
+            TableCompression::Zstd,
+            true,
+            false,
+            Some(&provider),
+            None,
+            1000,
+            &schema,
+        );
+
+        assert!(
+            !props.dictionary_enabled(&column_paths[&column_id(&schema, "simple")]),
+            "high cardinality top-level column should disable dictionary"
+        );
+        assert!(
+            props.dictionary_enabled(&column_paths[&column_id(&schema, "nested:leaf")]),
+            "low cardinality nested column should keep dictionary"
+        );
+        assert!(
+            !props.dictionary_enabled(&column_paths[&column_id(&schema, "nested:arr:0")]),
+            "high cardinality nested array element should disable dictionary"
+        );
+        assert!(
+            props.dictionary_enabled(&column_paths[&column_id(&schema, "no_stats")]),
+            "columns without NDV stats keep the default dictionary behavior"
+        );
+    }
+
+    #[test]
+    fn test_disabled_globally() {
+        let schema = sample_schema();
+
+        let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(&schema)
+            .into_iter()
+            .map(|(id, path)| (id, ColumnPath::from(path)))
+            .collect();
+
+        let props = crate::build_parquet_writer_properties(
+            TableCompression::Zstd,
+            false,
+            false,
+            None,
+            None,
+            1000,
+            &schema,
+        );
+
+        for field in schema.leaf_fields() {
+            assert!(
+                !props.dictionary_enabled(&column_paths[&field.column_id()]),
+                "dictionary must remain disabled when enable_dictionary is false",
+            );
+        }
+    }
+}

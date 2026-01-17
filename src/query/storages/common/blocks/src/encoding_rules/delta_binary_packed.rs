@@ -26,7 +26,7 @@ use crate::encoding_rules::DeltaOrderingStats;
 use crate::encoding_rules::EncodingStatsProvider;
 
 // NDV must be very close to row count (≥95%) to ensure high cardinality.
-// This filters out columns with many duplicates where delta encoding provides no benefit.
+// This filters out columns with many duplicates where delta encoding usually brings limited gains.
 const DELTA_HIGH_CARDINALITY_RATIO: f64 = 0.95;
 
 // Span (max - min + 1) should be very close to NDV (≤1% tolerance).
@@ -171,7 +171,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::ColumnStatistics;
 
     use super::*;
-    use crate::encoding_rules::delta_ordering::compute_delta_ordering_stats;
+    use crate::encoding_rules::delta_ordering::compute_delta_ordering_stats_i32;
 
     fn make_stats(min: i32, max: i32, null_count: u64) -> ColumnStatistics {
         ColumnStatistics {
@@ -189,7 +189,7 @@ mod tests {
         let values: Vec<i32> = (1..=1000).collect();
 
         // Compute real ordering stats
-        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let ordering_stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Verify the computed stats match our expectations
         assert_eq!(
@@ -226,7 +226,7 @@ mod tests {
         // values ≈ [2,1, 4,3, 6,5, ...] - heavily shuffled
 
         // Compute real ordering stats
-        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let ordering_stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Verify the computed stats show it's not monotonic
         assert!(
@@ -260,7 +260,7 @@ mod tests {
         // values = [1,2,3,4,5, 100,101,102,103,104, ...]
 
         // Compute real ordering stats
-        let ordering_stats = compute_delta_ordering_stats(&values, |v| *v as i64).unwrap();
+        let ordering_stats = compute_delta_ordering_stats_i32(&values).unwrap();
 
         // Verify monotonic but high CV
         assert_eq!(ordering_stats.monotonic_ratio, 1.0, "Still monotonic");
