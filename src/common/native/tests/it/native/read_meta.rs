@@ -61,11 +61,11 @@ fn test_read_meta() -> std::io::Result<()> {
 // TODO(xuanwo): bring this test back when we extract trait for ReadAt.
 //
 // #[test]
-// fn test_read_meta_async() -> Result<()> {
+// fn test_read_meta_async() -> anyhow::Result<()> {
 //     async_std::task::block_on(test_read_meta_async_impl())
 // }
 //
-// async fn test_read_meta_async_impl() -> Result<()> {
+// async fn test_read_meta_async_impl() -> anyhow::Result<()> {
 //     let mut buf: Vec<u8> = Vec::new();
 //     let expected_meta = write_data(&mut buf);
 //     let len = buf.len();

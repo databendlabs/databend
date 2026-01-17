@@ -34,7 +34,7 @@ use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_equivalent_constants() -> Result<()> {
+async fn test_equivalent_constants() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 

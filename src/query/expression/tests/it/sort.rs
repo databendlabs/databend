@@ -27,7 +27,7 @@ use crate::DataTypeFilter;
 use crate::rand_block_for_all_types;
 
 #[test]
-fn test_block_sort() -> Result<()> {
+fn test_block_sort() -> anyhow::Result<()> {
     let block = DataBlock::new_from_columns(vec![
         Int64Type::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
         StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),

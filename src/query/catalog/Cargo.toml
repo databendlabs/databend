@@ -43,6 +43,7 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 databend-base = { workspace = true }
 goldenfile = { workspace = true }
 maplit = { workspace = true }

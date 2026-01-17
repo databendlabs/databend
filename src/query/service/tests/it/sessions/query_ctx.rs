@@ -26,7 +26,7 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_storage_accessor_s3() -> Result<()> {
+async fn test_get_storage_accessor_s3() -> anyhow::Result<()> {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/bucket"))
@@ -53,7 +53,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_storage_accessor_fs() -> Result<()> {
+async fn test_get_storage_accessor_fs() -> anyhow::Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: "/tmp".to_string(),

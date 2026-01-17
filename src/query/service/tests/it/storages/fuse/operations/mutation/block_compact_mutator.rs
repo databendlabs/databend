@@ -49,7 +49,7 @@ use rand::thread_rng;
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact() -> Result<()> {
+async fn test_compact() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
@@ -165,7 +165,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_safety() -> Result<()> {
+async fn test_safety() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_application_level_data_operator()?.operator();

@@ -129,7 +129,7 @@ async fn check_segment_column_ids(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_optimize_alter_table() -> Result<()> {
+async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

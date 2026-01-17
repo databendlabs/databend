@@ -31,7 +31,7 @@ use goldenfile::Mint;
 use super::eliminate_cast::parse_expr;
 
 #[test]
-fn test_page_index() -> Result<()> {
+fn test_page_index() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_page_indies.txt").unwrap();
 

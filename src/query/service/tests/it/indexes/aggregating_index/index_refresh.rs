@@ -44,7 +44,7 @@ use derive_visitor::DriveMut;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_agg_index() -> Result<()> {
+async fn test_refresh_agg_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture
@@ -177,7 +177,7 @@ async fn test_refresh_agg_index() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_agg_index_with_limit() -> Result<()> {
+async fn test_refresh_agg_index_with_limit() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     // Create table
@@ -237,7 +237,7 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_sync_agg_index() -> Result<()> {
+async fn test_sync_agg_index() -> anyhow::Result<()> {
     test_sync_agg_index_after_update().await?;
     test_sync_agg_index_after_insert().await?;
     test_sync_agg_index_after_copy_into().await?;
@@ -245,7 +245,7 @@ async fn test_sync_agg_index() -> Result<()> {
     Ok(())
 }
 
-async fn test_sync_agg_index_after_update() -> Result<()> {
+async fn test_sync_agg_index_after_update() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     // Create table
@@ -372,7 +372,7 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
     Ok(())
 }
 
-async fn test_sync_agg_index_after_insert() -> Result<()> {
+async fn test_sync_agg_index_after_insert() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     // Create table
@@ -514,7 +514,7 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     Ok(())
 }
 
-async fn test_sync_agg_index_after_copy_into() -> Result<()> {
+async fn test_sync_agg_index_after_copy_into() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let settings = fixture.default_session().get_settings();
     settings.set_auto_compaction_imperfect_blocks_threshold(1)?;

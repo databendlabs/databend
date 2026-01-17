@@ -18,7 +18,7 @@ use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_computed_column() -> Result<()> {
+async fn test_computed_column() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     fixture.create_default_database().await?;

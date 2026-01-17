@@ -32,7 +32,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_password_policy() -> Result<()> {
+async fn test_password_policy() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);

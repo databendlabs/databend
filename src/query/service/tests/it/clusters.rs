@@ -20,7 +20,7 @@ use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_empty_cluster_discovery() -> Result<()> {
+async fn test_empty_cluster_discovery() -> anyhow::Result<()> {
     let _guard = TestFixture::setup().await?;
 
     let config = ConfigBuilder::create().build();
@@ -40,7 +40,7 @@ async fn test_empty_cluster_discovery() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_single_cluster_discovery() -> Result<()> {
+async fn test_single_cluster_discovery() -> anyhow::Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
@@ -55,7 +55,7 @@ async fn test_single_cluster_discovery() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_remove_invalid_nodes() -> Result<()> {
+async fn test_remove_invalid_nodes() -> anyhow::Result<()> {
     let _guard = TestFixture::setup().await?;
 
     let config_1 = ConfigBuilder::create()
@@ -90,7 +90,7 @@ async fn test_remove_invalid_nodes() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_lost_local_cluster_discovery() -> Result<()> {
+async fn test_lost_local_cluster_discovery() -> anyhow::Result<()> {
     let _guard = TestFixture::setup().await?;
 
     let mut config_1 = ConfigBuilder::create()
@@ -125,7 +125,7 @@ async fn test_lost_local_cluster_discovery() -> Result<()> {
 
 // TODO:(Winter) need kvapi::KVApi for cluster multiple nodes test
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_multiple_cluster_discovery() -> Result<()> {
+// async fn test_multiple_cluster_discovery() -> anyhow::Result<()> {
 //     let mut config = Config::default();
 //     config.query.tenant = String::from("tenant_id");
 //     config.query.namespace = String::from("namespace_id");

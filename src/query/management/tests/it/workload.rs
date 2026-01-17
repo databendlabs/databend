@@ -30,7 +30,7 @@ async fn create_workload_mgr() -> WorkloadMgr {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_workload_group() -> Result<()> {
+async fn test_create_workload_group() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
     let mut quotas = HashMap::new();
     quotas.insert(
@@ -74,7 +74,7 @@ async fn test_create_workload_group() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_workload_group() -> Result<()> {
+async fn test_get_workload_group() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
     let mut quotas = HashMap::new();
     quotas.insert(
@@ -107,7 +107,7 @@ async fn test_get_workload_group() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_workload_group() -> Result<()> {
+async fn test_drop_workload_group() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
     let group = WorkloadGroup {
         id: "".to_string(),
@@ -129,7 +129,7 @@ async fn test_drop_workload_group() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_rename_workload_group() -> Result<()> {
+async fn test_rename_workload_group() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
     let group = WorkloadGroup {
         id: "".to_string(),
@@ -172,7 +172,7 @@ async fn test_rename_workload_group() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_alter_quotas() -> Result<()> {
+async fn test_alter_quotas() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
     let group = WorkloadGroup {
         id: "".to_string(),
@@ -219,7 +219,7 @@ async fn test_alter_quotas() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_all_workload_groups() -> Result<()> {
+async fn test_get_all_workload_groups() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
 
     // Create multiple groups
@@ -246,7 +246,7 @@ async fn test_get_all_workload_groups() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_invalid_workload_group() -> Result<()> {
+async fn test_invalid_workload_group() -> anyhow::Result<()> {
     let mgr = create_workload_mgr().await;
 
     // Test empty name

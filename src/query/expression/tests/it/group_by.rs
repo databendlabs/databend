@@ -21,7 +21,7 @@ use databend_common_expression::*;
 use ethnum::u256;
 
 #[test]
-fn test_group_by_hash() -> Result<()> {
+fn test_group_by_hash() -> anyhow::Result<()> {
     let schema = TableSchemaRefExt::create(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int8)),
         TableField::new("b", TableDataType::Number(NumberDataType::Int8)),
@@ -60,7 +60,7 @@ fn test_group_by_hash() -> Result<()> {
 }
 
 #[test]
-fn test_group_by_hash_decimal() -> Result<()> {
+fn test_group_by_hash_decimal() -> anyhow::Result<()> {
     let size_128 = DecimalSize::new_unchecked(20, 2);
     let size_256 = DecimalSize::new_unchecked(40, 2);
 

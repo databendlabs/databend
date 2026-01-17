@@ -155,7 +155,7 @@ impl TaskService for MockTaskService {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_task_client_success_cases() -> Result<()> {
+async fn test_task_client_success_cases() -> anyhow::Result<()> {
     let (client, server) = tokio::io::duplex(1024);
     let client = TokioIo::new(client);
 

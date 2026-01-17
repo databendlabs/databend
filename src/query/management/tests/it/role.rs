@@ -37,7 +37,7 @@ mod add {
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_json_upgrade_to_pb() -> Result<()> {
+    async fn test_json_upgrade_to_pb() -> anyhow::Result<()> {
         let role_name = "role1";
         {
             let (kv_api, role_api) = new_role_api(true).await?;

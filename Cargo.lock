@@ -3451,6 +3451,7 @@ dependencies = [
 name = "databend-common-catalog"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-schema 56.2.0",
  "async-backtrace",
  "async-trait",
@@ -3494,6 +3495,7 @@ dependencies = [
 name = "databend-common-cloud-control"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "chrono",
  "databend-common-base",
@@ -3624,6 +3626,7 @@ dependencies = [
 name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array 56.2.0",
  "arrow-buffer 56.2.0",
  "arrow-cast 56.2.0",
@@ -3738,6 +3741,7 @@ dependencies = [
 name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "blake3",
  "borsh",
@@ -3800,6 +3804,7 @@ name = "databend-common-grpc"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
@@ -3851,6 +3856,7 @@ name = "databend-common-io"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "anyhow",
  "bincode 2.0.1",
  "borsh",
  "byteorder",
@@ -4323,6 +4329,7 @@ name = "databend-common-native"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.12",
+ "anyhow",
  "bitpacking 0.8.4",
  "bytemuck",
  "byteorder",
@@ -4369,6 +4376,7 @@ dependencies = [
 name = "databend-common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array 56.2.0",
  "arrow-ord 56.2.0",
  "arrow-schema 56.2.0",
@@ -5062,6 +5070,7 @@ dependencies = [
 name = "databend-common-users"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "base64 0.22.1",
  "chrono",
@@ -5796,6 +5805,7 @@ name = "databend-storages-common-index"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "bincode 2.0.1",
  "bitvec",
  "bytemuck",

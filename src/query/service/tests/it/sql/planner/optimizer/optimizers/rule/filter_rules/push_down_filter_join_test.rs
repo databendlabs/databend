@@ -324,7 +324,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
 }
 
 #[test]
-fn test_push_down_filter_left_join() -> Result<()> {
+fn test_push_down_filter_left_join() -> anyhow::Result<()> {
     // Create metadata
     let metadata = MetadataRef::default();
 
@@ -595,7 +595,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
 }
 
 #[test]
-fn test_push_down_filter_right_join() -> Result<()> {
+fn test_push_down_filter_right_join() -> anyhow::Result<()> {
     // Create metadata
     let metadata = MetadataRef::default();
 
@@ -841,7 +841,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
 }
 
 #[test]
-fn test_push_down_filter_full_join() -> Result<()> {
+fn test_push_down_filter_full_join() -> anyhow::Result<()> {
     // Create metadata
     let metadata = MetadataRef::default();
 
@@ -1088,7 +1088,7 @@ fn test_push_down_filter_full_join() -> Result<()> {
 }
 
 #[test]
-fn test_push_down_complex_or_expressions() -> Result<()> {
+fn test_push_down_complex_or_expressions() -> anyhow::Result<()> {
     // Create metadata
     let metadata = MetadataRef::default();
 

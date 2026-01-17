@@ -136,7 +136,7 @@ async fn apply_snapshot_pruning(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_snapshot_pruner() -> Result<()> {
+async fn test_snapshot_pruner() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 

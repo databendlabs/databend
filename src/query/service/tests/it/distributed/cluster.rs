@@ -24,7 +24,7 @@ use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 
 #[test]
-fn test_simple_cluster() -> Result<()> {
+fn test_simple_cluster() -> anyhow::Result<()> {
     let configs = setup_node_configs(vec![
         "0.0.0.0:6061", // Node 1 flight address
         "0.0.0.0:6062", // Node 2 flight address

@@ -27,7 +27,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_number_table() -> Result<()> {
+async fn test_number_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -75,7 +75,7 @@ async fn test_number_table() -> Result<()> {
 }
 
 #[test]
-fn test_util_generate_parts() -> Result<()> {
+fn test_util_generate_parts() -> anyhow::Result<()> {
     {
         // deal with remainder
         let ps = generate_numbers_parts(0, 3, 11);

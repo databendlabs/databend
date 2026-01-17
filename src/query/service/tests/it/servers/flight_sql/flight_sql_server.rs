@@ -19,7 +19,7 @@ use databend_query::servers::FlightSQLServer;
 use databend_query::test_kits::ConfigBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_sql_server_port_used() -> Result<()> {
+async fn test_flight_sql_server_port_used() -> anyhow::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:0").unwrap();
     let local_socket = listener.local_addr().unwrap();
 

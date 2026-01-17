@@ -21,10 +21,9 @@ use databend_common_base::runtime::compress_time_point;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use databend_common_exception::Result;
 
 #[test]
-fn test_time_series_profile_record() -> Result<()> {
+fn test_time_series_profile_record() -> anyhow::Result<()> {
     let profile = TimeSeriesProfiles::new();
 
     // 1. For the first record, we need only increase the inner counter
@@ -162,7 +161,7 @@ fn test_finish_flush() {
 }
 
 #[test]
-fn test_record_inner_basic() -> Result<()> {
+fn test_record_inner_basic() -> anyhow::Result<()> {
     let points = ProfilePoints::new();
     let now = chrono::Utc::now().timestamp() as usize;
 
@@ -186,7 +185,7 @@ fn test_record_inner_basic() -> Result<()> {
 }
 
 #[test]
-fn test_record_inner_special() -> Result<()> {
+fn test_record_inner_special() -> anyhow::Result<()> {
     // Simulate concurrently recording but one thread is late
     let points = ProfilePoints::new();
     let now = 1000000001_usize;
@@ -209,7 +208,7 @@ fn test_record_inner_special() -> Result<()> {
 }
 
 #[test]
-fn test_record_inner_special_invalid() -> Result<()> {
+fn test_record_inner_special_invalid() -> anyhow::Result<()> {
     // Simulate concurrently recording but one thread is later than 1 second
     let points = ProfilePoints::new();
     let now = 1000000001_usize;
@@ -232,7 +231,7 @@ fn test_record_inner_special_invalid() -> Result<()> {
 }
 
 #[test]
-fn test_should_flush() -> Result<()> {
+fn test_should_flush() -> anyhow::Result<()> {
     let global_count = AtomicUsize::new(0);
     for _i in 0..1023 {
         let query_profile = QueryTimeSeriesProfile::should_flush(&global_count);

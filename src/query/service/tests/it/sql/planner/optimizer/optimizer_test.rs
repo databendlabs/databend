@@ -456,7 +456,7 @@ async fn optimize_plan(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_optimizer() -> Result<()> {
+async fn test_optimizer() -> anyhow::Result<()> {
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
     let subdir = std::env::var("TEST_SUBDIR").ok();

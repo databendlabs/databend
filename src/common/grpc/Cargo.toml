@@ -25,6 +25,9 @@ tower-service = { workspace = true }
 
 [build-dependencies]
 
+[dev-dependencies]
+anyhow = { workspace = true }
+
 [features]
 mocks = []
 

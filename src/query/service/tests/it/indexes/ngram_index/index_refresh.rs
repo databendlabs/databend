@@ -20,7 +20,7 @@ use databend_query::test_kits::TestFixture;
 use futures_util::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
+async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture
         .default_session()

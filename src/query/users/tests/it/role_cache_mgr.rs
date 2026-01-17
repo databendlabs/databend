@@ -33,7 +33,7 @@ use databend_common_version::BUILD_INFO;
 pub const CATALOG_DEFAULT: &str = "default";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_role_cache_mgr() -> Result<()> {
+async fn test_role_cache_mgr() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -69,7 +69,7 @@ async fn test_role_cache_mgr() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_find_all_related_roles() -> Result<()> {
+async fn test_find_all_related_roles() -> anyhow::Result<()> {
     let roles = vec![
         RoleInfo::new("role1", None),
         RoleInfo::new("role2", None),

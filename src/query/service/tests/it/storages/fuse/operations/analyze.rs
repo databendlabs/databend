@@ -22,7 +22,7 @@ use databend_query::test_kits::*;
 use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze() -> Result<()> {
+async fn test_fuse_snapshot_analyze() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -47,7 +47,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
+async fn test_fuse_snapshot_analyze_and_truncate() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -88,7 +88,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
+async fn test_fuse_snapshot_analyze_purge() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

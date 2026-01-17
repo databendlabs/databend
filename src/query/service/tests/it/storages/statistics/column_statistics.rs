@@ -83,7 +83,7 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
 }
 
 #[test]
-fn test_column_statistic() -> Result<()> {
+fn test_column_statistic() -> anyhow::Result<()> {
     let (sample_block, sample_cols, schema) = gen_sample_block();
     let col_stats = gen_columns_statistics(&sample_block, None, &schema)?;
 
@@ -113,7 +113,7 @@ fn test_column_statistic() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_accurate_columns_rages() -> Result<()> {
+async fn test_accurate_columns_rages() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
