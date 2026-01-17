@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -31,10 +30,7 @@ use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
 
 use crate::encoding_rules::ColumnPathsCache;
-use crate::encoding_rules::ColumnStatsView;
 use crate::encoding_rules::DeltaOrderingStats;
-use crate::encoding_rules::EncodingStatsProvider;
-use crate::encoding_rules::NdvProvider;
 use crate::encoding_rules::delta_ordering::collect_delta_ordering_stats;
 use crate::encoding_rules::dictionary::apply_dictionary_high_cardinality_heuristic;
 use crate::encoding_rules::page_limit::MAX_BATCH_MEMORY_SIZE;
@@ -95,29 +91,6 @@ impl ParquetWriteOptionsBuilder {
     }
 }
 
-struct ColumnStatsWithDelta<'a> {
-    stats: &'a StatisticsOfColumns,
-    delta_stats: HashMap<ColumnId, DeltaOrderingStats>,
-}
-
-impl<'a> NdvProvider for ColumnStatsWithDelta<'a> {
-    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-        self.stats
-            .get(column_id)
-            .and_then(|item| item.distinct_of_values)
-    }
-}
-
-impl<'a> EncodingStatsProvider for ColumnStatsWithDelta<'a> {
-    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
-        self.stats.get(column_id)
-    }
-
-    fn column_delta_stats(&self, column_id: &ColumnId) -> Option<&DeltaOrderingStats> {
-        self.delta_stats.get(column_id)
-    }
-}
-
 pub fn blocks_to_parquet(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
@@ -133,8 +106,7 @@ pub fn blocks_to_parquet(
 /// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
 /// * `write_buffer` - Destination buffer that receives the serialized Parquet bytes.
 /// * `options` - Parquet writer options controlling compression, dictionary, delta heuristics.
-/// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
-///   before ArrowWriter instantiation disables further changes.
+/// * `column_stats` - Optional statistics from the first block, used to configure writer properties.
 pub fn blocks_to_parquet_with_stats(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
@@ -145,34 +117,26 @@ pub fn blocks_to_parquet_with_stats(
     assert!(!blocks.is_empty());
 
     // Writer properties cannot be tweaked after ArrowWriter creation, so we mirror the behavior of
-    // the streaming writer and only rely on the first block's NDV (and row count) snapshot.
+    // the streaming writer and only rely on the first block's statistics snapshot.
     let num_rows = blocks[0].num_rows();
     let arrow_schema = Arc::new(table_schema.into());
-    let column_stats_view = column_stats.map(ColumnStatsView);
-    let column_metrics = if let Some(stats) = column_stats {
-        if options.enable_delta_binary_packed_heuristic_rule {
-            let delta_stats = collect_delta_ordering_stats(table_schema, &blocks[0])?;
-            Some(ColumnStatsWithDelta { stats, delta_stats })
+
+    let delta_stats = if options.enable_delta_binary_packed_heuristic_rule {
+        if column_stats.is_some() {
+            Some(collect_delta_ordering_stats(table_schema, &blocks[0])?)
         } else {
             None
         }
     } else {
         None
     };
-    let column_metrics_ref = column_metrics
-        .as_ref()
-        .map(|view| view as &dyn EncodingStatsProvider)
-        .or_else(|| {
-            column_stats_view
-                .as_ref()
-                .map(|view| view as &dyn EncodingStatsProvider)
-        });
 
     let props = build_parquet_writer_properties(
         options.compression,
         options.enable_dictionary,
         options.enable_delta_binary_packed_heuristic_rule,
-        column_metrics_ref,
+        column_stats,
+        delta_stats.as_ref(),
         options.metadata.clone(),
         num_rows,
         table_schema,
@@ -196,7 +160,8 @@ pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,
     enable_parquet_delta_binary_packed_heuristic_rule: bool,
-    column_metrics: Option<&dyn EncodingStatsProvider>,
+    column_stats: Option<&StatisticsOfColumns>,
+    delta_stats: Option<&HashMap<ColumnId, DeltaOrderingStats>>,
     metadata: Option<Vec<KeyValue>>,
     num_rows: usize,
     table_schema: &TableSchema,
@@ -218,10 +183,10 @@ pub fn build_parquet_writer_properties(
     let mut column_paths_cache = ColumnPathsCache::new();
 
     if enable_dictionary {
-        if let Some(metrics) = column_metrics {
+        if let Some(stats) = column_stats {
             builder = apply_dictionary_high_cardinality_heuristic(
                 builder,
-                metrics,
+                stats,
                 table_schema,
                 num_rows,
                 &mut column_paths_cache,
@@ -230,15 +195,18 @@ pub fn build_parquet_writer_properties(
     }
 
     if enable_parquet_delta_binary_packed_heuristic_rule {
-        if let Some(metrics) = column_metrics {
-            builder =
-                crate::encoding_rules::delta_binary_packed::apply_delta_binary_packed_heuristic(
-                    builder,
-                    metrics,
-                    table_schema,
-                    num_rows,
-                    &mut column_paths_cache,
-                );
+        if let Some(stats) = column_stats {
+            if let Some(delta) = delta_stats {
+                builder =
+                    crate::encoding_rules::delta_binary_packed::apply_delta_binary_packed_heuristic(
+                        builder,
+                        stats,
+                        delta,
+                        table_schema,
+                        num_rows,
+                        &mut column_paths_cache,
+                    );
+            }
         }
     }
 

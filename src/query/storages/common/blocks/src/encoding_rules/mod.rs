@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::schema::types::ColumnPath;
 
 pub mod delta_binary_packed;
@@ -97,40 +95,5 @@ impl ColumnPathsCache {
             );
         }
         self.cache.as_ref().unwrap()
-    }
-}
-
-/// Provides per column NDV statistics.
-pub trait NdvProvider {
-    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
-}
-
-impl NdvProvider for &StatisticsOfColumns {
-    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-        self.get(column_id).and_then(|item| item.distinct_of_values)
-    }
-}
-
-pub trait EncodingStatsProvider: NdvProvider {
-    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics>;
-
-    fn column_delta_stats(&self, _column_id: &ColumnId) -> Option<&DeltaOrderingStats> {
-        None
-    }
-}
-
-pub struct ColumnStatsView<'a>(pub &'a StatisticsOfColumns);
-
-impl<'a> NdvProvider for ColumnStatsView<'a> {
-    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-        self.0
-            .get(column_id)
-            .and_then(|item| item.distinct_of_values)
-    }
-}
-
-impl<'a> EncodingStatsProvider for ColumnStatsView<'a> {
-    fn column_stats(&self, column_id: &ColumnId) -> Option<&ColumnStatistics> {
-        self.0.get(column_id)
     }
 }
