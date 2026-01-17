@@ -324,8 +324,7 @@ impl Interpreter for RefreshIndexInterpreter {
         let sink_schema = Arc::new(sink_schema);
 
         build_res.main_pipeline.try_resize(1)?;
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let write_settings = fuse_table.get_write_settings_with_ctx(&table_ctx)?;
+        let write_settings = fuse_table.get_write_settings_with_ctx(self.ctx.as_ref())?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
