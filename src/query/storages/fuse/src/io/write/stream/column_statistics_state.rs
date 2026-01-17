@@ -87,6 +87,13 @@ impl ColumnStatisticsState {
         Ok(())
     }
 
+    pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
+        self.distinct_columns
+            .iter()
+            .map(|(column_id, ndv_estimator)| (*column_id, ndv_estimator.count()))
+            .collect()
+    }
+
     pub fn peek_column_stats(&self) -> Result<StatisticsOfColumns> {
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
         for (column_id, builder) in &self.col_stats {
@@ -102,7 +109,7 @@ impl ColumnStatisticsState {
         mut column_distinct_count: HashMap<ColumnId, usize>,
     ) -> Result<StatisticsOfColumns> {
         for (column_id, estimator) in &self.distinct_columns {
-            column_distinct_count.insert(*column_id, estimator.finalize());
+            column_distinct_count.insert(*column_id, estimator.count());
         }
 
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
