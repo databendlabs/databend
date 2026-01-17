@@ -42,7 +42,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant = Tenant::new_literal("tenant1");
 
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;

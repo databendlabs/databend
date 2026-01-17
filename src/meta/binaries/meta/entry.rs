@@ -231,7 +231,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
-                ..RpcClientConf::empty(&BUILD_INFO)
+                ..RpcClientConf::empty(BUILD_INFO.semver())
             };
             let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),

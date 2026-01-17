@@ -198,7 +198,7 @@ impl MetaStoreProvider {
                 LocalMetaService::new_with_fixed_dir(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
-                    self.rpc_conf.version.semantic.clone(),
+                    self.rpc_conf.version.clone(),
                 )
                 .await
                 .unwrap(),

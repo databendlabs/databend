@@ -42,7 +42,7 @@ async fn test_user_manager() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

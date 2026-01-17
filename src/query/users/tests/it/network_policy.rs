@@ -39,7 +39,7 @@ async fn test_user_network_policy() -> Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant = Tenant::new_literal("test");
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;
