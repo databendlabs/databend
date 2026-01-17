@@ -18,7 +18,6 @@ mod tests {
     use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_sql;
     use databend_common_ast::parser::tokenize_sql;
-    use databend_common_exception::Result;
 
     use crate::planner::semantic::name_resolution::NameResolutionContext;
     use crate::planner::semantic::name_resolution::normalize_identifier;
@@ -75,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_identifier_preserves_quotes() -> anyhow::Result<()> {
+    fn test_normalize_identifier_preserves_quotes() -> Result<()> {
         // Create a context where case sensitivity is off for both quoted and unquoted identifiers
         let context = NameResolutionContext {
             unquoted_ident_case_sensitive: false,
@@ -130,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_normalizations() -> anyhow::Result<()> {
+    fn test_multiple_normalizations() -> Result<()> {
         // This test simulates the scenario where an identifier is normalized multiple times
         // which could happen during multiple parsing/planning phases
 
