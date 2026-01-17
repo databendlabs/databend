@@ -16,7 +16,6 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::NetworkPolicy;

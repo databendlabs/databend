@@ -15,7 +15,6 @@
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_config::QueryConfig;
-use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;

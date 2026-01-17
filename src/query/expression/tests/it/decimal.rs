@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::type_check::common_super_type;

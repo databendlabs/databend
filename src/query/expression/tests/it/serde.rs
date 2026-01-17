@@ -16,7 +16,6 @@ use std::vec;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
