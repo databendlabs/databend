@@ -79,7 +79,7 @@ async fn test_delete_by_block_name() -> Result<()> {
         .await?
         .try_collect::<Vec<_>>()
         .await?;
-    let block_name = match blocks.get(0).and_then(|b| b.get_by_offset(0).index(0)) {
+    let block_name = match blocks.first().and_then(|b| b.get_by_offset(0).index(0)) {
         Some(ScalarRef::String(s)) => s.to_string(),
         Some(other) => {
             return Err(ErrorCode::Internal(format!(
@@ -105,7 +105,7 @@ async fn test_delete_by_block_name() -> Result<()> {
         .try_collect::<Vec<_>>()
         .await?;
     let count = match count_blocks
-        .get(0)
+        .first()
         .and_then(|b| b.get_by_offset(0).index(0))
     {
         Some(ScalarRef::Number(NumberScalar::UInt64(v))) => v,
