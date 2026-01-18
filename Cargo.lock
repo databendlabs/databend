@@ -272,31 +272,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "apache-avro"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36fa98bc79671c7981272d91a8753a928ff6a1cd8e4f20a44c45bd5d313840bf"
-dependencies = [
- "bigdecimal",
- "bon",
- "digest",
- "log",
- "miniz_oxide 0.8.9",
- "num-bigint",
- "quad-rand",
- "rand 0.9.2",
- "regex-lite",
- "serde",
- "serde_bytes",
- "serde_json",
- "strum 0.27.2",
- "strum_macros 0.27.2",
- "thiserror 2.0.17",
- "uuid",
- "zstd 0.13.3",
-]
-
-[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,12 +832,6 @@ dependencies = [
  "wasi-common",
  "wasmtime",
 ]
-
-[[package]]
-name = "as-any"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0f477b951e452a0b6b4a10b53ccd569042d1d01729b519e02074a9c0958a063"
 
 [[package]]
 name = "as-slice"
@@ -3351,8 +3320,17 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.1.0"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.1.0#14cbc285b79520b86b1daeba50ee6d57b7023765"
+version = "0.2.3"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.3#71428e7e39971212eb1e2fea0a6f8f93d942ae66"
+dependencies = [
+ "async-trait",
+ "ctrlc",
+ "futures",
+ "log",
+ "pin-project-lite",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "databend-bendsave"
@@ -3457,9 +3435,9 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
- "databend-common-base",
  "http 1.4.0",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -3469,7 +3447,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-backtrace",
- "async-trait",
  "borsh",
  "bytemuck",
  "bytes",
@@ -3477,15 +3454,13 @@ dependencies = [
  "chrono",
  "concurrent-queue",
  "crc32fast",
- "ctrlc",
+ "databend-base",
  "databend-common-exception",
  "enquote",
- "fastrace",
  "futures",
  "hickory-resolver",
  "libc",
  "log",
- "logcall",
  "micromarshal",
  "num-traits",
  "num_cpus",
@@ -3539,11 +3514,13 @@ dependencies = [
 name = "databend-common-catalog"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-schema 56.2.0",
  "async-backtrace",
  "async-trait",
  "chrono",
  "dashmap 6.1.0",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -3567,18 +3544,21 @@ dependencies = [
  "parking_lot 0.12.5",
  "parquet 56.2.0",
  "rand 0.8.5",
- "roaring 0.10.12",
+ "roaring",
  "serde",
  "serde_json",
  "sha2",
  "thrift",
+ "tokio",
  "typetag",
+ "uuid",
 ]
 
 [[package]]
 name = "databend-common-cloud-control"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "chrono",
  "databend-common-base",
@@ -3589,6 +3569,7 @@ dependencies = [
  "prost-build",
  "semver",
  "serde",
+ "tokio",
  "tonic 0.13.1",
  "tonic-build",
  "tower 0.5.2",
@@ -3644,6 +3625,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "databend-base",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",
@@ -3651,6 +3633,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-tracing",
  "log",
+ "semver",
  "serde",
  "serde_ignored",
  "serde_with",
@@ -3706,6 +3689,7 @@ dependencies = [
 name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array 56.2.0",
  "arrow-buffer 56.2.0",
  "arrow-cast 56.2.0",
@@ -3756,7 +3740,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "recursive",
- "roaring 0.10.12",
+ "roaring",
  "rust_decimal",
  "rustls 0.23.36",
  "serde",
@@ -3820,6 +3804,7 @@ dependencies = [
 name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "blake3",
  "borsh",
@@ -3874,6 +3859,7 @@ dependencies = [
  "stringslice",
  "twox-hash 1.6.3",
  "unicase",
+ "uuid",
 ]
 
 [[package]]
@@ -3881,6 +3867,7 @@ name = "databend-common-grpc"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
@@ -3888,8 +3875,10 @@ dependencies = [
  "hyper-util",
  "jwt-simple",
  "log",
+ "semver",
  "serde",
  "thiserror 1.0.69",
+ "tokio",
  "tonic 0.13.1",
  "tower-service",
 ]
@@ -3922,6 +3911,7 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -3929,6 +3919,7 @@ name = "databend-common-io"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "anyhow",
  "base64 0.22.1",
  "bincode 2.0.1",
  "borsh",
@@ -3950,7 +3941,7 @@ dependencies = [
  "micromarshal",
  "rand 0.8.5",
  "rmp-serde",
- "roaring 0.10.12",
+ "roaring",
  "scroll 0.12.0",
  "serde",
  "smallvec",
@@ -3973,11 +3964,13 @@ dependencies = [
 name = "databend-common-management"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "async-trait",
  "chrono",
  "chrono-tz 0.8.6",
  "cron",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
@@ -4035,6 +4028,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
+ "uuid",
 ]
 
 [[package]]
@@ -4073,10 +4067,10 @@ dependencies = [
 name = "databend-common-meta-app-storage"
 version = "0.1.0"
 dependencies = [
- "databend-common-base",
  "databend-common-exception",
  "opendal",
  "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -4111,6 +4105,7 @@ dependencies = [
  "arrow-flight",
  "async-backtrace",
  "chrono",
+ "databend-base",
  "databend-common-base",
  "databend-common-grpc",
  "databend-common-meta-api",
@@ -4134,6 +4129,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tonic 0.13.1",
 ]
 
@@ -4143,7 +4139,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "databend-common-base",
  "databend-common-building",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -4157,6 +4152,7 @@ dependencies = [
  "mlua",
  "raft-log",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "tokio",
@@ -4221,8 +4217,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode 2.0.1",
+ "databend-base",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
  "databend-common-meta-sled-store",
@@ -4234,7 +4230,6 @@ dependencies = [
  "fastrace",
  "fs_extra",
  "futures",
- "futures-async-stream",
  "futures-util",
  "hostname",
  "log",
@@ -4324,7 +4319,6 @@ name = "databend-common-meta-stoerr"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "databend-common-exception",
  "serde_json",
  "sled",
  "thiserror 1.0.69",
@@ -4336,7 +4330,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "databend-common-base",
+ "databend-base",
  "databend-common-grpc",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -4346,6 +4340,7 @@ dependencies = [
  "databend-common-version",
  "databend-meta",
  "log",
+ "semver",
  "tempfile",
  "tokio",
  "tokio-stream",
@@ -4358,7 +4353,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
@@ -4399,6 +4393,7 @@ name = "databend-common-native"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.12",
+ "anyhow",
  "bitpacking 0.8.4",
  "bytemuck",
  "byteorder",
@@ -4414,7 +4409,7 @@ dependencies = [
  "opendal",
  "rand 0.8.5",
  "ringbuffer",
- "roaring 0.10.12",
+ "roaring",
  "serde",
  "serde_json",
  "snap",
@@ -4445,6 +4440,7 @@ dependencies = [
 name = "databend-common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow-array 56.2.0",
  "arrow-ord 56.2.0",
  "arrow-schema 56.2.0",
@@ -4453,6 +4449,7 @@ dependencies = [
  "async-trait",
  "bumpalo",
  "bytesize 2.3.1",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
@@ -4599,6 +4596,7 @@ dependencies = [
  "enum-as-inner",
  "fastrace",
  "globiter",
+ "goldenfile",
  "indexmap 2.12.1",
  "itertools 0.13.0",
  "jsonb",
@@ -4610,15 +4608,17 @@ dependencies = [
  "prqlc",
  "recursive",
  "regex",
- "roaring 0.10.12",
+ "roaring",
  "serde",
  "serde_json",
  "sha2",
  "similar",
  "simsearch",
  "tantivy-query-grammar",
+ "tokio",
  "unicase",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4654,6 +4654,7 @@ dependencies = [
  "serde",
  "simple_hll",
  "thiserror 1.0.69",
+ "tokio",
  "url",
 ]
 
@@ -4794,7 +4795,7 @@ dependencies = [
  "parquet 56.2.0",
  "paste",
  "rand 0.8.5",
- "roaring 0.10.12",
+ "roaring",
  "serde",
  "serde_json",
  "sha2",
@@ -4804,6 +4805,7 @@ dependencies = [
  "tantivy-fst",
  "tantivy-jieba",
  "thrift",
+ "tokio",
  "typetag",
  "uuid",
 ]
@@ -4839,6 +4841,7 @@ dependencies = [
  "parquet 56.2.0",
  "recursive",
  "serde",
+ "tokio",
  "typetag",
  "volo-thrift",
 ]
@@ -4847,7 +4850,6 @@ dependencies = [
 name = "databend-common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
- "arrow-array 56.2.0",
  "arrow-schema 56.2.0",
  "async-backtrace",
  "async-trait",
@@ -4877,10 +4879,8 @@ dependencies = [
  "iceberg-catalog-rest",
  "iceberg-catalog-s3tables",
  "log",
- "parquet 56.2.0",
  "serde",
  "serde_json",
- "typetag",
  "uuid",
 ]
 
@@ -4962,6 +4962,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "thrift",
+ "tokio",
  "typetag",
 ]
 
@@ -4969,7 +4970,7 @@ dependencies = [
 name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
- "apache-avro 0.17.0",
+ "apache-avro",
  "arrow-schema 56.2.0",
  "async-backtrace",
  "async-trait",
@@ -5006,7 +5007,9 @@ dependencies = [
  "parquet 56.2.0",
  "serde",
  "serde_json",
+ "tokio",
  "typetag",
+ "uuid",
 ]
 
 [[package]]
@@ -5047,6 +5050,7 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-sql",
@@ -5071,6 +5075,7 @@ dependencies = [
  "serde_repr",
  "snailquote",
  "tikv-jemalloc-ctl",
+ "tokio",
  "typetag",
 ]
 
@@ -5119,14 +5124,17 @@ dependencies = [
  "parquet 56.2.0",
  "serde",
  "serde_json",
+ "tokio",
  "toml 0.8.23",
  "tonic 0.13.1",
+ "uuid",
 ]
 
 [[package]]
 name = "databend-common-users"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "base64 0.22.1",
  "chrono",
@@ -5161,6 +5169,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "serde",
  "serde_json",
+ "tokio",
  "wiremock",
 ]
 
@@ -5239,6 +5248,7 @@ version = "0.1.0"
 name = "databend-enterprise-query"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "async-trait",
  "base64 0.22.1",
@@ -5289,7 +5299,9 @@ dependencies = [
  "opendal",
  "serde",
  "tempfile",
+ "tokio",
  "typetag",
+ "uuid",
  "walkdir",
 ]
 
@@ -5411,6 +5423,7 @@ dependencies = [
  "jsonb",
  "match-template",
  "num-traits",
+ "uuid",
 ]
 
 [[package]]
@@ -5541,8 +5554,8 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "databend-base",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-app",
@@ -5606,6 +5619,7 @@ dependencies = [
  "cron",
  "ctor",
  "dashmap 6.1.0",
+ "databend-base",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-cache",
@@ -5828,6 +5842,7 @@ dependencies = [
  "bytes",
  "crc32fast",
  "crossbeam-channel",
+ "databend-base",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-catalog",
@@ -5854,6 +5869,7 @@ name = "databend-storages-common-index"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "bincode 2.0.1",
  "bitvec",
  "bytemuck",
@@ -5882,7 +5898,7 @@ dependencies = [
  "parquet 56.2.0",
  "rand 0.8.5",
  "rayon",
- "roaring 0.10.12",
+ "roaring",
  "self_cell",
  "serde",
  "serde_json",
@@ -5968,7 +5984,6 @@ dependencies = [
  "bincode 1.3.3",
  "bytes",
  "chrono",
- "databend-common-base",
  "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
@@ -5986,6 +6001,7 @@ dependencies = [
  "serde_json",
  "snap",
  "typetag",
+ "uuid",
  "zstd 0.12.4",
 ]
 
@@ -6076,7 +6092,7 @@ dependencies = [
  "object_store",
  "parquet 55.2.0",
  "reqwest",
- "roaring 0.10.12",
+ "roaring",
  "rustc_version",
  "serde",
  "serde_json",
@@ -6147,7 +6163,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "regex",
- "roaring 0.10.12",
+ "roaring",
  "serde",
  "serde_json",
  "sqlparser 0.56.0",
@@ -6386,12 +6402,6 @@ dependencies = [
  "quote",
  "syn 2.0.114",
 ]
-
-[[package]]
-name = "dissimilar"
-version = "1.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8975ffdaa0ef3661bfe02dbdcc06c9f829dfafe6a3c474de366a8d5e44276921"
 
 [[package]]
 name = "divan"
@@ -6815,16 +6825,6 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
-]
-
-[[package]]
-name = "expect-test"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63af43ff4431e848fb47472a920f14fa71c24de13255a5692e93d4e90302acb0"
-dependencies = [
- "dissimilar",
- "once_cell",
 ]
 
 [[package]]
@@ -8924,9 +8924,9 @@ checksum = "0a7763b98ba8a24f59e698bf9ab197e7676c640d6455d1580b4ce7dc560f0f0d"
 
 [[package]]
 name = "hive_metastore"
-version = "0.2.0"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a699b5fcbc7f4614c4fcd8154bedcaab8b741e524e5f1b7bf1e9b1dca9917d8a"
+checksum = "35f502759a3b4517dc44d06d8cdaddb942b7930bb81ebf7d645e209cfc7b7e43"
 dependencies = [
  "anyhow",
  "pilota",
@@ -9290,11 +9290,11 @@ dependencies = [
 
 [[package]]
 name = "iceberg"
-version = "0.8.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=6ccaa60e#6ccaa60e3da324b570a1288cd9b5977c70981930"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
- "apache-avro 0.21.0",
+ "apache-avro",
  "array-init",
  "arrow-arith 56.2.0",
  "arrow-array 56.2.0",
@@ -9304,16 +9304,11 @@ dependencies = [
  "arrow-schema 56.2.0",
  "arrow-select 56.2.0",
  "arrow-string 56.2.0",
- "as-any",
  "async-trait",
- "backon",
- "base64 0.22.1",
  "bimap",
  "bytes",
  "chrono",
  "derive_builder",
- "expect-test",
- "flate2",
  "fnv",
  "futures",
  "itertools 0.13.0",
@@ -9325,9 +9320,8 @@ dependencies = [
  "ordered-float 4.6.0",
  "parquet 56.2.0",
  "rand 0.8.5",
- "reqsign",
  "reqwest",
- "roaring 0.11.3",
+ "roaring",
  "rust_decimal",
  "serde",
  "serde_bytes",
@@ -9335,7 +9329,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
- "strum 0.27.2",
+ "thrift",
  "tokio",
  "typed-builder 0.20.1",
  "url",
@@ -9345,8 +9339,8 @@ dependencies = [
 
 [[package]]
 name = "iceberg-catalog-glue"
-version = "0.8.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=6ccaa60e#6ccaa60e3da324b570a1288cd9b5977c70981930"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9356,12 +9350,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "typed-builder 0.20.1",
+ "uuid",
 ]
 
 [[package]]
 name = "iceberg-catalog-hms"
-version = "0.8.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=6ccaa60e#6ccaa60e3da324b570a1288cd9b5977c70981930"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9376,14 +9372,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "typed-builder 0.20.1",
+ "uuid",
  "volo",
  "volo-thrift",
 ]
 
 [[package]]
 name = "iceberg-catalog-rest"
-version = "0.8.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=6ccaa60e#6ccaa60e3da324b570a1288cd9b5977c70981930"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9402,14 +9400,17 @@ dependencies = [
 
 [[package]]
 name = "iceberg-catalog-s3tables"
-version = "0.8.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=6ccaa60e#6ccaa60e3da324b570a1288cd9b5977c70981930"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=a5e780ae#a5e780ae11a6b0cba18734139f4add3302faac80"
 dependencies = [
  "anyhow",
  "async-trait",
  "aws-config",
  "aws-sdk-s3tables",
  "iceberg",
+ "serde_json",
+ "typed-builder 0.20.1",
+ "uuid",
 ]
 
 [[package]]
@@ -13860,16 +13861,6 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "serde",
-]
-
-[[package]]
-name = "roaring"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba9ce64a8f45d7fc86358410bb1a82e8c987504c0d4900e9141d69a9f26c885"
-dependencies = [
- "bytemuck",
- "byteorder",
 ]
 
 [[package]]
