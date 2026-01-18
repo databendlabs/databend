@@ -59,22 +59,19 @@ impl<Output> Future for JoinHandle<Output> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.inner.poll_unpin(cx) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(res) => match res {
-                Ok(res) => Poll::Ready(Ok(res)),
-                Err(error) => match error.is_panic() {
-                    true => {
-                        let cause = error.into_panic();
-                        Poll::Ready(Err(match cause.downcast_ref::<&'static str>() {
-                            None => match cause.downcast_ref::<String>() {
-                                None => ErrorCode::PanicError("Sorry, unknown panic message"),
-                                Some(message) => ErrorCode::PanicError(message.to_string()),
-                            },
-                            Some(message) => ErrorCode::PanicError(message.to_string()),
-                        }))
-                    }
-                    false => Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled"))),
-                },
-            },
+            Poll::Ready(Ok(res)) => Poll::Ready(Ok(res)),
+            Poll::Ready(Err(error)) if error.is_panic() => {
+                let cause = error.into_panic();
+                let message = cause
+                    .downcast_ref::<&'static str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| cause.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
+                Poll::Ready(Err(ErrorCode::PanicError(message)))
+            }
+            Poll::Ready(Err(_)) => {
+                Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled")))
+            }
         }
     }
 }
@@ -105,15 +102,13 @@ impl Runtime {
             Thread::named_spawn(n.as_ref().map(|n| format!("wait-to-drop-{n}")), move || {
                 let _ = runtime.block_on(recv_stop);
 
-                match !cfg!(debug_assertions) {
-                    true => false,
-                    false => {
-                        let instant = Instant::now();
-                        // We wait up to 3 seconds to complete the runtime shutdown.
-                        runtime.shutdown_timeout(Duration::from_secs(3));
-
-                        instant.elapsed() >= Duration::from_secs(3)
-                    }
+                if cfg!(debug_assertions) {
+                    let instant = Instant::now();
+                    // We wait up to 3 seconds to complete the runtime shutdown.
+                    runtime.shutdown_timeout(Duration::from_secs(3));
+                    instant.elapsed() >= Duration::from_secs(3)
+                } else {
+                    false
                 }
             });
 
@@ -231,8 +226,8 @@ impl Runtime {
         Fut::Output: Send + 'static,
     {
         let iter = futures.into_iter();
-        let mut handlers =
-            Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
+        let (lower, upper) = iter.size_hint();
+        let mut handlers = Vec::with_capacity(upper.unwrap_or(lower));
         for fut in iter {
             let semaphore = semaphore.clone();
             // Although async task is rather lightweight, it do consumes resources,
