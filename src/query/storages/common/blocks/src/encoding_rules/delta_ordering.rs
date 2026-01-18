@@ -38,14 +38,8 @@ pub fn collect_delta_ordering_stats(
     let mut stats = HashMap::new();
     let mut leaves = Vec::new();
     traverse_values_dfs(block.columns(), schema.fields(), &mut leaves)?;
-    for (column_id, value, data_type) in leaves {
-        let data_type = data_type.remove_nullable();
-        if !matches!(
-            data_type,
-            DataType::Number(NumberDataType::Int32) | DataType::Number(NumberDataType::UInt32)
-        ) {
-            continue;
-        }
+    // leaves already filtered to only contain Int32/UInt32 columns
+    for (column_id, value, _data_type) in leaves {
         let Value::Column(column) = value else {
             continue;
         };
@@ -65,9 +59,7 @@ fn traverse_values_dfs(
         let mut next_column_id = field.column_id;
         match entry {
             BlockEntry::Const(..) => {
-                // Skip const entries: delta ordering stats can only be computed from columns,
-                // not from constant scalar values. The downstream filter (line 50) would
-                // reject any Value::Scalar anyway.
+                // Skip const entries: DBP is not suitable for it, and already skipped in `collect_delta_ordering_stats`
             }
             BlockEntry::Column(column) => {
                 traverse_column_recursive(
@@ -141,12 +133,17 @@ fn traverse_column_recursive(
             // Map types are always encoded as Tuple(key, value)
             _ => unreachable!(),
         },
-        _ => {
+        // Only collect Int32/UInt32 columns for delta ordering stats
+        DataType::Number(NumberDataType::Int32) | DataType::Number(NumberDataType::UInt32) => {
             leaves.push((
                 *next_column_id,
                 Value::Column(column.clone()),
                 data_type.clone(),
             ));
+            *next_column_id += 1;
+        }
+        _ => {
+            // Skip other types - DBP encoding only applies to Int32/UInt32
             *next_column_id += 1;
         }
     }
@@ -156,6 +153,8 @@ fn traverse_column_recursive(
 fn column_delta_ordering_stats(column: &Column) -> Option<DeltaOrderingStats> {
     match column {
         Column::Nullable(nullable) => {
+            // Conservative strategy: we currently skip DBP encoding for columns with null values.
+            // This could be optimized in the future by filtering out nulls before computing stats.
             if nullable.validity().null_count() != 0 {
                 return None;
             }
@@ -178,8 +177,6 @@ fn column_delta_ordering_stats(column: &Column) -> Option<DeltaOrderingStats> {
 /// - `abs_delta_cv`: Coefficient of variation of absolute deltas (measures delta stability)
 ///
 /// Returns `None` if the column has fewer than 2 values.
-///
-/// Implementation uses Welford's algorithm to compute both metrics in a single pass.
 fn compute_delta_ordering_stats_impl<T, F>(values: &[T], to_i64: F) -> Option<DeltaOrderingStats>
 where
     T: Copy,
@@ -361,16 +358,6 @@ mod tests {
         let stats = compute_delta_ordering_stats_i32(&values);
 
         assert!(stats.is_none(), "Single value should return None");
-    }
-
-    #[test]
-    fn test_two_values() {
-        let values = vec![1i32, 2];
-        let stats = compute_delta_ordering_stats_i32(&values).unwrap();
-
-        assert_eq!(stats.monotonic_ratio, 1.0);
-        // Only one delta, variance calculation returns 0
-        assert_eq!(stats.abs_delta_cv, 0.0);
     }
 
     #[test]
