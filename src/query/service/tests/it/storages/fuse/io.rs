@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::TestFixture;
@@ -23,7 +22,7 @@ use futures_util::TryStreamExt;
 use uuid::Uuid;
 
 #[test]
-fn test_meta_locations() -> Result<()> {
+fn test_meta_locations() -> anyhow::Result<()> {
     let test_prefix = "test_pref";
     let locs = TableMetaLocationGenerator::new(test_prefix.to_owned());
     let test_table_meta_timestamps = TestFixture::default_table_meta_timestamps();
@@ -38,7 +37,7 @@ fn test_meta_locations() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_array_cache_of_nested_column_iusse_14502() -> Result<()> {
+async fn test_array_cache_of_nested_column_iusse_14502() -> anyhow::Result<()> {
     // https://github.com/datafuselabs/databend/issues/14502
     // ~~~
     //  create table t1(c tuple(c1 int not null, c2 int null) null);

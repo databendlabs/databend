@@ -361,9 +361,10 @@ fn get_test_suites() -> Vec<TestSuite> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_query_rewrite() -> Result<()> {
+async fn test_query_rewrite() -> anyhow::Result<()> {
     test_query_rewrite_impl("parquet").await?;
-    test_query_rewrite_impl("native").await
+    test_query_rewrite_impl("native").await?;
+    Ok(())
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {

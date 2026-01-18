@@ -20,7 +20,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -38,7 +37,7 @@ use databend_query::catalogs::Catalog;
 use crate::tests::create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_database_error_handling() -> Result<()> {
+async fn test_get_database_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -58,7 +57,7 @@ async fn test_get_database_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_table_error_handling() -> Result<()> {
+async fn test_get_table_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -121,7 +120,7 @@ async fn test_get_table_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_table_history_error_handling() -> Result<()> {
+async fn test_get_table_history_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -158,7 +157,7 @@ async fn test_get_table_history_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_list_tables_error_handling() -> Result<()> {
+async fn test_list_tables_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -177,7 +176,7 @@ async fn test_list_tables_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_list_tables_history_error_handling() -> Result<()> {
+async fn test_list_tables_history_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -192,7 +191,7 @@ async fn test_list_tables_history_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_table_by_info_error_handling() -> Result<()> {
+async fn test_get_table_by_info_error_handling() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 
@@ -241,7 +240,7 @@ async fn test_get_table_by_info_error_handling() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_delegation_between_catalogs() -> Result<()> {
+async fn test_delegation_between_catalogs() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("test");
     let catalog = create_catalog().await?;
 

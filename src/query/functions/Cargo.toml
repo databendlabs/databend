@@ -61,6 +61,7 @@ unicase = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
 divan = { workspace = true }

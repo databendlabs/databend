@@ -25,7 +25,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_quota_from_json_to_pb() -> Result<()> {
+async fn test_update_quota_from_json_to_pb() -> anyhow::Result<()> {
     let (kv_api, quota_api_json, quota_api_pb) = new_quota_api().await?;
 
     // when disable write pb

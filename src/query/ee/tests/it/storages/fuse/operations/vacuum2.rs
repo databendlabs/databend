@@ -24,7 +24,7 @@ use databend_query::test_kits::TestFixture;
 // TODO investigate this
 // NOTE: SHOULD specify flavor = "multi_thread", otherwise query execution might be hanged
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum2_all() -> Result<()> {
+async fn test_vacuum2_all() -> anyhow::Result<()> {
     let ee_setup = EESetup::new();
     let fixture = TestFixture::setup_with_custom(ee_setup).await?;
     // Adjust retention period to 0, so that dropped tables will be vacuumed immediately

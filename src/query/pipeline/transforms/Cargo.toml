@@ -37,6 +37,7 @@ tokio = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-schema = { workspace = true }

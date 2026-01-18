@@ -26,7 +26,7 @@ use databend_common_version::BUILD_INFO;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_set_setting() -> Result<()> {
+async fn test_set_setting() -> anyhow::Result<()> {
     let (kv_api, mgr) = new_setting_api().await?;
 
     {

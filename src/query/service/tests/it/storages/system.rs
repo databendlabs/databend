@@ -109,7 +109,7 @@ async fn run_table_tests(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_build_options_table() -> Result<()> {
+async fn test_build_options_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -134,7 +134,7 @@ async fn test_build_options_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_columns_table() -> Result<()> {
+async fn test_columns_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -147,7 +147,7 @@ async fn test_columns_table() -> Result<()> {
 }
 
 #[test]
-fn test_information_schema_character_sets_table_metadata() -> Result<()> {
+fn test_information_schema_character_sets_table_metadata() -> anyhow::Result<()> {
     let table = CharacterSetsTable::create(1, "default");
     let table_info = table.get_table_info();
     assert_eq!(table_info.name, "character_sets");
@@ -162,7 +162,7 @@ fn test_information_schema_character_sets_table_metadata() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_clusters_table() -> Result<()> {
+async fn test_clusters_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -180,7 +180,7 @@ async fn test_clusters_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_configs_table_basic() -> Result<()> {
+async fn test_configs_table_basic() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
     let fixture = TestFixture::setup_with_config(&config).await?;
@@ -198,7 +198,7 @@ async fn test_configs_table_basic() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_configs_table_redact() -> Result<()> {
+async fn test_configs_table_redact() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let _file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
 
@@ -238,7 +238,7 @@ async fn test_configs_table_redact() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_contributors_table() -> Result<()> {
+async fn test_contributors_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -256,7 +256,7 @@ async fn test_contributors_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_credits_table() -> Result<()> {
+async fn test_credits_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -279,7 +279,7 @@ async fn test_credits_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_catalogs_table() -> Result<()> {
+async fn test_catalogs_table() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
 
@@ -293,7 +293,7 @@ async fn test_catalogs_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_databases_table() -> Result<()> {
+async fn test_databases_table() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
     let fixture = TestFixture::setup_with_config(&config).await?;
@@ -309,7 +309,7 @@ async fn test_databases_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_databases_history_table() -> Result<()> {
+async fn test_databases_history_table() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
     let fixture = TestFixture::setup_with_config(&config).await?;
@@ -327,7 +327,7 @@ async fn test_databases_history_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_engines_table() -> Result<()> {
+async fn test_engines_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -340,7 +340,7 @@ async fn test_engines_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_functions_table() -> Result<()> {
+async fn test_functions_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -358,7 +358,7 @@ async fn test_functions_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_metrics_table() -> Result<()> {
+async fn test_metrics_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -396,7 +396,7 @@ async fn test_metrics_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_roles_table() -> Result<()> {
+async fn test_roles_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -451,7 +451,7 @@ async fn test_roles_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_users_table() -> Result<()> {
+async fn test_users_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -499,7 +499,7 @@ async fn test_users_table() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_caches_table() -> Result<()> {
+async fn test_caches_table() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 

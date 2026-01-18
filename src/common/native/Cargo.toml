@@ -34,6 +34,7 @@ zstd = { workspace = true }
 
 [dev-dependencies]
 # used to test async readers
+anyhow = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

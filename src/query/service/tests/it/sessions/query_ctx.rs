@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
@@ -26,7 +25,7 @@ use wiremock::matchers::method;
 use wiremock::matchers::path;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_storage_accessor_s3() -> Result<()> {
+async fn test_get_storage_accessor_s3() -> anyhow::Result<()> {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/bucket"))
@@ -53,7 +52,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_get_storage_accessor_fs() -> Result<()> {
+async fn test_get_storage_accessor_fs() -> anyhow::Result<()> {
     let mut conf = ConfigBuilder::create().config();
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: "/tmp".to_string(),

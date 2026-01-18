@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resolver_github() -> Result<()> {
+async fn test_resolver_github() -> anyhow::Result<()> {
     let addrs = DNSResolver::instance()?.resolve("github.com").await?;
     assert_ne!(addrs.len(), 0);
     Ok(())

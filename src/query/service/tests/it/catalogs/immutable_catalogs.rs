@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -25,7 +24,7 @@ use databend_query::catalogs::default::ImmutableCatalog;
 use crate::tests::create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_immutable_catalogs_database() -> Result<()> {
+async fn test_immutable_catalogs_database() -> anyhow::Result<()> {
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
@@ -85,7 +84,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_immutable_catalogs_table() -> Result<()> {
+async fn test_immutable_catalogs_table() -> anyhow::Result<()> {
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
     let catalog = create_catalog().await?;

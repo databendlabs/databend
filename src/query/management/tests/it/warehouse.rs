@@ -34,7 +34,7 @@ use databend_common_version::BUILD_INFO;
 use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_empty_id_with_self_managed() -> Result<()> {
+async fn test_empty_id_with_self_managed() -> anyhow::Result<()> {
     let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_secs(60), 0).await?;
 
     let mut node = system_managed_node(&GlobalUniq::unique());
@@ -59,7 +59,7 @@ async fn test_empty_id_with_self_managed() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_add_self_managed_node() -> Result<()> {
+async fn test_successfully_add_self_managed_node() -> anyhow::Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_secs(60), 0).await?;
 
     let mut node_info_1 = self_managed_node("test_node_1");
@@ -107,7 +107,7 @@ async fn test_successfully_add_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_already_exists_add_self_managed_node() -> Result<()> {
+async fn test_already_exists_add_self_managed_node() -> anyhow::Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_secs(60), 1).await?;
 
     let node_info = self_managed_node("test_node_1");
@@ -135,7 +135,7 @@ async fn test_already_exists_add_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_get_self_managed_nodes() -> Result<()> {
+async fn test_successfully_get_self_managed_nodes() -> anyhow::Result<()> {
     let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let get_nodes =
@@ -162,7 +162,7 @@ async fn test_successfully_get_self_managed_nodes() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_drop_self_managed_node() -> Result<()> {
+async fn test_successfully_drop_self_managed_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let node_info = self_managed_node("test_node");
@@ -183,7 +183,7 @@ async fn test_successfully_drop_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unknown_node_drop_self_managed_node() -> Result<()> {
+async fn test_unknown_node_drop_self_managed_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     match warehouse_manager
@@ -198,7 +198,7 @@ async fn test_unknown_node_drop_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_self_managed_warehouse() -> Result<()> {
+async fn test_drop_self_managed_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let node_info = self_managed_node("test_node");
@@ -212,7 +212,7 @@ async fn test_drop_self_managed_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_heartbeat_not_exists_self_managed_node() -> Result<()> {
+async fn test_heartbeat_not_exists_self_managed_node() -> anyhow::Result<()> {
     let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let node_info = self_managed_node("test_node");
@@ -238,7 +238,7 @@ async fn test_heartbeat_not_exists_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
+async fn test_successfully_heartbeat_self_managed_node() -> anyhow::Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let mut node_info = self_managed_node("test_node");
@@ -276,7 +276,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_empty_system_managed_warehouse() -> Result<()> {
+async fn test_empty_system_managed_warehouse() -> anyhow::Result<()> {
     let (_, cluster_mgr, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = cluster_mgr.create_warehouse(String::new(), vec![]);
@@ -297,7 +297,7 @@ async fn test_empty_system_managed_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
+async fn test_successfully_create_system_managed_warehouse() -> anyhow::Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     for node in &nodes {
@@ -359,7 +359,7 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> {
+async fn test_create_system_managed_warehouse_with_offline_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 4).await?;
 
     // mock node offline
@@ -403,7 +403,7 @@ async fn test_create_system_managed_warehouse_with_offline_node() -> Result<()> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
+async fn test_create_system_managed_warehouse_with_online_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 3).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
@@ -449,7 +449,7 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_concurrent_create_warehouse() -> Result<()> {
+async fn test_concurrent_create_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
 
     let barrier = Arc::new(Barrier::new(10));
@@ -487,7 +487,7 @@ async fn test_concurrent_create_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_duplicated_warehouse() -> Result<()> {
+async fn test_create_duplicated_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse("test_warehouse".to_string(), vec![
@@ -515,7 +515,7 @@ async fn test_create_duplicated_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_warehouse_with_self_manage() -> Result<()> {
+async fn test_create_warehouse_with_self_manage() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     // Self manage node online
@@ -547,7 +547,7 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_warehouse_with_no_resources() -> Result<()> {
+async fn test_create_warehouse_with_no_resources() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = warehouse_manager
@@ -578,7 +578,7 @@ async fn test_create_warehouse_with_no_resources() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_recovery_with_suspended_warehouse() -> Result<()> {
+async fn test_recovery_with_suspended_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse(
@@ -620,7 +620,7 @@ async fn test_recovery_with_suspended_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_recovery_create_warehouse() -> Result<()> {
+async fn test_recovery_create_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse(
@@ -699,7 +699,7 @@ async fn test_recovery_create_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_assign_nodes_for_invalid_warehouse() -> Result<()> {
+async fn test_assign_nodes_for_invalid_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let assign_warehouse_nodes =
@@ -737,7 +737,7 @@ async fn test_assign_nodes_for_invalid_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unassign_nodes_for_invalid_warehouse() -> Result<()> {
+async fn test_unassign_nodes_for_invalid_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let unassign_warehouse_nodes = warehouse_manager.unassign_warehouse_nodes("", HashMap::new());
@@ -795,7 +795,7 @@ async fn test_unassign_nodes_for_invalid_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unassign_all_nodes_for_warehouse() -> Result<()> {
+async fn test_unassign_all_nodes_for_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
     warehouse_manager
         .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
@@ -816,7 +816,7 @@ async fn test_unassign_all_nodes_for_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unassign_nodes_for_warehouse() -> Result<()> {
+async fn test_unassign_nodes_for_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
     let create_warehouse = warehouse_manager
         .create_warehouse(String::from("test_warehouse"), vec![SelectedNode::Random(
@@ -923,7 +923,7 @@ async fn test_unassign_nodes_for_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
+async fn test_concurrent_recovery_create_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse(
@@ -982,7 +982,7 @@ async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_empty_warehouse() -> Result<()> {
+async fn test_drop_empty_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
     let drop_warehouse = warehouse_manager.drop_warehouse(String::new());
 
@@ -991,7 +991,7 @@ async fn test_drop_empty_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_not_exists_warehouse() -> Result<()> {
+async fn test_drop_not_exists_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("not_exists"));
 
@@ -1000,7 +1000,7 @@ async fn test_drop_not_exists_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_system_managed_warehouse() -> Result<()> {
+async fn test_drop_system_managed_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, mut nodes) = nodes(Duration::from_mins(30), 2).await?;
     let create_warehouse =
         warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![
@@ -1083,7 +1083,7 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_list_warehouses() -> Result<()> {
+async fn test_list_warehouses() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 10).await?;
 
     assert_eq!(warehouse_manager.list_warehouses().await?, vec![]);
@@ -1209,7 +1209,7 @@ async fn test_list_warehouses() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_rename_not_exists_warehouses() -> Result<()> {
+async fn test_rename_not_exists_warehouses() -> anyhow::Result<()> {
     let (_, warehouse_manager, _) = nodes(Duration::from_mins(30), 1).await?;
     let rename_warehouse =
         warehouse_manager.rename_warehouse(String::from("test_warehouse"), String::from("aa"));
@@ -1219,7 +1219,7 @@ async fn test_rename_not_exists_warehouses() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_rename_warehouses() -> Result<()> {
+async fn test_rename_warehouses() -> anyhow::Result<()> {
     let (kv, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 1).await?;
 
     let self_managed_node_1 = GlobalUniq::unique();
@@ -1330,7 +1330,7 @@ async fn test_rename_warehouses() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_concurrent_rename_to_warehouse() -> Result<()> {
+async fn test_concurrent_rename_to_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse(
@@ -1374,7 +1374,7 @@ async fn test_concurrent_rename_to_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_concurrent_rename_from_warehouse() -> Result<()> {
+async fn test_concurrent_rename_from_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 10).await?;
 
     let barrier = Arc::new(Barrier::new(10));
@@ -1418,7 +1418,7 @@ async fn test_concurrent_rename_from_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_concurrent_drop_warehouse() -> Result<()> {
+async fn test_concurrent_drop_warehouse() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
 
     let create_warehouse = warehouse_manager.create_warehouse(
@@ -1460,7 +1460,7 @@ async fn test_concurrent_drop_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_warehouse_cluster_failure() -> Result<()> {
+async fn test_drop_warehouse_cluster_failure() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 1).await?;
     let drop_warehouse_cluster = warehouse_manager
         .drop_warehouse_cluster(String::from("test_warehouse"), String::from("test_cluster"));

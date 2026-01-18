@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use databend_common_catalog::session_type::SessionType;
-use databend_common_exception::Result;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_session_setting() -> Result<()> {
+async fn test_session_setting() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
@@ -42,7 +41,7 @@ async fn test_session_setting() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_session_setting_override() -> Result<()> {
+async fn test_session_setting_override() -> anyhow::Result<()> {
     // Setup.
     let config = ConfigBuilder::create()
         .max_storage_io_requests(1000)

@@ -69,7 +69,7 @@ async fn apply_block_pruning(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_block_pruner() -> Result<()> {
+async fn test_block_pruner() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 

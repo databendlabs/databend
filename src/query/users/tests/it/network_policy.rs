@@ -16,7 +16,6 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::NetworkPolicy;
@@ -30,7 +29,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_network_policy() -> Result<()> {
+async fn test_user_network_policy() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);

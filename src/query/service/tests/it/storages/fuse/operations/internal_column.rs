@@ -146,7 +146,7 @@ async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_internal_column() -> Result<()> {
+async fn test_internal_column() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();

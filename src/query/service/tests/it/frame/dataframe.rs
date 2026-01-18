@@ -35,7 +35,7 @@ use goldenfile::Mint;
 use tokio_stream::StreamExt;
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_dataframe() -> Result<()> {
+// async fn test_dataframe() -> anyhow::Result<()> {
 //     let fixture = TestFixture::new().await?;
 //     let query_ctx = fixture.new_query_ctx().await?;
 //     fixture.create_default_table().await.unwrap();

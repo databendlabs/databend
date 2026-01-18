@@ -59,7 +59,7 @@ use opendal::raw::OpStat;
 use opendal::raw::RpStat;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture
@@ -138,7 +138,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_do_vacuum_temporary_files() -> Result<()> {
+async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let operator = DataOperator::instance().spill_operator();
@@ -383,7 +383,7 @@ mod test_accessor {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_table_deletion_error() -> anyhow::Result<()> {
     // do_vacuum_drop_table should return Err if file deletion failed
 
     let mut table_info = TableInfo::default();
@@ -412,7 +412,7 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Result<()> {
+async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyhow::Result<()> {
     let mut table_info = TableInfo::default();
     table_info
         .meta
@@ -459,7 +459,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Result<()> {
+async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> anyhow::Result<()> {
     let mut table_info = TableInfo::default();
     table_info
         .meta
@@ -502,7 +502,7 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
 
 // fuse table on external storage is same as internal storage.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_table_external_storage() -> anyhow::Result<()> {
     let meta = TableMeta {
         storage_params: Some(StorageParams::default()),
         ..Default::default()
@@ -531,7 +531,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
+async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()> {
     // errors should not be swallowed in remove_file_in_batch
     let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();

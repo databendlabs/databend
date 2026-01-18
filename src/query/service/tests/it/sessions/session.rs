@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_session() -> Result<()> {
+async fn test_session() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let mut session = TestFixture::create_dummy_session().await;
 
@@ -45,7 +44,7 @@ async fn test_session() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_session_in_management_mode() -> Result<()> {
+async fn test_session_in_management_mode() -> anyhow::Result<()> {
     let config = ConfigBuilder::create().with_management_mode().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 

@@ -1089,7 +1089,7 @@ impl TableContext for CtxDelegation {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_get_same_table_once() -> Result<()> {
+async fn test_get_same_table_once() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

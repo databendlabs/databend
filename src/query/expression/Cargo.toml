@@ -64,6 +64,7 @@ typetag = { workspace = true }
 unicode-segmentation = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }

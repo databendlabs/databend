@@ -15,7 +15,6 @@
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::FuseTable;
@@ -36,7 +35,7 @@ pub fn test_format_field_name() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-pub async fn test_snapshot_consistency() -> Result<()> {
+pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

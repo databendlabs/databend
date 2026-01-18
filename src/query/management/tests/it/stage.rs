@@ -31,7 +31,7 @@ use databend_common_version::BUILD_INFO;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_stage() -> Result<()> {
+async fn test_add_stage() -> anyhow::Result<()> {
     let (kv_api, stage_api) = new_stage_api().await?;
 
     let stage_info = create_test_stage_info();
@@ -58,7 +58,7 @@ async fn test_add_stage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_already_exists_add_stage() -> Result<()> {
+async fn test_already_exists_add_stage() -> anyhow::Result<()> {
     let (_, stage_api) = new_stage_api().await?;
 
     let stage_info = create_test_stage_info();
@@ -78,7 +78,7 @@ async fn test_already_exists_add_stage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_get_stages() -> Result<()> {
+async fn test_successfully_get_stages() -> anyhow::Result<()> {
     let (_, stage_api) = new_stage_api().await?;
 
     let stages = stage_api.get_stages().await?;
@@ -95,7 +95,7 @@ async fn test_successfully_get_stages() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_drop_stage() -> Result<()> {
+async fn test_successfully_drop_stage() -> anyhow::Result<()> {
     let (_, stage_api) = new_stage_api().await?;
 
     let stage_info = create_test_stage_info();
@@ -114,7 +114,7 @@ async fn test_successfully_drop_stage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unknown_stage_drop_stage() -> Result<()> {
+async fn test_unknown_stage_drop_stage() -> anyhow::Result<()> {
     let (_, stage_api) = new_stage_api().await?;
 
     match stage_api.drop_stage("UNKNOWN_ID").await {
@@ -150,7 +150,7 @@ async fn new_stage_api() -> Result<(Arc<MetaStore>, StageMgr)> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_stage_file() -> Result<()> {
+async fn test_add_stage_file() -> anyhow::Result<()> {
     let (kv_api, stage_api) = new_stage_api().await?;
 
     let stage_info = create_test_stage_info();
@@ -190,7 +190,7 @@ async fn test_add_stage_file() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_remove_files() -> Result<()> {
+async fn test_remove_files() -> anyhow::Result<()> {
     let (_kv_api, stage_api) = new_stage_api().await?;
     let stage_info = create_test_stage_info();
     stage_api
