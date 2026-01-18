@@ -881,7 +881,7 @@ impl BloomIndexBuilder {
     ///
     /// This provides approximate NDV based on distinct digests.
     /// Use this for encoding decisions before building the filters.
-    pub fn peek_column_distinct_count(&self) -> HashMap<ColumnId, usize> {
+    pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
         let mut result = HashMap::with_capacity(self.bloom_columns.len());
         for column in &self.bloom_columns {
             if let FilterImplBuilder::Xor(builder) = &column.builder {
