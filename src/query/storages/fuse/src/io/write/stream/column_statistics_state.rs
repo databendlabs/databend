@@ -97,9 +97,8 @@ impl ColumnStatisticsState {
     pub fn peek_column_stats(&self) -> Result<StatisticsOfColumns> {
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
         for (column_id, builder) in &self.col_stats {
-            if let Some(stats) = builder.peek()? {
-                statistics.insert(*column_id, stats);
-            }
+            let stats = builder.peek()?;
+            statistics.insert(*column_id, stats);
         }
         Ok(statistics)
     }
