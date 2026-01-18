@@ -28,6 +28,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -278,6 +279,21 @@ async fn mutation_source_partitions(
         (None, vec![])
     };
 
+    let mut read_column_positions = Vec::new();
+    if !filter_used_columns.is_empty() {
+        let metadata = mutation.metadata.read();
+        for column_index in &filter_used_columns {
+            if let ColumnEntry::BaseTableColumn(base) = metadata.column(*column_index) {
+                if let Some(pos) = base.column_position {
+                    // column_position is 1-based
+                    read_column_positions.push(pos - 1);
+                }
+            }
+        }
+        read_column_positions.sort_unstable();
+        read_column_positions.dedup();
+    }
+
     let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
         let cluster = ctx.get_cluster();
         let is_lazy = fuse_table.is_column_oriented()
@@ -292,7 +308,7 @@ async fn mutation_source_partitions(
         .mutation_read_partitions(
             ctx,
             table_snapshot,
-            filter_used_columns,
+            read_column_positions,
             filters,
             is_lazy,
             is_delete,

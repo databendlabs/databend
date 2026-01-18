@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -53,6 +54,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        internal_columns: Vec<InternalColumn>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
     ) -> Result<()> {
@@ -65,10 +67,25 @@ impl FuseTable {
             };
         let projection = Projection::Columns(col_indices.clone());
         let update_stream_columns = self.change_tracking_enabled();
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
+        let query_internal_columns = !internal_columns.is_empty();
+        let block_reader = self.create_block_reader(
+            ctx.clone(),
+            projection,
+            query_internal_columns,
+            update_stream_columns,
+            false,
+        )?;
 
-        let schema = block_reader.schema().as_ref().clone();
+        let mut schema = block_reader.schema().as_ref().clone();
+        if query_internal_columns {
+            for internal_column in &internal_columns {
+                schema.add_internal_field(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
+                );
+            }
+        }
         let filter_expr = Arc::new(filter.map(|v| {
             v.as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| schema.index_of(name))
@@ -120,6 +137,7 @@ impl FuseTable {
                     filter_expr.clone(),
                     block_reader.clone(),
                     remain_reader.clone(),
+                    internal_columns.clone(),
                     ops.clone(),
                     self.storage_format,
                 )
