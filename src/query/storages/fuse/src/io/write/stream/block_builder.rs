@@ -397,10 +397,10 @@ impl StreamBlockBuilder {
             cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
 
             // Override HLL-estimated NDV with accurate counts from bloom index builders
-            // This provides precise cardinality for encoding decisions (e.g., delta_binary_packed)
-            let bloom_ndv = self.bloom_index_builder.peek_column_distinct_count();
-            for (col_id, accurate_ndv) in bloom_ndv {
-                cols_ndv.insert(col_id, accurate_ndv);
+            // This provides more precise / supplement NDV information for encoding decisions (e.g., delta_binary_packed)
+            let bloom_ndv = self.bloom_index_builder.peek_cols_ndv();
+            for (col_id, ndv) in bloom_ndv {
+                cols_ndv.insert(col_id, ndv);
             }
 
             // Get column statistics and fill in NDV information

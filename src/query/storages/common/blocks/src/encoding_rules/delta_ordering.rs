@@ -19,7 +19,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
@@ -65,8 +64,10 @@ fn traverse_values_dfs(
     for (entry, field) in columns.iter().zip(fields) {
         let mut next_column_id = field.column_id;
         match entry {
-            BlockEntry::Const(scalar, data_type, _) => {
-                traverse_scalar_recursive(scalar, data_type, &mut next_column_id)?;
+            BlockEntry::Const(..) => {
+                // Skip const entries: delta ordering stats can only be computed from columns,
+                // not from constant scalar values. The downstream filter (line 50) would
+                // reject any Value::Scalar anyway.
             }
             BlockEntry::Column(column) => {
                 traverse_column_recursive(
@@ -146,41 +147,6 @@ fn traverse_column_recursive(
                 Value::Column(column.clone()),
                 data_type.clone(),
             ));
-            *next_column_id += 1;
-        }
-    }
-    Ok(())
-}
-
-fn traverse_scalar_recursive(
-    scalar: &Scalar,
-    data_type: &DataType,
-    next_column_id: &mut ColumnId,
-) -> Result<()> {
-    match data_type.remove_nullable() {
-        DataType::Tuple(inner_types) => {
-            let inner_scalars = if data_type.is_nullable() && *scalar == Scalar::Null {
-                inner_types.iter().map(Scalar::default_value).collect()
-            } else {
-                scalar.as_tuple().unwrap().clone()
-            };
-            for (inner_scalar, inner_type) in inner_scalars.iter().zip(inner_types.iter()) {
-                traverse_scalar_recursive(inner_scalar, inner_type, next_column_id)?;
-            }
-        }
-        DataType::Array(inner_type) => {
-            *next_column_id += inner_type.num_leaf_columns() as u32;
-        }
-        DataType::Map(inner_type) => match *inner_type {
-            DataType::Tuple(ref inner_types) => {
-                *next_column_id += inner_types
-                    .iter()
-                    .map(|inner_type| inner_type.num_leaf_columns())
-                    .sum::<usize>() as u32;
-            }
-            _ => unreachable!(),
-        },
-        _ => {
             *next_column_id += 1;
         }
     }
