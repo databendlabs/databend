@@ -81,7 +81,7 @@ pub trait ColumnStatsOps {
 }
 
 pub trait ColumnStatsPeek {
-    fn peek(&self) -> Result<Option<ColumnStatistics>>;
+    fn peek(&self) -> Result<ColumnStatistics>;
 }
 
 impl<T, A> ColumnStatsOps for GenericColumnStatisticsBuilder<T, A>
@@ -344,18 +344,14 @@ where
         )
     }
 
-    fn peek(&self) -> Result<Option<ColumnStatistics>> {
-        if self.min.is_none() && self.max.is_none() && self.null_count == 0 {
-            return Ok(None);
-        }
-        let stats = Self::build_statistics(
+    fn peek(&self) -> Result<ColumnStatistics> {
+        Self::build_statistics(
             self.min.clone(),
             self.max.clone(),
             self.null_count,
             self.in_memory_size,
             &self.data_type,
-        )?;
-        Ok(Some(stats))
+        )
     }
 
     fn build_statistics(
@@ -396,7 +392,7 @@ where
 }
 
 impl ColumnStatsPeek for ColumnStatisticsBuilder {
-    fn peek(&self) -> Result<Option<ColumnStatistics>> {
+    fn peek(&self) -> Result<ColumnStatistics> {
         match self {
             ColumnStatisticsBuilder::Int8(inner) => inner.peek(),
             ColumnStatisticsBuilder::Int16(inner) => inner.peek(),
