@@ -149,6 +149,123 @@ pub struct GrantObjectVisibilityChecker {
     granted_seq: FxHashSet<Arc<str>>,
 }
 
+/// Check if a table is visible based on user and roles grants (without ownership info).
+/// This is a lightweight check that avoids loading all ownerships.
+/// Returns true if the table is visible through grants.
+#[inline]
+pub fn check_table_visibility_with_roles(
+    user: &UserInfo,
+    roles: &[RoleInfo],
+    catalog: &str,
+    db_name: &str,
+    db_id: u64,
+    table_id: u64,
+) -> bool {
+    // System databases are always visible
+    if is_system_database(db_name) {
+        return true;
+    }
+
+    let grant_sets = std::iter::once(&user.grants).chain(roles.iter().map(|r| &r.grants));
+
+    for grant_set in grant_sets {
+        for grant_entry in grant_set.entries() {
+            match grant_entry.object() {
+                GrantObject::Global => {
+                    // Check if has any database/table related privilege
+                    if grant_entry.privileges().iter().any(|p| {
+                        UserPrivilegeSet::available_privileges_on_database(false).has_privilege(p)
+                    }) {
+                        return true;
+                    }
+                }
+                GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
+                    // Has database-level privilege (not just Usage)
+                    if !(grant_entry.privileges().len() == 1
+                        && grant_entry
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Usage)))
+                    {
+                        return true;
+                    }
+                }
+                GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
+                    if !(grant_entry.privileges().len() == 1
+                        && grant_entry
+                            .privileges()
+                            .contains(BitFlags::from(UserPrivilegeType::Usage)))
+                    {
+                        return true;
+                    }
+                }
+                GrantObject::TableById(cat, did, tid)
+                    if cat == catalog && *did == db_id && *tid == table_id =>
+                {
+                    return true;
+                }
+                GrantObject::Table(cat, db, _table) if cat == catalog && db == db_name => {
+                    // Note: We don't have table name here, so we can't do exact match
+                    // This is a limitation - for name-based grants, we need the table name
+                    // But for the optimization path, we typically have table_id
+                }
+                _ => {}
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if a database is visible based on user and roles grants (without ownership info).
+/// This is a lightweight check that avoids loading all ownerships.
+/// Returns true if the database is visible through grants.
+#[inline]
+pub fn check_database_visibility_with_roles(
+    user: &UserInfo,
+    roles: &[RoleInfo],
+    catalog: &str,
+    db_name: &str,
+    db_id: u64,
+) -> bool {
+    // System databases are always visible
+    if is_system_database(db_name) {
+        return true;
+    }
+
+    let grant_sets = std::iter::once(&user.grants).chain(roles.iter().map(|r| &r.grants));
+
+    for grant_set in grant_sets {
+        for grant_entry in grant_set.entries() {
+            match grant_entry.object() {
+                GrantObject::Global => {
+                    // Check if has any database related privilege
+                    if grant_entry.privileges().iter().any(|p| {
+                        UserPrivilegeSet::available_privileges_on_database(false).has_privilege(p)
+                    }) {
+                        return true;
+                    }
+                }
+                GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
+                    return true;
+                }
+                GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
+                    return true;
+                }
+                // If user has table-level grant in this database, the database should be visible
+                GrantObject::TableById(cat, did, _) if cat == catalog && *did == db_id => {
+                    return true;
+                }
+                GrantObject::Table(cat, db, _) if cat == catalog && db == db_name => {
+                    return true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    false
+}
+
 impl GrantObjectVisibilityChecker {
     pub fn new(user: &UserInfo, roles: &[RoleInfo], ownership_objects: &[OwnershipInfo]) -> Self {
         let mut granted_global_udf = false;

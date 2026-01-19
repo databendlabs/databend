@@ -30,6 +30,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
@@ -43,6 +44,8 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
+use databend_common_users::UserApiProvider;
+use databend_common_users::check_table_visibility_with_roles;
 use log::warn;
 
 use crate::generate_catalog_meta;
@@ -290,6 +293,96 @@ pub(crate) async fn dump_tables(
         }
     }
 
+    // Threshold for using optimized path without visibility_checker
+    const OPTIMIZED_PATH_THRESHOLD: usize = 20;
+
+    // Optimized path: when filter specifies limited databases and tables,
+    // use lightweight permission check without loading all ownerships
+    let filter_count = if !filtered_db_names.is_empty() && !filtered_table_names.is_empty() {
+        filtered_db_names.len() * filtered_table_names.len()
+    } else {
+        0
+    };
+    let use_optimized_path = filter_count > 0
+        && filter_count <= OPTIMIZED_PATH_THRESHOLD
+        && !catalog.is_external();
+
+    if use_optimized_path {
+        // Get effective roles once for permission checking
+        let current_user = ctx.get_current_user()?;
+        let effective_roles = ctx.get_all_effective_roles().await?;
+        let user_api = UserApiProvider::instance();
+
+        let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::new();
+
+        for db_name in &filtered_db_names {
+            match catalog.get_database(&tenant, db_name).await {
+                Ok(db) => {
+                    let db_id = db.get_db_info().database_id.db_id;
+                    let mut visible_tables = Vec::new();
+
+                    for table_name in &filtered_table_names {
+                        match catalog.get_table(&tenant, db_name, table_name).await {
+                            Ok(table) => {
+                                let table_id = table.get_id();
+
+                                // Get ownership for this specific table
+                                let ownership = user_api
+                                    .get_ownership(&tenant, &OwnershipObject::Table {
+                                        catalog_name: catalog.name().to_string(),
+                                        db_id,
+                                        table_id,
+                                    })
+                                    .await
+                                    .ok()
+                                    .flatten();
+                                let owner_role = ownership.map(|o| o.role.clone());
+
+                                // Check if user is owner
+                                let is_owner = owner_role.as_ref().is_some_and(|role| {
+                                    effective_roles.iter().any(|r| r.name == *role)
+                                });
+
+                                // Check visibility through grants (lightweight check)
+                                let is_visible = is_owner
+                                    || check_table_visibility_with_roles(
+                                        &current_user,
+                                        &effective_roles,
+                                        &catalog.name(),
+                                        db_name,
+                                        db_id,
+                                        table_id,
+                                    );
+
+                                if is_visible {
+                                    visible_tables.push(table);
+                                }
+                            }
+                            Err(err) => {
+                                let msg = format!(
+                                    "Failed to get table {}.{}: {}",
+                                    db_name, table_name, err
+                                );
+                                warn!("{}", msg);
+                            }
+                        }
+                    }
+
+                    if !visible_tables.is_empty() {
+                        final_tables.push((db_name.clone(), visible_tables));
+                    }
+                }
+                Err(err) => {
+                    let msg = format!("Failed to get database {}: {}", db_name, err);
+                    warn!("{}", msg);
+                }
+            }
+        }
+
+        return Ok(final_tables);
+    }
+
+    // Slow path: need full visibility checker
     let visibility_checker = if catalog.is_external() {
         None
     } else {
