@@ -1,0 +1,60 @@
+control sortmode rowsort
+
+statement ok
+drop table if exists lazy_join_t1 all;
+
+statement ok
+drop table if exists lazy_join_t2 all;
+
+statement ok
+create or replace table lazy_join_t1(
+  id int,
+  a int,
+  wide varchar,
+  create_time timestamp
+) engine = FUSE;
+
+statement ok
+create or replace table lazy_join_t2(
+  id int,
+  b int,
+  wide2 varchar
+) engine = FUSE;
+
+statement ok
+insert into lazy_join_t1 values
+  (1, 10, 'aaa', '2021-01-01 00:00:00'),
+  (2, 20, 'bbb', '2021-01-02 00:00:00'),
+  (3, 30, 'ccc', '2021-01-03 00:00:00');
+
+statement ok
+insert into lazy_join_t2 values
+  (1, 100, 'xxx'),
+  (2, 200, 'yyy'),
+  (3, 300, 'zzz');
+
+statement ok
+analyze table lazy_join_t1;
+
+statement ok
+analyze table lazy_join_t2;
+
+statement ok
+set lazy_read_threshold = 10;
+
+query IITIT
+select t1.id, t1.a, t1.wide, t2.b, t2.wide2
+from lazy_join_t1 as t1
+inner join lazy_join_t2 as t2 on t1.id = t2.id
+where t1.create_time >= '2021-01-02 00:00:00'
+limit 2;
+----
+2 20 bbb 200 yyy
+3 30 ccc 300 zzz
+
+statement ok
+EXPLAIN SELECT t1.id, t1.a, t1.wide, t2.b, t2.wide2
+FROM lazy_join_t1 AS t1
+INNER JOIN lazy_join_t2 AS t2 ON t1.id = t2.id
+WHERE t1.create_time >= '2021-01-02 00:00:00'
+LIMIT 2;
