@@ -48,6 +48,7 @@
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![feature(debug_closure_helpers)]
+#![feature(stmt_expr_attributes)]
 
 extern crate core;
 

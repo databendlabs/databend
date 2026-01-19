@@ -68,11 +68,12 @@ impl SemiRightHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(SemiRightHashJoin {
@@ -115,7 +116,7 @@ impl Join for SemiRightHashJoin {
         let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -124,6 +125,9 @@ impl Join for SemiRightHashJoin {
 
                 let probe_data = ProbeData::new(probe_keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
+            }
+            HashJoinHashTable::NestedLoop(_) => {
+                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
