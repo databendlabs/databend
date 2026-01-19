@@ -41,6 +41,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::check_database_visibility_with_roles;
+use databend_common_users::is_role_owner;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -170,15 +171,10 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                                     catalog_name: ctl_name.to_string(),
                                     db_id,
                                 })
-                                .await
-                                .ok()
-                                .flatten();
+                                .await?;
                             let owner_role = ownership.map(|o| o.role.clone());
-
-                            // Check if user is owner
-                            let is_owner = owner_role.as_ref().is_some_and(|role| {
-                                effective_roles.iter().any(|r| r.name == *role)
-                            });
+                            let is_owner =
+                                is_role_owner(owner_role.as_deref(), &effective_roles);
 
                             // Check visibility through grants (lightweight check)
                             let is_visible = is_owner
