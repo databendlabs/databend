@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::io;
 use std::marker::PhantomData;
 
-use databend_common_meta_stoerr::MetaStorageError;
 use fastrace::func_name;
 use log::debug;
 use sled::IVec;
@@ -70,10 +70,7 @@ impl<KV: SledKeySpace> SledItem<KV> {
 #[allow(clippy::type_complexity)]
 impl SledTree {
     /// Open SledTree
-    pub fn open<N: AsRef<[u8]> + Display>(
-        db: &sled::Db,
-        tree_name: N,
-    ) -> Result<Self, MetaStorageError> {
+    pub fn open<N: AsRef<[u8]> + Display>(db: &sled::Db, tree_name: N) -> Result<Self, io::Error> {
         // During testing, every tree name must be unique.
         if cfg!(test) {
             let x = tree_name.as_ref();
@@ -115,10 +112,7 @@ impl SledTree {
     }
 
     /// Retrieve the value of key.
-    pub(crate) fn get<KV: SledKeySpace>(
-        &self,
-        key: &KV::K,
-    ) -> Result<Option<KV::V>, MetaStorageError> {
+    pub(crate) fn get<KV: SledKeySpace>(&self, key: &KV::K) -> Result<Option<KV::V>, io::Error> {
         let got = self.tree.get(KV::serialize_key(key)?)?;
 
         let v = match got {
@@ -136,7 +130,7 @@ impl SledTree {
         &self,
         key: &KV::K,
         flush: bool,
-    ) -> Result<Option<usize>, MetaStorageError>
+    ) -> Result<Option<usize>, io::Error>
     where
         KV: SledKeySpace,
     {
@@ -152,7 +146,7 @@ impl SledTree {
     }
 
     #[fastrace::trace]
-    async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
+    async fn flush_async(&self, flush: bool) -> Result<(), io::Error> {
         debug!("{}: flush: {}", func_name!(), flush);
 
         if flush {
@@ -171,7 +165,7 @@ pub struct AsKeySpace<'a, KV: SledKeySpace> {
 
 #[allow(clippy::type_complexity)]
 impl<KV: SledKeySpace> AsKeySpace<'_, KV> {
-    pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, MetaStorageError> {
+    pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, io::Error> {
         self.inner.get::<KV>(key)
     }
 
@@ -179,7 +173,7 @@ impl<KV: SledKeySpace> AsKeySpace<'_, KV> {
         &self,
         key: &KV::K,
         flush: bool,
-    ) -> Result<Option<usize>, MetaStorageError> {
+    ) -> Result<Option<usize>, io::Error> {
         self.inner.remove_no_return::<KV>(key, flush).await
     }
 }

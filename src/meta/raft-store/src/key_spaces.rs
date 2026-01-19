@@ -181,10 +181,18 @@ impl SledKeySpace for DataHeader {
     type V = Header;
 }
 
+/// Convert SledBytesError to MetaStorageError via io::Error.
+fn sled_bytes_err(e: databend_common_meta_sled_store::SledBytesError) -> MetaStorageError {
+    MetaStorageError::from(std::io::Error::from(e))
+}
+
 /// Serialize SledKeySpace key value pair
 macro_rules! serialize_for_sled {
     ($ks:tt, $key:expr, $value:expr) => {
-        Ok(($ks::serialize_key($key)?, $ks::serialize_value($value)?))
+        Ok((
+            $ks::serialize_key($key).map_err(sled_bytes_err)?,
+            $ks::serialize_value($value).map_err(sled_bytes_err)?,
+        ))
     };
 }
 
@@ -197,8 +205,8 @@ macro_rules! deserialize_by_prefix {
 
         if <$key_space as SledKeySpace>::PREFIX == $prefix {
 
-            let key = SledOrderedSerde::de($vec_key)?;
-            let value = SledSerde::de($vec_value)?;
+            let key = SledOrderedSerde::de($vec_key).map_err(sled_bytes_err)?;
+            let value = SledSerde::de($vec_value).map_err(sled_bytes_err)?;
 
             // Self reference the enum that use this macro
             return Ok(Self::$key_space { key, value, });

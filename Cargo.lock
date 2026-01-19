@@ -4238,7 +4238,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "byteorder",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "fastrace",
  "log",
