@@ -40,6 +40,7 @@ use databend_common_expression::infer_schema_type;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use jsonb::keypath::OwnedKeyPaths;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -118,7 +119,6 @@ pub enum NameResolutionResult {
 pub struct VirtualColumnName {
     pub table_index: IndexType,
     pub source_column_id: ColumnId,
-    pub source_column_name: String,
     pub key_name: String,
 }
 
@@ -717,7 +717,9 @@ impl BindContext {
     pub fn add_virtual_column_binding(
         &mut self,
         metadata: MetadataRef,
+        source_column_name: &str,
         virtual_column_name: VirtualColumnName,
+        key_paths: OwnedKeyPaths,
     ) -> Option<ColumnBinding> {
         if !self.allow_virtual_column {
             return None;
@@ -767,7 +769,6 @@ impl BindContext {
                     }
                 };
 
-                let source_column_name = virtual_column_name.source_column_name.clone();
                 let source_column_id = virtual_column_name.source_column_id;
                 let column_name = virtual_column_name.key_name.clone();
                 // todo
@@ -776,10 +777,11 @@ impl BindContext {
 
                 let column_index = metadata.add_virtual_column(
                     table_index,
-                    source_column_name,
+                    source_column_name.to_string(),
                     source_column_id,
                     column_id,
                     column_name,
+                    key_paths,
                     table_data_type,
                     is_try,
                 );

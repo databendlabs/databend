@@ -6438,20 +6438,21 @@ impl<'a> TypeChecker<'a> {
         if !self.bind_context.allow_virtual_column {
             return None;
         }
-        // let name = Self::keypaths_to_name(column_name, keypaths);
-        let key_name = Self::keypaths_to_name(&format!("{}", column_id), keypaths);
-
+        let owned_keypaths = keypaths.to_owned();
+        let key_name = Self::keypaths_to_name(column_name, keypaths);
         let virtual_column_name = VirtualColumnName {
             table_index,
             source_column_id: column_id,
-            source_column_name: column_name.to_string(),
             key_name,
         };
 
         // add virtual column binding into `BindContext`
-        let column = self
-            .bind_context
-            .add_virtual_column_binding(self.metadata.clone(), virtual_column_name)?;
+        let column = self.bind_context.add_virtual_column_binding(
+            self.metadata.clone(),
+            column_name,
+            virtual_column_name,
+            owned_keypaths,
+        )?;
 
         let data_type = *column.data_type.clone();
         Some(Box::new((

@@ -16,16 +16,19 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_array::RecordBatch;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::eval_function;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -33,6 +36,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
+use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::arrow_reader::RowSelection;
 
@@ -45,7 +49,7 @@ pub struct VirtualBlockReadResult {
     pub compression: Compression,
     pub data: BlockReadResult,
     pub schema: TableSchemaRef,
-    pub shared_virtual_column_names: BTreeMap<ColumnId, Vec<String>>,
+    pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
 }
@@ -56,7 +60,7 @@ impl VirtualBlockReadResult {
         compression: Compression,
         data: BlockReadResult,
         schema: TableSchemaRef,
-        shared_virtual_column_names: BTreeMap<ColumnId, Vec<String>>,
+        virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
         ignore_column_ids: Option<HashSet<ColumnId>>,
     ) -> VirtualBlockReadResult {
         VirtualBlockReadResult {
@@ -64,7 +68,7 @@ impl VirtualBlockReadResult {
             compression,
             data,
             schema,
-            shared_virtual_column_names,
+            virtual_column_read_plan,
             ignore_column_ids,
         }
     }
@@ -83,22 +87,30 @@ impl VirtualColumnReader {
 
         let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
-        for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
+        for (name, column_id) in &virtual_block_meta.virtual_column_name_ids {
+            let Some(virtual_column_meta) = virtual_block_meta.virtual_column_metas.get(column_id)
+            else {
+                continue;
+            };
             let (offset, len) = virtual_column_meta.offset_length();
-            ranges.push((*virtual_column_id, offset..(offset + len)));
+            ranges.push((*column_id, offset..(offset + len)));
             let data_type = virtual_column_meta.data_type();
-
-            let name = format!("{}", virtual_column_id);
-            schema.add_internal_field(&name, data_type, *virtual_column_id);
+            schema.add_internal_field(name, data_type, *column_id);
         }
 
-        for (source_column_id, (shared_key_meta, shared_value_meta)) in
-            &virtual_block_meta.shared_virtual_column_metas
-        {
+        for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
+            let Some(shared_key_meta) = virtual_block_meta.virtual_column_metas.get(base_id) else {
+                continue;
+            };
+            let value_id = base_id + 1;
+            let Some(shared_value_meta) = virtual_block_meta.virtual_column_metas.get(&value_id)
+            else {
+                continue;
+            };
             let (offset, len) = shared_key_meta.offset_length();
-            ranges.push((*source_column_id, offset..(offset + len)));
+            ranges.push((*base_id, offset..(offset + len)));
             let (offset, len) = shared_value_meta.offset_length();
-            ranges.push((*source_column_id + 1, offset..(offset + len)));
+            ranges.push((value_id, offset..(offset + len)));
 
             let name = format!("{}__shared__", source_column_id);
             let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
@@ -108,7 +120,7 @@ impl VirtualColumnReader {
                     TableDataType::Variant,
                 ],
             }));
-            schema.add_internal_field(&name, data_type, *source_column_id);
+            schema.add_internal_field(&name, data_type, *base_id);
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
@@ -126,7 +138,7 @@ impl VirtualColumnReader {
             self.compression.into(),
             block_read_res,
             Arc::new(schema),
-            virtual_block_meta.shared_virtual_column_names.clone(),
+            virtual_block_meta.virtual_column_read_plan.clone(),
             ignore_column_ids,
         ))
     }
@@ -141,9 +153,9 @@ impl VirtualColumnReader {
             .as_ref()
             .map(|virtual_data| virtual_data.schema.clone())
             .unwrap_or_default();
-        let shared_virtual_column_names = virtual_data
+        let virtual_column_read_plan = virtual_data
             .as_ref()
-            .map(|virtual_data| virtual_data.shared_virtual_column_names.clone())
+            .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
             .unwrap_or_default();
         let record_batch = virtual_data
             .map(|virtual_data| {
@@ -162,6 +174,86 @@ impl VirtualColumnReader {
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
+            if let (Some(plans), Some(record_batch)) = (
+                virtual_column_read_plan.get(&virtual_column_field.column_id),
+                record_batch.as_ref(),
+            ) {
+                let target_type: DataType = virtual_column_field.data_type.as_ref().into();
+                let cast_func_name = format!(
+                    "to_{}",
+                    target_type.remove_nullable().to_string().to_lowercase()
+                );
+                let mut args = Vec::new();
+                for plan in plans {
+                    let Some((value, data_type)) = eval_read_plan(
+                        plan,
+                        record_batch,
+                        &orig_schema,
+                        &func_ctx,
+                        data_block.num_rows(),
+                    )?
+                    else {
+                        continue;
+                    };
+                    let (value, data_type) = if data_type != target_type {
+                        eval_function(
+                            None,
+                            &cast_func_name,
+                            [(value, data_type)],
+                            &func_ctx,
+                            data_block.num_rows(),
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                    } else {
+                        (value, data_type)
+                    };
+                    args.push((value, data_type));
+                }
+
+                if !args.is_empty() {
+                    let (value, data_type) = if args.len() == 1 {
+                        args.pop().unwrap()
+                    } else {
+                        let mut if_args = Vec::with_capacity(args.len() * 2 - 1);
+                        let last_index = args.len() - 1;
+                        for (idx, (value, data_type)) in args.into_iter().enumerate() {
+                            if idx == last_index {
+                                if_args.push((value, data_type));
+                                break;
+                            }
+                            let (cond, cond_type) = eval_function(
+                                None,
+                                "is_not_null",
+                                [(value.clone(), data_type.clone())],
+                                &func_ctx,
+                                data_block.num_rows(),
+                                &BUILTIN_FUNCTIONS,
+                            )?;
+                            let (nonnull_value, nonnull_type) = eval_function(
+                                None,
+                                "assume_not_null",
+                                [(value, data_type)],
+                                &func_ctx,
+                                data_block.num_rows(),
+                                &BUILTIN_FUNCTIONS,
+                            )?;
+                            if_args.push((cond, cond_type));
+                            if_args.push((nonnull_value, nonnull_type));
+                        }
+                        eval_function(
+                            None,
+                            "if",
+                            if_args,
+                            &func_ctx,
+                            data_block.num_rows(),
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                    };
+                    data_block.add_value(value, data_type);
+                    continue;
+                }
+            }
+
             let name = format!("{}", virtual_column_field.column_id);
             if let Some(arrow_array) = record_batch
                 .as_ref()
@@ -191,44 +283,6 @@ impl VirtualColumnReader {
                 continue;
             }
 
-            let name = format!("{}__shared__", virtual_column_field.source_column_id);
-            if let Some(arrow_array) = record_batch
-                .as_ref()
-                .and_then(|r| r.column_by_name(&name).cloned())
-            {
-                let orig_field = orig_schema.field_with_name(&name).unwrap();
-                let orig_type: DataType = orig_field.data_type().into();
-                let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
-
-                let shared_names = shared_virtual_column_names
-                    .get(&virtual_column_field.source_column_id)
-                    .unwrap();
-                let mut index = 0;
-                for (shared_index, shared_name) in shared_names.iter().enumerate() {
-                    if *shared_name == virtual_column_field.name {
-                        index = shared_index as u32;
-                        break;
-                    }
-                }
-
-                let (shared_value, shared_data_type) = eval_function(
-                    None,
-                    "get",
-                    [
-                        (Value::Column(column), orig_type),
-                        (
-                            Value::Scalar(Scalar::Number(NumberScalar::UInt32(index))),
-                            DataType::Number(NumberDataType::UInt32),
-                        ),
-                    ],
-                    &func_ctx,
-                    data_block.num_rows(),
-                    &BUILTIN_FUNCTIONS,
-                )?;
-                data_block.add_value(shared_value, shared_data_type);
-                continue;
-            }
-
             let src_index = self
                 .source_schema
                 .index_of(&virtual_column_field.source_name)
@@ -236,7 +290,7 @@ impl VirtualColumnReader {
             let source = data_block.get_by_offset(src_index);
             let src_arg = (source.value(), source.data_type());
             let path_arg = (
-                Value::Scalar(virtual_column_field.key_paths.clone()),
+                Value::Scalar(Scalar::String(virtual_column_field.key_paths.to_string())),
                 DataType::String,
             );
 
@@ -265,5 +319,118 @@ impl VirtualColumnReader {
         }
 
         Ok(data_block)
+    }
+}
+
+fn column_from_record_batch(
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    name: &str,
+) -> Result<Option<(Column, DataType)>> {
+    let Some(arrow_array) = record_batch.column_by_name(name).cloned() else {
+        return Ok(None);
+    };
+    let Ok(orig_field) = orig_schema.field_with_name(name) else {
+        return Ok(None);
+    };
+    let orig_type: DataType = orig_field.data_type().into();
+    let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
+    Ok(Some((column, orig_type)))
+}
+
+fn eval_read_plan(
+    plan: &VirtualColumnReadPlan,
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<Option<(Value<AnyType>, DataType)>> {
+    match plan {
+        VirtualColumnReadPlan::Direct { name } => {
+            let Some((column, data_type)) =
+                column_from_record_batch(record_batch, orig_schema, name)?
+            else {
+                return Ok(None);
+            };
+            Ok(Some((Value::Column(column), data_type)))
+        }
+        VirtualColumnReadPlan::FromParent {
+            parent,
+            suffix_path,
+        } => {
+            let Some((value, data_type)) =
+                eval_read_plan(parent, record_batch, orig_schema, func_ctx, num_rows)?
+            else {
+                return Ok(None);
+            };
+            if suffix_path.is_empty() {
+                return Ok(Some((value, data_type)));
+            }
+            let (value, value_type) = eval_function(
+                None,
+                "get_by_keypath",
+                [
+                    (value, data_type),
+                    (
+                        Value::Scalar(Scalar::String(suffix_path.clone())),
+                        DataType::String,
+                    ),
+                ],
+                func_ctx,
+                num_rows,
+                &BUILTIN_FUNCTIONS,
+            )?;
+            Ok(Some((value, value_type)))
+        }
+        VirtualColumnReadPlan::Shared {
+            source_column_id,
+            index,
+        } => {
+            let name = format!("{}__shared__", source_column_id);
+            let Some((column, data_type)) =
+                column_from_record_batch(record_batch, orig_schema, &name)?
+            else {
+                return Ok(None);
+            };
+            let (value, value_type) = eval_function(
+                None,
+                "get",
+                [
+                    (Value::Column(column), data_type),
+                    (
+                        Value::Scalar(Scalar::Number(NumberScalar::UInt32(*index))),
+                        DataType::Number(NumberDataType::UInt32),
+                    ),
+                ],
+                func_ctx,
+                num_rows,
+                &BUILTIN_FUNCTIONS,
+            )?;
+            Ok(Some((value, value_type)))
+        }
+        VirtualColumnReadPlan::Object { entries } => {
+            if entries.is_empty() {
+                return Ok(None);
+            }
+            let mut args = Vec::with_capacity(entries.len() * 2);
+            for (key, plan) in entries {
+                let Some((value, data_type)) =
+                    eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
+                else {
+                    return Ok(None);
+                };
+                args.push((Value::Scalar(Scalar::String(key.clone())), DataType::String));
+                args.push((value, data_type));
+            }
+            let (value, value_type) = eval_function(
+                None,
+                "object_construct",
+                args,
+                func_ctx,
+                num_rows,
+                &BUILTIN_FUNCTIONS,
+            )?;
+            Ok(Some((value, value_type)))
+        }
     }
 }

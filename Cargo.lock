@@ -3489,6 +3489,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "dyn-clone",
  "goldenfile",
+ "jsonb",
  "log",
  "maplit",
  "parking_lot 0.12.3",
@@ -5259,6 +5260,7 @@ dependencies = [
  "databend-query",
  "databend-storages-common-cache",
  "databend-storages-common-io",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "futures",
  "futures-util",
@@ -5915,13 +5917,10 @@ name = "databend-storages-common-index"
 version = "0.1.0"
 dependencies = [
  "anyerror",
-<<<<<<< HEAD
  "anyhow",
-=======
  "arrow-ipc 56.2.0",
  "arrow-schema 56.2.0",
  "base64 0.22.1",
->>>>>>> c62cfdb41d (refactor(query): Virtual column support shared values)
  "bincode 2.0.1",
  "bitvec",
  "bytemuck",
@@ -10000,7 +9999,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.5"
-source = "git+https://github.com/b41sh/jsonb?rev=68e071d8ebf612457c27625bd9cbb22968f03f97#68e071d8ebf612457c27625bd9cbb22968f03f97"
+source = "git+https://github.com/b41sh/jsonb?rev=03c9aeabbf0d30569f188094de7449d234e005c7#03c9aeabbf0d30569f188094de7449d234e005c7"
 dependencies = [
  "byteorder",
  "ethnum",

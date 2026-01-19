@@ -32,6 +32,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
+use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
@@ -301,6 +302,7 @@ impl Metadata {
         source_column_id: u32,
         column_id: u32,
         column_name: String,
+        key_paths: OwnedKeyPaths,
         data_type: TableDataType,
         is_try: bool,
     ) -> IndexType {
@@ -312,6 +314,7 @@ impl Metadata {
             column_id,
             column_index,
             column_name,
+            key_paths,
             data_type,
             is_try,
         });
@@ -643,6 +646,7 @@ pub struct VirtualColumn {
     pub column_id: u32,
     pub column_index: IndexType,
     pub column_name: String,
+    pub key_paths: OwnedKeyPaths,
     pub data_type: TableDataType,
     /// try cast to target type or not
     pub is_try: bool,

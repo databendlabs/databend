@@ -12,25 +12,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field;
+use arrow_schema::FieldRef;
 use arrow_schema::Schema;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchema;
+use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use parquet::format::FileMetaData;
 
+pub const VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "virtual_column_string_table";
+pub const VIRTUAL_COLUMN_NODES_KEY: &str = "virtual_column_nodes";
+
+// Virtual columns are extracted from Variant/JSON values into independent parquet columns.
+// Each source column builds a trie keyed by path segments; leaf nodes point to either a
+// dedicated virtual column or a shared map entry for sparse paths. The parquet file stores:
+// - ARROW:schema: column names/types for all virtual columns.
+// - VIRTUAL_COLUMN_STRING_TABLE_KEY: a string table of unique path segments.
+// - VIRTUAL_COLUMN_NODES_KEY: the trie encoded by string table ids and leaf indices.
+// Column offsets/lengths/num_values and shared map columns are derived from parquet metadata.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub enum VirtualColumnNameIndex {
+    // column_metas index
+    Column(u32),
+    // shared column index, index is shared map key index
+    Shared { source_id: u32, index: u32 },
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct VirtualColumnNode {
+    // children: segment_id -> child node, where segment_id references string_table.
+    pub children: HashMap<u32, VirtualColumnNode>,
+    // leaf: terminal node that maps to a virtual column or shared map entry.
+    pub leaf: Option<VirtualColumnNameIndex>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct VirtualColumnIdWithMeta {
+    pub column_id: u32,
+    pub meta: SingleColumnMeta,
+    pub data_type: DataType,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnFileMeta {
-    pub columns: HashMap<String, SingleColumnMeta>,
-    pub data_types: HashMap<String, DataType>,
-    pub shared_names: BTreeMap<u32, Vec<String>>,
+    // All unique path segment strings in this file.
+    pub string_table: Vec<String>,
+    // Column metadata for all virtual columns (offset/len/num_values + type + column id).
+    pub column_metas: Vec<VirtualColumnIdWithMeta>,
+    // Sparse paths are stored in a shared map column: source_id -> (key column, value column).
+    pub shared_column_metas: HashMap<u32, (VirtualColumnIdWithMeta, VirtualColumnIdWithMeta)>,
+    // Per source column trie: source_column_id -> root node.
+    pub virtual_column_nodes: HashMap<u32, VirtualColumnNode>,
 }
 
 impl TryFrom<&VirtualColumnFileMeta> for Vec<u8> {
@@ -62,60 +102,93 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
     type Error = ErrorCode;
 
     fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        let rg = meta.row_groups.remove(0);
-        let mut col_metas = HashMap::with_capacity(rg.columns.len());
-        for x in &rg.columns {
-            match &x.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = SingleColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    let column_name = chunk_meta.path_in_schema.join(".");
-                    col_metas.insert(column_name, res);
-                }
-                None => {
-                    panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to VirtualColumnFileMeta"
-                    )
-                }
-            }
-        }
+        let mut arrow_schema = None;
+        let mut string_table = None;
+        let mut virtual_column_nodes = None;
 
-        let mut data_types = HashMap::new();
-        let mut shared_names = BTreeMap::new();
         let key_value_metadata = meta.key_value_metadata.unwrap_or_default();
         for key_value in &key_value_metadata {
             if key_value.key == "ARROW:schema" {
                 let encoded_meta = key_value.value.as_ref().unwrap();
-                let schema = get_arrow_schema_from_metadata(encoded_meta).unwrap();
-                let data_schema = DataSchema::try_from(&schema).unwrap();
-                for field in data_schema.fields() {
-                    data_types.insert(field.name().clone(), field.data_type().clone());
-                }
-            } else if key_value.key == "shared_virtual_column_key_names" {
+                arrow_schema = Some(get_arrow_schema_from_metadata(encoded_meta)?);
+            } else if key_value.key == VIRTUAL_COLUMN_STRING_TABLE_KEY {
                 let encoded_meta = key_value.value.as_ref().unwrap();
-                shared_names = get_shared_virtual_column_names(encoded_meta).unwrap();
+                string_table = Some(get_virtual_column_string_table(encoded_meta)?);
+            } else if key_value.key == VIRTUAL_COLUMN_NODES_KEY {
+                let encoded_meta = key_value.value.as_ref().unwrap();
+                virtual_column_nodes = Some(get_virtual_column_nodes(encoded_meta)?);
             }
         }
 
+        let arrow_schema = arrow_schema.ok_or_else(|| {
+            ErrorCode::Internal("virtual column file missing ARROW:schema metadata")
+        })?;
+        let string_table = string_table.ok_or_else(|| {
+            ErrorCode::Internal("virtual column file missing virtual column string table metadata")
+        })?;
+        let virtual_column_nodes = virtual_column_nodes.ok_or_else(|| {
+            ErrorCode::Internal("virtual column file missing virtual column nodes metadata")
+        })?;
+
+        let rg = meta.row_groups.remove(0);
+        let mut column_metas = Vec::with_capacity(rg.columns.len());
+        let mut shared_column_index: HashMap<u32, (Option<u32>, Option<u32>)> = HashMap::new();
+        for (column_idx, column) in rg.columns.iter().enumerate() {
+            let chunk_meta = column.meta_data.as_ref().ok_or_else(|| {
+                ErrorCode::Internal(
+                    "expecting chunk meta data while converting ThriftFileMetaData to VirtualColumnFileMeta",
+                )
+            })?;
+            let col_start = if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
+                dict_page_offset
+            } else {
+                chunk_meta.data_page_offset
+            };
+            let col_len = chunk_meta.total_compressed_size;
+            assert!(
+                col_start >= 0 && col_len >= 0,
+                "column start and length should not be negative"
+            );
+            let num_values = chunk_meta.num_values as u64;
+            let res = SingleColumnMeta {
+                offset: col_start as u64,
+                len: col_len as u64,
+                num_values,
+            };
+            let data_type = data_type_from_path(&arrow_schema, &chunk_meta.path_in_schema)?;
+            let column_id = column_idx as u32;
+            column_metas.push(VirtualColumnIdWithMeta {
+                column_id,
+                meta: res,
+                data_type,
+            });
+
+            let column_name = chunk_meta.path_in_schema.join(".");
+            if let Some((source_id, is_key)) = parse_shared_column_name(&column_name) {
+                let entry = shared_column_index.entry(source_id).or_insert((None, None));
+                if is_key {
+                    entry.0 = Some(column_id);
+                } else {
+                    entry.1 = Some(column_id);
+                }
+            }
+        }
+
+        let mut shared_column_metas = HashMap::new();
+        for (source_id, (key_idx, value_idx)) in shared_column_index {
+            let (Some(key_idx), Some(value_idx)) = (key_idx, value_idx) else {
+                continue;
+            };
+            let key_meta = column_metas[key_idx as usize].clone();
+            let value_meta = column_metas[value_idx as usize].clone();
+            shared_column_metas.insert(source_id, (key_meta, value_meta));
+        }
+
         Ok(Self {
-            columns: col_metas,
-            data_types,
-            shared_names,
+            string_table,
+            column_metas,
+            shared_column_metas,
+            virtual_column_nodes,
         })
     }
 }
@@ -150,25 +223,87 @@ fn get_arrow_schema_from_metadata(encoded_meta: &str) -> Result<Schema> {
     }
 }
 
-fn get_shared_virtual_column_names(
-    encoded_shared_names: &str,
-) -> Result<BTreeMap<u32, Vec<String>>> {
-    let mut shared_virtual_column_names = BTreeMap::new();
-    let v: serde_json::Value = serde_json::from_str(encoded_shared_names)?;
-    if let Some(obj) = v.as_object() {
-        for (key_str, val) in obj.iter() {
-            let Ok(source_column_id) = key_str.parse::<u32>() else {
-                continue;
-            };
-            let Some(vals) = val.as_array() else {
-                continue;
-            };
-            let names: Vec<String> = vals
-                .iter()
-                .map(|val| val.as_str().unwrap().to_string())
-                .collect();
-            shared_virtual_column_names.insert(source_column_id, names);
-        }
+fn get_virtual_column_string_table(encoded_meta: &str) -> Result<Vec<String>> {
+    serde_json::from_str(encoded_meta).map_err(|e| {
+        ErrorCode::StorageOther(format!(
+            "failed to decode virtual column string table {:?}",
+            e
+        ))
+    })
+}
+
+fn get_virtual_column_nodes(encoded_meta: &str) -> Result<HashMap<u32, VirtualColumnNode>> {
+    serde_json::from_str(encoded_meta).map_err(|e| {
+        ErrorCode::StorageOther(format!("failed to decode virtual column nodes {:?}", e))
+    })
+}
+
+fn data_type_from_path(schema: &Schema, path: &[String]) -> Result<DataType> {
+    let field = find_arrow_field(schema.fields(), path).ok_or_else(|| {
+        ErrorCode::Internal(format!("failed to find arrow field for path {:?}", path))
+    })?;
+    let table_field = TableField::try_from(field)?;
+    Ok(DataType::from(table_field.data_type()))
+}
+
+fn find_arrow_field<'a>(fields: &'a [FieldRef], path: &[String]) -> Option<&'a Field> {
+    if path.is_empty() {
+        return None;
     }
-    Ok(shared_virtual_column_names)
+    let field_ref = fields
+        .iter()
+        .find(|field| field.name().as_str() == path[0].as_str())?;
+    let field = field_ref.as_ref();
+    if path.len() == 1 {
+        return Some(field);
+    }
+    find_arrow_field_in_type(field.data_type(), &path[1..])
+}
+
+fn find_arrow_field_in_type<'a>(
+    data_type: &'a ArrowDataType,
+    path: &[String],
+) -> Option<&'a Field> {
+    if path.is_empty() {
+        return None;
+    }
+    match data_type {
+        ArrowDataType::Struct(fields) => find_arrow_field(fields, path),
+        ArrowDataType::Map(child, _) => {
+            if child.name().as_str() != path[0].as_str() {
+                return None;
+            }
+            if path.len() == 1 {
+                return Some(child.as_ref());
+            }
+            find_arrow_field_in_type(child.data_type(), &path[1..])
+        }
+        ArrowDataType::List(child)
+        | ArrowDataType::LargeList(child)
+        | ArrowDataType::FixedSizeList(child, _) => {
+            if child.name().as_str() != path[0].as_str() {
+                return None;
+            }
+            if path.len() == 1 {
+                return Some(child.as_ref());
+            }
+            find_arrow_field_in_type(child.data_type(), &path[1..])
+        }
+        _ => None,
+    }
+}
+
+fn parse_shared_column_name(name: &str) -> Option<(u32, bool)> {
+    const SHARED_KEY_SUFFIX: &str = ".__shared_virtual_column_data__.entries.key";
+    const SHARED_VALUE_SUFFIX: &str = ".__shared_virtual_column_data__.entries.value";
+
+    if let Some(prefix) = name.strip_suffix(SHARED_KEY_SUFFIX) {
+        let source_id = prefix.parse::<u32>().ok()?;
+        return Some((source_id, true));
+    }
+    if let Some(prefix) = name.strip_suffix(SHARED_VALUE_SUFFIX) {
+        let source_id = prefix.parse::<u32>().ok()?;
+        return Some((source_id, false));
+    }
+    None
 }

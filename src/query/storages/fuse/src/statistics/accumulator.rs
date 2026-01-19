@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -35,7 +34,6 @@ use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
-use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
@@ -127,16 +125,14 @@ impl VirtualColumnAccumulator {
     pub fn add_virtual_column_metas(
         &mut self,
         draft_virtual_column_metas: &Vec<DraftVirtualColumnMeta>,
-    ) -> HashMap<ColumnId, VirtualColumnMeta> {
-        let mut virtual_column_metas = HashMap::new();
-
+    ) {
         for draft_virtual_column_meta in draft_virtual_column_metas {
             let key = (
                 draft_virtual_column_meta.source_column_id,
                 draft_virtual_column_meta.name.clone(),
             );
 
-            let column_id = if let Some(field_idx) = self.virtual_fields.get(&key) {
+            if let Some(field_idx) = self.virtual_fields.get(&key) {
                 let virtual_field =
                     unsafe { self.virtual_schema.fields.get_unchecked_mut(*field_idx) };
                 if !virtual_field
@@ -147,7 +143,6 @@ impl VirtualColumnAccumulator {
                         .data_types
                         .push(draft_virtual_column_meta.data_type.clone());
                 }
-                virtual_field.column_id
             } else {
                 if self.virtual_schema.is_full() {
                     continue;
@@ -161,14 +156,10 @@ impl VirtualColumnAccumulator {
                     source_column_id: draft_virtual_column_meta.source_column_id,
                     column_id: 0,
                 };
-                self.virtual_schema.add_field(new_virtual_field).unwrap()
-            };
-
-            virtual_column_metas.insert(column_id, draft_virtual_column_meta.column_meta.clone());
+                self.virtual_schema.add_field(new_virtual_field).unwrap();
+            }
         }
         self.number_of_blocks += 1;
-
-        virtual_column_metas
     }
 
     pub fn build_virtual_schema(self) -> Option<VirtualDataSchema> {

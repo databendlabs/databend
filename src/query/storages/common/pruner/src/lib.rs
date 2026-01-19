@@ -24,6 +24,7 @@ mod topn_pruner;
 
 pub use block_meta::BlockMetaIndex;
 pub use block_meta::VirtualBlockMetaIndex;
+pub use block_meta::VirtualColumnReadPlan;
 pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;

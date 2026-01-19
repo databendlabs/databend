@@ -619,13 +619,12 @@ impl TableMutationAggregator {
                     let mut new_block_meta = extended_block_meta.block_meta.clone();
                     if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
                         // generate ColumnId for virtual columns.
-                        let virtual_column_metas = virtual_column_accumulator
-                            .add_virtual_column_metas(
-                                &draft_virtual_block_meta.virtual_column_metas,
-                            );
+                        virtual_column_accumulator.add_virtual_column_metas(
+                            &draft_virtual_block_meta.virtual_column_metas,
+                        );
 
                         let virtual_block_meta = VirtualBlockMeta {
-                            virtual_column_metas,
+                            virtual_column_metas: HashMap::new(),
                             virtual_column_size: draft_virtual_block_meta.virtual_column_size,
                             virtual_location: draft_virtual_block_meta.virtual_location.clone(),
                         };
@@ -687,11 +686,11 @@ impl TableMutationAggregator {
 
                 if let Some(ref mut virtual_column_accumulator) = virtual_column_accumulator {
                     // generate ColumnId for virtual columns.
-                    let virtual_column_metas = virtual_column_accumulator
+                    virtual_column_accumulator
                         .add_virtual_column_metas(&draft_virtual_block_meta.virtual_column_metas);
 
                     let virtual_block_meta = VirtualBlockMeta {
-                        virtual_column_metas,
+                        virtual_column_metas: HashMap::new(),
                         virtual_column_size: draft_virtual_block_meta.virtual_column_size,
                         virtual_location: draft_virtual_block_meta.virtual_location.clone(),
                     };
