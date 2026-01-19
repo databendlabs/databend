@@ -59,6 +59,8 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::check_table_visibility_with_roles;
+use databend_common_users::has_table_name_grants;
+use databend_common_users::is_role_owner;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
 
@@ -465,7 +467,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         // Optimized path: when filter specifies limited databases and tables,
         // use lightweight permission check without loading all ownerships
         let filter_count = db_name.len() * (tables_names.len() + tables_ids.len()).max(1);
-        let use_optimized_path = !db_name.is_empty()
+        let mut use_optimized_path = !db_name.is_empty()
             && (tables_names.len() + tables_ids.len()) > 0
             && filter_count <= OPTIMIZED_PATH_THRESHOLD
             && !WITH_HISTORY
@@ -476,96 +478,100 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             let current_user = ctx.get_current_user()?;
             let effective_roles = ctx.get_all_effective_roles().await?;
 
-            for (ctl_name, ctl) in ctls.iter() {
-                for db in &db_name {
-                    match ctl.get_database(&tenant, db.as_str()).await {
-                        Ok(database) => dbs.push(database),
-                        Err(err) => {
-                            let msg = format!("Failed to get database: {}, {}", db, err);
-                            warn!("{}", msg);
+            // If grants use table names, fall back to slow path for exact match.
+            if has_table_name_grants(&current_user, &effective_roles) {
+                use_optimized_path = false;
+            } else {
+                for (ctl_name, ctl) in ctls.iter() {
+                    for db in &db_name {
+                        match ctl.get_database(&tenant, db.as_str()).await {
+                            Ok(database) => dbs.push(database),
+                            Err(err) => {
+                                let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                            }
                         }
                     }
-                }
-                match ctl
-                    .mget_table_names_by_ids(&tenant, &tables_ids, false)
-                    .await
-                {
-                    Ok(new_tables) => {
-                        let new_table_names: BTreeSet<_> =
-                            new_tables.into_iter().flatten().collect();
-                        tables_names.extend(new_table_names);
+                    match ctl
+                        .mget_table_names_by_ids(&tenant, &tables_ids, false)
+                        .await
+                    {
+                        Ok(new_tables) => {
+                            let new_table_names: BTreeSet<_> =
+                                new_tables.into_iter().flatten().collect();
+                            tables_names.extend(new_table_names);
+                        }
+                        Err(err) => {
+                            // swallow the errors related with mget tables
+                            warn!("Failed to get tables: {}, {}", ctl.name(), err);
+                        }
                     }
-                    Err(err) => {
-                        // swallow the errors related with mget tables
-                        warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                    }
-                }
 
-                for table_name in &tables_names {
-                    for db in &dbs {
-                        match ctl.get_table(&tenant, db.name(), table_name).await {
-                            Ok(t) => {
-                                let db_id = db.get_db_info().database_id.db_id;
-                                let table_id = t.get_id();
+                    for table_name in &tables_names {
+                        for db in &dbs {
+                            match ctl.get_table(&tenant, db.name(), table_name).await {
+                                Ok(t) => {
+                                    let db_id = db.get_db_info().database_id.db_id;
+                                    let table_id = t.get_id();
 
-                                // Get ownership for this specific table
-                                let ownership = user_api
-                                    .role_api(&tenant)
-                                    .get_ownership(&OwnershipObject::Table {
-                                        catalog_name: ctl_name.to_string(),
-                                        db_id,
-                                        table_id,
-                                    })
-                                    .await?;
-                                let owner_role = ownership.map(|o| o.role);
+                                    // Get ownership for this specific table
+                                    let ownership = user_api
+                                        .role_api(&tenant)
+                                        .get_ownership(&OwnershipObject::Table {
+                                            catalog_name: ctl_name.to_string(),
+                                            db_id,
+                                            table_id,
+                                        })
+                                        .await?;
+                                    let owner_role = ownership.map(|o| o.role);
+                                    let is_owner =
+                                        is_role_owner(owner_role.as_deref(), &effective_roles);
 
-                                // Check if user is owner
-                                let is_owner = owner_role.as_ref().is_some_and(|role| {
-                                    effective_roles.iter().any(|r| r.name == *role)
-                                });
+                                    // Check visibility through grants (lightweight check)
+                                    let is_visible = is_owner
+                                        || check_table_visibility_with_roles(
+                                            &current_user,
+                                            &effective_roles,
+                                            ctl_name,
+                                            db.name(),
+                                            db_id,
+                                            table_id,
+                                        );
 
-                                // Check visibility through grants (lightweight check)
-                                let is_visible = is_owner
-                                    || check_table_visibility_with_roles(
-                                        &current_user,
-                                        &effective_roles,
-                                        ctl_name,
-                                        db.name(),
-                                        db_id,
-                                        table_id,
-                                    );
-
-                                if is_visible {
-                                    push_table_info(
-                                        &mut catalogs,
-                                        &mut databases,
-                                        &mut databases_ids,
-                                        &mut database_tables,
-                                        &mut owners,
-                                        ctl_name,
-                                        db.name(),
-                                        db.get_db_info().database_id.db_id,
-                                        t,
-                                        owner_role,
-                                    );
+                                    if is_visible {
+                                        push_table_info(
+                                            &mut catalogs,
+                                            &mut databases,
+                                            &mut databases_ids,
+                                            &mut database_tables,
+                                            &mut owners,
+                                            ctl_name,
+                                            db.name(),
+                                            db.get_db_info().database_id.db_id,
+                                            t,
+                                            owner_role,
+                                        );
+                                    }
                                 }
-                            }
-                            Err(err) => {
-                                let msg = format!(
-                                    "Failed to get table in database: {}.{}, {}",
-                                    ctl_name,
-                                    db.name(),
-                                    err
-                                );
-                                // warn no need to pad in ctx
-                                warn!("{}", msg);
-                                continue;
+                                Err(err) => {
+                                    let msg = format!(
+                                        "Failed to get table in database: {}.{}, {}",
+                                        ctl_name,
+                                        db.name(),
+                                        err
+                                    );
+                                    // warn no need to pad in ctx
+                                    warn!("{}", msg);
+                                    continue;
+                                }
                             }
                         }
                     }
                 }
             }
-        } else {
+        }
+
+        if !use_optimized_path {
             // Slow path: need full visibility checker
             let visibility_checker = if is_external_catalog {
                 None

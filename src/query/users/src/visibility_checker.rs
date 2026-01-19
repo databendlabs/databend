@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_hashtable::HashMap as FastHashMap;
 use databend_common_hashtable::HashSet as FastHashSet;
 use databend_common_hashtable::HashtableKeyable;
+use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -102,6 +103,21 @@ fn is_system_database(name: &str) -> bool {
     name.eq_ignore_ascii_case("information_schema") || name.eq_ignore_ascii_case("system")
 }
 
+/// Check if a grant entry only has USAGE privilege.
+#[inline(always)]
+fn is_usage_only(grant_entry: &GrantEntry) -> bool {
+    grant_entry.privileges().len() == 1
+        && grant_entry
+            .privileges()
+            .contains(BitFlags::from(UserPrivilegeType::Usage))
+}
+
+/// Check if user is owner based on owner_role and effective_roles.
+#[inline]
+pub fn is_role_owner(owner_role: Option<&str>, effective_roles: &[RoleInfo]) -> bool {
+    owner_role.is_some_and(|role| effective_roles.iter().any(|r| r.name == role))
+}
+
 /// Checks visibility of grant objects (databases, tables, UDFs, stages, etc.) for a user and their roles.
 ///
 /// This structure is optimized for large-scale ownership checking by:
@@ -180,21 +196,12 @@ pub fn check_table_visibility_with_roles(
                     }
                 }
                 GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
-                    // Has database-level privilege (not just Usage)
-                    if !(grant_entry.privileges().len() == 1
-                        && grant_entry
-                            .privileges()
-                            .contains(BitFlags::from(UserPrivilegeType::Usage)))
-                    {
+                    if !is_usage_only(&grant_entry) {
                         return true;
                     }
                 }
                 GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
-                    if !(grant_entry.privileges().len() == 1
-                        && grant_entry
-                            .privileges()
-                            .contains(BitFlags::from(UserPrivilegeType::Usage)))
-                    {
+                    if !is_usage_only(&grant_entry) {
                         return true;
                     }
                 }
@@ -209,6 +216,22 @@ pub fn check_table_visibility_with_roles(
                     // But for the optimization path, we typically have table_id
                 }
                 _ => {}
+            }
+        }
+    }
+
+    false
+}
+
+/// Fast check: return true if any grant uses table name instead of table id.
+#[inline]
+pub fn has_table_name_grants(user: &UserInfo, roles: &[RoleInfo]) -> bool {
+    let grant_sets = std::iter::once(&user.grants).chain(roles.iter().map(|r| &r.grants));
+
+    for grant_set in grant_sets {
+        for grant_entry in grant_set.entries() {
+            if matches!(grant_entry.object(), GrantObject::Table(_, _, _)) {
+                return true;
             }
         }
     }
@@ -246,10 +269,14 @@ pub fn check_database_visibility_with_roles(
                     }
                 }
                 GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
-                    return true;
+                    if !is_usage_only(&grant_entry) {
+                        return true;
+                    }
                 }
                 GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
-                    return true;
+                    if !is_usage_only(&grant_entry) {
+                        return true;
+                    }
                 }
                 // If user has table-level grant in this database, the database should be visible
                 GrantObject::TableById(cat, did, _) if cat == catalog && *did == db_id => {
