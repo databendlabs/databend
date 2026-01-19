@@ -146,6 +146,41 @@ pub struct TrackingPayload {
     pub process_rows: AtomicUsize,
 }
 
+pub trait TrackingPayloadExt {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future;
+}
+
+impl TrackingPayloadExt for Option<Arc<TrackingPayload>> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self)
+    }
+}
+
+impl TrackingPayloadExt for Arc<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(self))
+    }
+}
+
+impl TrackingPayloadExt for TrackingPayload {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(Arc::new(self)))
+    }
+}
+
+impl TrackingPayloadExt for Option<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self.map(Arc::new))
+    }
+}
+
+impl TrackingPayload {}
+
 impl Clone for TrackingPayload {
     fn clone(&self) -> Self {
         TrackingPayload {
@@ -286,6 +321,18 @@ impl ThreadTracker {
 
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
         TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
+    }
+
+    pub fn tracking_future_with_payload<T: Future>(
+        future: T,
+        payload: Option<Arc<TrackingPayload>>,
+    ) -> TrackingFuture<T> {
+        TRACKER.with(move |x| {
+            TrackingFuture::create(
+                future,
+                payload.unwrap_or_else(|| x.borrow().payload.clone()),
+            )
+        })
     }
 
     pub fn tracking_function<F, T>(f: F) -> impl FnOnce() -> T
