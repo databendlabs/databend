@@ -120,7 +120,7 @@ fn test_to_projection_mask() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_projection_from_column_names() -> Result<()> {
+fn test_projection_from_column_names() -> anyhow::Result<()> {
     let schema = TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::Tuple {
@@ -146,7 +146,7 @@ fn test_projection_from_column_names() -> Result<()> {
 }
 
 #[test]
-fn test_projection_from_column_names_inner_columns() -> Result<()> {
+fn test_projection_from_column_names_inner_columns() -> anyhow::Result<()> {
     let schema = TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::Tuple {
@@ -180,7 +180,7 @@ fn test_projection_from_column_names_inner_columns() -> Result<()> {
 }
 
 #[test]
-fn test_projection_merge() -> Result<()> {
+fn test_projection_merge() -> anyhow::Result<()> {
     // Columns + Columns
     let mut p = Projection::Columns(vec![2, 1, 1]);
     p.merge(&Projection::Columns(vec![3, 1]));
