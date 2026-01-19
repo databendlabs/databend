@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -614,8 +615,8 @@ impl Binder {
         // add previous(subquery) stored non_lazy_columns to non_lazy_cols
         non_lazy_cols.extend(metadata.non_lazy_columns());
 
-        let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
-        let mut lazy_table_indexes = HashSet::new();
+        let lazy_cols: ColumnSet = select_cols.difference(&non_lazy_cols).copied().collect();
+        let mut lazy_table_indexes = BTreeSet::new();
         let mut supported_lazy_cols = ColumnSet::new();
         for index in lazy_cols.iter() {
             let table_index = match metadata.column(*index) {

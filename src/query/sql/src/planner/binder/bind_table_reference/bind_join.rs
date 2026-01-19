@@ -441,22 +441,6 @@ impl Binder {
                     right_conditions,
                 )
             };
-        let logical_join = Join {
-            equi_conditions: JoinEquiCondition::new_conditions(
-                left_conditions,
-                right_conditions,
-                is_null_equal,
-            ),
-            non_equi_conditions,
-            join_type,
-            marker_index: None,
-            from_correlated_subquery: false,
-            need_hold_hash_table: false,
-            is_lateral,
-            single_to_inner: None,
-            build_side_cache_info,
-        };
-
         let mut join_condition_columns = ColumnSet::new();
         for predicate in left_conditions.iter() {
             join_condition_columns.extend(predicate.used_columns());
@@ -473,6 +457,22 @@ impl Binder {
                 .write()
                 .add_non_lazy_columns(join_condition_columns);
         }
+
+        let logical_join = Join {
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                is_null_equal,
+            ),
+            non_equi_conditions,
+            join_type,
+            marker_index: None,
+            from_correlated_subquery: false,
+            need_hold_hash_table: false,
+            is_lateral,
+            single_to_inner: None,
+            build_side_cache_info,
+        };
 
         if logical_join.join_type.is_asof_join() {
             self.rewrite_asof(logical_join, left_child, (right_child, right_context))

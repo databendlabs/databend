@@ -1,0 +1,117 @@
+control sortmode rowsort
+
+statement ok
+create database if not exists test_db;
+
+statement ok
+use test_db;
+
+statement ok
+drop table if exists lazy_t1;
+
+statement ok
+drop table if exists lazy_t2;
+
+statement ok
+create or replace table lazy_t1(
+  id int,
+  a int,
+  wide varchar,
+  create_time timestamp
+) engine = FUSE;
+
+statement ok
+create or replace table lazy_t2(
+  id int,
+  b int,
+  wide2 varchar
+) engine = FUSE;
+
+statement ok
+insert into lazy_t1 values
+  (1, 10, 'aaa', '2021-01-01 00:00:00'),
+  (2, 20, 'bbb', '2021-01-02 00:00:00'),
+  (3, 30, 'ccc', '2021-01-03 00:00:00');
+
+statement ok
+insert into lazy_t2 values
+  (1, 100, 'xxx'),
+  (2, 200, 'yyy'),
+  (3, 300, 'zzz');
+
+statement ok
+analyze table lazy_t1;
+
+statement ok
+analyze table lazy_t2;
+
+statement ok
+set lazy_read_threshold = 10;
+
+query IITIT
+select t1.id, t1.a, t1.wide, t2.b, t2.wide2
+from lazy_t1 as t1
+inner join lazy_t2 as t2 on t1.id = t2.id
+where t1.create_time >= '2021-01-02 00:00:00'
+limit 2;
+----
+2 20 bbb 200 yyy
+3 30 ccc 300 zzz
+
+query T
+EXPLAIN SELECT t1.id, t1.a, t1.wide, t2.b, t2.wide2
+FROM lazy_t1 AS t1
+INNER JOIN lazy_t2 AS t2 ON t1.id = t2.id
+WHERE t1.create_time >= '2021-01-02 00:00:00'
+LIMIT 2;
+----
+RowFetch
+├── output columns: [t1.id (#0), t1._row_id (#7), t2._row_id (#8), t2.id (#4), t1.a (#1), t1.wide (#2), t2.b (#5), t2.wide2 (#6)]
+├── columns to fetch: [b, wide2]
+├── estimated rows: 2.00
+└── RowFetch
+    ├── output columns: [t1.id (#0), t1._row_id (#7), t2._row_id (#8), t2.id (#4), t1.a (#1), t1.wide (#2)]
+    ├── columns to fetch: [a, wide]
+    ├── estimated rows: 2.00
+    └── Limit
+        ├── output columns: [t1.id (#0), t1._row_id (#7), t2._row_id (#8), t2.id (#4)]
+        ├── limit: 2
+        ├── offset: 0
+        ├── estimated rows: 2.00
+        └── HashJoin
+            ├── output columns: [t1.id (#0), t1._row_id (#7), t2._row_id (#8), t2.id (#4)]
+            ├── join type: INNER
+            ├── build keys: [t2.id (#4)]
+            ├── probe keys: [t1.id (#0)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:t2.id (#4), probe targets:[t1.id (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: 3.00
+            ├── TableScan(Build)
+            │   ├── table: default.test_db.lazy_t2
+            │   ├── scan id: 1
+            │   ├── output columns: [id (#4), _row_id (#8)]
+            │   ├── read rows: 3
+            │   ├── read size: < 1 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 3.00
+            └── Filter(Probe)
+                ├── output columns: [t1.id (#0), t1._row_id (#7)]
+                ├── filters: [is_true(t1.create_time (#3) >= '2021-01-02 00:00:00.000000')]
+                ├── estimated rows: 3.00
+                └── TableScan
+                    ├── table: default.test_db.lazy_t1
+                    ├── scan id: 0
+                    ├── output columns: [id (#0), create_time (#3), _row_id (#7)]
+                    ├── read rows: 3
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [is_true(lazy_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
+                    ├── apply join filters: [#0]
+                    └── estimated rows: 3.00
