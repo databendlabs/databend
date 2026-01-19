@@ -282,14 +282,20 @@ async fn mutation_source_partitions(
     let mut read_column_positions = Vec::new();
     if !filter_used_columns.is_empty() {
         let metadata = mutation.metadata.read();
+        let table_schema = fuse_table.schema();
+
+        // For each column used in the filter, find its index in the table schema
         for column_index in &filter_used_columns {
             if let ColumnEntry::BaseTableColumn(base) = metadata.column(*column_index) {
-                if let Some(pos) = base.column_position {
-                    // column_position is 1-based
-                    read_column_positions.push(pos - 1);
+                // Find the column's index in the table schema
+                if let Ok(_field) = table_schema.field_with_name(&base.column_name) {
+                    // Get the index of this field in the schema
+                    let schema_index = table_schema.index_of(&base.column_name).unwrap();
+                    read_column_positions.push(schema_index);
                 }
             }
         }
+
         read_column_positions.sort_unstable();
         read_column_positions.dedup();
     }

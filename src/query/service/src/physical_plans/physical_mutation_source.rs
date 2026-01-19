@@ -268,12 +268,18 @@ impl PhysicalPlanBuilder {
 
         let mut read_column_positions = Vec::new();
         let mut internal_columns = Vec::new();
+        let table_schema = &mutation_info.table_info.meta.schema;
+
+        // For each column in read_partition_columns, find its index in the table schema
         for column_index in mutation_source.read_partition_columns.iter() {
-            match metadata.column(*column_index) {
+            let column_entry = metadata.column(*column_index);
+
+            match column_entry {
                 databend_common_sql::ColumnEntry::BaseTableColumn(base) => {
-                    if let Some(pos) = base.column_position {
-                        // column_position is 1-based
-                        read_column_positions.push(pos - 1);
+                    // Find the column's index in the table schema
+                    if let Ok(_field) = table_schema.field_with_name(&base.column_name) {
+                        let schema_index = table_schema.index_of(&base.column_name).unwrap();
+                        read_column_positions.push(schema_index);
                     }
                 }
                 databend_common_sql::ColumnEntry::InternalColumn(internal) => {
@@ -282,6 +288,7 @@ impl PhysicalPlanBuilder {
                 _ => {}
             }
         }
+
         read_column_positions.sort_unstable();
         read_column_positions.dedup();
 
