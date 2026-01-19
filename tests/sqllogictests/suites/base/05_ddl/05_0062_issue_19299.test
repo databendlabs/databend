@@ -1,0 +1,63 @@
+statement ok
+USE default
+
+statement ok
+set hide_options_in_show_create_table=1
+
+# Cluster key should be updated on column rename, and referenced columns
+# should be protected from DROP/MODIFY.
+statement ok
+CREATE OR REPLACE TABLE `05_0062_issue_19299_t0`(col1 Int32, col2 String) CLUSTER BY(col1, to_date(col2))
+
+statement ok
+ALTER TABLE `05_0062_issue_19299_t0` RENAME COLUMN col2 TO col3
+
+query TT
+SHOW CREATE TABLE `05_0062_issue_19299_t0`
+----
+05_0062_issue_19299_t0 CREATE TABLE "05_0062_issue_19299_t0" ( col1 INT NULL, col3 VARCHAR NULL ) ENGINE=FUSE CLUSTER BY linear(col1, to_date(col3))
+
+statement error 1132
+ALTER TABLE `05_0062_issue_19299_t0` DROP COLUMN col3
+
+statement error 1132
+ALTER TABLE `05_0062_issue_19299_t0` MODIFY COLUMN col1 binary
+
+statement ok
+DROP TABLE IF EXISTS `05_0062_issue_19299_t0`
+
+# Rename from quoted identifier to normal identifier should update cluster key.
+statement ok
+CREATE OR REPLACE TABLE `05_0062_issue_19299_t1`(col1 Int32, "col 2" String) CLUSTER BY(col1, to_date("col 2"))
+
+statement ok
+ALTER TABLE `05_0062_issue_19299_t1` RENAME COLUMN "col 2" TO col2
+
+query TT
+SHOW CREATE TABLE `05_0062_issue_19299_t1`
+----
+05_0062_issue_19299_t1 CREATE TABLE "05_0062_issue_19299_t1" ( col1 INT NULL, col2 VARCHAR NULL ) ENGINE=FUSE CLUSTER BY linear(col1, to_date(col2))
+
+statement ok
+DROP TABLE IF EXISTS `05_0062_issue_19299_t1`
+
+# Rename from normal identifier to quoted identifier should update cluster key and SHOW CREATE TABLE.
+statement ok
+CREATE OR REPLACE TABLE `05_0062_issue_19299_t2`(col1 Int32, col2 String) CLUSTER BY(col1, to_date(col2))
+
+statement ok
+ALTER TABLE `05_0062_issue_19299_t2` RENAME COLUMN col1 TO "col 1"
+
+query TT
+SHOW CREATE TABLE `05_0062_issue_19299_t2`
+----
+05_0062_issue_19299_t2 CREATE TABLE "05_0062_issue_19299_t2" ( "col 1" INT NULL, col2 VARCHAR NULL ) ENGINE=FUSE CLUSTER BY linear("col 1", to_date(col2))
+
+statement error 1132
+ALTER TABLE `05_0062_issue_19299_t2` DROP COLUMN "col 1"
+
+statement error 1132
+ALTER TABLE `05_0062_issue_19299_t2` MODIFY COLUMN "col 1" binary
+
+statement ok
+DROP TABLE IF EXISTS `05_0062_issue_19299_t2`
