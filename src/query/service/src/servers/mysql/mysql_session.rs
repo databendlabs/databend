@@ -16,8 +16,12 @@ use std::io;
 use std::net::Shutdown;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::io::AsyncWriteExt;
+use databend_common_base::base::tokio::io::BufWriter;
+use databend_common_base::base::tokio::net::TcpStream;
+use databend_common_base::base::tokio::net::tcp::OwnedReadHalf;
+use databend_common_base::base::tokio::net::tcp::OwnedWriteHalf;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::Thread;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,11 +41,6 @@ use rand::RngCore;
 use rustls::ServerConfig;
 use socket2::SockRef;
 use socket2::TcpKeepalive;
-use tokio::io::AsyncWriteExt;
-use tokio::io::BufWriter;
-use tokio::net::TcpStream;
-use tokio::net::tcp::OwnedReadHalf;
-use tokio::net::tcp::OwnedWriteHalf;
 
 use crate::servers::mysql::MYSQL_VERSION;
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
@@ -59,6 +58,7 @@ impl MySQLConnection {
         stream: TcpStream,
         keepalive: TcpKeepalive,
         tls: Option<Arc<ServerConfig>>,
+        query_executor: Arc<Runtime>,
     ) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
         let handshake_stream = blocking_stream.try_clone()?;
@@ -142,10 +142,7 @@ impl MySQLConnection {
 
         info!("MySQL connection coming: {}", client_addr);
 
-        let query_executor =
-            Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
-
-        Thread::spawn(move || {
+        query_executor.spawn(async move {
             let tls_clone = tls.clone();
             let interactive_worker =
                 InteractiveWorker::create(session.clone(), version, client_addr, salt);
@@ -154,42 +151,30 @@ impl MySQLConnection {
                 reject_connection_on_dbname_absence: false,
             };
 
-            let join_handle = query_executor.spawn(async move {
-                let run_result = match (tls_clone, use_ssl) {
-                    (Some(config), true) => {
-                        secure_run_with_options(
-                            interactive_worker,
-                            writer,
-                            opts,
-                            config,
-                            init_params,
-                        )
+            let run_result = match (tls_clone, use_ssl) {
+                (Some(config), true) => {
+                    secure_run_with_options(interactive_worker, writer, opts, config, init_params)
                         .await
-                    }
-                    _ => {
-                        plain_run_with_options(interactive_worker, writer, opts, init_params).await
-                    }
-                };
+                }
+                _ => plain_run_with_options(interactive_worker, writer, opts, init_params).await,
+            };
 
-                run_result.ok();
+            run_result.ok();
 
-                let tenant = session.get_current_tenant();
-                let session_id = session.get_id();
-                let user = session.get_current_user()?.name;
-                UserApiProvider::instance()
-                    .client_session_api(&tenant)
-                    .drop_client_session_id(&session_id, &user)
-                    .await
-                    .ok();
-                drop_all_temp_tables(
-                    &format!("{user}/{session_id}"),
-                    session.temp_tbl_mgr(),
-                    "mysql",
-                )
+            let tenant = session.get_current_tenant();
+            let session_id = session.get_id();
+            let user = session.get_current_user()?.name;
+            UserApiProvider::instance()
+                .client_session_api(&tenant)
+                .drop_client_session_id(&session_id, &user)
                 .await
-            });
-
-            let _ = futures::executor::block_on(join_handle);
+                .ok();
+            drop_all_temp_tables(
+                &format!("{user}/{session_id}"),
+                session.temp_tbl_mgr(),
+                "mysql",
+            )
+            .await
         });
         Ok(())
     }
