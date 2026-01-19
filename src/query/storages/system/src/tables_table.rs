@@ -58,6 +58,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_common_users::check_table_visibility_with_roles;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
 
@@ -329,11 +330,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
-        let visibility_checker = if catalog_impl.is_external() {
-            None
-        } else {
-            Some(ctx.get_visibility_checker(false, Object::All).await?)
-        };
+        // Threshold for using optimized path without visibility_checker
+        const OPTIMIZED_PATH_THRESHOLD: usize = 20;
 
         let mut catalogs = vec![];
         let mut databases = vec![];
@@ -448,6 +446,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         }
 
         let ctl_name = catalog_impl.name();
+        let is_external_catalog = catalog_impl.is_external();
 
         let ctls = if !catalog_name.is_empty() {
             let mut res = vec![];
@@ -463,9 +462,20 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             vec![(ctl_name, catalog_impl)]
         };
 
-        // from system.tables where database = 'db' and name = 'name'
-        // from system.tables where database = 'db' and table_id = 123
-        if db_name.len() == 1 && tables_names.len() + tables_ids.len() == 1 && !WITH_HISTORY {
+        // Optimized path: when filter specifies limited databases and tables,
+        // use lightweight permission check without loading all ownerships
+        let filter_count = db_name.len() * (tables_names.len() + tables_ids.len()).max(1);
+        let use_optimized_path = !db_name.is_empty()
+            && (tables_names.len() + tables_ids.len()) > 0
+            && filter_count <= OPTIMIZED_PATH_THRESHOLD
+            && !WITH_HISTORY
+            && !is_external_catalog;
+
+        if use_optimized_path {
+            // Get effective roles once for permission checking
+            let current_user = ctx.get_current_user()?;
+            let effective_roles = ctx.get_all_effective_roles().await?;
+
             for (ctl_name, ctl) in ctls.iter() {
                 for db in &db_name {
                     match ctl.get_database(&tenant, db.as_str()).await {
@@ -497,52 +507,47 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             Ok(t) => {
                                 let db_id = db.get_db_info().database_id.db_id;
                                 let table_id = t.get_id();
-                                if let Some(visibility_checker) = &visibility_checker {
-                                    let role = user_api
-                                        .role_api(&tenant)
-                                        .get_ownership(&OwnershipObject::Table {
-                                            catalog_name: ctl_name.to_string(),
-                                            db_id,
-                                            table_id,
-                                        })
-                                        .await?
-                                        .map(|o| o.role);
-                                    if visibility_checker.check_table_visibility(
+
+                                // Get ownership for this specific table
+                                let ownership = user_api
+                                    .role_api(&tenant)
+                                    .get_ownership(&OwnershipObject::Table {
+                                        catalog_name: ctl_name.to_string(),
+                                        db_id,
+                                        table_id,
+                                    })
+                                    .await?;
+                                let owner_role = ownership.map(|o| o.role);
+
+                                // Check if user is owner
+                                let is_owner = owner_role.as_ref().is_some_and(|role| {
+                                    effective_roles.iter().any(|r| r.name == *role)
+                                });
+
+                                // Check visibility through grants (lightweight check)
+                                let is_visible = is_owner
+                                    || check_table_visibility_with_roles(
+                                        &current_user,
+                                        &effective_roles,
                                         ctl_name,
                                         db.name(),
-                                        table_name,
                                         db_id,
-                                        t.get_id(),
-                                    ) {
-                                        push_table_info(
-                                            &mut catalogs,
-                                            &mut databases,
-                                            &mut databases_ids,
-                                            &mut database_tables,
-                                            &mut owners,
-                                            ctl_name,
-                                            db.name(),
-                                            db.get_db_info().database_id.db_id,
-                                            t,
-                                            role,
-                                        );
-                                    } else if let Some(role) = role {
-                                        let roles = ctx.get_all_effective_roles().await?;
-                                        if roles.iter().any(|r| r.name == role) {
-                                            push_table_info(
-                                                &mut catalogs,
-                                                &mut databases,
-                                                &mut databases_ids,
-                                                &mut database_tables,
-                                                &mut owners,
-                                                ctl_name,
-                                                db.name(),
-                                                db.get_db_info().database_id.db_id,
-                                                t,
-                                                Some(role),
-                                            );
-                                        }
-                                    }
+                                        table_id,
+                                    );
+
+                                if is_visible {
+                                    push_table_info(
+                                        &mut catalogs,
+                                        &mut databases,
+                                        &mut databases_ids,
+                                        &mut database_tables,
+                                        &mut owners,
+                                        ctl_name,
+                                        db.name(),
+                                        db.get_db_info().database_id.db_id,
+                                        t,
+                                        owner_role,
+                                    );
                                 }
                             }
                             Err(err) => {
@@ -561,6 +566,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             }
         } else {
+            // Slow path: need full visibility checker
+            let visibility_checker = if is_external_catalog {
+                None
+            } else {
+                Some(ctx.get_visibility_checker(false, Object::All).await?)
+            };
+
             let catalog_dbs = visibility_checker
                 .as_ref()
                 .and_then(|c| c.get_visibility_database());
