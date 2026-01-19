@@ -411,7 +411,13 @@ impl StreamBlockBuilder {
                 }
             }
 
-            let delta_stats = collect_delta_ordering_stats(&self.properties.source_schema, &block)?;
+            // Only compute delta ordering stats if the DBP heuristic rule is enabled
+            let delta_stats = if self.properties.write_settings.enable_parquet_delta_binary_packed_heuristic_rule {
+                collect_delta_ordering_stats(&self.properties.source_schema, &block)?
+            } else {
+                HashMap::new()
+            };
+
             self.block_writer.start(ColumnsNdvInfo::new(
                 block.num_rows(),
                 cols_stats,
