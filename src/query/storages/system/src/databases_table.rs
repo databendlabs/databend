@@ -40,14 +40,16 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_users::check_database_visibility_with_roles;
-use databend_common_users::is_role_owner;
+use databend_common_users::is_database_visible_with_owner;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
+
 use crate::util::generate_default_catalog_meta;
+use crate::util::should_include_catalog;
+use crate::util::should_use_db_optimized_path;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
 pub type DatabasesTableWithoutHistory = DatabasesTable<false>;
@@ -131,8 +133,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let current_catalog_name = self.get_table_info().catalog();
 
         // Determine if current catalog should be included
-        let include_current_catalog = filter_catalog_names.is_empty()
-            || filter_catalog_names.iter().any(|name| name == current_catalog_name);
+        let include_current_catalog = should_include_catalog(&filter_catalog_names, current_catalog_name);
 
         let catalogs = if include_current_catalog {
             vec![(ctl.name(), ctl.clone())]
@@ -149,10 +150,12 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
 
         // Optimized path: when filter specifies limited databases,
         // use lightweight permission check without loading all ownerships
-        let use_optimized_path = !filter_db_names.is_empty()
-            && filter_db_names.len() <= OPTIMIZED_PATH_THRESHOLD
-            && !WITH_HISTORY
-            && !ctl.is_external();
+        let use_optimized_path = should_use_db_optimized_path(
+            filter_db_names.len(),
+            OPTIMIZED_PATH_THRESHOLD,
+            WITH_HISTORY,
+            ctl.is_external(),
+        );
 
         if use_optimized_path {
             // Get effective roles once for permission checking
@@ -173,18 +176,14 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                                 })
                                 .await?;
                             let owner_role = ownership.map(|o| o.role.clone());
-                            let is_owner =
-                                is_role_owner(owner_role.as_deref(), &effective_roles);
-
-                            // Check visibility through grants (lightweight check)
-                            let is_visible = is_owner
-                                || check_database_visibility_with_roles(
-                                    &current_user,
-                                    &effective_roles,
-                                    ctl_name,
-                                    db_name,
-                                    db_id,
-                                );
+                            let is_visible = is_database_visible_with_owner(
+                                &current_user,
+                                &effective_roles,
+                                owner_role.as_deref(),
+                                ctl_name,
+                                db_name,
+                                db_id,
+                            );
 
                             if is_visible {
                                 catalog_names.push(ctl_name.to_string());

@@ -239,6 +239,35 @@ pub fn has_table_name_grants(user: &UserInfo, roles: &[RoleInfo]) -> bool {
     false
 }
 
+/// Check table visibility with ownership and grants.
+#[inline]
+pub fn is_table_visible_with_owner(
+    user: &UserInfo,
+    roles: &[RoleInfo],
+    owner_role: Option<&str>,
+    catalog: &str,
+    db_name: &str,
+    db_id: u64,
+    table_id: u64,
+) -> bool {
+    is_role_owner(owner_role, roles)
+        || check_table_visibility_with_roles(user, roles, catalog, db_name, db_id, table_id)
+}
+
+/// Check database visibility with ownership and grants.
+#[inline]
+pub fn is_database_visible_with_owner(
+    user: &UserInfo,
+    roles: &[RoleInfo],
+    owner_role: Option<&str>,
+    catalog: &str,
+    db_name: &str,
+    db_id: u64,
+) -> bool {
+    is_role_owner(owner_role, roles)
+        || check_database_visibility_with_roles(user, roles, catalog, db_name, db_id)
+}
+
 /// Check if a database is visible based on user and roles grants (without ownership info).
 /// This is a lightweight check that avoids loading all ownerships.
 /// Returns true if the database is visible through grants.

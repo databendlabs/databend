@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -58,9 +59,8 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_users::check_table_visibility_with_roles;
 use databend_common_users::has_table_name_grants;
-use databend_common_users::is_role_owner;
+use databend_common_users::is_table_visible_with_owner;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
 
@@ -68,6 +68,7 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
 use crate::util::generate_default_catalog_meta;
+use crate::util::should_use_table_optimized_path;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -356,97 +357,42 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         for (ctl_name, ctl) in ctls.iter() {
             // Collect databases
-            let mut dbs = Vec::new();
-            for db in db_names {
-                match ctl.get_database(tenant, db.as_str()).await {
-                    Ok(database) => dbs.push(database),
-                    Err(err) => {
-                        warn!("Failed to get database: {}, {}", db, err);
-                    }
-                }
-            }
+            let dbs = collect_databases_by_names(ctl, tenant, db_names).await;
 
             // Resolve table IDs to names
-            match ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
-                Ok(new_tables) => {
-                    let new_table_names: BTreeSet<_> = new_tables.into_iter().flatten().collect();
-                    tables_names.extend(new_table_names);
-                }
-                Err(err) => {
-                    warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                }
+            if let Ok(new_tables) = ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
+                tables_names.extend(new_tables.into_iter().flatten());
             }
 
             // Check visibility for each table
-            for table_name in tables_names.iter() {
-                for db in &dbs {
-                    let table = match ctl.get_table(tenant, db.name(), table_name).await {
-                        Ok(t) => t,
-                        Err(err) => {
-                            warn!(
-                                "Failed to get table in database: {}.{}, {}",
-                                ctl_name,
-                                db.name(),
-                                err
-                            );
-                            continue;
-                        }
-                    };
-
-                    let db_id = db.get_db_info().database_id.db_id;
-                    let table_id = table.get_id();
-
-                    let ownership = user_api
-                        .role_api(tenant)
-                        .get_ownership(&OwnershipObject::Table {
-                            catalog_name: ctl_name.to_string(),
-                            db_id,
-                            table_id,
-                        })
-                        .await?;
-
-                    let owner_role = ownership.map(|o| o.role);
-                    let is_owner = is_role_owner(owner_role.as_deref(), &effective_roles);
-                    let is_visible = is_owner
-                        || check_table_visibility_with_roles(
-                            &current_user,
-                            &effective_roles,
-                            ctl_name,
-                            db.name(),
-                            db_id,
-                            table_id,
-                        );
-
-                    if is_visible {
-                        push_table_info(
-                            &mut catalogs,
-                            &mut databases,
-                            &mut databases_ids,
-                            &mut database_tables,
-                            &mut owners,
-                            ctl_name,
-                            db.name(),
-                            db_id,
-                            table,
-                            owner_role,
-                        );
-                    }
-                }
+            for db in &dbs {
+                collect_visible_tables_in_db(
+                    &mut catalogs,
+                    &mut databases,
+                    &mut databases_ids,
+                    &mut database_tables,
+                    &mut owners,
+                    ctl_name,
+                    ctl,
+                    db,
+                    tables_names,
+                    tenant,
+                    user_api,
+                    &current_user,
+                    &effective_roles,
+                )
+                .await?;
             }
         }
 
-        if catalogs.is_empty() {
-            // No results from optimized path, fall back to slow path
-            Ok(None)
-        } else {
-            Ok(Some((
-                catalogs,
-                databases,
-                databases_ids,
-                database_tables,
-                owners,
-            )))
-        }
+        // Always return Some - empty result is valid (no matching tables)
+        Ok(Some((
+            catalogs,
+            databases,
+            databases_ids,
+            database_tables,
+            owners,
+        )))
     }
 
     /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
@@ -595,13 +541,16 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         // Optimized path: when filter specifies limited databases and tables,
         // use lightweight permission check without loading all ownerships
-        let filter_count = db_name.len() * (tables_names.len() + tables_ids.len()).max(1);
-        let use_optimized_path = !db_name.is_empty()
-            && (tables_names.len() + tables_ids.len()) > 0
-            && filter_count <= OPTIMIZED_PATH_THRESHOLD
-            && !WITH_HISTORY
-            && !is_external_catalog;
+        let table_count = tables_names.len() + tables_ids.len();
+        let use_optimized_path = should_use_table_optimized_path(
+            db_name.len(),
+            table_count,
+            OPTIMIZED_PATH_THRESHOLD,
+            WITH_HISTORY,
+            is_external_catalog,
+        );
 
+        let mut used_optimized_path = false;
         if use_optimized_path {
             if let Some((opt_catalogs, opt_databases, opt_databases_ids, opt_tables, opt_owners)) =
                 Self::try_optimized_path(
@@ -620,12 +569,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 databases_ids = opt_databases_ids;
                 database_tables = opt_tables;
                 owners = opt_owners;
-            } else {
-                // Fall through to slow path
+                used_optimized_path = true;
             }
         }
 
-        if catalogs.is_empty() {
+        if !used_optimized_path {
             // Slow path: need full visibility checker
             let visibility_checker = if is_external_catalog {
                 None
@@ -1322,4 +1270,82 @@ fn push_table_info(
     databases_ids.push(db_id);
     database_tables.push(table);
     owner.push(role);
+}
+
+/// Collect databases by names, ignoring errors.
+async fn collect_databases_by_names(
+    ctl: &Arc<dyn Catalog>,
+    tenant: &Tenant,
+    db_names: &[String],
+) -> Vec<Arc<dyn Database>> {
+    let mut dbs = Vec::new();
+    for db_name in db_names {
+        if let Ok(db) = ctl.get_database(tenant, db_name.as_str()).await {
+            dbs.push(db);
+        }
+    }
+    dbs
+}
+
+/// Collect visible tables in a single database for optimized path.
+#[allow(clippy::too_many_arguments)]
+async fn collect_visible_tables_in_db(
+    catalogs: &mut Vec<String>,
+    databases: &mut Vec<String>,
+    databases_ids: &mut Vec<u64>,
+    database_tables: &mut Vec<Arc<dyn Table>>,
+    owners: &mut Vec<Option<String>>,
+    ctl_name: &str,
+    ctl: &Arc<dyn Catalog>,
+    db: &Arc<dyn Database>,
+    table_names: &BTreeSet<String>,
+    tenant: &Tenant,
+    user_api: &Arc<UserApiProvider>,
+    current_user: &databend_common_meta_app::principal::UserInfo,
+    effective_roles: &[databend_common_meta_app::principal::RoleInfo],
+) -> Result<()> {
+    let db_id = db.get_db_info().database_id.db_id;
+
+    for table_name in table_names {
+        let Ok(table) = ctl.get_table(tenant, db.name(), table_name).await else {
+            continue;
+        };
+
+        let table_id = table.get_id();
+        let ownership = user_api
+            .role_api(tenant)
+            .get_ownership(&OwnershipObject::Table {
+                catalog_name: ctl_name.to_string(),
+                db_id,
+                table_id,
+            })
+            .await?;
+
+        let owner_role = ownership.map(|o| o.role);
+        if !is_table_visible_with_owner(
+            current_user,
+            effective_roles,
+            owner_role.as_deref(),
+            ctl_name,
+            db.name(),
+            db_id,
+            table_id,
+        ) {
+            continue;
+        }
+
+        push_table_info(
+            catalogs,
+            databases,
+            databases_ids,
+            database_tables,
+            owners,
+            ctl_name,
+            db.name(),
+            db_id,
+            table,
+            owner_role,
+        );
+    }
+    Ok(())
 }

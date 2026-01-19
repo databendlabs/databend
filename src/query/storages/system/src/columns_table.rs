@@ -45,15 +45,15 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_users::check_table_visibility_with_roles;
 use databend_common_users::has_table_name_grants;
-use databend_common_users::is_role_owner;
+use databend_common_users::is_table_visible_with_owner;
 use log::warn;
 
 use crate::generate_default_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
+use crate::util::should_use_table_optimized_path;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -277,6 +277,7 @@ pub(crate) async fn dump_tables(
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
     let tenant = ctx.get_tenant();
+    const OPTIMIZED_PATH_THRESHOLD: usize = 20;
 
     // For performance considerations, we do not require the most up-to-date table information here:
     // - for regular tables, the data is certainly fresh
@@ -286,11 +287,28 @@ pub(crate) async fn dump_tables(
     let func_ctx = ctx.get_function_context()?;
     let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
 
+    // Check if optimized path should be used
+    let use_optimized_path = should_use_table_optimized_path(
+        filtered_db_names.len(),
+        filtered_table_names.len(),
+        OPTIMIZED_PATH_THRESHOLD,
+        false,
+        catalog.is_external(),
+    );
+
     // Try optimized path first
-    if let Some(result) =
-        try_collect_tables_optimized(ctx, &catalog, &tenant, &filtered_db_names, &filtered_table_names).await?
-    {
-        return Ok(result);
+    if use_optimized_path {
+        if let Some(result) = try_collect_tables_optimized(
+            ctx,
+            &catalog,
+            &tenant,
+            &filtered_db_names,
+            &filtered_table_names,
+        )
+        .await?
+        {
+            return Ok(result);
+        }
     }
 
     // Fall back to slow path with full visibility checker
@@ -324,18 +342,6 @@ async fn try_collect_tables_optimized(
     filtered_db_names: &[String],
     filtered_table_names: &[String],
 ) -> Result<Option<Vec<(String, Vec<Arc<dyn Table>>)>>> {
-    const OPTIMIZED_PATH_THRESHOLD: usize = 20;
-
-    // Check if optimized path is applicable
-    if filtered_db_names.is_empty() || filtered_table_names.is_empty() {
-        return Ok(None);
-    }
-
-    let filter_count = filtered_db_names.len() * filtered_table_names.len();
-    if filter_count > OPTIMIZED_PATH_THRESHOLD || catalog.is_external() {
-        return Ok(None);
-    }
-
     let current_user = ctx.get_current_user()?;
     let effective_roles = ctx.get_all_effective_roles().await?;
 
@@ -378,16 +384,15 @@ async fn try_collect_tables_optimized(
                 .await?;
 
             let owner_role = ownership.map(|o| o.role.clone());
-            let is_owner = is_role_owner(owner_role.as_deref(), &effective_roles);
-            let is_visible = is_owner
-                || check_table_visibility_with_roles(
-                    &current_user,
-                    &effective_roles,
-                    &catalog.name(),
-                    db_name,
-                    db_id,
-                    table_id,
-                );
+            let is_visible = is_table_visible_with_owner(
+                &current_user,
+                &effective_roles,
+                owner_role.as_deref(),
+                &catalog.name(),
+                db_name,
+                db_id,
+                table_id,
+            );
 
             if is_visible {
                 visible_tables.push(table);
