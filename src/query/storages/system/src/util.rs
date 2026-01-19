@@ -29,24 +29,6 @@ pub fn generate_default_catalog_meta() -> CatalogMeta {
     }
 }
 
-/// Check if current catalog should be included based on filter.
-#[inline]
-pub fn should_include_catalog(filter_catalog_names: &[String], current_catalog: &str) -> bool {
-    filter_catalog_names.is_empty()
-        || filter_catalog_names.iter().any(|name| name == current_catalog)
-}
-
-/// Check if database-level optimized path should be used.
-#[inline]
-pub fn should_use_db_optimized_path(
-    db_count: usize,
-    threshold: usize,
-    with_history: bool,
-    is_external: bool,
-) -> bool {
-    db_count > 0 && db_count <= threshold && !with_history && !is_external
-}
-
 /// Check if table-level optimized path should be used.
 #[inline]
 pub fn should_use_table_optimized_path(
