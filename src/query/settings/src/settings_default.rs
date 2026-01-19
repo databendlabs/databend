@@ -1580,6 +1580,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
+                ("enable_experiment_hash_index", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "experiment setting enable hash index(disable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
