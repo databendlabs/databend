@@ -41,6 +41,7 @@ use databend_storages_common_table_meta::table::is_internal_opt_key;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::format_cluster_key_for_show_create;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -279,6 +280,7 @@ impl ShowCreateTableInterpreter {
                 .get(OPT_KEY_CLUSTER_TYPE)
                 .cloned()
                 .unwrap_or("".to_string());
+            let cluster_keys_str = format_cluster_key_for_show_create(cluster_keys_str, settings)?;
             table_create_sql
                 .push_str(format!(" CLUSTER BY {}{}", cluster_type, cluster_keys_str).as_str());
         }

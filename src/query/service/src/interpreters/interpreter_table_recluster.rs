@@ -616,7 +616,7 @@ impl ReclusterTableInterpreter {
         let sample_size = settings.get_hilbert_sample_size_per_block()?;
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+        let ast_exprs = tbl.resolve_cluster_keys().unwrap();
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -434,19 +435,9 @@ pub fn analyze_cluster_keys(
     table_meta: Arc<dyn Table>,
     sql: &str,
 ) -> Result<(String, Vec<Expr>)> {
-    let settings = ctx.get_settings();
-    let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
-    let tokens = tokenize_sql(sql)?;
-    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    // unwrap tuple.
-    if ast_exprs.len() == 1 {
-        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
-            ast_exprs = exprs.clone();
-        }
-    }
-
+    let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
