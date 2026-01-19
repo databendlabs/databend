@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -37,7 +38,10 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }))?;
 
-    if let Err(cause) = join_handler.await.flatten() {
+    // Flatten nested Result: both JoinError and inner error should trigger cleanup
+    let result = join_handler.await.map_err(ErrorCode::from).and_then(|r| r);
+
+    if let Err(cause) = result {
         DataExchangeManager::instance().on_finished_query(&query_id, Some(cause.clone()));
         return Err(cause);
     }
