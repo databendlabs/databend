@@ -312,7 +312,14 @@ pub(crate) async fn dump_tables(
     }
 
     // Fall back to slow path with full visibility checker
-    collect_tables_with_visibility_checker(ctx, &catalog, &tenant, filtered_db_names, filtered_table_names).await
+    collect_tables_with_visibility_checker(
+        ctx,
+        &catalog,
+        &tenant,
+        filtered_db_names,
+        filtered_table_names,
+    )
+    .await
 }
 
 fn extract_filters(
@@ -436,7 +443,14 @@ async fn collect_tables_with_visibility_checker(
         Some(filtered_table_names)
     };
 
-    collect_visible_tables(catalog, tenant, final_dbs, filtered_table_names, &visibility_checker).await
+    collect_visible_tables(
+        catalog,
+        tenant,
+        final_dbs,
+        filtered_table_names,
+        &visibility_checker,
+    )
+    .await
 }
 
 /// Collect visible databases based on filters and visibility checker.
@@ -572,7 +586,10 @@ async fn collect_visible_tables(
                 }
                 res
             }
-            None => catalog.list_tables(tenant, &db_name).await.unwrap_or_default(),
+            None => catalog
+                .list_tables(tenant, &db_name)
+                .await
+                .unwrap_or_default(),
         };
 
         let filtered_tables: Vec<_> = tables_in_db
@@ -580,7 +597,15 @@ async fn collect_visible_tables(
             .filter(|table| {
                 visibility_checker
                     .as_ref()
-                    .map(|c| c.check_table_visibility(CATALOG_DEFAULT, &db_name, table.name(), db_id, table.get_id()))
+                    .map(|c| {
+                        c.check_table_visibility(
+                            CATALOG_DEFAULT,
+                            &db_name,
+                            table.name(),
+                            db_id,
+                            table.get_id(),
+                        )
+                    })
                     .unwrap_or(true)
             })
             .collect();

@@ -334,11 +334,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         tables_names: &mut BTreeSet<String>,
     ) -> Result<
         Option<(
-            Vec<String>,                // catalogs
-            Vec<String>,                // databases
-            Vec<u64>,                   // databases_ids
-            Vec<Arc<dyn Table>>,        // database_tables
-            Vec<Option<String>>,        // owners
+            Vec<String>,         // catalogs
+            Vec<String>,         // databases
+            Vec<u64>,            // databases_ids
+            Vec<Arc<dyn Table>>, // database_tables
+            Vec<Option<String>>, // owners
         )>,
     > {
         let current_user = ctx.get_current_user()?;
@@ -360,8 +360,15 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             let dbs = collect_databases_by_names(ctl, tenant, db_names).await;
 
             // Resolve table IDs to names
-            if let Ok(new_tables) = ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
-                tables_names.extend(new_tables.into_iter().flatten());
+            if !tables_ids.is_empty() {
+                match ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
+                    Ok(new_tables) => {
+                        tables_names.extend(new_tables.into_iter().flatten());
+                    }
+                    Err(err) => {
+                        warn!("Failed to resolve table IDs: {}, {}", ctl.name(), err);
+                    }
+                }
             }
 
             // Check visibility for each table
@@ -1280,8 +1287,16 @@ async fn collect_databases_by_names(
 ) -> Vec<Arc<dyn Database>> {
     let mut dbs = Vec::new();
     for db_name in db_names {
-        if let Ok(db) = ctl.get_database(tenant, db_name.as_str()).await {
-            dbs.push(db);
+        match ctl.get_database(tenant, db_name.as_str()).await {
+            Ok(db) => dbs.push(db),
+            Err(err) => {
+                warn!(
+                    "Failed to get database: {}.{}, {}",
+                    ctl.name(),
+                    db_name,
+                    err
+                );
+            }
         }
     }
     dbs
@@ -1307,8 +1322,18 @@ async fn collect_visible_tables_in_db(
     let db_id = db.get_db_info().database_id.db_id;
 
     for table_name in table_names {
-        let Ok(table) = ctl.get_table(tenant, db.name(), table_name).await else {
-            continue;
+        let table = match ctl.get_table(tenant, db.name(), table_name).await {
+            Ok(table) => table,
+            Err(err) => {
+                warn!(
+                    "Failed to get table in database: {}.{}.{}, {}",
+                    ctl_name,
+                    db.name(),
+                    table_name,
+                    err
+                );
+                continue;
+            }
         };
 
         let table_id = table.get_id();

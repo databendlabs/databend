@@ -132,7 +132,8 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let current_catalog_name = self.get_table_info().catalog();
 
         // Determine if current catalog should be included
-        let include_current_catalog = should_include_catalog(&filter_catalog_names, current_catalog_name);
+        let include_current_catalog =
+            should_include_catalog(&filter_catalog_names, current_catalog_name);
 
         let catalogs = if include_current_catalog {
             vec![(ctl.name(), ctl.clone())]
@@ -340,7 +341,8 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                                 .ok()
                                 .and_then(|ownership| ownership.map(|o| o.role.clone())),
                         );
-                        dropped_on.push(db.get_db_info().meta.drop_on.map(|v| v.timestamp_micros()));
+                        dropped_on
+                            .push(db.get_db_info().meta.drop_on.map(|v| v.timestamp_micros()));
                     }
                 }
             }
