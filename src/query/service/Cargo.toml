@@ -50,6 +50,7 @@ concurrent-queue = { workspace = true }
 cron = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
+databend-base = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }

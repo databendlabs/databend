@@ -46,7 +46,6 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -216,18 +215,16 @@ impl QueryContext {
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
+        branch_name: Option<&str>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog_name = table_info.catalog();
-        let catalog =
-            databend_common_base::runtime::block_on(self.shared.catalog_manager.get_catalog(
-                self.get_tenant().tenant_name(),
-                catalog_name,
-                self.session_state()?,
-            ))?;
+        let catalog = self
+            .shared
+            .catalog_manager
+            .build_catalog(table_info.catalog_info.clone(), self.session_state()?)?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
-        match (table_args, is_default) {
+        let tbl = match (table_args, is_default) {
             (Some(table_args), true) => {
                 let default_catalog = self
                     .shared
@@ -275,7 +272,9 @@ impl QueryContext {
                 }
             }
             (None, false) => catalog.get_table_by_info(table_info),
-        }
+        }?;
+
+        table_with_opt_branch(tbl, branch_name)
     }
 
     // Build external table by stage info, this is used in:
@@ -537,7 +536,7 @@ impl QueryContext {
             _ => table,
         };
 
-        let table = if let Some(branch) = branch {
+        if let Some(branch) = branch {
             if !self
                 .get_settings()
                 .get_enable_experimental_table_ref()
@@ -547,11 +546,16 @@ impl QueryContext {
                     "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
                 ));
             }
-            table.with_branch(branch)?
+            // TODO(zhyass): Branch are currently not allowed inside a transaction.
+            if self.txn_mgr().lock().is_active() {
+                return Err(ErrorCode::StorageUnsupported(
+                    "Branch operations are not supported within an active transaction",
+                ));
+            }
+            table.with_branch(branch)
         } else {
-            table
-        };
-        Ok(table)
+            Ok(table)
+        }
     }
 
     pub fn mark_unload_callbacked(&self) -> bool {
@@ -836,9 +840,11 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
-            }
+            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
+                &table_info.inner,
+                table_info.branch.as_deref(),
+                plan.tbl_args.clone(),
+            ),
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
             }
@@ -1863,12 +1869,13 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
+        let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {
             self.shared
                 .table_meta_timestamps
                 .lock()
-                .get(&table_id)
+                .get(&table_unique_id)
                 .copied()
         };
 
@@ -1920,7 +1927,7 @@ impl TableContext for QueryContext {
 
             if txn_mgr.is_active() {
                 // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_unique_id);
 
                 if let Some(existing_ts) = existing_timestamp {
                     // Defensively check that:
@@ -1938,7 +1945,7 @@ impl TableContext for QueryContext {
                     // When a table is first mutated within an active transaction, record its
                     // segment_block_timestamp as the transaction's begin timestamp for this table.
                     txn_mgr.set_table_txn_begin_timestamp(
-                        table_id,
+                        table_unique_id,
                         table_meta_timestamps.segment_block_timestamp,
                     );
                 }
@@ -1947,7 +1954,7 @@ impl TableContext for QueryContext {
 
         {
             let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_id, table_meta_timestamps);
+            cache.insert(table_unique_id, table_meta_timestamps);
         }
 
         Ok(table_meta_timestamps)
@@ -2334,15 +2341,17 @@ impl TableContext for QueryContext {
     }
 }
 
-impl TrySpawn for QueryContext {
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
+impl QueryContext {
+    /// Tries to spawn a new asynchronous task, returning a JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
+    #[track_caller]
+    pub fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        self.shared.try_get_runtime()?.try_spawn(task, name)
+        let runtime = self.shared.try_get_runtime()?;
+        Ok(runtime.spawn(task))
     }
 }
 
@@ -2356,4 +2365,12 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
+}
+
+fn table_with_opt_branch(tbl: Arc<dyn Table>, branch_name: Option<&str>) -> Result<Arc<dyn Table>> {
+    if let Some(branch) = branch_name {
+        tbl.with_branch(branch)
+    } else {
+        Ok(tbl)
+    }
 }

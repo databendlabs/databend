@@ -65,7 +65,6 @@ use arrow_flight::sql::TicketStatementQuery;
 use arrow_flight::sql::server::FlightSqlService;
 use arrow_flight::sql::server::PeekableFlightDataStream;
 use arrow_ipc::writer::IpcWriteOptions;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::DataSchema;
 use futures::Stream;
 use log::info;
@@ -76,6 +75,7 @@ use tonic::Status;
 use tonic::Streaming;
 use tonic::metadata::MetadataValue;
 use tonic::server::NamedService;
+use uuid::Uuid;
 
 use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;

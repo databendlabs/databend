@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_version::BUILD_INFO;
 use log::error;
@@ -49,7 +48,7 @@ impl MetaWorker {
         meta_io_rt.spawn(async move {
             let (handle_tx, worker_rx) = mpsc::channel(1024);
 
-            let res = MetaNode::start(&config, &BUILD_INFO).await;
+            let res = MetaNode::start(&config, BUILD_INFO.semver()).await;
             let meta_node = match res {
                 Ok(x) => x,
                 Err(e) => {
@@ -59,7 +58,7 @@ impl MetaWorker {
             };
 
             let id = meta_node.raft_store.id;
-            let version = meta_node.version;
+            let version = meta_node.version.clone();
 
             let worker = MetaWorker {
                 worker_rx,

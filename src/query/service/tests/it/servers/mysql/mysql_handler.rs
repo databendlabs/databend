@@ -17,9 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -37,7 +35,7 @@ use tokio::sync::Barrier;
 use crate::tests::tls_constants::*;
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_generic_code_with_on_query() -> Result<()> {
+async fn test_generic_code_with_on_query() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let tcp_keepalive_timeout_secs = 120;
@@ -54,7 +52,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_connect_with_tls() -> Result<()> {
+async fn test_connect_with_tls() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let tcp_keepalive_timeout_secs = 120;
@@ -73,7 +71,7 @@ async fn test_connect_with_tls() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_rejected_session_with_sequence() -> Result<()> {
+async fn test_rejected_session_with_sequence() -> anyhow::Result<()> {
     // TestFixture will create a default session, so we should limit the max_active_sessions to 2.
     let max_active_sessions = 2;
     let conf = ConfigBuilder::create()
@@ -117,7 +115,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_rejected_session_with_parallel() -> Result<()> {
+async fn test_rejected_session_with_parallel() -> anyhow::Result<()> {
     enum CreateServerResult {
         Accept,
         Rejected,

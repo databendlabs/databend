@@ -21,8 +21,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
@@ -47,6 +45,7 @@ use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
+use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
 
@@ -653,7 +652,7 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
 fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
     let client = MetaGrpcClient::try_create(
         vec![addr.to_string()],
-        &BUILD_INFO,
+        BUILD_INFO.semver(),
         "root",
         "xxx",
         None,

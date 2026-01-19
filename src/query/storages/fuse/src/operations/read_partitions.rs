@@ -24,7 +24,6 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -151,9 +150,11 @@ impl FuseTable {
                 let segment_len = segment_locs.len();
 
                 // snapshot.summary.block_count
-                let snapshot_loc = self
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
+                let snapshot_loc = self.meta_location_generator.gen_snapshot_location(
+                    self.get_branch_id(),
+                    &snapshot.snapshot_id,
+                    snapshot.format_version,
+                )?;
 
                 let mut nodes_num = 1;
                 let cluster = ctx.get_cluster();

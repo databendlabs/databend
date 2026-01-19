@@ -16,7 +16,7 @@ create table t2(b int null);
 statement ok
 insert into t2 values(1), (NULL), (3);
 
-query I
+query II
 select * from t1 join t2 on t1.a < t2.b order by t1.a;
 ----
 0 1

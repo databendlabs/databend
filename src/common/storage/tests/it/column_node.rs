@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -41,7 +40,7 @@ fn test_column_nodes_index_match_column_ids(schema: &TableSchema, column_leaves:
 }
 
 #[test]
-fn test_column_leaf_schema_from_struct() -> Result<()> {
+fn test_column_leaf_schema_from_struct() -> anyhow::Result<()> {
     let schema = create_test_complex_schema();
 
     let column_leaves = ColumnNodes::new_from_schema(&(&schema).into(), Some(&schema));
@@ -76,7 +75,7 @@ fn test_column_leaf_schema_from_struct() -> Result<()> {
 }
 
 #[test]
-fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
+fn test_column_leaf_schema_from_struct_of_old_version() -> anyhow::Result<()> {
     let old_schema = create_test_complex_schema();
     let old_column_leaves = ColumnNodes::new_from_schema(&(&old_schema).into(), None);
 
@@ -106,7 +105,7 @@ fn test_column_leaf_schema_from_struct_of_old_version() -> Result<()> {
 
 // add/drop column from schema, and test column_ids match leaf_indices
 #[test]
-fn test_alter_schema_column() -> Result<()> {
+fn test_alter_schema_column() -> anyhow::Result<()> {
     let fields = vec![TableField::new(
         "exist_column",
         TableDataType::Number(NumberDataType::UInt64),

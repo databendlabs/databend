@@ -29,7 +29,7 @@ use super::random_filter_expr;
 
 // Test the result of `FilterExecutor` is the same as `Evaluator`.
 #[test]
-pub fn test_filter_executor() -> databend_common_exception::Result<()> {
+pub fn test_filter_executor() -> anyhow::Result<()> {
     let mut rng = rand::thread_rng();
     // For EmptyMap, Map, Bitmap comparison, it is not supported by Evaluator.
     let data_types = get_filter_data_types();

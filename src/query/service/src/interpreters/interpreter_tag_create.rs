@@ -27,6 +27,7 @@ use databend_common_sql::plans::CreateTagPlan;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
+use crate::meta_service_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -79,7 +80,11 @@ impl Interpreter for CreateTagInterpreter {
             name_ident: TagNameIdent::new(&self.plan.tenant, &self.plan.name),
             meta,
         };
-        match meta_client.create_tag(req).await? {
+        match meta_client
+            .create_tag(req)
+            .await
+            .map_err(meta_service_error)?
+        {
             Ok(_) => Ok(PipelineBuildResult::create()),
             Err(_exist_err) => {
                 if ignore_exists {

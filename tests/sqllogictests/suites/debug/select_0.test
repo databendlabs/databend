@@ -37,7 +37,7 @@ create table if not exists t4(a float, b float, c varchar, d bool)
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false )
 
-query FFTB
+query RRTB
 select a,b,c,d from t4
 ----
 1.0 10.224 xxdsfs 0

@@ -4,12 +4,12 @@ create or replace table test_merge(col1 varchar,col2 varchar,col3 varchar);
 statement ok
 insert into test_merge values(2,'abc',2),(3,'abc',3),(4,'abc',4);
 
-query II
+query I
 merge into test_merge as tba using (select * from (values('1','add','11'),('4','add','44'))) as tbb("col1","col2","col3") on tba.col1=tbb.col1 WHEN MATCHED THEN update set tba.col1=tbb.col1 ,tba.col2='update',tba.col3=tbb.col3;
 ----
 1
 
-query ITI
+query TTT
 select * from test_merge order by col1;
 ----
 2 abc 2

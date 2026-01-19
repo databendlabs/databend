@@ -28,6 +28,8 @@ use databend_common_meta_types::UpsertKV;
 use futures::TryStreamExt;
 use seq_marked::SeqValue;
 
+use crate::errors::meta_service_error;
+
 pub struct SettingMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
@@ -64,7 +66,7 @@ impl SettingMgr {
         let key = self.setting_key(&setting.name);
         let upsert = self.kv_api.upsert_kv(UpsertKV::update(&key, &val));
 
-        let (_prev, curr) = upsert.await?.unpack();
+        let (_prev, curr) = upsert.await.map_err(meta_service_error)?.unpack();
         let res_seq = curr.seq();
         Ok(res_seq)
     }
@@ -73,10 +75,14 @@ impl SettingMgr {
     #[fastrace::trace]
     pub async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let prefix = self.setting_prefix();
-        let mut strm = self.kv_api.list_kv(ListOptions::unlimited(&prefix)).await?;
+        let mut strm = self
+            .kv_api
+            .list_kv(ListOptions::unlimited(&prefix))
+            .await
+            .map_err(meta_service_error)?;
 
         let mut settings = Vec::new();
-        while let Some(item) = strm.try_next().await? {
+        while let Some(item) = strm.try_next().await.map_err(meta_service_error)? {
             let setting: UserSetting = serde_json::from_slice(&item.value.unwrap().data)?;
             settings.push(setting);
         }
@@ -88,7 +94,7 @@ impl SettingMgr {
     #[fastrace::trace]
     pub async fn get_setting(&self, name: &str) -> Result<Option<SeqV<UserSetting>>> {
         let key = self.setting_key(name);
-        let res = self.kv_api.get_kv(&key).await?;
+        let res = self.kv_api.get_kv(&key).await.map_err(meta_service_error)?;
 
         let Some(seqv) = res else {
             return Ok(None);
@@ -102,7 +108,11 @@ impl SettingMgr {
     #[fastrace::trace]
     pub async fn try_drop_setting(&self, name: &str) -> Result<()> {
         let key = self.setting_key(name);
-        let _res = self.kv_api.upsert_kv(UpsertKV::delete(&key)).await?;
+        let _res = self
+            .kv_api
+            .upsert_kv(UpsertKV::delete(&key))
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(())
     }

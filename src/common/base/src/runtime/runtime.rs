@@ -14,7 +14,6 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
-use std::panic::Location;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -60,67 +59,20 @@ impl<Output> Future for JoinHandle<Output> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.inner.poll_unpin(cx) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(res) => match res {
-                Ok(res) => Poll::Ready(Ok(res)),
-                Err(error) => match error.is_panic() {
-                    true => {
-                        let cause = error.into_panic();
-                        Poll::Ready(Err(match cause.downcast_ref::<&'static str>() {
-                            None => match cause.downcast_ref::<String>() {
-                                None => ErrorCode::PanicError("Sorry, unknown panic message"),
-                                Some(message) => ErrorCode::PanicError(message.to_string()),
-                            },
-                            Some(message) => ErrorCode::PanicError(message.to_string()),
-                        }))
-                    }
-                    false => Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled"))),
-                },
-            },
+            Poll::Ready(Ok(res)) => Poll::Ready(Ok(res)),
+            Poll::Ready(Err(error)) if error.is_panic() => {
+                let cause = error.into_panic();
+                let message = cause
+                    .downcast_ref::<&'static str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| cause.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
+                Poll::Ready(Err(ErrorCode::PanicError(message)))
+            }
+            Poll::Ready(Err(_)) => {
+                Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled")))
+            }
         }
-    }
-}
-
-/// Methods to spawn tasks.
-pub trait TrySpawn {
-    /// Tries to spawn a new asynchronous task, returning a tokio::JoinHandle for it.
-    ///
-    /// It allows to return an error before spawning the task.
-    #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static;
-
-    /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
-    ///
-    /// A default impl of this method just calls `try_spawn` and just panics if there is an error.
-    #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.try_spawn(task, None).unwrap()
-    }
-}
-
-impl<S: TrySpawn> TrySpawn for Arc<S> {
-    #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.as_ref().try_spawn(task, name)
-    }
-
-    #[track_caller]
-    fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        self.as_ref().spawn(task)
     }
 }
 
@@ -150,15 +102,13 @@ impl Runtime {
             Thread::named_spawn(n.as_ref().map(|n| format!("wait-to-drop-{n}")), move || {
                 let _ = runtime.block_on(recv_stop);
 
-                match !cfg!(debug_assertions) {
-                    true => false,
-                    false => {
-                        let instant = Instant::now();
-                        // We wait up to 3 seconds to complete the runtime shutdown.
-                        runtime.shutdown_timeout(Duration::from_secs(3));
-
-                        instant.elapsed() >= Duration::from_secs(3)
-                    }
+                if cfg!(debug_assertions) {
+                    let instant = Instant::now();
+                    // We wait up to 3 seconds to complete the runtime shutdown.
+                    runtime.shutdown_timeout(Duration::from_secs(3));
+                    instant.elapsed() >= Duration::from_secs(3)
+                } else {
+                    false
                 }
             });
 
@@ -176,54 +126,43 @@ impl Runtime {
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-
-        #[cfg(debug_assertions)]
-        {
-            // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
-                && let Some(thread_name) = std::thread::current().name()
-            {
-                runtime_builder.thread_name(thread_name);
-            }
-
-            runtime_builder.thread_stack_size(20 * 1024 * 1024);
-        }
-
-        Self::create(
-            None,
-            runtime_builder
-                .enable_all()
-                .on_thread_start(ThreadTracker::init),
-        )
+        Self::create_runtime(None, None)
     }
 
+    pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
+        Self::create_runtime(Some(workers), thread_name)
+    }
+
+    /// Creates a new multi-thread runtime with optional worker count and thread name.
+    ///
+    /// In debug builds with UNIT_TEST=TRUE, overrides thread_name with current thread name
+    /// and sets a larger stack size (20MB) for debugging.
     #[allow(unused_mut)]
-    pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
+    fn create_runtime(workers: Option<usize>, mut thread_name: Option<String>) -> Result<Self> {
+        let mut builder = Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
         {
-            // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
-                && let Some(cur_thread_name) = std::thread::current().name()
+            // In unit tests, use the test thread name for better debugging
+            if matches!(std::env::var("UNIT_TEST"), Ok(v) if v == "TRUE")
+                && let Some(name) = std::thread::current().name()
             {
-                thread_name = Some(cur_thread_name.to_string());
+                thread_name = Some(name.to_string());
             }
-
-            runtime_builder.thread_stack_size(20 * 1024 * 1024);
+            builder.thread_stack_size(20 * 1024 * 1024);
         }
 
-        if let Some(thread_name) = &thread_name {
-            runtime_builder.thread_name(thread_name);
+        if let Some(ref name) = thread_name {
+            builder.thread_name(name);
+        }
+
+        if let Some(n) = workers {
+            builder.worker_threads(n);
         }
 
         Self::create(
             thread_name,
-            runtime_builder
-                .enable_all()
-                .on_thread_start(ThreadTracker::init)
-                .worker_threads(workers),
+            builder.enable_all().on_thread_start(ThreadTracker::init),
         )
     }
 
@@ -234,15 +173,12 @@ impl Runtime {
     #[track_caller]
     pub fn block_on<T, C, F>(&self, future: F) -> F::Output
     where F: Future<Output = Result<T, C>> {
-        let future = CatchUnwindFuture::create(future);
+        // Call location_future before closure since #[track_caller] doesn't propagate through closures
+        let future = location_future(CatchUnwindFuture::create(future), None);
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {
             self.handle
-                .block_on(location_future(
-                    future,
-                    std::panic::Location::caller(),
-                    None,
-                ))
+                .block_on(future)
                 .with_context(|| "failed to block on future".to_string())
                 .flatten()
         })
@@ -290,8 +226,8 @@ impl Runtime {
         Fut::Output: Send + 'static,
     {
         let iter = futures.into_iter();
-        let mut handlers =
-            Vec::with_capacity(iter.size_hint().1.unwrap_or_else(|| iter.size_hint().0));
+        let (lower, upper) = iter.size_hint();
+        let mut handlers = Vec::with_capacity(upper.unwrap_or(lower));
         for fut in iter {
             let semaphore = semaphore.clone();
             // Although async task is rather lightweight, it do consumes resources,
@@ -331,32 +267,46 @@ impl Runtime {
     }
 }
 
-impl TrySpawn for Runtime {
+impl Runtime {
+    /// Spawns a new asynchronous task with a specific name, returning a JoinHandle for it.
     #[track_caller]
-    fn try_spawn<T>(&self, task: T, name: Option<String>) -> Result<JoinHandle<T::Output>>
+    pub fn spawn_named<T>(&self, task: T, name: impl Into<String>) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        self.spawn_with_name(task, Some(name.into()))
+    }
+
+    /// Spawns a new asynchronous task, returning a JoinHandle for it.
+    #[track_caller]
+    pub fn spawn<T>(&self, task: T) -> JoinHandle<T::Output>
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        self.spawn_with_name(task, None)
+    }
+
+    /// Spawns a new asynchronous task with an optional name, returning a JoinHandle for it.
+    ///
+    /// If `name` is `None`, generates a default name based on the current query context.
+    fn spawn_with_name<T>(&self, task: T, name: Option<String>) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
         let task = ThreadTracker::tracking_future(task);
 
-        let location_name = {
-            if let Some(name) = name {
-                name
-            } else {
-                match ThreadTracker::query_id() {
-                    None => String::from(GLOBAL_TASK_DESC),
-                    Some(query_id) => {
-                        format!("Running query {} spawn task", query_id)
-                    }
-                }
-            }
-        };
+        let location_name = name.unwrap_or_else(|| match ThreadTracker::query_id() {
+            None => String::from(GLOBAL_TASK_DESC),
+            Some(query_id) => format!("Running query {} spawn task", query_id),
+        });
 
         let task = async_backtrace::location!(location_name).frame(task);
 
         #[expect(clippy::disallowed_methods)]
-        Ok(JoinHandle::create(self.handle.spawn(task)))
+        JoinHandle::create(self.handle.spawn(task))
     }
 }
 
@@ -429,11 +379,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(
-        future,
-        std::panic::Location::caller(),
-        None,
-    ))
+    tokio::spawn(location_future(future, None))
 }
 
 #[track_caller]
@@ -443,11 +389,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(
-        future,
-        std::panic::Location::caller(),
-        Some(name),
-    ))
+    tokio::spawn(location_future(future, Some(name)))
 }
 
 #[track_caller]
@@ -457,11 +399,7 @@ where
     F::Output: Send + 'static,
 {
     #[expect(clippy::disallowed_methods)]
-    tokio::task::spawn_local(location_future(
-        future,
-        std::panic::Location::caller(),
-        None,
-    ))
+    tokio::task::spawn_local(location_future(future, None))
 }
 
 #[track_caller]
@@ -489,39 +427,35 @@ where
 
 #[track_caller]
 pub fn block_on<F: Future>(future: F) -> F::Output {
+    // Call location_future before closure since #[track_caller] doesn't propagate through closures
+    let future = location_future(future, None);
     #[expect(clippy::disallowed_methods)]
-    tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(location_future(
-            future,
-            std::panic::Location::caller(),
-            None,
-        ))
-    })
+    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(future))
 }
 
 #[track_caller]
 pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(future),
-        #[expect(clippy::disallowed_methods)]
-        Ok(handler) => Ok(tokio::task::block_in_place(|| {
-            handler.block_on(location_future(
-                future,
-                std::panic::Location::caller(),
-                None,
-            ))
-        })),
+        Ok(handler) => {
+            // Call location_future before closure since #[track_caller] doesn't propagate through closures
+            let future = location_future(future, None);
+            #[expect(clippy::disallowed_methods)]
+            Ok(tokio::task::block_in_place(|| handler.block_on(future)))
+        }
     }
 }
 
+#[track_caller]
 fn location_future<F>(
     future: F,
-    frame_location: &'static Location,
     frame_name: Option<String>,
 ) -> impl Future<Output = F::Output> + use<F>
 where
     F: Future,
 {
+    let frame_location = std::panic::Location::caller();
+
     // NOTE:
     // Frame name: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=689fbc84ab4be894c0cdd285bea24845
     // Frame location: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=3ae3a2295607628ce95f0a34a566847b
@@ -529,13 +463,11 @@ where
     // TODO: tracking payload
     let future = ThreadTracker::tracking_future(future);
 
-    let frame_name = if let Some(n) = frame_name {
-        n
-    } else {
+    let frame_name = frame_name.unwrap_or_else(|| {
         std::any::type_name::<F>()
             .trim_end_matches("::{{closure}}")
             .to_string()
-    };
+    });
 
     async_backtrace::location!(
         frame_name,

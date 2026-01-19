@@ -16,13 +16,13 @@ INSERT INTO table_a VALUES (1, 'Alice'), (2, 'Bob');
 statement ok
 INSERT INTO table_b VALUES (10, 'Test description 1', 'x'), (20, 'Test description 2', 'y');
 
-query TT
+query IT
 SELECT * FROM table_a ORDER BY id;
 ----
 1 Alice
 2 Bob
 
-query TTT
+query ITT
 SELECT * FROM table_b ORDER BY id;
 ----
 10 Test description 1 x
@@ -31,13 +31,13 @@ SELECT * FROM table_b ORDER BY id;
 statement ok
 ALTER TABLE table_a SWAP WITH table_b;
 
-query TTT
+query ITT
 SELECT * FROM table_a ORDER BY id;
 ----
 10 Test description 1 x
 20 Test description 2 y
 
-query TT
+query IT
 SELECT * FROM table_b ORDER BY id;
 ----
 1 Alice

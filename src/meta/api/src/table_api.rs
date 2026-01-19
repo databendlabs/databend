@@ -1490,12 +1490,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let dbid_tbname = DBIdTableName {
             db_id: *seq_db_id.data,
@@ -1875,12 +1870,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let database_id = seq_db_id.data;
         let table_nivs = get_history_tables_for_gc(

@@ -10,12 +10,12 @@ EXPLAIN PIPELINE SELECT * FROM t17248 ORDER BY a;
 statement ok
 select avg(number) from numbers(10000000);
 
-query T
+query I
 select count(*) from system.processes where extra_info like 'EXPLAIN PIPELINE SELECT (SELECT COUNT(*) FROM t17248%';
 ----
 0
 
-query T
+query I
 select count(*) from system.processes where extra_info like 'EXPLAIN PIPELINE SELECT * FROM t17248 ORDER BY a%';
 ----
 0

@@ -8,7 +8,6 @@ edition = { workspace = true }
 
 [dependencies]
 anyerror = { workspace = true }
-databend-common-exception = { workspace = true }
 serde_json = { workspace = true }
 sled = { workspace = true }
 thiserror = { workspace = true }

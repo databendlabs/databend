@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
@@ -33,7 +31,7 @@ use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_manager() -> Result<()> {
+async fn test_user_manager() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -43,7 +41,7 @@ async fn test_user_manager() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

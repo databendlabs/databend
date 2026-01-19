@@ -26,6 +26,8 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 
+use crate::meta_service_error;
+
 /// refer to [crate::history_tables::meta::PermitGuard]
 pub struct PermitGuard {
     _permit: Permit,
@@ -88,7 +90,8 @@ impl TaskMetaHandle {
         if match self
             .meta_client
             .get_kv(&format!("{}/last_timestamp", meta_key))
-            .await?
+            .await
+            .map_err(meta_service_error)?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
@@ -132,7 +135,8 @@ impl TaskMetaHandle {
                 Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
                 None,
             ))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         Ok(())
     }
 }

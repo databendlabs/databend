@@ -124,7 +124,24 @@ EvalScalar
         ├── push downs: [filters: [NOT is_not_null(lineitem.l_orderkey (#0))], limit: NONE]
         └── estimated rows: 600572.00
 
-query I
-select count(*) from  ctl.tpch.lineitem where l_orderkey is null or l_commitdate is not null;
+query T
+explain select 1 from  ctl.tpch.lineitem where l_orderkey is null or l_commitdate is not null;
 ----
-600572
+EvalScalar
+├── output columns: [1 (#16)]
+├── expressions: [1]
+├── estimated rows: 600572.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))]
+    ├── estimated rows: 600572.00
+    └── TableScan
+        ├── table: ctl.tpch.lineitem
+        ├── scan id: 0
+        ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
+        ├── read rows: 600572
+        ├── read size: 14.54 MiB
+        ├── partitions total: 18
+        ├── partitions scanned: 18
+        ├── push downs: [filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))], limit: NONE]
+        └── estimated rows: 600572.00

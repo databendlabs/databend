@@ -43,6 +43,7 @@ use log::warn;
 
 use crate::error_util::unknown_database_error;
 use crate::kv_app_error::KVAppError;
+use crate::kv_app_error::KVAppResultExt;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
 use crate::txn_condition_util::txn_cond_seq;
@@ -64,17 +65,10 @@ pub(crate) async fn drop_database_meta(
     )
     .await;
 
-    let (seq_db_id, mut db_meta) = match res {
+    let (seq_db_id, mut db_meta) = match res.into_nested()? {
         Ok(x) => x,
-        Err(e) => {
-            if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
-                if if_exists {
-                    return Ok(0);
-                }
-            }
-
-            return Err(e);
-        }
+        Err(AppError::UnknownDatabase(_)) if if_exists => return Ok(0),
+        Err(app_err) => return Err(app_err.into()),
     };
 
     // remove db_name -> db id

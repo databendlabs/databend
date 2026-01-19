@@ -3,14 +3,14 @@ create table test_timestamp as
 select '2021-02-04 19:30:00'::timestamp t
 
 
-query T
+query ?
 select *
 from test_timestamp
 where (t::date) = '2021-02-04'::date
 ----
 2021-02-04 19:30:00.000000
 
-query T
+query ?
 select *
 from test_timestamp
 where (t::date) = '2021-02-04'

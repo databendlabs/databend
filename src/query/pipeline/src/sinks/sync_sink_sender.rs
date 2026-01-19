@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use tokio::sync::mpsc::Sender;
 
 use crate::core::InputPort;
 use crate::core::Processor;

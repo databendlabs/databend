@@ -7,7 +7,7 @@ create table t_uuid(id string default uuid(), a int)
 statement ok
 remove @data/ndjson/unload/uuid
 
-query
+query ???
 copy into @data/ndjson/unload/uuid/ from (select 1 as a)  file_format = (type = ndjson)
 ----
 1 8 8
@@ -15,15 +15,15 @@ copy into @data/ndjson/unload/uuid/ from (select 1 as a)  file_format = (type = 
 query error Missing value
 copy into t_uuid from @data/ndjson/unload/uuid file_format = (type = ndjson) RETURN_FAILED_ONLY=TRUE
 
-query
+query TI
 select * from t_uuid
 ----
 
-query
+query TIITI
 copy into t_uuid from @data/ndjson/unload/uuid file_format = (type = ndjson  missing_field_as=null) force=true RETURN_FAILED_ONLY=TRUE
 ----
 
-query
+query ??
 select * from t_uuid
 ----
 NULL 1
@@ -31,33 +31,33 @@ NULL 1
 statement ok
 remove @data/ndjson/unload/uuid
 
-query
+query ???
 copy into @data/ndjson/unload/uuid/ from (select 1 as a, null as id)  file_format = (type = ndjson)
 ----
 1 18 18
 
-query
+query TIITI
 copy into t_uuid from @data/ndjson/unload/uuid file_format = (type = ndjson) RETURN_FAILED_ONLY=TRUE
 ----
 
-query
+query ??
 select * from t_uuid
 ----
 NULL 1
 NULL 1
 
-query
+query TIITI
 copy into t_uuid from @data/ndjson/unload/uuid file_format = (type = ndjson  null_field_as=null) force=true RETURN_FAILED_ONLY=TRUE
 ----
 
-query
+query ??
 select * from t_uuid
 ----
 NULL 1
 NULL 1
 NULL 1
 
-query
+query ???
 copy into @data/ndjson/unload/uuid/ from (select 1 as a, null as id)  file_format = (type = ndjson)
 ----
 1 18 18
@@ -65,10 +65,10 @@ copy into @data/ndjson/unload/uuid/ from (select 1 as a, null as id)  file_forma
 statement ok
 truncate table t_uuid
 
-query
+query TIITI
 copy into t_uuid from @data/ndjson/unload/uuid file_format = (type = ndjson null_field_as=field_default) force=true RETURN_FAILED_ONLY=TRUE
 
-query
+query ?
 select uniq(id) from t_uuid
 ----
 2

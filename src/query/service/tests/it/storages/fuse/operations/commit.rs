@@ -22,7 +22,6 @@ use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -169,7 +168,7 @@ use parking_lot::RwLock;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_occ_retry() -> Result<()> {
+async fn test_fuse_occ_retry() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -225,7 +224,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_last_snapshot_hint() -> Result<()> {
+async fn test_last_snapshot_hint() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -263,7 +262,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_commit_to_meta_server() -> Result<()> {
+async fn test_commit_to_meta_server() -> anyhow::Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,
         expected_error: Option<ErrorCode>,

@@ -14,9 +14,7 @@
 
 use std::assert_matches::assert_matches;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
@@ -30,7 +28,7 @@ use databend_query::spillers::SpillerType;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_spill_with_partition() -> Result<()> {
+async fn test_spill_with_partition() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;

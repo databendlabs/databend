@@ -37,7 +37,6 @@ use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;

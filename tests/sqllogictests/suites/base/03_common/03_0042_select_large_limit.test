@@ -16,7 +16,7 @@ INSERT INTO t1 (id, v) VALUES(1, to_binary('aaa')),(2, from_hex('616161')),(3, f
 statement ok
 INSERT INTO t1 (id, v) VALUES(4, 'aaa')
 
-query IT
+query I?
 SELECT id, v FROM t1 order by id LIMIT 100000000;
 ----
 1 616161

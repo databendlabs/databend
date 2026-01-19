@@ -43,7 +43,7 @@ use databend_common_storages_fuse::TableContext;
 use log::warn;
 
 use crate::columns_table::dump_tables;
-use crate::generate_default_catalog_meta;
+use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -109,7 +109,7 @@ impl StatisticsTable {
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_default_catalog_meta(),
+                meta: generate_catalog_meta(ctl_name),
                 ..Default::default()
             }),
             ..Default::default()

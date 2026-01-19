@@ -16,10 +16,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
-use databend_common_base::base::tokio::sync::mpsc::Sender;
-use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -40,9 +36,12 @@ use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use petgraph::stable_graph::NodeIndex;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::channel;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_simple_pipeline() -> Result<()> {
+async fn test_create_simple_pipeline() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -61,7 +60,7 @@ async fn test_create_simple_pipeline() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_parallel_simple_pipeline() -> Result<()> {
+async fn test_create_parallel_simple_pipeline() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -85,7 +84,7 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_resize_pipeline() -> Result<()> {
+async fn test_create_resize_pipeline() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -117,7 +116,7 @@ async fn test_create_resize_pipeline() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_simple_pipeline_init_queue() -> Result<()> {
+async fn test_simple_pipeline_init_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -137,7 +136,7 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
+async fn test_parallel_simple_pipeline_init_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -161,7 +160,7 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resize_pipeline_init_queue() -> Result<()> {
+async fn test_resize_pipeline_init_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -182,7 +181,7 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_simple_schedule_queue() -> Result<()> {
+async fn test_simple_schedule_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_simple_pipeline(ctx)?;
@@ -220,7 +219,7 @@ async fn test_simple_schedule_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parallel_schedule_queue() -> Result<()> {
+async fn test_parallel_schedule_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_parallel_simple_pipeline(ctx)?;
@@ -264,7 +263,7 @@ async fn test_parallel_schedule_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resize_schedule_queue() -> Result<()> {
+async fn test_resize_schedule_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_resize_pipeline(ctx)?;
@@ -319,7 +318,7 @@ async fn test_resize_schedule_queue() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_queue_twice_without_processing() -> Result<()> {
+async fn test_schedule_queue_twice_without_processing() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_simple_pipeline(ctx)?;
@@ -340,7 +339,7 @@ async fn test_schedule_queue_twice_without_processing() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_with_one_tasks() -> Result<()> {
+async fn test_schedule_with_one_tasks() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -363,7 +362,7 @@ async fn test_schedule_with_one_tasks() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_with_two_tasks() -> Result<()> {
+async fn test_schedule_with_two_tasks() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -386,7 +385,7 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_point_simple() -> Result<()> {
+async fn test_schedule_point_simple() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let graph = create_simple_pipeline(ctx)?;
@@ -427,7 +426,7 @@ async fn test_schedule_point_simple() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_point_complex() -> Result<()> {
+async fn test_schedule_point_complex() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let graph = create_simple_pipeline(ctx)?;

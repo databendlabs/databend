@@ -16,7 +16,6 @@ use std::fmt;
 use std::fmt::Formatter;
 
 use databend_common_base::rangemap::RangeMerger;
-use databend_common_exception::Result;
 
 struct Array(Vec<std::ops::Range<u64>>);
 impl fmt::Display for Array {
@@ -29,7 +28,7 @@ impl fmt::Display for Array {
 }
 
 #[test]
-fn test_range_merger() -> Result<()> {
+fn test_range_merger() -> anyhow::Result<()> {
     let v = [3..6, 1..5, 7..11, 8..9, 9..12, 4..8, 13..15, 18..20];
 
     let mr = RangeMerger::from_iter(v, 0, 100, None);
@@ -41,7 +40,7 @@ fn test_range_merger() -> Result<()> {
 }
 
 #[test]
-fn test_range_merger_with_gap() -> Result<()> {
+fn test_range_merger_with_gap() -> anyhow::Result<()> {
     let v = [3..6, 1..5, 7..11, 8..9, 9..12, 4..8, 13..15, 18..20];
     let not_in = [6..21, 0..0];
 

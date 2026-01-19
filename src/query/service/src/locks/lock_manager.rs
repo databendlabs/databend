@@ -17,9 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -31,6 +29,7 @@ use databend_common_metrics::lock::metrics_inc_start_lock_holder_nums;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::UnlockApi;
 use parking_lot::RwLock;
+use tokio::sync::mpsc;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
@@ -45,14 +44,12 @@ impl LockManager {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let active_locks = Arc::new(RwLock::new(HashMap::new()));
         let lock_manager = Self { active_locks, tx };
-        GlobalIORuntime::instance().spawn({
-            let active_locks = lock_manager.active_locks.clone();
-            async move {
-                while let Some(revision) = rx.recv().await {
-                    metrics_inc_shutdown_lock_holder_nums();
-                    if let Some(lock) = active_locks.write().remove(&revision) {
-                        lock.shutdown();
-                    }
+        let active_locks_clone = lock_manager.active_locks.clone();
+        GlobalIORuntime::instance().spawn(async move {
+            while let Some(revision) = rx.recv().await {
+                metrics_inc_shutdown_lock_holder_nums();
+                if let Some(lock) = active_locks_clone.write().remove(&revision) {
+                    lock.shutdown();
                 }
             }
         });

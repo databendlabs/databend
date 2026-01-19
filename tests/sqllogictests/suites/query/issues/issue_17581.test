@@ -60,7 +60,7 @@ LIMIT 10;
 9820 0 9
 9800 0 10
 
-query IT
+query II
 SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
 ----
 9993 NULL
@@ -71,7 +71,7 @@ SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
 statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 0;
 
-query IT
+query II
 SELECT t.a, t.c FROM t_17581 t join t_17581 tt on t.a = tt.a where t.a > 9990 order by a;
 ----
 9991 NULL
@@ -111,7 +111,7 @@ LIMIT 10;
 9820 0 9
 9800 0 10
 
-query IT
+query II
 SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
 ----
 9993 NULL
@@ -119,7 +119,7 @@ SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
 9997 NULL
 9999 NULL
 
-query IT
+query II
 SELECT t.a, t.c FROM t_17581 t join t_17581 tt on t.a = tt.a where t.a > 9990 order by a;
 ----
 9991 NULL

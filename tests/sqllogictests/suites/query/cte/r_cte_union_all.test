@@ -91,7 +91,7 @@ VALUES ('Org','Org'),('Org','Global'),('Global','North'),
 ('Global','South'),('Global','East'),('Global','West'),
 ('Global','Org detail'),('North','North East'),('North','North West');
 
-query I
+query TT
 WITH RECURSIVE tree_values
     (parent, child)
 AS (
@@ -116,3 +116,8 @@ Global West
 
 statement ok
 drop table parent_child;
+
+query II
+WITH RECURSIVE aoc10_input(i) AS (SELECT '\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n'), lines(y, line, rest) AS (SELECT 0::UInt64, substr(i, 1, position('\n' IN i) - 1), substr(i, position('\n' IN i) + 1) FROM aoc10_input UNION ALL SELECT y + 1::UInt64, substr(rest, 1, position('\n' IN rest) - 1), substr(rest, position('\n' IN rest) + 1) FROM lines WHERE position('\n' IN rest) > 0), field(x, y, v, line) AS (SELECT (n.number + 1)::UInt64 AS x, l.y, (ascii(substr(l.line, ((n.number + 1)::Int64), 1)) - 48)::UInt64 AS v, l.line FROM lines l CROSS JOIN numbers(64) n WHERE l.line <> '' AND n.number < (length(l.line))::UInt64), paths(x, y, v, sx, sy) AS (SELECT x, y, 9::UInt64, x, y FROM field WHERE v = 9 UNION ALL SELECT f.x, f.y, f.v, p.sx, p.sy FROM field f JOIN paths p ON f.v = p.v - 1 AND p.v > 0 AND ((f.x = p.x AND abs(f.y - p.y) = 1) OR (f.y = p.y AND abs(f.x - p.x) = 1))), results AS (SELECT * FROM paths WHERE v = 0), part1 AS (SELECT DISTINCT * FROM results) SELECT (SELECT count(*) FROM part1) AS part1, (SELECT count(*) FROM results) AS part2;
+----
+36 81

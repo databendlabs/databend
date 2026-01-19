@@ -16,7 +16,6 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 
-use databend_common_base::base::Stoppable;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_node::meta_worker::MetaWorker;
@@ -53,7 +52,7 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
     File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
 
-    srv.start().await.expect("HTTP: admin api error");
+    srv.do_start().await.expect("HTTP: admin api error");
     // kick off
     let client = reqwest::Client::builder()
         .add_root_certificate(cert)

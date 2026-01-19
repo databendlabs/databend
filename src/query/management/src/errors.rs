@@ -15,6 +15,9 @@
 use std::fmt::Display;
 
 use databend_common_exception::ErrorCode;
+use databend_common_meta_types::MetaAPIError;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
 
 /// Error related to tenant, unrelated to the backend service providing tenant management.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -40,4 +43,19 @@ impl TenantError {
             },
         }
     }
+}
+
+/// Convert `MetaError` to `ErrorCode::MetaServiceError`.
+pub fn meta_service_error(e: MetaError) -> ErrorCode {
+    ErrorCode::MetaServiceError(e.to_string())
+}
+
+/// Convert `MetaClientError` to `ErrorCode::MetaServiceError`.
+pub fn meta_client_error(e: MetaClientError) -> ErrorCode {
+    ErrorCode::MetaServiceError(e.to_string())
+}
+
+/// Convert `MetaAPIError` to `ErrorCode::MetaServiceError`.
+pub fn meta_api_error(e: MetaAPIError) -> ErrorCode {
+    ErrorCode::MetaServiceError(e.to_string())
 }

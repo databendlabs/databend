@@ -29,6 +29,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
+use crate::meta_service_error;
 use crate::role_util::find_all_related_roles;
 
 impl UserApiProvider {
@@ -121,7 +122,11 @@ impl UserApiProvider {
         let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
         let client = self.role_api(tenant);
         let name = role_info.identity().to_string();
-        if let Err(_e) = client.add_role(role_info, can_replace).await? {
+        if let Err(_e) = client
+            .add_role(role_info, can_replace)
+            .await
+            .map_err(meta_service_error)?
+        {
             return if matches!(create_option, CreateOption::CreateIfNotExists) {
                 Ok(())
             } else {

@@ -9,31 +9,31 @@ drop table if exists t;
 statement ok
 create table t(a int);
 
-query 
+query ?????
 copy into t from @data/csv/prefix/ab file_format = (type = csv) force=true;
 ----
 csv/prefix/ab.csv 1 0 NULL NULL
 csv/prefix/ab/cd.csv 1 0 NULL NULL
 csv/prefix/ab/cd.csv.bk 1 0 NULL NULL
 
-query 
+query ?????
 copy into t from @data/csv/prefix/ab/ file_format = (type = csv) force=true;
 ----
 csv/prefix/ab/cd.csv 1 0 NULL NULL
 csv/prefix/ab/cd.csv.bk 1 0 NULL NULL
 
-query 
+query ?????
 copy into t from @data/csv/prefix/ab/cd.csv file_format = (type = csv) force=true;
 ----
 csv/prefix/ab/cd.csv 1 0 NULL NULL
 csv/prefix/ab/cd.csv.bk 1 0 NULL NULL
 
-query 
+query ?????
 copy into t from @data/csv/prefix/ab/cd.csv.bk file_format = (type = csv) force=true;
 ----
 csv/prefix/ab/cd.csv.bk 1 0 NULL NULL
 
-query
+query ?
 select $1 from '@data/csv/prefix/ab/cd.csv' (file_format => 'csv') order by $1;
 ----
 2

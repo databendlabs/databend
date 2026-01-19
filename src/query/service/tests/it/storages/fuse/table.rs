@@ -14,8 +14,6 @@
 
 use std::default::Default;
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::storages::fuse::FuseTable;
@@ -25,7 +23,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_normal_case() -> Result<()> {
+async fn test_fuse_table_normal_case() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -138,7 +136,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 }
 
 #[test]
-fn test_parse_storage_prefix() -> Result<()> {
+fn test_parse_storage_prefix() -> anyhow::Result<()> {
     let mut tbl_info = TableInfo::default();
     let db_id = 2;
     let tbl_id = 1;

@@ -567,7 +567,7 @@ NULL 1455 244 NULL 444
 207 NULL 208 NULL 444
 238 NULL NULL NULL 444
 
-query ITITI
+query IIIII
 select d as col1,
        a+b*2+c*3 as col2,
        c as col3,
@@ -865,7 +865,7 @@ NULL 1 239 237
 244 NULL 243 NULL
 208 NULL NULL NULL
 
-query ITIT
+query IIII
 select c as col1,
        d-e as col2,
        abs(a) as col3,
@@ -1150,7 +1150,7 @@ where (e>c or e<d)
    and (e>a and e<b)
 order by col2,col5,col1,col3,col4
 
-query TTTI
+query IIRI
 select b as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        (a+b+c+d+e)/5 as col3,
@@ -1189,7 +1189,7 @@ NULL NULL NULL 201
 112 NULL NULL NULL
 206 NULL NULL NULL
 
-query IIFI
+query IIRI
 select b as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        (a+b+c+d+e)/5 as col3,
@@ -1410,7 +1410,7 @@ NULL NULL 119
 NULL NULL 202
 NULL NULL 208
 
-query TTI
+query III
 select a-b as col1,
        a+b*2 as col2,
        c as col3
@@ -2134,7 +2134,7 @@ where c between b-2 and d+2
     or c>d
 order by col1,col3,col2,col4
 
-query IIIFI
+query IIIRI
 select b-c as col1,
        b as col2,
        d-e as col3,
@@ -2174,7 +2174,7 @@ NULL NULL -1 NULL 202
 -4 240 NULL NULL 244
 NULL 236 1 NULL NULL
 
-query TTTTI
+query IIIRI
 select b-c as col1,
        b as col2,
        d-e as col3,
@@ -3152,7 +3152,7 @@ select d-e as col1,
 from t1
 order by col3,col4,col1,col6,col5,col2
 
-query TI
+query II
 select b as col1,
        c as col2
 from t1
@@ -3864,7 +3864,7 @@ where b>c
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col2
 
-query ITTTTI
+query IIIIRI
 select c as col1,
        a+b*2+c*3+d*4 as col2,
        b as col3,
@@ -3905,7 +3905,7 @@ NULL NULL 236 NULL NULL 239
 113 NULL 112 1 NULL NULL
 208 NULL 206 2 NULL NULL
 
-query IIIIFI
+query IIIIRI
 select c as col1,
        a+b*2+c*3+d*4 as col2,
        b as col3,

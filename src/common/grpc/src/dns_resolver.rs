@@ -24,7 +24,6 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,7 @@ use hyper::Uri;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::connect::dns::Name;
 use log::info;
+use tokio::task::JoinHandle;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
@@ -223,14 +223,6 @@ impl ConnectionFactory {
                 if let Some(timeout) = timeout {
                     endpoint = endpoint.timeout(timeout);
                 }
-
-                // To avoid too_many_internal_resets
-                endpoint = endpoint
-                    .tcp_nodelay(true)
-                    .http2_adaptive_window(true)
-                    .http2_keep_alive_interval(std::time::Duration::from_secs(30))
-                    .keep_alive_timeout(std::time::Duration::from_secs(10))
-                    .keep_alive_while_idle(true);
 
                 Ok(endpoint)
             }

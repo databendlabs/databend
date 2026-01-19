@@ -15,7 +15,7 @@ create notification integration notify
     url = 'http://localhost:8080/notify'
   );
 
-query SSSS
+query TTB?
 select name, type, enabled, webhook_options from system.notifications where name = 'notify';
 ----
 notify webhook 1 {"url":"http://localhost:8080/notify","method":"GET","authorization_header":""}
@@ -26,7 +26,7 @@ alter notification integration notify SET
     url = 'http://localhost:8080/notify/v2'
   );
 
-query SSSS
+query TTB?
 select name, type, enabled, webhook_options from system.notifications where name = 'notify';
 ----
 notify webhook 1 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":""}
@@ -35,7 +35,7 @@ statement ok
 alter notification integration notify SET
     enabled = false
 
-query S
+query B
 select enabled from system.notifications where name = 'notify';
 ----
 0
@@ -44,7 +44,7 @@ statement ok
 alter notification integration notify SET
     webhook = (method = 'POST', authorization_header = 'Bearer 123')
 
-query SSSS
+query TTB?
 select name, type, enabled, webhook_options from system.notifications where name = 'notify';
 ----
 notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"POST","authorization_header":"Bearer 123"}
@@ -65,7 +65,7 @@ create or replace task alert_task
   as
     select 1 as id, 'test' as name;
 
-query SS
+query TT
 select name, error_integration from system.tasks where name = 'alert_task';
 ----
 alert_task notify
@@ -74,12 +74,12 @@ statement ok
 alter task alert_task set
   error_integration = 'notification_2';
 
-query SS
+query TT
 select name, error_integration from system.tasks where name = 'alert_task';
 ----
 alert_task notification_2
 
-query SS
+query T
 select message_source from system.notification_history;
 ----
 webhook

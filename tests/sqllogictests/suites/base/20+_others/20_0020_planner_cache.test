@@ -19,14 +19,14 @@ CREATE TABLE IF NOT EXISTS t1 (a INT not null);
 statement ok
 INSERT INTO t1 VALUES (1), (2), (3);
 
-query I
+query IT
 SELECT *, $a FROM t1 ORDER BY a;
 ----
 1 a
 2 a
 3 a
 
-query I
+query IT
 SELECT *, $a FROM t1 ORDER BY a;
 ----
 1 a
@@ -36,7 +36,7 @@ SELECT *, $a FROM t1 ORDER BY a;
 statement ok
 SET variable a = 'b';
 
-query I
+query IT
 SELECT *, $a FROM t1 ORDER BY a;
 ----
 1 b
@@ -46,14 +46,14 @@ SELECT *, $a FROM t1 ORDER BY a;
 statement ok
 alter table t1 add column b string default 's';
 
-query I
+query IT
 SELECT * FROM t1 ORDER BY a;
 ----
 1 s
 2 s
 3 s
 
-query I
+query IT
 SELECT * FROM t1 ORDER BY a;
 ----
 1 s
@@ -63,14 +63,14 @@ SELECT * FROM t1 ORDER BY a;
 statement ok
 SET enable_planner_cache = 0;
 
-query I
+query IT
 SELECT * FROM t1 ORDER BY a;
 ----
 1 s
 2 s
 3 s
 
-query I
+query IT
 SELECT * FROM t1 ORDER BY a;
 ----
 1 s

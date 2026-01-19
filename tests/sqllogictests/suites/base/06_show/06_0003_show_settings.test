@@ -31,12 +31,12 @@ SHOW SETTINGS
 statement ok
 SHOW SETTINGS LIKE 'enable%'
 
-query TT
+query TTTTTTT
 SHOW SETTINGS LIKE 'max_block_size%' LIMIT 1
 ----
 max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum rows size of a single data block that can be read. UInt64
 
-query TT
+query TTTTTTT
 SHOW SETTINGS WHERE name='max_block_size' LIMIT 1
 ----
 max_block_size 65536 65536 [1, 18446744073709551615] DEFAULT Sets the maximum rows size of a single data block that can be read. UInt64
@@ -86,7 +86,7 @@ unset max_threads
 statement ok
 set query_flight_compression = 'Lz4';
 
-query TT
+query T
 select value from system.settings where name = 'query_flight_compression'
 ----
 LZ4
@@ -94,7 +94,7 @@ LZ4
 statement ok
 set query_flight_compression = 'lz4';
 
-query TT
+query T
 select value from system.settings where name = 'query_flight_compression'
 ----
 LZ4

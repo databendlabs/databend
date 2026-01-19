@@ -74,7 +74,7 @@ where
 {
     fn from(value: CrudError<E>) -> Self {
         match value {
-            CrudError::ApiError(meta_err) => meta_err.into(),
+            CrudError::ApiError(meta_err) => ErrorCode::MetaServiceError(meta_err.to_string()),
             CrudError::Business(e) => e.into(),
         }
     }

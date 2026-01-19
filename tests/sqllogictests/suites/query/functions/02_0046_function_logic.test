@@ -33,7 +33,7 @@ SELECT 1 and 1
 
 
 
-query B
+query ?
 SELECT 1 and null
 ----
 NULL
@@ -45,7 +45,7 @@ SELECT 0 and null
 
 
 
-query B
+query ?
 SELECT null and null
 ----
 NULL
@@ -105,7 +105,7 @@ SELECT 1 OR null
 
 
 
-query B
+query ?
 SELECT 0 OR null
 ----
 NULL
@@ -117,7 +117,7 @@ SELECT null OR 1
 
 
 
-query B
+query ?
 SELECT null OR null
 ----
 NULL
@@ -158,12 +158,12 @@ SELECT false XOR true
 
 
 
-query T
+query ?
 SELECT null XOR true
 ----
 NULL
 
-query T
+query ?
 SELECT false XOR null
 ----
 NULL
@@ -211,7 +211,7 @@ SELECT or_filters(true, false, null)
 
 
 
-query TT
+query ??
 SELECT not null, not (null BETWEEN NULL AND NULL)
 ----
 NULL NULL
@@ -226,97 +226,97 @@ statement ok
 INSERT INTO t_logic VALUES (NULL)
 
 # NULL(false), NULL(false)
-query TT
+query BB
 SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
 # NULL(false), NULL(true)
-query TT
+query BB
 SELECT (a > 1) AND (a < 1), (a > 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
 # NULL(true), NULL(false)
-query TT
+query BB
 SELECT (a < 1) AND (a > 1), (a < 1) OR (a > 1) FROM t_logic
 ----
 NULL NULL
 
 # NULL(true), NULL(true)
-query TT
+query BB
 SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
 # NULL(false), false
-query TT
+query BB
 SELECT (a > 1) AND (0 > 1), (a > 1) OR (0 > 1) FROM t_logic
 ----
 0 NULL
 
 # NULL(false), true
-query TT
+query BB
 SELECT (a > 1) AND (0 < 1), (a > 1) OR (0 < 1) FROM t_logic
 ----
 NULL 1
 
 # NULL(true), false
-query TT
+query BB
 SELECT (a < 1) AND (0 > 1), (a < 1) OR (0 > 1) FROM t_logic
 ----
 0 NULL
 
 # NULL(true), true
-query TT
+query BB
 SELECT (a < 1) AND (0 < 1), (a < 1) OR (0 < 1) FROM t_logic
 ----
 NULL 1
 
 # false, NULL(false)
-query TT
+query BB
 SELECT (0 > 1) AND (a > 1), (0 > 1) OR (a > 1) FROM t_logic
 ----
 0 NULL
 
 # false, NULL(true)
-query TT
+query BB
 SELECT (0 > 1) AND (a < 1), (0 > 1) OR (a < 1) FROM t_logic
 ----
 0 NULL
 
 # true, NULL(false)
-query TT
+query BB
 SELECT (0 < 1) AND (a > 1), (0 < 1) OR (a > 1) FROM t_logic
 ----
 NULL 1
 
 # true, NULL(true)
-query TT
+query BB
 SELECT (0 < 1) AND (a < 1), (0 < 1) OR (a < 1) FROM t_logic
 ----
 NULL 1
 
 # false, false
-query TT
+query BB
 SELECT (0 > 1) AND (0 > 1), (0 > 1) OR (0 > 1) FROM t_logic
 ----
 0 0
 
 # false, true
-query TT
+query BB
 SELECT (0 > 1) AND (0 < 1), (0 > 1) OR (0 < 1) FROM t_logic
 ----
 0 1
 
 # true, false
-query TT
+query BB
 SELECT (0 < 1) AND (0 > 1), (0 < 1) OR (0 > 1) FROM t_logic
 ----
 0 1
 
 # true, true
-query TT
+query BB
 SELECT (0 < 1) AND (0 < 1), (0 < 1) OR (0 < 1) FROM t_logic
 ----
 1 1
@@ -342,7 +342,7 @@ SELECT or_filters(a > 2, a > 2, a > 2) FROM t_logic_1
 0
 0
 
-query TT
+query IB
 select number, and_filters(number > 1, number > 2 , number > 3) from numbers(6) order by number;
 ----
 0 0
@@ -352,7 +352,7 @@ select number, and_filters(number > 1, number > 2 , number > 3) from numbers(6) 
 4 1
 5 1
 
-query TT
+query IB
 select number, or_filters(number = 1, number = 5 , number = 3) from numbers(6) order by number;
 ----
 0 0

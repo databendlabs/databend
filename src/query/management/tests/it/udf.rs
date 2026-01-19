@@ -15,9 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
+use anyhow::Result;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
@@ -32,7 +31,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_add_udf() -> Result<()> {
+async fn test_add_udf() -> anyhow::Result<()> {
     let (kv_api, udf_api) = new_udf_api().await?;
 
     // lambda udf
@@ -112,7 +111,7 @@ async fn test_add_udf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_already_exists_add_udf() -> Result<()> {
+async fn test_already_exists_add_udf() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
     // lambda udf
@@ -142,7 +141,7 @@ async fn test_already_exists_add_udf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_get_udfs() -> Result<()> {
+async fn test_successfully_get_udfs() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
     let udfs = udf_api.list_udf().await?;
@@ -165,7 +164,7 @@ async fn test_successfully_get_udfs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_successfully_drop_udf() -> Result<()> {
+async fn test_successfully_drop_udf() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
     let lambda_udf = create_test_lambda_udf();
@@ -191,7 +190,7 @@ async fn test_successfully_drop_udf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_unknown_udf_drop_udf() -> Result<()> {
+async fn test_unknown_udf_drop_udf() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 
     let res = udf_api.drop_udf("UNKNOWN_NAME", MatchSeq::GE(1)).await;
@@ -239,7 +238,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaStore>, UdfMgr)> {
-    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
+    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));

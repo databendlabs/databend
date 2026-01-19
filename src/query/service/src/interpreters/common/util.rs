@@ -19,6 +19,8 @@ use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_users::UserApiProvider;
 
+use crate::meta_service_error;
+
 /// Checks if a duplicate label exists in the meta store.
 ///
 /// # Arguments
@@ -40,7 +42,8 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
                 UserApiProvider::instance()
                     .get_meta_store_client()
                     .get_kv(&deduplicate_label)
-                    .await?
+                    .await
+                    .map_err(meta_service_error)?
                     .is_some()
             };
             Ok(is_exists)

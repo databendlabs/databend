@@ -19,8 +19,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::future::TimedFutureExt;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -50,6 +49,7 @@ use databend_common_meta_types::sys_data::SysData;
 use display_more::DisplayOptionExt;
 use futures::Stream;
 use futures::stream::BoxStream;
+use semver::Version;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tonic::Status;
@@ -69,7 +69,7 @@ pub type MetaFnOnce<T> = Box<dyn FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 
 #[derive(Clone)]
 pub struct MetaHandle {
     pub id: NodeId,
-    pub version: BuildInfoRef,
+    pub version: Version,
     tx: mpsc::Sender<MetaFnOnce<()>>,
     /// The runtime containing the meta node worker.
     ///
@@ -80,7 +80,7 @@ pub struct MetaHandle {
 impl MetaHandle {
     pub fn new(
         id: NodeId,
-        version: BuildInfoRef,
+        version: Version,
         tx: mpsc::Sender<MetaFnOnce<()>>,
         rt: Arc<Runtime>,
     ) -> Self {
@@ -149,7 +149,7 @@ impl MetaHandle {
                 }
             }
             .log_elapsed_info(log_info)
-            .with_timing(move |_output, total, _busy| {
+            .inspect_elapsed(move |_output, total, _busy| {
                 request_histogram::record(&histogram_label, total);
             });
 
@@ -179,7 +179,7 @@ impl MetaHandle {
                 meta_node
                     .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
                     .log_elapsed_info(format!("ReadRequest: {:?}", req))
-                    .with_timing(|_output, total, _busy| {
+                    .inspect_elapsed(|_output, total, _busy| {
                         request_histogram::record(&histogram_label, total);
                     })
                     .await
@@ -207,7 +207,7 @@ impl MetaHandle {
                             prefix,
                             limit.display()
                         ))
-                        .with_timing(|_output, total, _busy| {
+                        .inspect_elapsed(|_output, total, _busy| {
                             request_histogram::record(histogram_label, total);
                         })
                         .await
@@ -234,7 +234,7 @@ impl MetaHandle {
                     meta_node
                         .handle_kv_get_many(input)
                         .log_elapsed_info("KvGetMany")
-                        .with_timing(|_output, total, _busy| {
+                        .inspect_elapsed(|_output, total, _busy| {
                             request_histogram::record(histogram_label, total);
                         })
                         .await
@@ -262,7 +262,7 @@ impl MetaHandle {
                 let res = meta_node
                     .handle_forwardable_request(forward_req)
                     .log_elapsed_info(format!("TxnRequest: {:?}", txn))
-                    .with_timing(|_output, total, _busy| {
+                    .inspect_elapsed(|_output, total, _busy| {
                         request_histogram::record(&histogram_label, total);
                     })
                     .await;
@@ -295,7 +295,7 @@ impl MetaHandle {
                     meta_node
                         .handle_forwardable_request(forward_req)
                         .log_elapsed_info(format!("WriteRequest: {:?}", entry))
-                        .with_timing(|_output, total, _busy| {
+                        .inspect_elapsed(|_output, total, _busy| {
                             request_histogram::record(&histogram_label, total);
                         })
                         .await

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -26,6 +25,7 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use rand::prelude::SliceRandom;
+use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::io::BlockBuilder;

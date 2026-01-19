@@ -20,7 +20,6 @@ use std::time::Duration;
 use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -64,6 +63,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
+use uuid::Uuid;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);

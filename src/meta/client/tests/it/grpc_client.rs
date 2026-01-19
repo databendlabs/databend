@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
@@ -150,7 +149,7 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
 }
 
 fn new_client(addr: impl ToString, timeout: Option<Duration>) -> anyhow::Result<Arc<ClientHandle>> {
-    let version = &databend_common_version::BUILD_INFO;
+    let version = databend_common_version::BUILD_INFO.semver();
     let client =
         MetaGrpcClient::try_create(vec![addr.to_string()], version, "", "", timeout, None, None)?;
 

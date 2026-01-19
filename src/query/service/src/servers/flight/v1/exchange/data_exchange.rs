@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -86,7 +86,7 @@ impl MergeExchange {
             destination_id,
             ignore_exchange,
             allow_adjust_parallelism,
-            channel_id: GlobalUniqName::unique(),
+            channel_id: GlobalUniq::unique(),
         })
     }
 }
@@ -102,7 +102,7 @@ impl BroadcastExchange {
         let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
         for destination in &destination_ids {
-            destination_channels.push((destination.clone(), vec![GlobalUniqName::unique()]));
+            destination_channels.push((destination.clone(), vec![GlobalUniq::unique()]));
         }
 
         DataExchange::Broadcast(BroadcastExchange {

@@ -1,4 +1,4 @@
-query T
+query ???????????
 SELECT '2019-02-28'::DATE AS "DATE",
 TIME_SLICE("DATE", 4, 'year', 'START') AS "START OF SLICE 1",
        TIME_SLICE("DATE", 4, 'year', 'END') AS "END OF SLICE 2",
@@ -13,7 +13,7 @@ TIME_SLICE("DATE", 4, 'year', 'START') AS "START OF SLICE 1",
 ----
 2019-02-28 2018-01-01 2022-01-01 2019-01-01 2020-01-01 2019-01-01 2019-05-01 2019-02-18 2019-03-18 2019-02-25 2019-03-01
 
-query T
+query ?????????????????
 SELECT '2019-02-28T01:23:45.678'::timestamp AS "TIMESTAMP 1",
 TIME_SLICE("TIMESTAMP 1", 8, 'day') AS "SLICE FOR TIMESTAMP 11",
        TIME_SLICE("TIMESTAMP 1", 8, 'day', 'end') AS "SLICE FOR TIMESTAMP 22",
@@ -43,7 +43,7 @@ INSERT INTO accounts (ID, billing_date, balance_due) VALUES
     (2, '2018-08-01', 200.00),
     (3, '2018-08-25', 400.00);
 
-query T
+query ??IR
 SELECT
        TIME_SLICE(billing_date, 2, 'WEEK', 'START') AS "START OF SLICE",
        TIME_SLICE(billing_date, 2, 'WEEK', 'END')   AS "END OF SLICE",

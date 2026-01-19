@@ -1,19 +1,19 @@
-query T
+query ?
 SELECT REPLACE(NULL, 'a', 'b')
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE('aaa', 'a', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE('aaa', NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT REPLACE(NULL, NULL, NULL)
 ----
 NULL

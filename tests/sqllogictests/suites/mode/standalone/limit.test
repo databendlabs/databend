@@ -7,7 +7,7 @@ create or replace table t1 as select number as a from numbers(10);
 statement ok
 create or replace table t2 as select number as b from numbers(100);
 
-query I rowsort
+query ?? rowsort
 select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
 ----
 5 5
@@ -25,36 +25,36 @@ insert into t values(1,10),(2,20),(3,30);
 statement error 1065
 select top 2 * from t order by id limit 2;
 
-query TT
+query II
 select top 2 * from t
 ----
 1 10
 2 20
 
-query T
+query I
 select distinct top 2 id from t order by id;
 ----
 1
 2
 
-query T
+query I
 select top 2 "top" from t order by top desc;
 ----
 30
 20
 
-query T
+query I
 select "top" from t order by top limit 1;
 ----
 10
 
-query TT
+query II
 select top 2 * from (select * from t limit 3) as t1 order by id;
 ----
 1 10
 2 20
 
-query TT
+query II
 select top 2 * from (select * from t limit 3) as t1 order by id offset 2;
 ----
 3 30

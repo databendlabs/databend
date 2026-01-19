@@ -14,7 +14,6 @@
 
 use std::io;
 
-use databend_common_exception::ErrorCode;
 use databend_common_meta_stoerr::MetaStorageError;
 use thiserror::Error;
 
@@ -93,12 +92,6 @@ impl From<MetaHandshakeError> for MetaError {
     fn from(e: MetaHandshakeError) -> Self {
         let client_err = MetaClientError::from(e);
         Self::ClientError(client_err)
-    }
-}
-
-impl From<MetaError> for ErrorCode {
-    fn from(e: MetaError) -> Self {
-        ErrorCode::MetaServiceError(e.to_string())
     }
 }
 

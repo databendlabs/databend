@@ -1,5 +1,5 @@
 onlyif mysql
-query I
+query T
 select "Engine" as engine from system.engines order by engine
 ----
 DELTA

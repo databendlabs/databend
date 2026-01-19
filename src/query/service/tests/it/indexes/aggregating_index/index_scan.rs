@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_expression::block_debug::pretty_format_blocks;
@@ -34,37 +33,37 @@ use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan() -> Result<()> {
+async fn test_index_scan() -> anyhow::Result<()> {
     test_index_scan_impl("parquet").await?;
     test_index_scan_impl("native").await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan_two_agg_funcs() -> Result<()> {
+async fn test_index_scan_two_agg_funcs() -> anyhow::Result<()> {
     test_index_scan_two_agg_funcs_impl("parquet").await?;
     test_index_scan_two_agg_funcs_impl("native").await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_projected_index_scan() -> Result<()> {
+async fn test_projected_index_scan() -> anyhow::Result<()> {
     test_projected_index_scan_impl("parquet").await?;
     test_projected_index_scan_impl("native").await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan_with_count() -> Result<()> {
+async fn test_index_scan_with_count() -> anyhow::Result<()> {
     test_index_scan_with_count_impl("parquet").await?;
     test_index_scan_with_count_impl("native").await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_index_scan_agg_args_are_expression() -> Result<()> {
+async fn test_index_scan_agg_args_are_expression() -> anyhow::Result<()> {
     test_index_scan_agg_args_are_expression_impl("parquet").await?;
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
 #[test]
-fn test_fuzz() -> Result<()> {
+fn test_fuzz() -> anyhow::Result<()> {
     let runtime = Runtime::with_worker_threads(2, None)?;
     runtime.block_on(async {
         test_fuzz_impl("parquet", false).await?;
@@ -74,7 +73,7 @@ fn test_fuzz() -> Result<()> {
 }
 
 #[test]
-fn test_fuzz_with_spill() -> Result<()> {
+fn test_fuzz_with_spill() -> anyhow::Result<()> {
     let runtime = Runtime::with_worker_threads(2, None)?;
     runtime.block_on(async {
         test_fuzz_impl("parquet", true).await?;

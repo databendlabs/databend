@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
+use crate::meta_service_error;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -63,7 +64,8 @@ impl AsyncSystemTable for ProceduresTable {
                 tenant,
                 filter: None,
             })
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_base::runtime;
 use databend_common_cloud_control::pb::AlterTaskRequest;
 use databend_common_cloud_control::pb::AlterTaskResponse;
@@ -37,7 +36,6 @@ use databend_common_cloud_control::pb::task::Status::Suspended;
 use databend_common_cloud_control::pb::task_service_client::TaskServiceClient;
 use databend_common_cloud_control::pb::task_service_server::TaskService;
 use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
-use databend_common_exception::Result;
 use hyper_util::rt::TokioIo;
 use tonic::Request;
 use tonic::Response;
@@ -156,7 +154,7 @@ impl TaskService for MockTaskService {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_task_client_success_cases() -> Result<()> {
+async fn test_task_client_success_cases() -> anyhow::Result<()> {
     let (client, server) = tokio::io::duplex(1024);
     let client = TokioIo::new(client);
 

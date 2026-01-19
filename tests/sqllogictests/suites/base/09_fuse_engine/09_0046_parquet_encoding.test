@@ -29,7 +29,7 @@ statement ok
 optimize table t compact;
 
 # In this case, lz4 with encoding produces smaller block files
-query T
+query B
 with
   e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't_encoded')  limit 1),
   p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't') limit 1)
@@ -78,7 +78,7 @@ optimize table tbl compact;
 
 # 3. check that file size of newly created blocks with encoding is smaller
 
-query T
+query B
 with
  e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
  p as (select s as c from tbl_size)
@@ -109,7 +109,7 @@ optimize table tbl compact;
 
 
 # 3. check that file size of newly created blocks with encoding is smaller
-query T
+query B
 with
  p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
  e as (select s as c from e_tbl_size)

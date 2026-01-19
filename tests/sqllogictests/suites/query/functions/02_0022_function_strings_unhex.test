@@ -11,7 +11,7 @@ select unhex(hex('hello'))::STRING
 ----
 hello
 
-query T
+query ?
 select unhex(null)
 ----
 NULL

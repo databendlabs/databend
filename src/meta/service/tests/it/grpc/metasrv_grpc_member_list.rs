@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
-use databend_common_base::base::tokio::time::Duration;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_version::BUILD_INFO;
 use databend_meta::message::ForwardRequest;
@@ -24,6 +23,7 @@ use databend_meta::message::JoinRequest;
 use databend_meta::meta_service::MetaNode;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
@@ -84,7 +84,7 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // Create a learner node but don't start it as part of the initial cluster
     let learner_node_id = 2;
     let learner_tc = MetaSrvTestContext::new(learner_node_id);
-    let learner_mn = MetaNode::open(&learner_tc.config.raft_config, &BUILD_INFO).await?;
+    let learner_mn = MetaNode::open(&learner_tc.config.raft_config, BUILD_INFO.semver()).await?;
 
     // Get the leader to send join request
     let leader_tc = &tcs[0];

@@ -24,6 +24,7 @@ databend-common-functions = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-sql = { workspace = true }
@@ -48,6 +49,7 @@ serde_json = { workspace = true }
 serde_repr = { workspace = true }
 snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 
 [lints]

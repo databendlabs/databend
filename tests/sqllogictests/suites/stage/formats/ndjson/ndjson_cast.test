@@ -4,7 +4,7 @@ drop table if exists cast_ndjson
 statement ok
 CREATE TABLE cast_ndjson (name String, tags Map(String, String))
 
-query TIBTI
+query TIITI
 copy into cast_ndjson from @data/ndjson/cast_sample.ndjson file_format = (type = NDJSON) ON_ERROR=continue
 ----
 ndjson/cast_sample.ndjson 3 0 NULL NULL
@@ -19,12 +19,12 @@ data3 {"env":"test3","length":"10"}
 statement ok
 CREATE OR REPLACE TABLE cast_ts_ndjson (t timestamp)
 
-query TIBTI
+query TIITI
 copy into cast_ts_ndjson from @data/ndjson/ts.ndjson file_format = (type = NDJSON) ON_ERROR=continue
 ----
 ndjson/ts.ndjson 3 0 NULL NULL
 
-query T
+query ?
 select * from cast_ts_ndjson order by t
 ----
 2025-01-08 03:11:04.000000
@@ -34,7 +34,7 @@ select * from cast_ts_ndjson order by t
 statement ok
 CREATE OR REPLACE TABLE number (id Int32, value Int64, score Variant)
 
-query TIBTI
+query TIITI
 COPY INTO number FROM @data/ndjson/numbers.ndjson file_format = (type = NDJSON) ON_ERROR=continue
 ----
 ndjson/numbers.ndjson 3 0 NULL NULL
@@ -42,6 +42,6 @@ ndjson/numbers.ndjson 3 0 NULL NULL
 query IIT
 SELECT * FROM number
 ----
-1 100 1e+38
-2 200 -1e+77
+1 100 1e38
+2 200 -1e77
 3 300 null

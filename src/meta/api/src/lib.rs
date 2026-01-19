@@ -31,6 +31,8 @@ pub mod error_util;
 pub mod garbage_collection_api;
 pub mod index_api;
 pub mod kv_app_error;
+pub use kv_app_error::KVAppResultExt;
+pub use kv_app_error::from_nested;
 pub mod kv_fetch_util;
 pub mod kv_pb_api;
 pub mod kv_pb_crud_api;

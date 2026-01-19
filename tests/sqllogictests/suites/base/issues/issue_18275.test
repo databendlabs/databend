@@ -20,7 +20,7 @@ INSERT INTO product_test (id, name, category, price, stock)
          (7, 'Table', 'Furniture', 399.99, 3);
 
 
-query TTTT
+query ITTRI
 select * from product_test order by id;
 ----
 6 Keyboard Electronics 79.99 25

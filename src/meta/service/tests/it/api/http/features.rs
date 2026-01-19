@@ -16,9 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::time::Instant;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_meta::api::HttpService;
@@ -26,6 +23,7 @@ use databend_meta::api::http::v1::features::FeatureResponse;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::Instant;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::start_metasrv_cluster;
@@ -38,11 +36,11 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let mut srv1 = HttpService::create(tcs[0].config.clone(), meta0.clone());
-    srv1.start().await.expect("HTTP: admin api error");
+    srv1.do_start().await.expect("HTTP: admin api error");
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
     let mut srv1 = HttpService::create(tcs[1].config.clone(), meta1.clone());
-    srv1.start().await.expect("HTTP: admin api error");
+    srv1.do_start().await.expect("HTTP: admin api error");
 
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(0));

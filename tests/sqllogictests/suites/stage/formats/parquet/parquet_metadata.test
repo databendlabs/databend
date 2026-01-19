@@ -1,4 +1,4 @@
-query ok
+query TIII
 select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ order by metadata$filename, c1 limit 3;
 ----
 parquet/ii/f1.parquet 1 0 1
@@ -6,7 +6,7 @@ parquet/ii/f1.parquet 2 1 2
 parquet/ii/f2.parquet 3 0 3
 
 
-query ok
+query TIII
 select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ where metadata$file_row_number = 0 and id > 1;
 ----
 parquet/ii/f2.parquet 3 0 3
@@ -16,14 +16,14 @@ parquet/ii/f3.parquet 5 0 5
 statement ok
 create or replace table t(file_name string, id string,  `row` int)
 
-query ok
+query TIITI
 copy into t from (select metadata$filename, c1, metadata$file_row_number + 1 from @data_s3/parquet/ii/)
 ----
 parquet/ii/f1.parquet 2 0 NULL NULL
 parquet/ii/f2.parquet 2 0 NULL NULL
 parquet/ii/f3.parquet 2 0 NULL NULL
 
-query ok
+query TTI
 select * from t order by file_name, id
 ----
 parquet/ii/f1.parquet 1 1

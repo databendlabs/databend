@@ -26,6 +26,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 
+use crate::meta_service_error;
 use crate::result_cache::common::ResultCacheValue;
 
 pub struct ResultCacheMetaManager {
@@ -55,13 +56,14 @@ impl ResultCacheMetaManager {
                 value: Operation::Update(value),
                 value_meta: Some(MetaSpec::new_ttl(ttl)),
             })
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn get(&self, key: String) -> Result<Option<ResultCacheValue>> {
-        let raw = self.inner.get_kv(&key).await?;
+        let raw = self.inner.get_kv(&key).await.map_err(meta_service_error)?;
         match raw {
             None => Ok(None),
             Some(SeqV { data, .. }) => {
@@ -76,7 +78,8 @@ impl ResultCacheMetaManager {
         let result = self
             .inner
             .list_kv_collect(ListOptions::unlimited(prefix))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         let mut r = vec![];
         for (_key, val) in result {

@@ -1,24 +1,24 @@
-query T
+query ?
 SELECT json_strip_nulls(parse_json('null'))
 ----
 null
 
-query T
+query ?
 SELECT json_strip_nulls(parse_json('true'))
 ----
 true
 
-query T
+query ?
 SELECT json_strip_nulls(parse_json('[1,2,3,null]'))
 ----
 [1,2,3,null]
 
-query T
+query ?
 SELECT json_strip_nulls(parse_json('{"a":1,"b":null,"c":{"a":1,"b":null},"d":[{"a":1,"b":null},{"a":2,"b":3}]}'))
 ----
 {"a":1,"c":{"a":1},"d":[{"a":1},{"a":2,"b":3}]}
 
-query T
+query ?
 SELECT json_typeof(parse_json(NULL))
 ----
 NULL
@@ -53,32 +53,32 @@ SELECT json_typeof(parse_json('{"a":1,"b":2}'))
 ----
 OBJECT
 
-query T
+query ?
 SELECT array_construct()
 ----
 []
 
-query T
+query ?
 SELECT array_construct(true, 1, 'str', [1,2], {'k':'v'}, null)
 ----
 [true,1,"str",[1,2],{"k":"v"},null]
 
-query T
+query ?
 SELECT json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
 ----
 [true,1,"str",[1,2],{"k":"v"},null]
 
-query T
+query ?
 SELECT object_construct()
 ----
 {}
 
-query T
+query ?
 SELECT object_construct('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
-query T
+query ?
 SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
@@ -86,27 +86,27 @@ SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', nul
 statement error 1006
 SELECT object_construct('k1', 1, 'k2', 'str', 'k3')
 
-query T
+query ?
 SELECT try_object_construct('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
-query T
+query ?
 SELECT try_object_construct('k1', 1, 'k2', 'str', 'k3')
 ----
 NULL
 
-query T
+query ?
 SELECT object_construct_keep_null()
 ----
 {}
 
-query T
+query ?
 SELECT object_construct_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
-query T
+query ?
 SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
@@ -114,12 +114,12 @@ SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'},
 statement error 1006
 SELECT object_construct_keep_null('k1', 1, 'k2', 'str', 'k3')
 
-query T
+query ?
 SELECT try_object_construct_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
-query T
+query ?
 SELECT try_object_construct_keep_null('k1', 1, 'k2', 'str', 'k3')
 ----
 NULL
@@ -133,7 +133,7 @@ CREATE TABLE t1(id Int, tag String NULL)
 statement ok
 INSERT INTO t1(id, tag) VALUES(1, 'a'), (2, 'b'), (3, 'c'), (4, 'null'), (5, NULL)
 
-query T
+query ?
 SELECT array_construct(id, tag) FROM t1
 ----
 [1,"a"]
@@ -142,7 +142,7 @@ SELECT array_construct(id, tag) FROM t1
 [4,"null"]
 [5,null]
 
-query T
+query ?
 SELECT object_construct('id', id, 'tag', tag) FROM t1
 ----
 {"id":1,"tag":"a"}
@@ -151,7 +151,7 @@ SELECT object_construct('id', id, 'tag', tag) FROM t1
 {"id":4,"tag":"null"}
 {"id":5}
 
-query T
+query ?
 SELECT object_construct_keep_null('id', id, 'tag', tag) FROM t1
 ----
 {"id":1,"tag":"a"}
@@ -163,207 +163,207 @@ SELECT object_construct_keep_null('id', id, 'tag', tag) FROM t1
 statement ok
 DROP TABLE IF EXISTS t1
 
-query T
+query ?
 SELECT json_path_exists(NULL, '$.a')
 ----
 NULL
 
-query T
+query ?
 SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
 ----
 NULL
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
 ----
 1
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
 ----
 0
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
 ----
 1
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
 ----
 0
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
 ----
 1
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
 ----
 0
 
-query T
+query B
 SELECT json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
 ----
 1
 
-query T
+query ?
 SELECT NULL @? '$.a'
 ----
 NULL
 
-query T
+query ?
 SELECT parse_json('{"a": 1, "b": 2}') @? NULL
 ----
 NULL
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": 2}') @? '$.a'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": 2}') @? '$.c'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ == 1)'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": 2}') @? '$.a ? (@ > 1)'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[0]'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[3]'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a": 1, "b": [1,2,3]}') @? '$.b[1 to last] ? (@ >=2 && @ <=3)'
 ----
 1
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a == 1')
 ----
 1
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.a > 1')
 ----
 0
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.c > 0')
 ----
 0
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":2}'), '$.b < 2')
 ----
 0
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] == 1')
 ----
 1
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[0] > 1')
 ----
 0
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[3] == 0')
 ----
 0
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] >= 2')
 ----
 1
 
-query T
+query B
 SELECT json_path_match(parse_json('{"a":1,"b":[1,2,3]}'), '$.b[1 to last] == 2 || $.b[1 to last] == 3')
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":2}') @@ '$.a == 1'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":2}') @@ '$.a > 1'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":2}') @@ '$.c > 0'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":2}') @@ '$.b < 2'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] == 1'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[0] > 1'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[3] == 0'
 ----
 0
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] >= 2'
 ----
 1
 
-query T
+query B
 SELECT parse_json('{"a":1,"b":[1,2,3]}') @@ '$.b[1 to last] == 2 || $.b[1 to last] == 3'
 ----
 1
 
-query T
+query ?
 SELECT json_each(NULL)
 ----
 
-query T
+query ?
 SELECT json_each(parse_json('null'))
 ----
 
-query T
+query ?
 SELECT json_each(parse_json('true'))
 ----
 
-query T
+query ?
 SELECT json_each(parse_json('[1, 2, 3]'))
 ----
 
-query T
+query ?
 SELECT json_each(parse_json('{}'))
 ----
 
-query T
+query ?
 SELECT json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
 ----
 ("a",1)
@@ -371,13 +371,13 @@ SELECT json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k
 ("c",true)
 ("d",{"k1":1,"k2":2})
 
-query TT
+query ??
 SELECT parse_json('{"k1": "v1", "k2": "v2"}') config, json_each(config)
 ----
 {"k1":"v1","k2":"v2"} ("k1","v1")
 {"k1":"v1","k2":"v2"} ("k2","v2")
 
-query TT
+query T?
 SELECT * FROM json_each(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
 ----
 a 1
@@ -391,41 +391,41 @@ SELECT * FROM json_each(parse_json('{"a": true}')) WHERE json_each(parse_json('{
 statement error 1065
 SELECT * FROM json_each(parse_json('{"a": true}')) HAVING json_each(parse_json('{"a": true}'))
 
-query T
+query ?
 SELECT json_array_elements(NULL)
 ----
 
-query T
+query ?
 SELECT json_array_elements(parse_json('null'))
 ----
 
-query T
+query ?
 SELECT json_array_elements(parse_json('true'))
 ----
 
-query T
+query ?
 SELECT json_array_elements(parse_json('[]'))
 ----
 
-query T
+query ?
 SELECT json_array_elements(parse_json('[1, 2, 3]'))
 ----
 1
 2
 3
 
-query TT
+query ??
 SELECT parse_json('{"k": [1, 2, 3]}') config, json_array_elements(config:k)
 ----
 {"k":[1,2,3]} 1
 {"k":[1,2,3]} 2
 {"k":[1,2,3]} 3
 
-query T
+query ?
 SELECT json_array_elements(parse_json('{"a": 1, "b": [1,2,3], "c": true, "d": {"k1": 1, "k2": 2}}'))
 ----
 
-query T
+query ?
 SELECT json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
 ----
 1
@@ -433,7 +433,7 @@ SELECT json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
 true
 {"k1":1,"k2":2}
 
-query T
+query ?
 SELECT * FROM json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2": 2}]'))
 ----
 1
@@ -447,92 +447,92 @@ SELECT * FROM json_array_elements(parse_json('[true]')) WHERE json_array_element
 statement error 1065
 SELECT * FROM json_array_elements(parse_json('[true]')) HAVING json_array_elements(parse_json('[true]'))
 
-query T
+query ?
 select parse_json('["1","2","3"]') ? NULL
 ----
 NULL
 
-query T
+query B
 select parse_json('"string"') ? '1'
 ----
 0
 
-query T
+query B
 select parse_json('["1","2","3"]') ? '1'
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ? 'b'
 ----
 1
 
-query T
+query B
 select parse_json('["1","2","3"]') ? '4'
 ----
 0
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ? 'd'
 ----
 0
 
-query T
+query ?
 select parse_json('["1","2","3"]') ?| NULL
 ----
 NULL
 
-query T
+query B
 select parse_json('"string"') ?| ['1','2']
 ----
 0
 
-query T
+query B
 select parse_json('["1","2","3"]') ?| ['1','4']
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ?| ['b','e']
 ----
 1
 
-query T
+query B
 select parse_json('["1","2","3"]') ?| ['4','5']
 ----
 0
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ?| ['d','e']
 ----
 0
 
-query T
+query ?
 select parse_json('["1","2","3"]') ?& NULL
 ----
 NULL
 
-query T
+query B
 select parse_json('"string"') ?& ['1','2']
 ----
 0
 
-query T
+query B
 select parse_json('["1","2","3"]') ?& ['1','3']
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ?& ['b','c']
 ----
 1
 
-query T
+query B
 select parse_json('["1","2","3"]') ?& ['3','5']
 ----
 0
 
-query T
+query B
 select parse_json('{"a":1,"b":2,"c":3}') ?& ['c','d']
 ----
 0
@@ -549,7 +549,7 @@ statement ok
 INSERT INTO t2(id, v) VALUES (1, parse_json('true')), (2, parse_json('{"a":1,"b":2,"c":3}')), (3, '["b","c","e"]'), (4, NULL)
 
 
-query T
+query IB
 select id, v ? 'a' from t2 order by id
 ----
 1 0
@@ -557,7 +557,7 @@ select id, v ? 'a' from t2 order by id
 3 0
 4 NULL
 
-query T
+query IB
 select id, v ?| ['a','d'] from t2 order by id
 ----
 1 0
@@ -565,7 +565,7 @@ select id, v ?| ['a','d'] from t2 order by id
 3 0
 4 NULL
 
-query T
+query IB
 select id, v ?& ['a','c'] from t2 order by id
 ----
 1 0
@@ -574,7 +574,7 @@ select id, v ?& ['a','c'] from t2 order by id
 4 NULL
 
 
-query T
+query IB
 select id, v @? '$.b' from t2 order by id
 ----
 1 0
@@ -582,7 +582,7 @@ select id, v @? '$.b' from t2 order by id
 3 0
 4 NULL
 
-query T
+query IB
 select id, v @@ '$[*] == "b"' from t2 order by id
 ----
 1 NULL
@@ -593,389 +593,389 @@ select id, v @@ '$[*] == "b"' from t2 order by id
 statement ok
 DROP TABLE IF EXISTS t2
 
-query T
+query ?
 select NULL @> NULL;
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1,2,3]') @> NULL;
 ----
 NULL
 
-query T
+query ?
 select NULL @> parse_json('1');
 ----
 NULL
 
-query T
+query B
 select parse_json('true') @> parse_json('true');
 ----
 1
 
-query T
+query B
 select parse_json('true') @> parse_json('false');
 ----
 0
 
-query T
+query B
 select parse_json('"asd"') @> parse_json('"asd"');
 ----
 1
 
-query T
+query B
 select parse_json('"asd"') @> parse_json('"asdd"');
 ----
 0
 
-query T
+query B
 select parse_json('[1,2,3]') @> parse_json('1');
 ----
 1
 
-query T
+query B
 select parse_json('[1,2,3]') @> parse_json('4');
 ----
 0
 
-query T
+query B
 select parse_json('[1,2,3,4]') @> parse_json('[2,1,3]');
 ----
 1
 
-query T
+query B
 select parse_json('[1,2,3,4]') @> parse_json('[2,1,1]');
 ----
 1
 
-query T
+query B
 select parse_json('[1,2,[1,3]]') @> parse_json('[1,3]');
 ----
 0
 
-query T
+query B
 select parse_json('[1,2,[1,3]]') @> parse_json('[[1,3]]');
 ----
 1
 
-query T
+query B
 select parse_json('[1,2,[1,3]]') @> parse_json('[[[1,3]]]');
 ----
 0
 
-query T
+query B
 select parse_json('[{"a":1}]') @> parse_json('{"a":1}');
 ----
 0
 
-query T
+query B
 select parse_json('[{"a":1},{"b":2}]') @> parse_json('[{"a":1}]');
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1,"b":2}') @> parse_json('{"a":1}');
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1,"b":2}') @> parse_json('{"a":2}');
 ----
 0
 
-query T
+query B
 select parse_json('{"z":2,"b":{"a":1}}') @> parse_json('{"a":1}');
 ----
 0
 
 
-query T
+query B
 select parse_json('{"a":{"c":100,"d":200},"b":2}') @> parse_json('{"a":{}}');
 ----
 1
 
-query T
+query ?
 select NULL <@ NULL;
 ----
 NULL
 
-query T
+query ?
 select NULL <@ parse_json('[1,2,3]');
 ----
 NULL
 
-query T
+query ?
 select parse_json('1') <@ NULL;
 ----
 NULL
 
-query T
+query B
 select parse_json('true') <@ parse_json('true');
 ----
 1
 
-query T
+query B
 select parse_json('true') <@ parse_json('false');
 ----
 0
 
-query T
+query B
 select parse_json('"asd"') <@ parse_json('"asd"');
 ----
 1
 
-query T
+query B
 select parse_json('"asd"') <@ parse_json('"asdd"');
 ----
 0
 
-query T
+query B
 select parse_json('1') <@ parse_json('[1,2,3]');
 ----
 1
 
-query T
+query B
 select parse_json('4') <@ parse_json('[1,2,3]');
 ----
 0
 
-query T
+query B
 select parse_json('[2,1,3]') <@ parse_json('[1,2,3,4]');
 ----
 1
 
-query T
+query B
 select parse_json('[2,1,1]') <@ parse_json('[1,2,3,4]');
 ----
 1
 
-query T
+query B
 select parse_json('[1,3]') <@ parse_json('[1,2,[1,3]]');
 ----
 0
 
-query T
+query B
 select parse_json('[[1,3]]') <@ parse_json('[1,2,[1,3]]');
 ----
 1
 
-query T
+query B
 select parse_json('[[[1,3]]]') <@ parse_json('[1,2,[1,3]]');
 ----
 0
 
-query T
+query B
 select parse_json('{"a":1}') <@ parse_json('[{"a":1}]');
 ----
 0
 
-query T
+query B
 select parse_json('[{"a":1}]') <@ parse_json('[{"a":1},{"b":2}]');
 ----
 1
 
-query T
+query B
 select parse_json('{"a":1}') <@ parse_json('{"a":1,"b":2}');
 ----
 1
 
-query T
+query B
 select parse_json('{"a":2}') <@ parse_json('{"a":1,"b":2}');
 ----
 0
 
-query T
+query B
 select parse_json('{"a":1}') <@ parse_json('{"z":2,"b":{"a":1}}');
 ----
 0
 
-query T
+query B
 select parse_json('{"a":{}}') <@ parse_json('{"a":{"c":100,"d":200},"b":2}');
 ----
 1
 
-query T
+query ?
 select parse_json('[1,2,3]') || NULL;
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1,2,3]') || parse_json('10');
 ----
 [1,2,3,10]
 
-query T
+query ?
 select parse_json('"asd"') || parse_json('[1,2,3]');
 ----
 ["asd",1,2,3]
 
-query T
+query ?
 select parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('"asd"');
 ----
 [1,{"a":1,"b":2,"c":[1,2,3]},3,"asd"]
 
-query T
+query ?
 select parse_json('[1,{"a":1,"b":2,"c":[1,2,3]},3]') || parse_json('[10,20,30]');
 ----
 [1,{"a":1,"b":2,"c":[1,2,3]},3,10,20,30]
 
-query T
+query ?
 select parse_json('[1,[1,2,3],3]') || parse_json('[[10,20,30]]');
 ----
 [1,[1,2,3],3,[10,20,30]]
 
-query T
+query ?
 select parse_json('{"a":1,"b":2}') || parse_json('true');
 ----
 [{"a":1,"b":2},true]
 
-query T
+query ?
 select parse_json('[1,2,3]') || parse_json('{"a":1,"b":2}');
 ----
 [1,2,3,{"a":1,"b":2}]
 
-query T
+query ?
 select parse_json('{"a":1,"b":2}') || parse_json('[1,2,3]');
 ----
 [{"a":1,"b":2},1,2,3]
 
-query T
+query ?
 select parse_json('{"a":1,"b":2}') || parse_json('{"c":3,"d":4}');
 ----
 {"a":1,"b":2,"c":3,"d":4}
 
-query T
+query ?
 select parse_json('{"a":1,"b":2,"d":10}') || parse_json('{"a":3,"b":4}');
 ----
 {"a":3,"b":4,"d":10}
 
-query T
+query ?
 select parse_json('[1,2,3]') - NULL;
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1,2,3]') - '1';
 ----
 [1,2,3]
 
-query T
+query ?
 select parse_json('["1","2","3"]') - '0';
 ----
 ["1","2","3"]
 
-query T
+query ?
 select parse_json('["1","2","3"]') - '1';
 ----
 ["2","3"]
 
-query T
+query ?
 select parse_json('["1","2","3",{"a":1,"b":2}]') - '1';
 ----
 ["2","3",{"a":1,"b":2}]
 
-query T
+query ?
 select parse_json('{"a":1,"b":2}') - 'c';
 ----
 {"a":1,"b":2}
 
-query T
+query ?
 select parse_json('{"a":1,"b":2}') - 'a';
 ----
 {"b":2}
 
-query T
+query ?
 select parse_json('{"b":2}') - 'b';
 ----
 {}
 
-query T
+query ?
 select parse_json('[1,2,3]') - 0;
 ----
 [2,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') - 1;
 ----
 [1,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') - 2;
 ----
 [1,2]
 
-query T
+query ?
 select parse_json('[1,2,3]') - -1;
 ----
 [1,2]
 
-query T
+query ?
 select parse_json('[1,2,3]') - -2;
 ----
 [1,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') - -3;
 ----
 [2,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') - -4;
 ----
 [1,2,3]
 
-query T
+query ?
 select parse_json('[1,2,{"a":[1,2,3],"b":[40,50,60]}]') - 2;
 ----
 [1,2]
 
 
-query T
+query ?
 select parse_json('[1,2,3]') #- NULL
 ----
 NULL
 
-query T
+query ?
 select parse_json('[1,2,3]') #- '{}'
 ----
 [1,2,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') #- '{0}'
 ----
 [2,3]
 
-query T
+query ?
 select parse_json('[1,2,3]') #- '{-1}'
 ----
 [1,2]
 
-query T
+query ?
 select parse_json('[1,2,3]') #- '{3}'
 ----
 [1,2,3]
 
-query T
+query ?
 select parse_json('{"a":1,"b":[1,2,3]}') #- '{b}'
 ----
 {"a":1}
 
-query T
+query ?
 select parse_json('{"a":1,"b":[1,2,3]}') #- '{c}'
 ----
 {"a":1,"b":[1,2,3]}
 
-query T
+query ?
 select parse_json('{"a":1,"b":[1,2,3]}') #- '{b,2}'
 ----
 {"a":1,"b":[1,2]}
 
-query T
+query ?
 select parse_json('{"a":1,"b":[1,2,3]}') #- '{b,-2}'
 ----
 {"a":1,"b":[1,3]}
 
-query T
+query ?
 select parse_json('{"a":1,"b":[{"c":1,"d":10},2,3]}') #- '{b,0,d}'
 ----
 {"a":1,"b":[{"c":1},2,3]}
@@ -989,7 +989,7 @@ CREATE TABLE t3(id Int, v Variant NULL, s String NULL);
 statement ok
 INSERT INTO t3(id, v, s) VALUES (1, parse_json('[1,2,3]'), '{0}'), (2, parse_json('{"a":1,"b":2,"c":3}'), '{b}'), (3, '[1,{"a":[1,2,3]},3]', '{1,a,-1}'), (4, NULL, NULL)
 
-query T
+query I?
 select id, v #- s from t3 order by id
 ----
 1 [2,3]
@@ -1001,19 +1001,19 @@ statement ok
 DROP TABLE IF EXISTS t3
 
 # Basic jq usage tests
-query T
+query ?
 SELECT * FROM jq('.[] | .', object_construct('k1', 'v1', 'k2', 'v2')) ORDER BY 1
 ----
 "v1"
 "v2"
 
-query T
+query ?
 SELECT * FROM jq($$[.[] | .]$$, object_construct('k1', 'v1', 'k2', 'v2'))
 ----
 ["v1","v2"]
 
 # Test with array input
-query T
+query ?
 SELECT * FROM jq('.[]', array_construct(1, 2, 3))
 ----
 1
@@ -1021,26 +1021,26 @@ SELECT * FROM jq('.[]', array_construct(1, 2, 3))
 3
 
 # Test with nested objects
-query T
+query ?
 SELECT * FROM jq('.a.b', object_construct('a', object_construct('b', 'nested_value')))
 ----
 "nested_value"
 
 # Test with array of objects
-query T
+query ?
 SELECT * FROM jq('.[].name', array_construct(object_construct('name', 'Alice'), object_construct('name', 'Bob')))
 ----
 "Alice"
 "Bob"
 
 # Test with filtering
-query T
+query ?
 SELECT * FROM jq('.[] | select(.age > 30)', array_construct(object_construct('name', 'Alice', 'age', 25), object_construct('name', 'Bob', 'age', 35)))
 ----
 {"age":35,"name":"Bob"}
 
 # Test with multiple outputs per input element
-query T
+query ?
 SELECT * FROM jq('.[] | .name, .age', array_construct(object_construct('name', 'Alice', 'age', 25), object_construct('name', 'Bob', 'age', 35)))
 ----
 "Alice"
@@ -1049,18 +1049,18 @@ SELECT * FROM jq('.[] | .name, .age', array_construct(object_construct('name', '
 35
 
 # Test with NULL input
-query T
+query ?
 SELECT * FROM jq('.', NULL)
 ----
 
 # Test with empty object
-query T
+query ?
 SELECT * FROM jq('.', object_construct())
 ----
 {}
 
 # Test with empty array
-query T
+query ?
 SELECT * FROM jq('.[]', array_construct())
 ----
 
@@ -1069,20 +1069,20 @@ statement error
 SELECT * FROM jq('invalid_expression', object_construct('k', 'v'))
 
 # Test with complex transformations
-query T
+query ?
 SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', array_construct(1, 2, 3, 4, 5))
 ----
 {"length":5,"max":5,"min":1,"sum":15}
 
 # Test with string manipulation
-query T
+query ?
 SELECT * FROM jq('.[] | ascii_upcase', array_construct('hello', 'world'))
 ----
 "HELLO"
 "WORLD"
 
 # Test with numeric operations
-query T
+query ?
 SELECT * FROM jq('.[] * 2', array_construct(1, 2, 3))
 ----
 2
@@ -1090,19 +1090,19 @@ SELECT * FROM jq('.[] * 2', array_construct(1, 2, 3))
 6
 
 # Test with object construction
-query T
+query ?
 SELECT * FROM jq('{new_key: .key}', object_construct('key', 'value'))
 ----
 {"new_key":"value"}
 
 # Test with array construction
-query T
+query ?
 SELECT * FROM jq('[.[] | . * 2]', array_construct(1, 2, 3))
 ----
 [2,4,6]
 
 # Test with conditional logic
-query T
+query ?
 SELECT * FROM jq('.[] | if . == 0 then "zero" elif . == 1 then "one" else "many" end', array_construct(0, 1, 2))
 ----
 "zero"
@@ -1119,7 +1119,7 @@ INSERT INTO test_data VALUES
     (2, '{"name": "Bob", "scores": [92, 88, 95]}'),
     (3, '{"name": "Charlie", "scores": [76, 80, 82]}');
 
-query IT
+query I?
 SELECT
     id,
     jq('to_entries[] | {key: .key, value: (.value | tostring)}', json_data) AS jq
@@ -1158,32 +1158,32 @@ INSERT INTO t4(id, v1, v2) VALUES
     (8, '{"k":[1,2]}', '{"k":[3]}')
 
 
-query T
+query ?
 SELECT array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)
 ----
 [0,1,"hello",2,3]
 
-query T
+query ?
 SELECT array_insert('[0,1,2,3]'::variant, 7, '"hello"'::variant)
 ----
 [0,1,2,3,"hello"]
 
-query T
+query ?
 SELECT array_insert('[0,1,2,3]'::variant, -1, '"hello"'::variant)
 ----
 [0,1,2,"hello",3]
 
-query T
+query ?
 SELECT array_insert('["A","A","B",null,null]'::variant, 0, '[1,2,3]'::variant)
 ----
 [[1,2,3],"A","A","B",null,null]
 
-query T
+query ?
 SELECT json_array_insert('"A"'::variant, 0, '[1,2,3]'::variant)
 ----
 [[1,2,3],"A"]
 
-query ITT
+query I??
 SELECT id, array_insert(v1, 0, '100'::variant), array_insert(v2, 2, '[10,11]'::variant) from t4
 ----
 1 [100,1,2,2,3,3,null] [2,3,[10,11],3]
@@ -1195,32 +1195,32 @@ SELECT id, array_insert(v1, 0, '100'::variant), array_insert(v2, 2, '[10,11]'::v
 7 [100,{"k":[1,2]}] [{"k":[1,2]},[10,11]]
 8 [100,{"k":[1,2]}] [{"k":[3]},[10,11]]
 
-query T
+query ?
 SELECT array_distinct('["A","A","B",null,null]'::variant)
 ----
 ["A","B",null]
 
-query T
+query ?
 SELECT array_distinct('[1,1,2,3,3,1,2,null,null]'::variant)
 ----
 [1,2,3,null]
 
-query T
+query ?
 SELECT array_distinct('[[1,2],[1,2],[3,4,3,3],{"k":"v"},{"k":"v"}]'::variant)
 ----
 [[1,2],[3,4,3,3],{"k":"v"}]
 
-query T
+query ?
 SELECT array_distinct('true'::variant)
 ----
 [true]
 
-query T
+query ?
 SELECT json_array_distinct('{"kk":[1,2]}'::variant)
 ----
 [{"kk":[1,2]}]
 
-query ITT
+query I??
 SELECT id, array_distinct(v1), array_distinct(v2) from t4
 ----
 1 [1,2,3,null] [2,3]
@@ -1232,62 +1232,62 @@ SELECT id, array_distinct(v1), array_distinct(v2) from t4
 7 [{"k":[1,2]}] [{"k":[1,2]}]
 8 [{"k":[1,2]}] [{"k":[3]}]
 
-query T
+query ?
 SELECT array_intersection('["A","B"]'::variant, '["B","C"]'::variant)
 ----
 ["B"]
 
-query T
+query ?
 SELECT array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)
 ----
 ["B","C"]
 
-query T
+query ?
 SELECT array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
 ----
 ["B","B"]
 
-query T
+query ?
 SELECT array_intersection('[1,2]'::variant, '[3,4]'::variant)
 ----
 []
 
-query T
+query ?
 SELECT array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)
 ----
 [null,null]
 
-query T
+query ?
 SELECT array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
 ----
 [{"a":1,"b":2}]
 
-query T
+query ?
 SELECT array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant)
 ----
 []
 
-query T
+query ?
 SELECT array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1}]'::variant);
 ----
 [{"a":1,"b":2,"c":3}]
 
-query T
+query ?
 SELECT array_intersection('true'::variant, '[true,false]'::variant)
 ----
 [true]
 
-query T
+query ?
 SELECT array_intersection('true'::variant, 'false'::variant)
 ----
 []
 
-query T
+query ?
 SELECT json_array_intersection('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
 ----
 [{"k":"v"}]
 
-query IT
+query I?
 SELECT id, array_intersection(v1, v2) from t4
 ----
 1 [2,3,3]
@@ -1299,47 +1299,47 @@ SELECT id, array_intersection(v1, v2) from t4
 7 [{"k":[1,2]}]
 8 []
 
-query T
+query ?
 SELECT array_except('["A","B"]'::variant, '["B","C"]'::variant);
 ----
 ["A"]
 
-query T
+query ?
 SELECT array_except('["A","B","C"]'::variant, '["B","C"]'::variant);
 ----
 ["A"]
 
-query T
+query ?
 SELECT array_except('["A","B","B","B","C"]'::variant, '["B"]'::variant);
 ----
 ["A","B","B","C"]
 
-query T
+query ?
 SELECT array_except('["A",null,null]'::variant, '["B",null]'::variant);
 ----
 ["A",null]
 
-query T
+query ?
 SELECT array_except('[{"a":1,"b":2},1]'::variant, '[{"a":1,"b":2},3]'::variant);
 ----
 [1]
 
-query T
+query ?
 SELECT array_except('true'::variant, '[true,false]'::variant)
 ----
 []
 
-query T
+query ?
 SELECT array_except('true'::variant, 'false'::variant)
 ----
 [true]
 
-query T
+query ?
 SELECT json_array_except('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
 ----
 [1]
 
-query IT
+query I?
 SELECT id, array_except(v1, v2) from t4
 ----
 1 [1,2,null]
@@ -1416,17 +1416,17 @@ INSERT INTO t5(id, v1) VALUES
     (2, '{"a":[1,2,3],"c":{"c1":"v1","c2":"v2"},"m":true}'),
     (3, '{"a":1,"h":2,"m":3,"n":4}')
 
-query T
+query ?
 SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'c', 3)
 ----
 {"a":1,"b":2,"c":3,"d":4}
 
-query T
+query ?
 SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'x', 10)
 ----
 {"a":1,"b":2,"d":4,"x":10}
 
-query T
+query ?
 SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'A', 10)
 ----
 {"A":10,"a":1,"b":2,"d":4}
@@ -1440,54 +1440,54 @@ SELECT object_insert('1234'::variant, 'a', 10)
 statement error 1006
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', false)
 
-query T
+query ?
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', true)
 ----
 {"city":"San Jose","state":"CA"}
 
-query T
+query ?
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 94402::DOUBLE, false)
 ----
 {"city":"San Mateo","state":"CA","zip_code":94402.0}
 
-query T
+query ?
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', null)
 ----
 {"city":"San Mateo","state":"CA"}
 
-query T
+query ?
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 'null'::variant)
 ----
 {"city":"San Mateo","state":"CA","zip_code":null}
 
-query T
+query ?
 SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, to_date('2020-01-01'), 100)
 ----
 {"2020-01-01":100,"city":"San Mateo","state":"CA"}
 
-query T
+query ??
 SELECT json_object_insert('{"a":1}'::variant, 'a', null, true), json_object_insert('{"a":1}'::variant, 'a', null, false)
 ----
 {} {"a":1}
 
-query IT
+query I?
 SELECT id, object_insert(v1, 'b', '100'::variant) from t5
 ----
 1 {"b":100,"k1":"v1","k2":"v2"}
 2 {"a":[1,2,3],"b":100,"c":{"c1":"v1","c2":"v2"},"m":true}
 3 {"a":1,"b":100,"h":2,"m":3,"n":4}
 
-query T
+query ?
 SELECT object_delete('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
 ----
 {"b":2,"d":4}
 
-query T
+query ?
 SELECT object_delete('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
 ----
 {"a":1}
 
-query T
+query ?
 SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 ----
 {"a":1,"b":2,"d":4}
@@ -1495,24 +1495,24 @@ SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 statement error 1006
 SELECT object_delete('1234'::variant, 'a')
 
-query IT
+query I?
 SELECT id, object_delete(v1, 'a', 'k1') from t5
 ----
 1 {"k2":"v2"}
 2 {"c":{"c1":"v1","c2":"v2"},"m":true}
 3 {"h":2,"m":3,"n":4}
 
-query T
+query ?
 SELECT object_pick('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
 ----
 {"a":1}
 
-query T
+query ?
 SELECT object_pick('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
 ----
 {"b":2,"d":4}
 
-query T
+query ?
 SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 ----
 {}
@@ -1520,7 +1520,7 @@ SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 statement error 1006
 SELECT object_pick('1234'::variant, 'a')
 
-query IT
+query I?
 SELECT id, object_pick(v1, 'a', 'k1') from t5
 ----
 1 {"k1":"v1"}
@@ -1539,7 +1539,7 @@ INSERT INTO t6 VALUES
 (2, '{"name": "Bob", "age": null, "address": {"city": "New York", "zip": null}}'),
 (3, '{"name": "Charlie", "age": 25, "address": {"city": "San Francisco", "zip": "94107"}}');
 
-query II
+query I????
 SELECT id, data:address, data:address:zip, STRIP_NULL_VALUE(data:address), STRIP_NULL_VALUE(data:address:zip) FROM t6;
 ----
 1 null NULL NULL NULL
@@ -1550,27 +1550,27 @@ SELECT id, data:address, data:address:zip, STRIP_NULL_VALUE(data:address), STRIP
 statement ok
 DROP TABLE IF EXISTS t6
 
-query T
+query ?
 SELECT array_append(parse_json('[1,2,3]'), 4)
 ----
 [1,2,3,4]
 
-query T
+query ?
 SELECT array_append(parse_json('[1, "a", true]'), null)
 ----
 [1,"a",true,null]
 
-query T
+query ?
 SELECT array_append(parse_json('true'), 1)
 ----
 [true,1]
 
-query T
+query ?
 SELECT array_compact(parse_json('[1, null, 2, null, 3]'))
 ----
 [1,2,3]
 
-query T
+query ?
 SELECT array_compact(parse_json('[null, null, null]'))
 ----
 []
@@ -1593,12 +1593,12 @@ SELECT array_contains(parse_json('1'), 1), array_contains(parse_json('1'), 4)
 ----
 1 0
 
-query T
+query ?
 SELECT array_flatten(parse_json('[[1,2],[3,4]]'))
 ----
 [1,2,3,4]
 
-query T
+query ?
 SELECT array_flatten(parse_json('[[1,[2,3]],[4]]'))
 ----
 [1,[2,3],4]
@@ -1611,7 +1611,7 @@ SELECT array_indexof(parse_json('[1,2,3]'), 2)
 ----
 1
 
-query I
+query ?
 SELECT array_indexof(parse_json('[1,2,3]'), 4)
 ----
 NULL
@@ -1621,67 +1621,67 @@ SELECT array_indexof(parse_json('[1,2,2,3]'), 2)
 ----
 1
 
-query T
+query ?
 SELECT array_prepend(0, parse_json('[1,2,3]'))
 ----
 [0,1,2,3]
 
-query T
+query ?
 SELECT array_prepend('a', parse_json('[]'))
 ----
 ["a"]
 
-query T
+query ?
 SELECT array_remove(parse_json('[1,2,3,2]'), 2)
 ----
 [1,3]
 
-query T
+query ?
 SELECT array_remove(parse_json('[1,2,3]'), 4)
 ----
 [1,2,3]
 
-query TT
+query ??
 SELECT array_remove(parse_json('"a"'), 'a'), array_remove(parse_json('"a"'), 'b')
 ----
 [] ["a"]
 
-query T
+query ?
 SELECT array_remove_first(parse_json('[1,2,3,2]'))
 ----
 [2,3,2]
 
-query T
+query ?
 SELECT array_remove_first(parse_json('1'))
 ----
 []
 
-query T
+query ?
 SELECT array_remove_last(parse_json('[1,2,3,2]'))
 ----
 [1,2,3]
 
-query T
+query ?
 SELECT array_remove_last(parse_json('1'))
 ----
 []
 
-query T
+query ?
 SELECT array_reverse(parse_json('[1,2,3]'))
 ----
 [3,2,1]
 
-query T
+query ?
 SELECT array_reverse(parse_json('"a"'))
 ----
 ["a"]
 
-query T
+query ?
 SELECT array_slice(parse_json('[1,2,3,4,5]'), 1, 3)
 ----
 [2,3]
 
-query T
+query ?
 SELECT array_slice(parse_json('[1,2,3,4,5]'), -2, -1)
 ----
 [4]

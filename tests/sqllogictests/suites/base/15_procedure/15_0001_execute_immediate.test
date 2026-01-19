@@ -4,7 +4,7 @@ create or replace database test_procedure;
 statement ok
 use test_procedure;
 
-query I
+query ?
 EXECUTE IMMEDIATE $$
 BEGIN
     RETURN NULL;
@@ -148,7 +148,7 @@ $$;
 statement ok
 set script_max_steps = 1000;
 
-query
+query ?
 EXECUTE IMMEDIATE $$
 BEGIN
     LET sum := 0;

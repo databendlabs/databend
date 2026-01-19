@@ -15,7 +15,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_base::base::tokio::sync::oneshot::Sender;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
@@ -31,6 +30,7 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use fastrace::Span;
+use tokio::sync::oneshot::Sender;
 use tonic::codegen::BoxStream;
 
 use crate::established_client::EstablishedClient;

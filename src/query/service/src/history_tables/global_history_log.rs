@@ -22,7 +22,6 @@ use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -92,8 +91,9 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version))
-            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_client =
+            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.semver()))
+                .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(

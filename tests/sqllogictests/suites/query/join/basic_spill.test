@@ -24,7 +24,7 @@ insert into t1 values('a'),('b');
 statement ok
 insert into t2 values('a'),('b');
 
-query TT
+query T
 select a from t2 right join t1 on t1.a = t2.b order by a;
 ----
 a
@@ -42,7 +42,7 @@ drop table if exists t3;
 statement ok
 create table t3(a int);
 
-query I
+query II
 select * from t3 inner join numbers(100000) on t3.a = number;
 ----
 

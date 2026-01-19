@@ -100,7 +100,7 @@ impl From<TaskApiError> for ErrorCode {
         match value {
             TaskApiError::TenantError(e) => ErrorCode::from(e),
             TaskApiError::MetaError { meta_err, context } => {
-                ErrorCode::from(meta_err).add_message_back(context)
+                ErrorCode::MetaServiceError(meta_err.to_string()).add_message_back(context)
             }
         }
     }

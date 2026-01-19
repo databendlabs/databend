@@ -16,7 +16,7 @@ CREATE DATABASE test_db_options OPTIONS (
     DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/data/'
 )
 
-query I
+query TT
 show create database test_db_options
 ----
 test_db_options CREATE DATABASE `test_db_options` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_s3_connection', DEFAULT_STORAGE_PATH='fs:///tmp/test-bucket/data/')
@@ -53,7 +53,7 @@ CREATE OR REPLACE DATABASE test_db_mixed ENGINE = DEFAULT OPTIONS (
     DEFAULT_STORAGE_PATH = 'fs:///tmp/mixed_path/'
 )
 
-query I
+query TT
 show create database test_db_mixed
 ----
 test_db_mixed CREATE DATABASE `test_db_mixed` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_connection', DEFAULT_STORAGE_PATH='fs:///tmp/mixed_path/')

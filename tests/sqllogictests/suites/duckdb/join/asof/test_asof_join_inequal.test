@@ -26,7 +26,7 @@ CREATE TABLE probe0 AS
 #
 
 # INNER 
-query III
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin > e.begin
@@ -46,7 +46,7 @@ ORDER BY 1,2 ASC
 #
 
 # INNER
-query III
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin <= e.begin
@@ -63,7 +63,7 @@ ORDER BY 1,2 ASC
 #
 
 # INNER
-query III
+query ??I
 SELECT p.begin, e.begin, e.value
 FROM probe0 p ASOF JOIN events0 e
 ON p.begin < e.begin

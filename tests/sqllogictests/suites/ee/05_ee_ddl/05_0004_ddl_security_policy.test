@@ -615,7 +615,7 @@ alter table employees modify column salary set masking policy mask_nested_case u
 ## - Engineering + hr_admin: 100000 (full)
 ## - Engineering + regular_user: 60000 (120000 / 2)
 ## - Sales + regular_user: 0
-query ITTFT
+query ITTRT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice ***-**-**** 100000.0 Engineering
@@ -623,7 +623,7 @@ select id, name, ssn, salary, department from employees order by id;
 3 Charlie ***-**-**** 60000.0 Engineering
 
 ## Test 18: GROUP BY with nested CASE masked column
-query TF
+query TR
 select department, avg(salary) as avg_salary
 from employees
 group by department
@@ -633,7 +633,7 @@ Engineering 80000.0
 Sales 0.0
 
 ## Test 19: Complex aggregation with HAVING on masked column
-query TIF
+query TIR
 select department, count(*) as cnt, max(salary) as max_sal
 from employees
 group by department
@@ -643,7 +643,7 @@ order by department;
 Engineering 2 100000.0
 
 ## Test 20: Subquery with masked columns in HAVING
-query TF
+query TR
 select department, sum(salary) as total
 from employees
 group by department
@@ -653,7 +653,7 @@ order by department;
 Engineering 160000.0
 
 ## Test 21: Multiple aggregations with masked columns
-query TIFFF
+query TIRRR
 select
   department,
   count(*) as cnt,
@@ -708,7 +708,7 @@ alter table employees modify column ssn set masking policy mask_triple_nested us
 ## - Alice (Engineering + hr_admin): full SSN
 ## - Charlie (Engineering + regular_user): 123-XX-XXXX
 ## - Bob (Sales): ***-**-****
-query ITTFT
+query ITTRT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice 123-45-6789 100000.0 Engineering
@@ -728,7 +728,7 @@ order by ssn_prefix;
 456 1
 
 ## Test 25: Window function with masked columns
-query ITTFF
+query ITTRR
 select
   id,
   name,
@@ -743,7 +743,7 @@ order by id;
 3 Charlie Engineering 60000.0 160000.0
 
 ## Test 26: CTE with masked columns and GROUP BY
-query TF
+query TR
 with dept_stats as (
   select department, sum(salary) as total_salary
   from employees
@@ -810,7 +810,7 @@ CREATE MASKING POLICY mask_simple AS (val INT) RETURNS INT -> CASE WHEN current_
 statement ok
 ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_simple;
 
-query IAII
+query ITII
 select * from t_test;
 ----
 1 [1,2,3] -1 10
@@ -996,7 +996,7 @@ insert into employees values
 statement ok
 ALTER TABLE employees modify column ssn SET MASKING POLICY mask_ssn_conditional using (ssn, role);
 
-query ITTFT
+query ITTITT
 select * from employees;
 ----
 1 Alice ***-**-**** 100000 Engineering hr_admin
@@ -1013,7 +1013,7 @@ DROP MASKING POLICY mask_ssn_conditional;
 statement ok
 UNDROP TABLE employees;
 
-query ITTFT
+query ITTITT
 select * from employees;
 ----
 1 Alice 123-45-6789 100000 Engineering hr_admin
@@ -1032,7 +1032,7 @@ statement ok
 ALTER TABLE employees modify column ssn SET MASKING POLICY mask_ssn_conditional using (ssn, role);
 
 ## policy valid
-query ITTFT
+query ITTITT
 select * from employees;
 ----
 1 Alice ***-**-**** 100000 Engineering hr_admin
@@ -1046,7 +1046,7 @@ statement ok
 UNDROP TABLE employees;
 
 ## policy valid
-query ITTFT
+query ITTITT
 select * from employees;
 ----
 1 Alice ***-**-**** 100000 Engineering hr_admin

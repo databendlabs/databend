@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -123,7 +122,7 @@ use uuid::Uuid;
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_random_location_memory_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_random_location_memory_size() -> databend_common_exception::Result<()> {
+async fn test_random_location_memory_size() -> anyhow::Result<()> {
     // generate random location of Type Location
     let location_gen = TableMetaLocationGenerator::new("/root".to_string());
 
@@ -157,7 +156,7 @@ async fn test_random_location_memory_size() -> databend_common_exception::Result
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_info_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_info_size() -> databend_common_exception::Result<()> {
+async fn test_segment_info_size() -> anyhow::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
@@ -202,7 +201,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_raw_bytes_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> {
+async fn test_segment_raw_bytes_size() -> anyhow::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 
@@ -242,7 +241,7 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
 // cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_raw_repr_bytes_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
-async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result<()> {
+async fn test_segment_raw_repr_bytes_size() -> anyhow::Result<()> {
     let cache_number = 3000;
     let num_block_per_seg = 1000;
 

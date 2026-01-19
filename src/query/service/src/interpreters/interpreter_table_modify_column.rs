@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -64,6 +65,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::meta_service_error;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -106,7 +108,10 @@ impl ModifyTableColumnInterpreter {
 
         // Get mask policy ID from name using KV API
         let name_ident = DataMaskNameIdent::new(self.ctx.get_tenant(), mask_name.clone());
-        let mask_id_seq = meta_api.get_pb(&name_ident).await?;
+        let mask_id_seq = meta_api
+            .get_pb(&name_ident)
+            .await
+            .map_err(meta_service_error)?;
         let policy_id = match mask_id_seq {
             Some(seq_id) => seq_id.data,
             None => {
@@ -835,7 +840,7 @@ pub(crate) async fn build_select_insert_plan(
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
         input: select_plan,
-        table_info: new_table.get_table_info().clone(),
+        table_info: TableInfoWithBranch::new(new_table.get_table_info()),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),

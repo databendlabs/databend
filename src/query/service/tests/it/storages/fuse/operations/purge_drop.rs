@@ -12,12 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
+async fn test_fuse_snapshot_truncate_in_drop_stmt() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
@@ -36,7 +34,7 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
 // TODO this integration test can only be tested with valid EE license, to be re-enabled till CI supports it
 #[ignore]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
+async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();

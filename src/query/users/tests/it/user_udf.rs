@@ -14,10 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -28,7 +26,7 @@ use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_lambda_udf() -> Result<()> {
+async fn test_user_lambda_udf() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -38,7 +36,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
@@ -104,7 +102,7 @@ async fn test_user_lambda_udf() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_user_udf_server() -> Result<()> {
+async fn test_user_udf_server() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -114,7 +112,7 @@ async fn test_user_udf_server() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant = Tenant::new_literal("test");
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

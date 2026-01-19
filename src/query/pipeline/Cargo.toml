@@ -19,6 +19,7 @@ log = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

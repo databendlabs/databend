@@ -62,13 +62,13 @@ select trim(leading 'ab' from 'abc')
 c
 
 
-query T
+query ?
 select trim(leading ' ' from NULL)
 ----
 NULL
 
 
-query T
+query ?
 select trim(leading NULL from 'aaa')
 ----
 NULL
@@ -96,13 +96,13 @@ select trim(trailing 'ab' from 'cab')
 c
 
 
-query T
+query ?
 select trim(trailing ' ' from NULL)
 ----
 NULL
 
 
-query T
+query ?
 select trim(trailing NULL from 'aaa')
 ----
 NULL
@@ -123,18 +123,18 @@ select trim('abcab', 'ab')
 ----
 c
 
-query T
+query ?
 select trim(both ' ' from NULL)
 ----
 NULL
 
 
-query T
+query ?
 select trim(both NULL from 'aaa')
 ----
 NULL
 
-query T
+query ?
 select trim(NULL)
 ----
 NULL

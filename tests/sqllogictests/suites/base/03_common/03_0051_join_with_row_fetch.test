@@ -16,14 +16,14 @@ insert into test_row_fetch1 SELECT number, number from numbers(10);
 statement ok
 insert into test_row_fetch2 SELECT number, number from numbers(10);
 
-query III
+query IIII
 settings(disable_join_reorder = 1) SELECT c1, c2, c3, c4 FROM (select * from test_row_fetch2 order by c3 desc LIMIT 3) AS b inner join test_row_fetch1 as a ON a.c1 = b.c3 ORDER BY c1 LIMIT 10;
 ----
 7 7 7 7
 8 8 8 8
 9 9 9 9
 
-query III
+query IIII
 settings(disable_join_reorder = 1) SELECT c1, c2, c3, c4 FROM test_row_fetch1 as a inner join(select * from test_row_fetch2 order by c3 desc LIMIT 3) AS b ON a.c1 = b.c3 ORDER BY c1 LIMIT 10;
 ----
 7 7 7 7

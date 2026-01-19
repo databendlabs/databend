@@ -19,7 +19,7 @@ SELECT CAST('  E1' AS DOUBLE)
 statement error 1006
 SELECT CAST('  1e1' AS INTEGER)
 
-query F
+query R
 SELECT CAST('1e1' AS DOUBLE)
 ----
 10.0

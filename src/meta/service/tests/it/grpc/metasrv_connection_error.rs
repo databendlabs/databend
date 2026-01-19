@@ -19,7 +19,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -53,7 +52,7 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     let a2 = || addresses[2].clone();
 
     let mut stopped = tcs.remove(1);
-    { stopped }.grpc_srv.take().unwrap().stop(None).await?;
+    { stopped }.grpc_srv.take().unwrap().do_stop(None).await;
 
     for addrs in [
         vec![a0(), a1(), a2()], // a1() is down
@@ -104,7 +103,7 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     test_write_read(&client, "conn-error-one-client-node-1-running").await?;
 
     let mut stopped = tcs.remove(1);
-    { stopped }.grpc_srv.take().unwrap().stop(None).await?;
+    { stopped }.grpc_srv.take().unwrap().do_stop(None).await;
 
     test_write_read(&client, "conn-error-one-client-node-1-down").await?;
 
@@ -137,7 +136,7 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     test_write_read(&client, "conn-error-one-client-node-0-running").await?;
 
     let mut stopped = tcs.remove(0);
-    { stopped }.grpc_srv.take().unwrap().stop(None).await?;
+    { stopped }.grpc_srv.take().unwrap().do_stop(None).await;
 
     // Write/read operations will recover functioning after a new leader is elected.
     test_write_read(&client, "conn-error-one-client-node-0-down").await?;
@@ -148,7 +147,7 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
 fn make_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses, // a1() will be shut down
-        &databend_common_version::BUILD_INFO,
+        databend_common_version::BUILD_INFO.semver(),
         "root",
         "xxx",
         None,

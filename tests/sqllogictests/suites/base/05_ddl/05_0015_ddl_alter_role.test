@@ -19,7 +19,7 @@ grant role role1 to role role2;
 statement ok
 grant all on *.* to role role1;
 
-query T
+query TTT
 select name, comment, inherited_roles_name from show_roles() where name in ('role1', 'role2', 'role3') order by name;
 ----
 role1 (empty) (empty)
@@ -37,7 +37,7 @@ settings (enable_expand_roles=0) select grants from show_grants('role', 'role1')
 GRANT ROLE public to ROLE `role1`
 GRANT ALL ON *.* TO ROLE `role1`
 
-query T
+query TTT
 select name, comment, inherited_roles_name from show_roles() where name in ('role1', 'role2', 'role3') order by name;
 ----
 role1 xxx (empty)

@@ -16,7 +16,6 @@ use std::fmt;
 use std::io;
 
 use anyerror::AnyError;
-use databend_common_exception::ErrorCode;
 
 /// Storage level error that is raised by meta service.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -63,11 +62,5 @@ impl From<io::Error> for MetaStorageError {
 impl From<MetaStorageError> for io::Error {
     fn from(e: MetaStorageError) -> Self {
         io::Error::new(io::ErrorKind::InvalidData, e)
-    }
-}
-
-impl From<MetaStorageError> for ErrorCode {
-    fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaStorageError(e.to_string())
     }
 }

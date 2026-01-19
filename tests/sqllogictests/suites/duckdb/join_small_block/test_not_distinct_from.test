@@ -21,29 +21,29 @@ create table tbl_2 (b decimal(4,0))
 statement ok
 insert into tbl_2 values (1),(2),(NULL)
 
-query I
+query R
 SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
 ----
 1
 2
 
-query I
+query R
 SELECT a from tbl_1 WHERE a IS NOT DISTINCT FROM b
 ----
 NULL
 
-query II
+query RR
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) ORDER BY 1
 ----
 1	1
 2	2
 NULL	NULL
 
-query II
+query RR
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b AND a <> tbl_2.b) ORDER BY 1
 ----
 
-query II rowsort
+query RR rowsort
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
 ----
 1	2
@@ -53,19 +53,19 @@ select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
 NULL	1
 NULL	2
 
-query II
+query RR
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b AND a <> tbl_2.b) order by a,tbl_2.b
 ----
 1	2
 2	1
 
-query II
+query RR
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a <> tbl_2.b AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
 ----
 1	2
 2	1
 
-query II
+query RR
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (tbl_2.b > a AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
 ----
 1	2
@@ -77,7 +77,7 @@ statement ok
 DROP TABLE tbl_2;
 
 #Vector with vector
-query III
+query IIB
 select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
 ----
 1	1	1
@@ -90,7 +90,7 @@ NULL	1	0
 NULL	2	0
 NULL	NULL	1
 
-query III
+query IIB
 select a.a, b.b, a.a IS DISTINCT FROM b.b AS "Is Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
 ----
 1	1	0
@@ -104,39 +104,39 @@ NULL	2	1
 NULL	NULL	0
 
 #constant with constant
-query I
+query B
 select null is not distinct from null;
 ----
 1
 
-query I
+query B
 select null is distinct from null;
 ----
 0
 
 # Vector with constant
-query II
+query IB
 select a.a, a.a IS NOT DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
 ----
 1	1
 2	0
 NULL	0
 
-query II
+query IB
 select a.a, a.a IS DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
 ----
 1	0
 2	1
 NULL	1
 
-query II
+query IB
 select a.a, a.a IS NOT DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
 ----
 1	0
 2	0
 NULL	1
 
-query II
+query IB
 select a.a, a.a IS DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
 ----
 1	1

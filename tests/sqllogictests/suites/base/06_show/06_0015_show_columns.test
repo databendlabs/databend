@@ -13,7 +13,7 @@ CREATE TABLE showcolumn.t2(c1 int not null) ENGINE = Null
 statement ok
 CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime not null default '2022-02-02 12:00:00', c3 String not null Default 'c3') ENGINE = Null;
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS FROM default.showcolumn.t3
 ----
 c1 int YES 4 NULL NULL
@@ -30,7 +30,7 @@ select comment from system.columns where database='showcolumn' and table='t4' or
 2022-02-02 12:00:00
 c\s3
 
-query T
+query TT
 select column_name, column_comment from information_schema.columns where table_schema='showcolumn' and table_name='t4' order by column_name;
 ----
 c1 4
@@ -40,30 +40,30 @@ c3 c\s3
 statement ok
 use showcolumn
 
-query TTTTTTT
+query TTTT??T?T
 SHOW FULL COLUMNS IN t3
 ----
 c1 int YES 4 NULL NULL NULL NULL (empty)
 c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
 c3 varchar(16382) NO 'c3' NULL NULL utf8mb4_general_ci NULL (empty)
 
-query TTTTTTT
+query TTTT??T?T
 SHOW FULL COLUMNS IN t3 like '%1';
 ----
 c1 int YES 4 NULL NULL NULL NULL (empty)
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS IN t3 where column_name like '%1';
 ----
 c1 int YES 4 NULL NULL
 
-query TTTTTTTTT
+query TTTT??T?T
 SHOW FULL COLUMNS IN t3 where is_nullable!='YES' and default like '%2022-02-02 12:00:00.000000%';
 ----
 c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
 
 
-query TTTTTTTTT
+query TTTT??T?T
 SHOW FULL COLUMNS IN columns from system
 ----
 comment varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
@@ -76,13 +76,13 @@ name varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 table varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS IN columns from system like '%type%'
 ----
 data_type varchar(16382) NO (empty) NULL NULL
 type varchar(16382) NO (empty) NULL NULL
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS IN columns from system where column_name != '%type%' and is_nullable!='YES'
 ----
 comment varchar(16382) NO (empty) NULL NULL
@@ -95,7 +95,7 @@ name varchar(16382) NO (empty) NULL NULL
 table varchar(16382) NO (empty) NULL NULL
 type varchar(16382) NO (empty) NULL NULL
 
-query TTTTTTT
+query TTTT??T?T
 SHOW FULL COLUMNS IN columns from information_schema
 ----
 character_maximum_length smallint unsigned YES (empty) NULL NULL NULL NULL (empty)
@@ -129,14 +129,14 @@ table_catalog varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty
 table_name varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 table_schema varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS IN columns from information_schema like 'numeric%'
 ----
 numeric_precision null NO (empty) NULL NULL
 numeric_precision_radix null NO (empty) NULL NULL
 numeric_scale null NO (empty) NULL NULL
 
-query TTTTTT
+query TTTT??
 SHOW COLUMNS IN columns from information_schema where column_name != '%type%' and column_type!='NULL'
 ----
 character_maximum_length smallint unsigned YES (empty) NULL NULL

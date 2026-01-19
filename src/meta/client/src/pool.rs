@@ -15,17 +15,14 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use log::debug;
 use log::warn;
-
-use crate::base::tokio;
-use crate::base::tokio::time::sleep;
+use tokio::time::sleep;
+use tonic::async_trait;
 
 pub type PoolItem<T> = Arc<tokio::sync::Mutex<Option<T>>>;
 
@@ -67,8 +64,6 @@ where Mgr: ItemManager + Debug
 
     manager: Mgr,
 
-    err_type: PhantomData<Mgr::Error>,
-
     n_retries: u32,
 }
 
@@ -84,18 +79,14 @@ where
             initial_retry_interval,
             items: Default::default(),
             manager,
-            err_type: Default::default(),
             n_retries: 3,
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_retries(mut self, retries: u32) -> Self {
         self.n_retries = retries;
         self
-    }
-
-    pub fn item_manager(&self) -> &Mgr {
-        &self.manager
     }
 
     /// Return a raw pool item.
@@ -140,12 +131,16 @@ where
         }
 
         let mut interval = self.initial_retry_interval;
+        let mut last_err = None;
 
         for i in 0..self.n_retries {
+            if i > 0 {
+                sleep(interval).await;
+                interval *= 2;
+            }
+
             debug!("build new item of key: {:?}", key);
-
             let new_item = self.manager.build(key).await;
-
             debug!("build new item of key res: {:?}", new_item);
 
             match new_item {
@@ -154,17 +149,158 @@ where
                     return Ok(x);
                 }
                 Err(err) => {
-                    warn!("MetaGrpcClient Pool build new item failed: {:?}", err);
-                    if i == self.n_retries - 1 {
-                        return Err(err);
-                    }
+                    warn!("Pool build new item failed: {:?}", err);
+                    last_err = Some(err);
                 }
             }
-
-            sleep(interval).await;
-            interval *= 2;
         }
 
-        unreachable!("the loop should always return!");
+        Err(last_err.unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    use log::info;
+    use tonic::async_trait;
+
+    use super::ItemManager;
+    use super::Pool;
+
+    /// A simple sequence generator for tests
+    struct TestSequence;
+
+    impl TestSequence {
+        fn next() -> usize {
+            static SEQ: AtomicUsize = AtomicUsize::new(0);
+            SEQ.fetch_add(1, Ordering::SeqCst)
+        }
+
+        fn reset() {
+            static SEQ: AtomicUsize = AtomicUsize::new(0);
+            SEQ.store(0, Ordering::SeqCst);
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct Item {
+        pub key: u32,
+        pub seq: usize,
+    }
+
+    // Test from pool.rs: basic pool functionality
+    #[derive(Debug)]
+    struct FooMgr {}
+
+    #[async_trait]
+    impl ItemManager for FooMgr {
+        type Key = u32;
+        type Item = Item;
+        type Error = anyhow::Error;
+
+        async fn build(&self, key: &Self::Key) -> Result<Self::Item, Self::Error> {
+            let seq = TestSequence::next();
+            if seq > 4 {
+                return Err(anyhow::anyhow!("invalid seq: {}", seq));
+            }
+            Ok(Item { key: *key, seq })
+        }
+
+        async fn check(&self, item: Self::Item) -> Result<Self::Item, Self::Error> {
+            if item.seq == 2 || item.seq > 3 {
+                Err(anyhow::anyhow!("invalid seq: {}", item.seq))
+            } else {
+                Ok(item)
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_pool() -> anyhow::Result<()> {
+        TestSequence::reset();
+        let p = Pool::new(FooMgr {}, Duration::from_millis(10));
+
+        let i3_1 = p.get(&3).await?;
+        assert_eq!(3, i3_1.key, "make a new item(3)");
+
+        let i3_2 = p.get(&3).await?;
+        assert_eq!(i3_1.seq, i3_2.seq, "item(3) is reused");
+
+        let _i4 = p.get(&4).await?;
+
+        let i5_1 = p.get(&5).await?;
+        assert_eq!(2, i5_1.seq, "seq=2 valid for make");
+
+        info!("--- check() is called when reusing it. re-build() an new one");
+        let i5_2 = p.get(&5).await?;
+        assert_eq!(
+            3, i5_2.seq,
+            "seq=2 is dropped by check(), then make() a new item with seq=3"
+        );
+
+        info!("--- check() is not called for new item");
+        let i6_1 = p.get(&6).await?;
+        assert_eq!(4, i6_1.seq, "seq=4 is valid for make()");
+
+        info!("--- check() is called when reusing it. re-build() does not succeed");
+        let i6_2 = p.get(&6).await;
+        assert!(i6_2.is_err(), "seq>=4 can not reuse or make()");
+
+        Ok(())
+    }
+
+    // Test from pool_retry.rs: retry functionality
+    struct LocalRetrySequence;
+
+    impl LocalRetrySequence {
+        fn next() -> usize {
+            static LOCAL_SEQ: AtomicUsize = AtomicUsize::new(0);
+            LOCAL_SEQ.fetch_add(1, Ordering::SeqCst)
+        }
+
+        fn reset() {
+            static LOCAL_SEQ: AtomicUsize = AtomicUsize::new(0);
+            LOCAL_SEQ.store(0, Ordering::SeqCst);
+        }
+    }
+
+    #[derive(Debug)]
+    struct BarMgr {}
+
+    #[async_trait]
+    impl ItemManager for BarMgr {
+        type Key = u32;
+        type Item = Item;
+        type Error = anyhow::Error;
+
+        async fn build(&self, key: &Self::Key) -> Result<Self::Item, Self::Error> {
+            let retry_times = LocalRetrySequence::next();
+            if retry_times < 5 {
+                return Err(anyhow::anyhow!("Keep retry!"));
+            }
+            Ok(Item {
+                key: *key,
+                seq: retry_times,
+            })
+        }
+
+        async fn check(&self, item: Self::Item) -> Result<Self::Item, Self::Error> {
+            Ok(item)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_pool_retry() -> anyhow::Result<()> {
+        LocalRetrySequence::reset();
+        let p = Pool::new(BarMgr {}, Duration::from_millis(10)).with_retries(6);
+        let r1 = p.get(&3).await?;
+        assert_eq!(3, r1.key, "make a new item(3)");
+        let r2 = p.get(&3).await?;
+        assert_eq!(r1.seq, r2.seq, "item(3) is reused");
+        Ok(())
     }
 }

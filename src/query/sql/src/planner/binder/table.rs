@@ -331,7 +331,6 @@ impl Binder {
                         "Recursive CTE must contain a UNION(ALL) query".to_string(),
                     ));
                 }
-                self.set_bind_recursive_cte(true);
                 let (union_s_expr, mut new_bind_ctx) = self.bind_set_operator(
                     bind_context,
                     &set_expr.left,
@@ -340,10 +339,14 @@ impl Binder {
                     &set_expr.all,
                     Some(cte_name.to_string()),
                 )?;
-                self.set_bind_recursive_cte(false);
+                let has_column_alias = alias
+                    .as_ref()
+                    .map(|alias| !alias.columns.is_empty())
+                    .unwrap_or(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                } else {
+                }
+                if !has_column_alias {
                     for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
                         new_bind_ctx.columns[index].column_name = column_name.clone();
                     }

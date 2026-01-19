@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_management::*;
 use databend_common_meta_app::principal::AuthInfo;
@@ -45,7 +44,7 @@ mod add {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Test normal case - should succeed
@@ -69,7 +68,7 @@ mod add {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // First creation should succeed
@@ -101,7 +100,7 @@ mod get {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -128,7 +127,7 @@ mod get {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -150,7 +149,7 @@ mod get {
         let test_user_name = "nonexistent_user";
         let test_hostname = "localhost";
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
@@ -172,7 +171,7 @@ mod get {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user
@@ -208,7 +207,7 @@ mod get {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -244,7 +243,7 @@ mod get_users {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_empty() -> databend_common_exception::Result<()> {
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         let users = user_mgr.get_users().await?;
@@ -255,7 +254,7 @@ mod get_users {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_multiple() -> databend_common_exception::Result<()> {
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add multiple users
@@ -293,7 +292,7 @@ mod drop {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -328,7 +327,7 @@ mod drop {
         let test_user = "unknown_user";
         let test_hostname = "localhost";
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
@@ -381,7 +380,7 @@ mod update {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -425,7 +424,7 @@ mod update {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -469,7 +468,7 @@ mod update {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -512,7 +511,7 @@ mod update {
         let test_user_name = "unknown_update_user";
         let test_hostname = "localhost";
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
@@ -535,7 +534,7 @@ mod update {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -576,7 +575,7 @@ mod set_user_privileges {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first
@@ -619,7 +618,7 @@ mod set_user_privileges {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let meta_store = MetaStore::new_local_testing(&BUILD_INFO).await;
+        let meta_store = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
         let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
         // Add user first

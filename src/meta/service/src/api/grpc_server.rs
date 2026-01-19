@@ -16,19 +16,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::sync::oneshot::Sender;
-use databend_common_base::base::tokio::task::JoinHandle;
+use databend_base::shutdown::Graceful;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use fastrace::prelude::*;
+use futures::future::BoxFuture;
 use futures::future::Either;
 use futures::future::select;
 use log::info;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender;
+use tokio::task::JoinHandle;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
@@ -79,7 +79,9 @@ impl GrpcServer {
             .unwrap()
     }
 
-    async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+    pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+        info!("GrpcServer::start");
+
         let conf = self.conf.clone();
         let meta_handle = self.meta_handle.clone().unwrap();
         // For sending signal when server started.
@@ -95,11 +97,7 @@ impl GrpcServer {
         // Configure HTTP/2 settings to handle stream reset accumulation.
         // The default limit (20) can be too low under high concurrency.
         // Setting to None disables the limit entirely.
-        let builder = Server::builder()
-            .http2_keepalive_interval(Some(Duration::from_secs(30)))
-            .http2_keepalive_timeout(Some(Duration::from_secs(10)))
-            .http2_adaptive_window(Some(true))
-            .http2_max_pending_accept_reset_streams(Some(4096));
+        let builder = Server::builder().http2_max_pending_accept_reset_streams(Some(4096));
 
         let tls_conf = Self::tls_config(&self.conf)
             .await
@@ -159,10 +157,13 @@ impl GrpcServer {
         self.join_handle = Some(j);
         self.stop_grpc_tx = Some(stop_grpc_tx);
 
+        info!("Done GrpcServer::start");
         Ok(())
     }
 
-    async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
+    pub async fn do_stop(&mut self, _force: Option<BoxFuture<'static, ()>>) {
+        info!("GrpcServer::stop");
+
         let meta_handle = self.meta_handle.take();
         let Some(meta_handle) = meta_handle else {
             info!("GrpcServer::do_stop: already stopped");
@@ -203,6 +204,8 @@ impl GrpcServer {
             Arc::strong_count(&meta_handle)
         );
         drop(meta_handle);
+
+        info!("Done GrpcServer::stop");
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
@@ -219,26 +222,12 @@ impl GrpcServer {
     }
 }
 
-#[tonic::async_trait]
-impl Stoppable for GrpcServer {
+#[async_trait::async_trait]
+impl Graceful for GrpcServer {
     type Error = AnyError;
 
-    async fn start(&mut self) -> Result<(), Self::Error> {
-        info!("GrpcServer::start");
-        let res = self.do_start().await;
-
-        res.map_err(|e: MetaNetworkError| AnyError::new(&e))?;
-        info!("Done GrpcServer::start");
-        Ok(())
-    }
-
-    async fn stop(
-        &mut self,
-        force: Option<tokio::sync::broadcast::Receiver<()>>,
-    ) -> Result<(), Self::Error> {
-        info!("GrpcServer::stop");
+    async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {
         self.do_stop(force).await;
-        info!("Done GrpcServer::stop");
         Ok(())
     }
 }

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
 use itertools::Itertools;
 
 #[test]
-fn test_partition() -> Result<()> {
+fn test_partition() -> anyhow::Result<()> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     for _ in 0..100 {

@@ -76,7 +76,7 @@ impl From<UdfApiError> for ErrorCode {
         match value {
             UdfApiError::TenantError(e) => ErrorCode::from(e),
             UdfApiError::MetaError { meta_err, context } => {
-                ErrorCode::from(meta_err).add_message_back(context)
+                ErrorCode::MetaServiceError(meta_err.to_string()).add_message_back(context)
             }
         }
     }

@@ -12,7 +12,7 @@ create or replace table t( c DECIMAL(10, 2) not null);
 statement ok
 insert into t select number / 100 as c from numbers(100);
 
-query T
+query I
 select count(*) from t;
 ----
 100

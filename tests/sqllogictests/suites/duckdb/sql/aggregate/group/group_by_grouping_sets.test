@@ -18,7 +18,7 @@ select sum(number), number % 3 a, grouping(number % 3)+grouping(number % 4) AS l
 group by rollup(number % 3, number % 4)  order by  grouping(number % 3)+grouping(number % 4) ;
 
 
-query TT
+query II
 select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((a,b), (a), (b)) order by a,b;
 ----
 0 0
@@ -33,12 +33,12 @@ NULL 0
 NULL 1
 NULL 2
 
-query T
+query III
 select * from (select number % 3 a, number % 4 b, count() from range(1, 1000)t(number) group by cube(a,b))  where a is null and b is null;
 ----
 NULL NULL 999
 
-query TT
+query II
 select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((1,2), (1), (2)) order by a,b;
 ----
 0 0
@@ -169,7 +169,7 @@ b NULL 11 1 0 1 2
 NULL NULL 18 1 1 3 3
 
 # ISSUE-12852. Aggregation function argument is in grouping sets.
-query TT
+query II
 SELECT arg_min(c, 10), c FROM t GROUP BY CUBE (c) ORDER BY c;
 ----
 1 1
@@ -179,7 +179,7 @@ SELECT arg_min(c, 10), c FROM t GROUP BY CUBE (c) ORDER BY c;
 5 5
 1 NULL
 
-query TT
+query II
 SELECT min(c), c FROM t GROUP BY CUBE (c) ORDER BY c;
 ----
 1 1
@@ -189,7 +189,7 @@ SELECT min(c), c FROM t GROUP BY CUBE (c) ORDER BY c;
 5 5
 1 NULL
 
-query TT
+query II
 SELECT min(c + 1), c + 1 FROM t GROUP BY CUBE (c + 1) ORDER BY c + 1;
 ----
 2 2
@@ -199,7 +199,7 @@ SELECT min(c + 1), c + 1 FROM t GROUP BY CUBE (c + 1) ORDER BY c + 1;
 6 6
 2 NULL
 
-query TTTTTT
+query TTIITT
 SELECT min(a), min(b), min(c), max(c), a, b FROM t GROUP BY CUBE (a, b) ORDER BY a, b;
 ----
 a A 1 2 a A
@@ -218,7 +218,7 @@ create or replace table tt (a string not null, b string not null, c int not null
 statement ok
 insert into tt select *  from t;
 
-query TT
+query II
 SELECT arg_min(c, 10), c FROM tt GROUP BY CUBE (c) ORDER BY c;
 ----
 1 1
@@ -228,7 +228,7 @@ SELECT arg_min(c, 10), c FROM tt GROUP BY CUBE (c) ORDER BY c;
 5 5
 1 NULL
 
-query TT
+query II
 SELECT min(c), c FROM tt GROUP BY CUBE (c) ORDER BY c;
 ----
 1 1
@@ -238,7 +238,7 @@ SELECT min(c), c FROM tt GROUP BY CUBE (c) ORDER BY c;
 5 5
 1 NULL
 
-query TT
+query II
 SELECT min(c + 1), c + 1 FROM tt GROUP BY CUBE (c + 1) ORDER BY c + 1;
 ----
 2 2
@@ -248,7 +248,7 @@ SELECT min(c + 1), c + 1 FROM tt GROUP BY CUBE (c + 1) ORDER BY c + 1;
 6 6
 2 NULL
 
-query TTTTTT
+query TTIITT
 SELECT min(a), min(b), min(c), max(c), a, b FROM tt GROUP BY CUBE (a, b) ORDER BY a, b;
 ----
 a A 1 2 a A
@@ -263,7 +263,7 @@ a A 1 5 NULL NULL
 
 
 ## group with CTE
-query ?TTT
+query RT?T
 WITH cte_0 AS
 (
        SELECT  try_cast(number % 10 AS String) AS media_source,

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,7 @@ use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
+use tokio::time::sleep;
 
 use super::diff::SegmentsDiff;
 use crate::FuseTable;
@@ -149,6 +149,7 @@ async fn compute_table_segments_diffs(
     Ok((table_segments_diffs, table_original_snapshots))
 }
 
+// Support for transactional branch writes is planned for the next PR.
 async fn try_rebuild_req(
     ctx: Arc<dyn TableContext>,
     req: &mut UpdateMultiTableMetaReq,
@@ -312,12 +313,16 @@ async fn try_rebuild_req(
         // write snapshot
         let dal = latest_table.get_operator();
         let location_generator = &latest_table.meta_location_generator;
-        let location = location_generator
-            .snapshot_location_from_uuid(&merged_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        // TODO(zhyass): branch are currently not allowed inside a transaction. So the branch id is none.
+        let location = location_generator.gen_snapshot_location(
+            None,
+            &merged_snapshot.snapshot_id,
+            TableSnapshot::VERSION,
+        )?;
         dal.write(&location, merged_snapshot.to_bytes()?).await?;
 
         // build new table meta
-        let new_table_meta = FuseTable::build_new_table_meta(
+        let new_table_meta = latest_table.build_new_table_meta(
             &latest_table.table_info.meta,
             &location,
             &merged_snapshot,
