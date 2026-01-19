@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::Write;
 
 use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_meta::store::RaftStore;
 use futures::TryStreamExt;
 
@@ -35,7 +36,7 @@ pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Export:");
 
-    let sto = RaftStore::open(&raft_config).await?;
+    let sto = RaftStore::<TokioRuntime>::open(&raft_config).await?;
     let mut lines = sto.clone().export();
 
     eprintln!("    From: {}", raft_config.raft_dir);

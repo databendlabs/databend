@@ -21,6 +21,7 @@ use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
@@ -69,7 +70,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     tc.config.raft_config.max_applied_log_to_keep = 0;
 
-    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
 
     tc.assert_raft_server_connection().await?;
 
@@ -182,7 +183,8 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     };
 
     // build a temp snapshot data
-    let ss_store = SnapshotStoreV004::new(tc0.config.raft_config.clone());
+    let ss_store: SnapshotStoreV004<TokioRuntime> =
+        SnapshotStoreV004::new(tc0.config.raft_config.clone());
     let writer = ss_store.new_writer()?;
 
     let snapshot_data = {
@@ -260,7 +262,8 @@ async fn test_raft_service_install_snapshot_v004() -> anyhow::Result<()> {
     let snapshot_id = MetaSnapshotId::new(Some(last_log_id), 1);
 
     // build a temp snapshot data
-    let ss_store = SnapshotStoreV004::new(tc0.config.raft_config.clone());
+    let ss_store: SnapshotStoreV004<TokioRuntime> =
+        SnapshotStoreV004::new(tc0.config.raft_config.clone());
     let writer = ss_store.new_writer()?;
 
     let db = {

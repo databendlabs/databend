@@ -1,0 +1,154 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Runtime adapter for meta-service using databend-common-base.
+//!
+//! This crate provides `DatabendRuntime`, which implements `RuntimeApi` and `SpawnApi`
+//! from `databend-common-meta-runtime-api` using the runtime infrastructure from
+//! `databend-common-base`. This allows meta-service to leverage Databend's advanced
+//! runtime features (memory tracking, thread tracking, etc.) while keeping the meta-service
+//! core decoupled from the query runtime.
+
+use std::future::Future;
+
+use databend_common_base::runtime;
+use databend_common_meta_runtime_api::BoxFuture;
+use databend_common_meta_runtime_api::JoinHandle;
+use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TrackingData;
+
+/// Runtime adapter that wraps `databend_common_base::Runtime`.
+///
+/// This provides the `RuntimeApi` implementation for meta-service binaries,
+/// enabling integration with Databend's runtime infrastructure including
+/// memory tracking and thread tracking.
+pub struct DatabendRuntime {
+    inner: runtime::Runtime,
+}
+
+impl std::fmt::Debug for DatabendRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DatabendRuntime").finish_non_exhaustive()
+    }
+}
+
+impl SpawnApi for DatabendRuntime {
+    fn spawn<F>(future: F, name: Option<String>) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        match name {
+            Some(n) => runtime::spawn_named(future, n),
+            None => runtime::spawn_named(future, "meta-spawn".to_string()),
+        }
+    }
+
+    fn spawn_blocking<F, R>(f: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        runtime::spawn_blocking(f)
+    }
+
+    fn track_future<'a, T, Fut>(fut: Fut, data: Vec<TrackingData>) -> BoxFuture<'a, T>
+    where
+        Fut: Future<Output = T> + Send + 'a,
+        T: Send + 'a,
+    {
+        use runtime::TrackingPayloadExt;
+
+        let mut payload = runtime::ThreadTracker::new_tracking_payload();
+
+        for d in data {
+            match d {
+                TrackingData::QueryId(query_id) => {
+                    payload.query_id = query_id;
+                }
+            }
+        }
+
+        Box::pin(payload.tracking(fut))
+    }
+}
+
+impl RuntimeApi for DatabendRuntime {
+    fn new(workers: Option<usize>, name: Option<String>) -> Result<Self, String> {
+        let rt = match workers {
+            Some(n) => runtime::Runtime::with_worker_threads(n, name),
+            None => runtime::Runtime::with_default_worker_threads(),
+        };
+        rt.map(|inner| Self { inner }).map_err(|e| e.to_string())
+    }
+
+    fn spawn_on<F>(&self, future: F, name: Option<String>) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        match name {
+            Some(n) => self.inner.spawn_named(future, n),
+            None => self.inner.spawn(future),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_runtime() {
+        let rt = DatabendRuntime::new(Some(2), Some("test-rt".to_string()));
+        assert!(rt.is_ok());
+    }
+
+    #[test]
+    fn test_spawn_on() {
+        let rt = DatabendRuntime::new(Some(1), Some("test-spawn".to_string())).unwrap();
+        let handle = rt.spawn_on(async { 42 }, None);
+
+        #[allow(clippy::disallowed_methods)]
+        let result = std::thread::spawn(move || {
+            let rt2 = tokio::runtime::Runtime::new().unwrap();
+            rt2.block_on(handle)
+        })
+        .join()
+        .unwrap();
+
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_spawn() {
+        let handle = DatabendRuntime::spawn(async { "hello" }, Some("test-task".to_string()));
+        assert_eq!(handle.await.unwrap(), "hello");
+    }
+
+    #[tokio::test]
+    async fn test_spawn_blocking() {
+        let handle = DatabendRuntime::spawn_blocking(|| 42);
+        assert_eq!(handle.await.unwrap(), 42);
+    }
+
+    #[tokio::test]
+    async fn test_track_future() {
+        let fut = DatabendRuntime::track_future(async { 100 }, vec![TrackingData::new_query_id(
+            Some("test-query"),
+        )]);
+        assert_eq!(fut.await, 100);
+    }
+}

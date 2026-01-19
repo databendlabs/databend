@@ -16,8 +16,9 @@
 
 use std::time::Duration;
 
-use databend_common_base::runtime::spawn_named;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::UpsertKV;
 use log::info;
@@ -526,7 +527,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
     let fu = Semaphore::new_acquired_by_time(client(), "time_seq", 1, "later", timestamp2, secs(1));
 
     let (tx, rx) = oneshot::channel();
-    spawn_named(
+    TokioRuntime::spawn(
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;
@@ -534,7 +535,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
             info!("permit2: {:?}", res);
             tx.send(res).ok();
         },
-        "foo".to_string(),
+        None,
     );
 
     let meta_node = tc
@@ -590,7 +591,7 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
     let fu = Semaphore::new_acquired_by_time(client(), "time_seq", 0, "later", timestamp2, secs(1));
 
     let (tx, rx) = oneshot::channel();
-    spawn_named(
+    TokioRuntime::spawn(
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;
@@ -598,7 +599,7 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
             info!("permit2: {:?}", res);
             tx.send(res).ok();
         },
-        "foo".to_string(),
+        None,
     );
 
     tokio::time::sleep(secs(1)).await;

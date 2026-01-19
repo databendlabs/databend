@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_types::Cmd;
@@ -81,6 +82,6 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
+fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode<TokioRuntime>>> {
     tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }

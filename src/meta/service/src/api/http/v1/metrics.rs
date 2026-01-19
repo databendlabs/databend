@@ -14,16 +14,16 @@
 
 use std::sync::Arc;
 
-use poem::web::Data;
+use databend_common_meta_runtime_api::SpawnApi;
+use poem::IntoResponse;
+use poem::Response;
 
+use crate::api::http_service::HttpService;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::metrics::meta_metrics_to_prometheus_string;
 
-/// GET /v1/metrics
-///
-/// return the metrics.
-/// The response content is the same as `MetaMetrics` in metrics/meta_metrics.rs
-#[poem::handler]
-pub async fn metrics_handler(_meta_handle: Data<&Arc<MetaHandle>>) -> poem::Result<String> {
-    Ok(meta_metrics_to_prometheus_string())
+impl<SP: SpawnApi> HttpService<SP> {
+    pub async fn metrics_handler(_meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
+        Ok(meta_metrics_to_prometheus_string().into_response())
+    }
 }

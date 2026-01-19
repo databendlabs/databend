@@ -17,6 +17,8 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use databend_base::shutdown::Graceful;
+use databend_common_meta_runtime_api::JoinHandle;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
@@ -28,7 +30,6 @@ use futures::future::select;
 use log::info;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
-use tokio::task::JoinHandle;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
@@ -39,38 +40,38 @@ use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
 
-pub struct GrpcServer {
+pub struct GrpcServer<SP: SpawnApi> {
     conf: Config,
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
-    pub meta_handle: Option<Arc<MetaHandle>>,
+    pub meta_handle: Option<Arc<MetaHandle<SP>>>,
     join_handle: Option<JoinHandle<()>>,
     stop_grpc_tx: Option<Sender<()>>,
 }
 
-impl Drop for GrpcServer {
+impl<SP: SpawnApi> Drop for GrpcServer<SP> {
     fn drop(&mut self) {
         info!("GrpcServer::drop: id={}", self.conf.raft_config.id);
     }
 }
 
-impl GrpcServer {
-    pub fn create(conf: Config, meta_node: Arc<MetaHandle>) -> Self {
+impl<SP: SpawnApi> GrpcServer<SP> {
+    pub fn create(conf: Config, meta_handle: Arc<MetaHandle<SP>>) -> Self {
         Self {
             conf,
-            meta_handle: Some(meta_node),
+            meta_handle: Some(meta_handle),
             join_handle: None,
             stop_grpc_tx: None,
         }
     }
 
-    pub fn get_meta_handle(&self) -> Arc<MetaHandle> {
+    pub fn get_meta_handle(&self) -> Arc<MetaHandle<SP>> {
         self.meta_handle.clone().unwrap()
     }
 
     // Only for test
-    pub async fn get_meta_node(&self) -> Arc<MetaNode> {
+    pub async fn get_meta_node(&self) -> Arc<MetaNode<SP>> {
         self.meta_handle
             .as_ref()
             .unwrap()
@@ -124,7 +125,7 @@ impl GrpcServer {
 
         let id = conf.raft_config.id;
 
-        let j = databend_common_base::runtime::spawn(
+        let j = SP::spawn(
             async move {
                 let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
 
@@ -148,6 +149,7 @@ impl GrpcServer {
                 );
             }
             .in_span(Span::enter_with_local_parent("spawn-grpc")),
+            Some("grpc-server".into()),
         );
 
         started_rx
@@ -223,7 +225,7 @@ impl GrpcServer {
 }
 
 #[async_trait::async_trait]
-impl Graceful for GrpcServer {
+impl<SP: SpawnApi> Graceful for GrpcServer<SP> {
     type Error = AnyError;
 
     async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {

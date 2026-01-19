@@ -16,15 +16,15 @@ use std::error::Error;
 use std::fmt::Display;
 use std::future::Future;
 use std::io::Read;
+use std::marker::PhantomData;
 use std::time::Duration;
 
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime;
-use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
@@ -129,22 +129,25 @@ impl Default for Backoff {
 }
 
 #[derive(Clone)]
-pub struct NetworkFactory {
-    sto: RaftStore,
+pub struct NetworkFactory<SP> {
+    sto: RaftStore<SP>,
 
     backoff: Backoff,
+
+    _phantom: PhantomData<SP>,
 }
 
-impl NetworkFactory {
-    pub fn new(sto: RaftStore) -> NetworkFactory {
-        NetworkFactory {
+impl<SP: SpawnApi> NetworkFactory<SP> {
+    pub fn new(sto: RaftStore<SP>) -> Self {
+        Self {
             sto,
             backoff: Backoff::default(),
+            _phantom: PhantomData,
         }
     }
 }
 
-pub struct Network {
+pub struct Network<SP> {
     /// This node id
     id: NodeId,
 
@@ -156,12 +159,14 @@ pub struct Network {
 
     client: Mutex<Option<RaftClient>>,
 
-    sto: RaftStore,
+    sto: RaftStore<SP>,
 
     backoff: Backoff,
+
+    _phantom: PhantomData<SP>,
 }
 
-impl Network {
+impl<SP: SpawnApi> Network<SP> {
     /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
@@ -301,7 +306,7 @@ impl Network {
         Some(new_count)
     }
 
-    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> + use<> {
+    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> + use<SP> {
         let policy = ExponentialBuilder::default()
             .with_factor(self.backoff.back_off_ratio)
             .with_min_delay(self.backoff.back_off_min_delay)
@@ -575,9 +580,9 @@ impl Network {
         let (tx, rx) = mpsc::channel(64);
         let strm = ReceiverStream::new(rx);
 
-        let strm_handle = spawn_named(
+        let strm_handle = SP::spawn(
             Self::send_snapshot_in_stream_v004(vote, snapshot, cancel, option, target, tx),
-            "send_snapshot_via_v004".to_string(),
+            Some("send_snapshot_via_v004".into()),
         );
 
         let mut client = self
@@ -656,7 +661,7 @@ impl Network {
         //
         // Here we convert it to a concrete type `ReceiverStream` to avoid the error.
 
-        let strm_handle = runtime::spawn_blocking(move || {
+        let strm_handle = SP::spawn_blocking(move || {
             Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option, target, tx)
         });
 
@@ -715,7 +720,7 @@ impl Network {
     }
 }
 
-impl RaftNetworkV2<TypeConfig> for Network {
+impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
     /// Send AppendEntries RPC with automatic payload size management.
     ///
     /// If the payload exceeds gRPC size limit, reduces entry count and retries.
@@ -828,13 +833,14 @@ impl RaftNetworkV2<TypeConfig> for Network {
         let (tx1, cancel1) = oneshot::channel();
         let (tx2, cancel2) = oneshot::channel();
 
-        spawn_named(
+        #[allow(unused_must_use)]
+        SP::spawn(
             async move {
                 let got = cancel.await;
                 tx1.send(got.clone()).ok();
                 tx2.send(got).ok();
             },
-            "snapshot_cancel_watch".to_string(),
+            Some("snapshot_cancel_watch".into()),
         );
 
         // TODO: Add proper version negotiation or configuration
@@ -991,11 +997,11 @@ impl RaftNetworkV2<TypeConfig> for Network {
     }
 }
 
-impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
-    type Network = Network;
+impl<SP: SpawnApi> RaftNetworkFactory<TypeConfig> for NetworkFactory<SP> {
+    type Network = Network<SP>;
 
     async fn new_client(
-        self: &mut NetworkFactory,
+        self: &mut NetworkFactory<SP>,
         target: NodeId,
         node: &MembershipNode,
     ) -> Self::Network {
@@ -1011,6 +1017,7 @@ impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
             backoff: self.backoff.clone(),
             endpoint: Default::default(),
             client: Default::default(),
+            _phantom: PhantomData,
         }
     }
 }

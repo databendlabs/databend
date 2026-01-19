@@ -16,6 +16,7 @@
 
 use databend_common_meta_api::reply::reply_to_api_result;
 use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
@@ -38,14 +39,14 @@ use crate::request_handling::Forwarder;
 use crate::store::RaftStore;
 
 /// Handle a request locally if it is leader. Otherwise, forward it to the leader.
-pub struct MetaForwarder<'a> {
-    sto: &'a RaftStore,
+pub struct MetaForwarder<'a, SP> {
+    sto: &'a RaftStore<SP>,
     #[allow(dead_code)]
     raft: &'a MetaRaft,
 }
 
-impl<'a> MetaForwarder<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> Self {
+impl<'a, SP: SpawnApi> MetaForwarder<'a, SP> {
+    pub fn new(meta_node: &'a MetaNode<SP>) -> Self {
         Self {
             sto: &meta_node.raft_store,
             raft: &meta_node.raft,
@@ -85,7 +86,7 @@ impl<'a> MetaForwarder<'a> {
 }
 
 #[async_trait::async_trait]
-impl Forwarder<ForwardRequestBody> for MetaForwarder<'_> {
+impl<SP: SpawnApi> Forwarder<ForwardRequestBody> for MetaForwarder<'_, SP> {
     #[fastrace::trace]
     async fn forward(
         &self,
@@ -110,7 +111,7 @@ impl Forwarder<ForwardRequestBody> for MetaForwarder<'_> {
 }
 
 #[async_trait::async_trait]
-impl Forwarder<MetaGrpcReadReq> for MetaForwarder<'_> {
+impl<SP: SpawnApi> Forwarder<MetaGrpcReadReq> for MetaForwarder<'_, SP> {
     #[fastrace::trace]
     async fn forward(
         &self,

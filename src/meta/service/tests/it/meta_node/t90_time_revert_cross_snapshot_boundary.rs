@@ -15,6 +15,7 @@
 use std::time::Duration;
 
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::SeqV;
@@ -116,7 +117,8 @@ async fn write_two_logs(
 
         sleep(Duration::from_secs(2)).await;
 
-        meta_node = MetaNode::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
+        meta_node =
+            MetaNode::<TokioRuntime>::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
     }
 
     // Apply second log

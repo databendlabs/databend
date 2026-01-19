@@ -26,6 +26,7 @@ use std::str::FromStr;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
@@ -201,7 +202,7 @@ async fn init_new_cluster(
 
     let raft_config: RaftConfig = args.clone().into();
 
-    let sto = RaftStore::open(&raft_config).await?;
+    let sto = RaftStore::<TokioRuntime>::open(&raft_config).await?;
 
     let last_applied = {
         let sm2 = sto.get_sm_v003();
