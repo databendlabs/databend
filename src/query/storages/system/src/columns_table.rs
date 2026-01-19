@@ -46,6 +46,7 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::has_table_name_grants;
+use databend_common_users::is_role_owner;
 use databend_common_users::is_table_visible_with_owner;
 use log::warn;
 
@@ -312,7 +313,14 @@ pub(crate) async fn dump_tables(
     }
 
     // Fall back to slow path with full visibility checker
-    collect_tables_with_visibility_checker(ctx, &catalog, &tenant, filtered_db_names, filtered_table_names).await
+    collect_tables_with_visibility_checker(
+        ctx,
+        &catalog,
+        &tenant,
+        filtered_db_names,
+        filtered_table_names,
+    )
+    .await
 }
 
 fn extract_filters(
@@ -363,6 +371,17 @@ async fn try_collect_tables_optimized(
         };
 
         let db_id = db.get_db_info().database_id.db_id;
+
+        // Check database ownership first - if user owns the database, all tables are visible
+        let db_ownership = user_api
+            .get_ownership(tenant, &OwnershipObject::Database {
+                catalog_name: catalog.name().to_string(),
+                db_id,
+            })
+            .await?;
+        let db_owner_role = db_ownership.map(|o| o.role.clone());
+        let user_owns_db = is_role_owner(db_owner_role.as_deref(), &effective_roles);
+
         let mut visible_tables = Vec::new();
 
         for table_name in filtered_table_names {
@@ -373,6 +392,12 @@ async fn try_collect_tables_optimized(
                     continue;
                 }
             };
+
+            // If user owns the database, all tables in it are visible
+            if user_owns_db {
+                visible_tables.push(table);
+                continue;
+            }
 
             let table_id = table.get_id();
             let ownership = user_api
@@ -436,7 +461,14 @@ async fn collect_tables_with_visibility_checker(
         Some(filtered_table_names)
     };
 
-    collect_visible_tables(catalog, tenant, final_dbs, filtered_table_names, &visibility_checker).await
+    collect_visible_tables(
+        catalog,
+        tenant,
+        final_dbs,
+        filtered_table_names,
+        &visibility_checker,
+    )
+    .await
 }
 
 /// Collect visible databases based on filters and visibility checker.
@@ -572,7 +604,10 @@ async fn collect_visible_tables(
                 }
                 res
             }
-            None => catalog.list_tables(tenant, &db_name).await.unwrap_or_default(),
+            None => catalog
+                .list_tables(tenant, &db_name)
+                .await
+                .unwrap_or_default(),
         };
 
         let filtered_tables: Vec<_> = tables_in_db
@@ -580,7 +615,15 @@ async fn collect_visible_tables(
             .filter(|table| {
                 visibility_checker
                     .as_ref()
-                    .map(|c| c.check_table_visibility(CATALOG_DEFAULT, &db_name, table.name(), db_id, table.get_id()))
+                    .map(|c| {
+                        c.check_table_visibility(
+                            CATALOG_DEFAULT,
+                            &db_name,
+                            table.name(),
+                            db_id,
+                            table.get_id(),
+                        )
+                    })
                     .unwrap_or(true)
             })
             .collect();
