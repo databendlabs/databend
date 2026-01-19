@@ -1504,6 +1504,30 @@ drop table t1;
 statement ok
 drop table t2;
 
+statement ok
+create or replace table date_sub_query_test(id bigint null, test_time timestamp null);
+
+query T
+explain select * from date_sub_query_test where test_time >= (select to_timestamp('2024-01-01 00:00:00'));
+----
+Filter
+├── output columns: [date_sub_query_test.id (#0), date_sub_query_test.test_time (#1)]
+├── filters: [is_true(date_sub_query_test.test_time (#1) >= '2024-01-01 00:00:00.000000')]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.date_sub_query_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), test_time (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(date_sub_query_test.test_time (#1) >= '2024-01-01 00:00:00.000000')], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+drop table date_sub_query_test;
+
 query T
 explain select * from numbers(0);
 ----
