@@ -561,6 +561,7 @@ mod tests {
     use proptest::prelude::*;
     use proptest::strategy::ValueTree;
     use proptest::test_runner::TestRunner;
+    use rand::Rng;
 
     use super::*;
 
