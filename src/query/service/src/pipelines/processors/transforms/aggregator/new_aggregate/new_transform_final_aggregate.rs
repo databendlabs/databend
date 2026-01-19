@@ -96,7 +96,8 @@ impl NewTransformFinalAggregate {
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
             HashTableConfig::default()
-                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64),
+                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64)
+                .with_experiment_hash_index(params.enable_experiment_hash_index),
             Arc::new(Bump::new()),
         );
         let flush_state = PayloadFlushState::default();
@@ -148,6 +149,7 @@ impl NewTransformFinalAggregate {
             self.params.aggregate_functions.clone(),
             self.params.num_states(),
             0,
+            self.params.enable_experiment_hash_index,
             Arc::new(Bump::new()),
         )?;
 

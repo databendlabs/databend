@@ -66,6 +66,7 @@ impl TransformFinalAggregate {
                                 self.params.aggregate_functions.clone(),
                                 self.params.num_states(),
                                 0,
+                                self.params.enable_experiment_hash_index,
                                 Arc::new(Bump::new()),
                             )?;
                             ht.combine_payloads(&payload, &mut self.flush_state)?;
@@ -77,6 +78,7 @@ impl TransformFinalAggregate {
                                 self.params.aggregate_functions.clone(),
                                 self.params.num_states(),
                                 0,
+                                self.params.enable_experiment_hash_index,
                                 Arc::new(Bump::new()),
                                 true,
                             )?);
@@ -94,7 +96,11 @@ impl TransformFinalAggregate {
                             let mut hashtable = AggregateHashTable::new_with_capacity(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
-                                HashTableConfig::default().with_initial_radix_bits(0),
+                                HashTableConfig::default()
+                                    .with_initial_radix_bits(0)
+                                    .with_experiment_hash_index(
+                                        self.params.enable_experiment_hash_index,
+                                    ),
                                 capacity,
                                 Arc::new(Bump::new()),
                             );
