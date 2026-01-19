@@ -60,6 +60,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::has_table_name_grants;
+use databend_common_users::is_role_owner;
 use databend_common_users::is_table_visible_with_owner;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
@@ -334,11 +335,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         tables_names: &mut BTreeSet<String>,
     ) -> Result<
         Option<(
-            Vec<String>,                // catalogs
-            Vec<String>,                // databases
-            Vec<u64>,                   // databases_ids
-            Vec<Arc<dyn Table>>,        // database_tables
-            Vec<Option<String>>,        // owners
+            Vec<String>,         // catalogs
+            Vec<String>,         // databases
+            Vec<u64>,            // databases_ids
+            Vec<Arc<dyn Table>>, // database_tables
+            Vec<Option<String>>, // owners
         )>,
     > {
         let current_user = ctx.get_current_user()?;
@@ -360,12 +361,31 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             let dbs = collect_databases_by_names(ctl, tenant, db_names).await;
 
             // Resolve table IDs to names
-            if let Ok(new_tables) = ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
-                tables_names.extend(new_tables.into_iter().flatten());
+            if !tables_ids.is_empty() {
+                match ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
+                    Ok(new_tables) => {
+                        tables_names.extend(new_tables.into_iter().flatten());
+                    }
+                    Err(err) => {
+                        warn!("Failed to resolve table IDs: {}, {}", ctl.name(), err);
+                    }
+                }
             }
 
             // Check visibility for each table
             for db in &dbs {
+                // Check database ownership first
+                let db_id = db.get_db_info().database_id.db_id;
+                let db_ownership = user_api
+                    .role_api(tenant)
+                    .get_ownership(&OwnershipObject::Database {
+                        catalog_name: ctl_name.to_string(),
+                        db_id,
+                    })
+                    .await?;
+                let db_owner_role = db_ownership.map(|o| o.role);
+                let user_owns_db = is_role_owner(db_owner_role.as_deref(), &effective_roles);
+
                 collect_visible_tables_in_db(
                     &mut catalogs,
                     &mut databases,
@@ -380,6 +400,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     user_api,
                     &current_user,
                     &effective_roles,
+                    user_owns_db,
                 )
                 .await?;
             }
@@ -1280,8 +1301,16 @@ async fn collect_databases_by_names(
 ) -> Vec<Arc<dyn Database>> {
     let mut dbs = Vec::new();
     for db_name in db_names {
-        if let Ok(db) = ctl.get_database(tenant, db_name.as_str()).await {
-            dbs.push(db);
+        match ctl.get_database(tenant, db_name.as_str()).await {
+            Ok(db) => dbs.push(db),
+            Err(err) => {
+                warn!(
+                    "Failed to get database: {}.{}, {}",
+                    ctl.name(),
+                    db_name,
+                    err
+                );
+            }
         }
     }
     dbs
@@ -1303,36 +1332,53 @@ async fn collect_visible_tables_in_db(
     user_api: &Arc<UserApiProvider>,
     current_user: &databend_common_meta_app::principal::UserInfo,
     effective_roles: &[databend_common_meta_app::principal::RoleInfo],
+    user_owns_db: bool,
 ) -> Result<()> {
     let db_id = db.get_db_info().database_id.db_id;
 
     for table_name in table_names {
-        let Ok(table) = ctl.get_table(tenant, db.name(), table_name).await else {
-            continue;
+        let table = match ctl.get_table(tenant, db.name(), table_name).await {
+            Ok(table) => table,
+            Err(err) => {
+                warn!(
+                    "Failed to get table in database: {}.{}.{}, {}",
+                    ctl_name,
+                    db.name(),
+                    table_name,
+                    err
+                );
+                continue;
+            }
         };
 
-        let table_id = table.get_id();
-        let ownership = user_api
-            .role_api(tenant)
-            .get_ownership(&OwnershipObject::Table {
-                catalog_name: ctl_name.to_string(),
+        // If user owns the database, all tables in it are visible
+        let owner_role = if user_owns_db {
+            None
+        } else {
+            let table_id = table.get_id();
+            let ownership = user_api
+                .role_api(tenant)
+                .get_ownership(&OwnershipObject::Table {
+                    catalog_name: ctl_name.to_string(),
+                    db_id,
+                    table_id,
+                })
+                .await?;
+
+            let owner_role = ownership.map(|o| o.role);
+            if !is_table_visible_with_owner(
+                current_user,
+                effective_roles,
+                owner_role.as_deref(),
+                ctl_name,
+                db.name(),
                 db_id,
                 table_id,
-            })
-            .await?;
-
-        let owner_role = ownership.map(|o| o.role);
-        if !is_table_visible_with_owner(
-            current_user,
-            effective_roles,
-            owner_role.as_deref(),
-            ctl_name,
-            db.name(),
-            db_id,
-            table_id,
-        ) {
-            continue;
-        }
+            ) {
+                continue;
+            }
+            owner_role
+        };
 
         push_table_info(
             catalogs,
