@@ -20,6 +20,7 @@ mod aggregate_function_state;
 mod aggregate_hashtable;
 mod group_hash;
 mod hash_index;
+mod new_hash_index;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
@@ -27,9 +28,9 @@ mod payload_row;
 mod probe_state;
 mod row_ptr;
 
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
