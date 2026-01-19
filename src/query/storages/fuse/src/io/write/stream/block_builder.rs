@@ -412,7 +412,11 @@ impl StreamBlockBuilder {
             }
 
             // Only compute delta ordering stats if the DBP heuristic rule is enabled
-            let delta_stats = if self.properties.write_settings.enable_parquet_delta_binary_packed_heuristic_rule {
+            let delta_stats = if self
+                .properties
+                .write_settings
+                .enable_parquet_delta_binary_packed_heuristic_rule
+            {
                 collect_delta_ordering_stats(&self.properties.source_schema, &block)?
             } else {
                 HashMap::new()
