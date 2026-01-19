@@ -37,7 +37,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }))?;
 
-    if let Err(cause) = join_handler.await.flatten() {
+    if let Err(cause) = join_handler.await? {
         DataExchangeManager::instance().on_finished_query(&query_id, Some(cause.clone()));
         return Err(cause);
     }
