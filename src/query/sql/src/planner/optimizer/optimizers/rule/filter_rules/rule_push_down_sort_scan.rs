@@ -86,14 +86,11 @@ impl Rule for RulePushDownSortScan {
             scan.order_by = Some(sort.items);
         }
 
-        // When SecureFilter exists, pushing limit is unsafe if push_down_predicates is empty.
-        // Storage triggers TopK pruning with (order_by + limit + no predicates), returning N rows
-        // before SecureFilter can filter them, causing fewer results than expected.
-        let can_push_limit = secure_filter.is_none()
-            || scan
-                .push_down_predicates
-                .as_ref()
-                .is_some_and(|preds| !preds.is_empty());
+        // When SecureFilter exists, pushing limit is always unsafe because push_down_predicates
+        // never contains SecureFilter predicates. Storage TopK pruning would return N rows based
+        // only on user predicates, then SecureFilter filters them further, yielding fewer rows
+        // than the requested LIMIT.
+        let can_push_limit = secure_filter.is_none();
 
         if can_push_limit {
             if let Some(limit) = sort.limit {
