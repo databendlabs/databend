@@ -155,7 +155,11 @@ pub fn blocks_to_parquet_with_stats(
     Ok(file_meta)
 }
 
-/// Create writer properties, optionally disabling dictionaries for high-cardinality columns.
+/// Build Parquet writer properties with optional encoding heuristics.
+///
+/// Applies the following heuristics based on column statistics:
+/// - Dictionary encoding: Disabled for high-cardinality columns to avoid memory overhead
+/// - Delta binary packed: Enabled for near-sorted Int32/UInt32 columns with stable deltas
 pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,

@@ -38,7 +38,6 @@ pub fn collect_delta_ordering_stats(
     let mut stats = HashMap::new();
     let mut leaves = Vec::new();
     traverse_values_dfs(block.columns(), schema.fields(), &mut leaves)?;
-    // leaves already filtered to only contain Int32/UInt32 columns
     for (column_id, value, _data_type) in leaves {
         let Value::Column(column) = value else {
             continue;
