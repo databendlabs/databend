@@ -27,6 +27,7 @@ use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::snapshot_config::SnapshotConfig;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::protobuf as pb;
@@ -69,12 +70,12 @@ use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
-pub struct RaftServiceImpl {
-    pub meta_node: Arc<MetaNode>,
+pub struct RaftServiceImpl<SP: SpawnApi> {
+    pub meta_node: Arc<MetaNode<SP>>,
 }
 
-impl RaftServiceImpl {
-    pub fn create(meta_node: Arc<MetaNode>) -> Self {
+impl<SP: SpawnApi> RaftServiceImpl<SP> {
+    pub fn create(meta_node: Arc<MetaNode<SP>>) -> Self {
         Self { meta_node }
     }
 
@@ -155,7 +156,7 @@ impl RaftServiceImpl {
             DATA_VERSION,
             self.meta_node.raft_store.config.as_ref().clone(),
         );
-        let writer = WriterV003::new(&snapshot_config)
+        let writer = WriterV003::<SP>::new(&snapshot_config)
             .map_err(|e| Status::internal(format!("Failed to create WriterV003: {}", e)))?;
 
         let (write_tx, jh) = writer.spawn_writer_thread("install_snapshot_v004");
@@ -276,18 +277,24 @@ impl RaftServiceImpl {
 
         let mut strm = request.into_inner();
 
-        databend_common_base::runtime::spawn(async move {
-            while let Some(chunk) = strm.try_next().await.inspect_err(|e| {
-                error!("fail to receive binary snapshot chunk: {:?}", e);
-            })? {
-                let res = tx.send(chunk).await;
-                if res.is_err() {
-                    info!("fail to send snapshot chunk to receiver_v003 thread; Stop receiving");
-                    break;
+        #[allow(unused_must_use)]
+        SP::spawn(
+            async move {
+                while let Some(chunk) = strm.try_next().await.inspect_err(|e| {
+                    error!("fail to receive binary snapshot chunk: {:?}", e);
+                })? {
+                    let res = tx.send(chunk).await;
+                    if res.is_err() {
+                        info!(
+                            "fail to send snapshot chunk to receiver_v003 thread; Stop receiving"
+                        );
+                        break;
+                    }
                 }
-            }
-            Ok::<(), Status>(())
-        });
+                Ok::<(), Status>(())
+            },
+            Some("receive_binary_snapshot".into()),
+        );
 
         let received = join_handle
             .await
@@ -306,7 +313,7 @@ impl RaftServiceImpl {
 }
 
 #[async_trait::async_trait]
-impl RaftService for RaftServiceImpl {
+impl<SP: SpawnApi> RaftService for RaftServiceImpl<SP> {
     async fn forward(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 

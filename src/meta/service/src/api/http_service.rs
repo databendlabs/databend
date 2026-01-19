@@ -24,27 +24,31 @@ use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::MetaNetworkError;
 use futures::future::BoxFuture;
 use log::info;
 use log::warn;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::Request;
 use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
 
+use crate::api::http::v1::ctrl::TransferLeaderQuery;
+use crate::api::http::v1::features::SetFeatureQuery;
 use crate::configs::Config;
 use crate::meta_node::meta_handle::MetaHandle;
 
-pub struct HttpService {
+pub struct HttpService<SP: SpawnApi> {
     cfg: Config,
     shutdown_handler: HttpShutdownHandler,
-    meta_handle: Arc<MetaHandle>,
+    pub(crate) meta_handle: Arc<MetaHandle<SP>>,
 }
 
-impl HttpService {
-    pub fn create(cfg: Config, meta_handle: Arc<MetaHandle>) -> Box<Self> {
+impl<SP: SpawnApi> HttpService<SP> {
+    pub fn create(cfg: Config, meta_handle: Arc<MetaHandle<SP>>) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
@@ -52,33 +56,74 @@ impl HttpService {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint + use<> {
+    fn build_router(&self) -> impl Endpoint + use<SP> {
+        let mh = self.meta_handle.clone();
+
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
-            .at(
-                "/v1/ctrl/trigger_snapshot",
-                get(super::http::v1::ctrl::trigger_snapshot),
-            )
-            .at(
-                "/v1/ctrl/trigger_transfer_leader",
-                get(super::http::v1::ctrl::trigger_transfer_leader),
-            )
-            .at("/v1/features/list", get(super::http::v1::features::list))
-            .at("/v1/features/set", get(super::http::v1::features::set))
-            .at(
-                "/v1/cluster/nodes",
-                get(super::http::v1::cluster_state::nodes_handler),
-            )
-            .at(
-                "/v1/cluster/status",
-                get(super::http::v1::cluster_state::status_handler),
-            )
-            .at(
-                "/v1/metrics",
-                get(super::http::v1::metrics::metrics_handler),
-            )
+            .at("/v1/ctrl/trigger_snapshot", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |_req: Request| {
+                    let mh = mh.clone();
+                    async move { Self::trigger_snapshot(mh).await }
+                }))
+            })
+            .at("/v1/ctrl/trigger_transfer_leader", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |req: Request| {
+                    let mh = mh.clone();
+                    async move {
+                        let query: Option<TransferLeaderQuery> = req
+                            .uri()
+                            .query()
+                            .and_then(|q| serde_urlencoded::from_str(q).ok());
+                        Self::trigger_transfer_leader(mh, query).await
+                    }
+                }))
+            })
+            .at("/v1/features/list", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |_req: Request| {
+                    let mh = mh.clone();
+                    async move { Self::features_list(mh).await }
+                }))
+            })
+            .at("/v1/features/set", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |req: Request| {
+                    let mh = mh.clone();
+                    async move {
+                        let query: Option<SetFeatureQuery> = req
+                            .uri()
+                            .query()
+                            .and_then(|q| serde_urlencoded::from_str(q).ok());
+                        Self::features_set(mh, query).await
+                    }
+                }))
+            })
+            .at("/v1/cluster/nodes", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |_req: Request| {
+                    let mh = mh.clone();
+                    async move { Self::nodes_handler(mh).await }
+                }))
+            })
+            .at("/v1/cluster/status", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |_req: Request| {
+                    let mh = mh.clone();
+                    async move { Self::status_handler(mh).await }
+                }))
+            })
+            .at("/v1/metrics", {
+                let mh = mh.clone();
+                get(poem::endpoint::make(move |_req: Request| {
+                    let mh = mh.clone();
+                    async move { Self::metrics_handler(mh).await }
+                }))
+            })
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler));
 
@@ -94,7 +139,7 @@ impl HttpService {
                 get(debug_jeprof_dump_handler),
             );
         };
-        route.data(self.meta_handle.clone()).data(self.cfg.clone())
+        route.data(self.cfg.clone())
     }
 
     fn build_tls(config: &Config) -> Result<OpensslTlsConfig, MetaNetworkError> {
@@ -143,7 +188,7 @@ impl HttpService {
 }
 
 #[async_trait::async_trait]
-impl Graceful for HttpService {
+impl<SP: SpawnApi> Graceful for HttpService<SP> {
     type Error = AnyError;
 
     async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {

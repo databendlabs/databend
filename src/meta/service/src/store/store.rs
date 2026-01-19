@@ -33,6 +33,7 @@ use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::compactor_acquirer::CompactorAcquirer;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
@@ -53,18 +54,28 @@ use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 /// A store that contains raft-log store and state-machine.
 ///
 /// It is designed to be cloneable in order to be shared by MetaNode and Raft.
-#[derive(Clone)]
-pub struct RaftStore {
+pub struct RaftStore<SP> {
     pub id: NodeId,
 
     pub(crate) config: Arc<RaftConfig>,
 
     log: MetaRaftLog,
 
-    state_machine: MetaRaftStateMachine,
+    state_machine: MetaRaftStateMachine<SP>,
 }
 
-impl RaftStore {
+impl<SP> Clone for RaftStore<SP> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            config: self.config.clone(),
+            log: self.log.clone(),
+            state_machine: self.state_machine.clone(),
+        }
+    }
+}
+
+impl<SP: SpawnApi> RaftStore<SP> {
     /// Open an existent raft-store or create a new one.
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig) -> Result<Self, MetaStartupError> {
@@ -113,7 +124,7 @@ impl RaftStore {
                 .map_err(to_startup_err)?;
         }
 
-        let ss_store = SnapshotStoreV004::new(config.as_ref().clone());
+        let ss_store: SnapshotStoreV004<SP> = SnapshotStoreV004::new(config.as_ref().clone());
         let loader = ss_store.new_loader();
         let last = loader.load_last_snapshot().await.map_err(to_startup_err)?;
 
@@ -164,7 +175,7 @@ impl RaftStore {
         &self.log
     }
 
-    pub fn state_machine(&self) -> &MetaRaftStateMachine {
+    pub fn state_machine(&self) -> &MetaRaftStateMachine<SP> {
         &self.state_machine
     }
 

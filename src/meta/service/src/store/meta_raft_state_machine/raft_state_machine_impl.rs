@@ -16,6 +16,7 @@ use std::io;
 
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_sled_store::openraft::storage::EntryResponder;
@@ -34,15 +35,15 @@ use log::info;
 use crate::metrics::raft_metrics;
 use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 
-impl RaftSnapshotBuilder<TypeConfig> for MetaRaftStateMachine {
+impl<SP: SpawnApi> RaftSnapshotBuilder<TypeConfig> for MetaRaftStateMachine<SP> {
     #[fastrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, io::Error> {
         self.do_build_snapshot().await
     }
 }
 
-impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
-    type SnapshotBuilder = MetaRaftStateMachine;
+impl<SP: SpawnApi> RaftStateMachine<TypeConfig> for MetaRaftStateMachine<SP> {
+    type SnapshotBuilder = MetaRaftStateMachine<SP>;
 
     async fn applied_state(&mut self) -> Result<(Option<LogId>, StoredMembership), io::Error> {
         let sm = self.get_inner();
@@ -91,7 +92,7 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
             "decoding snapshot for installation"
         );
 
-        let ss_store = SnapshotStoreV004::new(self.config.as_ref().clone());
+        let ss_store: SnapshotStoreV004<SP> = SnapshotStoreV004::new(self.config.as_ref().clone());
         let (storage_path, rel_path) = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())?;

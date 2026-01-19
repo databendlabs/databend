@@ -16,6 +16,7 @@ use std::io;
 
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_sled_store::openraft::entry::RaftEntry;
@@ -50,10 +51,14 @@ use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
 
-impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaStoreBuilder {
-    async fn build(&self) -> Result<(MetaSrvTestContext, LogStore, SMStore), StorageError> {
+impl StoreBuilder<TypeConfig, LogStore, SMStore<TokioRuntime>, MetaSrvTestContext>
+    for MetaStoreBuilder
+{
+    async fn build(
+        &self,
+    ) -> Result<(MetaSrvTestContext, LogStore, SMStore<TokioRuntime>), StorageError> {
         let tc = MetaSrvTestContext::new(555);
-        let sto = RaftStore::open(&tc.config.raft_config)
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config)
             .await
             .expect("fail to create store");
         Ok((tc, sto.log().clone(), sto.state_machine().clone()))
@@ -80,7 +85,7 @@ async fn test_meta_store_purge_cache() -> anyhow::Result<()> {
     tc.config.raft_config.log_wal_chunk_max_records = 5;
 
     {
-        let sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
         sto.log().clone().save_vote(&Vote::new(10, 5)).await?;
 
@@ -148,7 +153,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- new meta store");
     {
-        let sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
         assert_eq!(None, sto.log().clone().read_vote().await?);
 
@@ -177,7 +182,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- reopen meta store");
     {
-        let sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
         assert_eq!(Some(Vote::new(10, 5)), sto.log().clone().read_vote().await?);
 
@@ -205,7 +210,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = RaftStore::open(&tc.config.raft_config).await?;
+    let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
     info!("--- feed logs and state machine");
 
@@ -254,7 +259,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let sto = RaftStore::open(&tc.config.raft_config).await?;
+    let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
     info!("--- feed logs and state machine");
 
@@ -307,7 +312,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
         info!("--- feed logs and state machine");
 
@@ -324,7 +329,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
         info!("--- install snapshot");
         {

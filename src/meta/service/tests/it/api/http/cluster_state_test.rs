@@ -18,6 +18,8 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
@@ -25,7 +27,6 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_version::BUILD_INFO;
 use databend_meta::api::HttpService;
-use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use http::Method;
@@ -33,7 +34,6 @@ use http::StatusCode;
 use http::Uri;
 use log::info;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use poem::get;
@@ -58,9 +58,10 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
 
-    let mn1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
+    let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
+    let mn1 = MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
     let meta_handle_1 = Arc::new(mn1);
 
     let c = tc1.config.clone();
@@ -76,9 +77,13 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     assert!(res.is_ok());
 
-    let cluster_router = Route::new()
-        .at("/cluster/nodes", get(nodes_handler))
-        .data(meta_handle_1.clone());
+    let cluster_router = Route::new().at("/cluster/nodes", {
+        let mh = meta_handle_1.clone();
+        get(poem::endpoint::make(move |_req: Request| {
+            let mh = mh.clone();
+            async move { HttpService::<TokioRuntime>::nodes_handler(mh).await }
+        }))
+    });
     let response = cluster_router
         .call(
             Request::builder()
@@ -105,9 +110,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mn0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
 
-    let mn1 = MetaNode::start(&tc1.config, BUILD_INFO.semver()).await?;
+    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
     let _ = mn1
         .join_cluster(
             &tc1.config.raft_config,
@@ -262,9 +267,11 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
 
-    let meta_handle_1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
+    let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
+    let meta_handle_1 =
+        MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
     let meta_handle_1 = Arc::new(meta_handle_1);
 
     let c = tc1.config.clone();

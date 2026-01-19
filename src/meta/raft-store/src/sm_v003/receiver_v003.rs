@@ -18,7 +18,10 @@ use std::fs::File;
 use std::io;
 use std::io::BufWriter;
 use std::io::Write;
+use std::marker::PhantomData;
 
+use databend_common_meta_runtime_api::JoinHandle;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::Vote;
@@ -26,11 +29,10 @@ use log::debug;
 use log::error;
 use log::info;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use crate::sm_v003::received::Received;
 
-pub struct ReceiverV003 {
+pub struct ReceiverV003<SP: SpawnApi> {
     remote_addr: String,
 
     storage_path: String,
@@ -47,9 +49,11 @@ pub struct ReceiverV003 {
 
     /// number of bytes received.
     size_received: usize,
+
+    _phantom: PhantomData<SP>,
 }
 
-impl ReceiverV003 {
+impl<SP: SpawnApi> ReceiverV003<SP> {
     /// Create a new snapshot receiver with an empty snapshot.
     pub(crate) fn new(
         remote_addr: impl ToString,
@@ -68,6 +72,7 @@ impl ReceiverV003 {
             on_recv: None,
             n_received: 0,
             size_received: 0,
+            _phantom: PhantomData,
         }
     }
 
@@ -94,7 +99,7 @@ impl ReceiverV003 {
     ) {
         let (tx, mut rx) = mpsc::channel(1024);
 
-        let join_handle = databend_common_base::runtime::spawn_blocking(move || {
+        let join_handle = SP::spawn_blocking(move || {
             let with_context =
                 |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
 

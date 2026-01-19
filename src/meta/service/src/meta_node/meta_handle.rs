@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::future;
 use std::future::Future;
 use std::io;
@@ -20,10 +21,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -63,26 +64,27 @@ use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::MetaNode;
 
 pub type BoxFuture<T = ()> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
-pub type MetaFnOnce<T> = Box<dyn FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 'static>;
+pub type MetaFnOnce<Arg, Ret> = Box<dyn FnOnce(Arg) -> BoxFuture<Ret> + Send + 'static>;
 
 /// A handle to talk to MetaNode in another runtime.
 #[derive(Clone)]
-pub struct MetaHandle {
+pub struct MetaHandle<SP: SpawnApi> {
     pub id: NodeId,
     pub version: Version,
-    tx: mpsc::Sender<MetaFnOnce<()>>,
+    tx: mpsc::Sender<MetaFnOnce<Arc<MetaNode<SP>>, ()>>,
     /// The runtime containing the meta node worker.
     ///
-    /// When all handles are dropped, the runtime will be dropped
-    _rt: Arc<Runtime>,
+    /// When all handles are dropped, the runtime will be dropped.
+    /// Stored as `dyn Any` since we only need to keep it alive, not call methods.
+    _rt: Arc<dyn Any + Send + Sync>,
 }
 
-impl MetaHandle {
-    pub fn new(
+impl<SP: SpawnApi> MetaHandle<SP> {
+    pub fn new<RT: Send + Sync + 'static>(
         id: NodeId,
         version: Version,
-        tx: mpsc::Sender<MetaFnOnce<()>>,
-        rt: Arc<Runtime>,
+        tx: mpsc::Sender<MetaFnOnce<Arc<MetaNode<SP>>, ()>>,
+        rt: Arc<RT>,
     ) -> Self {
         MetaHandle {
             id,
@@ -95,14 +97,14 @@ impl MetaHandle {
     /// Run a function in meta-node
     pub async fn request<T>(
         &self,
-        f: impl FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 'static,
+        f: impl FnOnce(Arc<MetaNode<SP>>) -> BoxFuture<T> + Send + 'static,
     ) -> Result<T, MetaNodeStopped>
     where
         T: Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
 
-        let box_fn = Box::new(move |meta_node: Arc<MetaNode>| {
+        let box_fn = Box::new(move |meta_node: Arc<MetaNode<SP>>| {
             let fu = async move {
                 let res = f(meta_node).await;
                 tx.send(res).ok();
@@ -128,7 +130,7 @@ impl MetaHandle {
             .await
     }
 
-    pub async fn get_meta_node(&self) -> Result<Arc<MetaNode>, MetaNodeStopped> {
+    pub async fn get_meta_node(&self) -> Result<Arc<MetaNode<SP>>, MetaNodeStopped> {
         self.request(|meta_node| Box::pin(future::ready(meta_node.clone())))
             .await
     }

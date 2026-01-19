@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::Config;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
@@ -29,19 +31,21 @@ use crate::meta_node::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::meta_service::runtime_config::RuntimeConfig;
 use crate::meta_service::watcher::DispatcherHandle;
+use crate::meta_service::watcher::WatchTypes;
 use crate::network::NetworkFactory;
 use crate::store::RaftStore;
 
-pub struct MetaNodeBuilder {
+pub struct MetaNodeBuilder<SP> {
     pub(crate) node_id: Option<NodeId>,
     pub(crate) raft_config: Option<Config>,
-    pub(crate) sto: Option<RaftStore>,
+    pub(crate) sto: Option<RaftStore<SP>>,
     pub(crate) raft_service_endpoint: Option<Endpoint>,
     pub(crate) version: Option<Version>,
+    pub(crate) _phantom: PhantomData<SP>,
 }
 
-impl MetaNodeBuilder {
-    pub async fn build(mut self) -> Result<Arc<MetaNode>, MetaStartupError> {
+impl<SP: SpawnApi> MetaNodeBuilder<SP> {
+    pub async fn build(mut self) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let node_id = self
             .node_id
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("node_id is not set")))?;
@@ -60,7 +64,7 @@ impl MetaNodeBuilder {
             .version
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("version is not set")))?;
 
-        let net = NetworkFactory::new(sto.clone());
+        let net = NetworkFactory::<SP>::new(sto.clone());
 
         let log_store = sto.log().clone();
         let sm_store = sto.state_machine().clone();
@@ -73,8 +77,10 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let handle = Dispatcher::spawn();
-        let handle = DispatcherHandle::new(handle, node_id);
+        let (dispatcher_handle, dispatcher_fut) = Dispatcher::<WatchTypes>::create();
+        #[allow(unused_must_use)]
+        SP::spawn(dispatcher_fut, Some("watcher-dispatcher".into()));
+        let handle = DispatcherHandle::new(dispatcher_handle, node_id);
         let handle = Arc::new(handle);
 
         let on_change_applied = {
@@ -132,7 +138,7 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn sto(mut self, sto: RaftStore) -> Self {
+    pub fn sto(mut self, sto: RaftStore<SP>) -> Self {
         self.sto = Some(sto);
         self
     }

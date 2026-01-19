@@ -23,6 +23,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::ondisk::OnDisk;
+use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::Cmd;
@@ -57,7 +58,7 @@ use crate::kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
-pub async fn entry(conf: Config) -> anyhow::Result<()> {
+pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
     }
@@ -77,7 +78,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
     // Leaving does not access the local store thus it can be done before the store is initialized.
-    let has_left = MetaNode::leave_cluster(&conf.raft_config).await?;
+    let has_left = MetaNode::<RT>::leave_cluster(&conf.raft_config).await?;
     if has_left {
         info!("node {:?} has left cluster", conf.raft_config.leave_id);
         return Ok(());
@@ -151,7 +152,13 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
+    let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
+        databend_common_meta_types::MetaStartupError::MetaServiceError(format!(
+            "Cannot create meta IO runtime: {}",
+            e
+        ))
+    })?;
+    let meta_handle = MetaWorker::create_meta_worker(conf.clone(), Arc::new(runtime)).await?;
     let meta_handle = Arc::new(meta_handle);
 
     let mut stop_handler = ShutdownGroup::<AnyError>::new();
@@ -168,7 +175,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv = GrpcServer::create(conf.clone(), meta_handle.clone());
+        let mut srv = GrpcServer::<RT>::create(conf.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
             conf.grpc_api_address.clone()
@@ -191,7 +198,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     info!("Join result: {:?}", join_res);
 
-    register_node(&meta_handle, &conf).await?;
+    register_node::<RT>(&meta_handle, &conf).await?;
 
     println!("Databend Metasrv started");
 
@@ -203,7 +210,10 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn do_register(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), MetaAPIError> {
+async fn do_register<RT: RuntimeApi>(
+    meta_handle: &Arc<MetaHandle<RT>>,
+    conf: &Config,
+) -> Result<(), MetaAPIError> {
     let node_id = meta_handle.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
@@ -260,7 +270,10 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
 #[fastrace::trace]
-async fn register_node(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), anyhow::Error> {
+async fn register_node<RT: RuntimeApi>(
+    meta_handle: &Arc<MetaHandle<RT>>,
+    conf: &Config,
+) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
@@ -315,7 +328,7 @@ async fn register_node(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res = do_register(meta_handle, conf).await;
+        let res = do_register::<RT>(meta_handle, conf).await;
         info!("Register-node result: {:?}", res);
 
         match res {

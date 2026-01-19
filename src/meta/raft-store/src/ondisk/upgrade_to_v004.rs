@@ -18,6 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_sled_store::drop_sled_db;
 use databend_common_meta_sled_store::init_get_sled_db;
@@ -125,8 +126,10 @@ impl OnDisk {
 
         // 1.2. copy snapshot
 
-        let ss_store_v003 = SnapshotStoreV003::new(self.config.clone());
-        let ss_store_v004 = SnapshotStoreV004::new(self.config.clone());
+        let ss_store_v003: SnapshotStoreV003<TokioRuntime> =
+            SnapshotStoreV003::new(self.config.clone());
+        let ss_store_v004: SnapshotStoreV004<TokioRuntime> =
+            SnapshotStoreV004::new(self.config.clone());
 
         let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
         let v004_path = ss_store_v004.snapshot_config().version_dir();
@@ -181,7 +184,8 @@ impl OnDisk {
     }
 
     async fn remove_v003_snapshot(&mut self) -> Result<(), io::Error> {
-        let ss_store_v003 = SnapshotStoreV003::new(self.config.clone());
+        let ss_store_v003: SnapshotStoreV003<TokioRuntime> =
+            SnapshotStoreV003::new(self.config.clone());
 
         let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
 

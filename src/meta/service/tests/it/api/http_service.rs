@@ -16,6 +16,8 @@ use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
 
+use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_node::meta_worker::MetaWorker;
@@ -40,7 +42,8 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
     conf.admin_api_address = addr_str.to_owned();
     let tc = MetaSrvTestContext::new(0);
 
-    let mh = MetaWorker::create_meta_worker_in_rt(tc.config.clone()).await?;
+    let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
+    let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
 
     let mut srv = HttpService::create(conf, mh);

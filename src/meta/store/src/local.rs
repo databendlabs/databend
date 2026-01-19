@@ -23,6 +23,8 @@ use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
+use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -47,7 +49,7 @@ pub struct LocalMetaService {
 
     pub config: configs::Config,
 
-    pub grpc_server: Option<Box<GrpcServer>>,
+    pub grpc_server: Option<Box<GrpcServer<TokioRuntime>>>,
 
     client: Arc<ClientHandle>,
 }
@@ -147,7 +149,8 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
+        let runtime = TokioRuntime::new_embedded("meta-io-rt-embedded");
+        let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
         let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
         grpc_server.do_start().await?;
