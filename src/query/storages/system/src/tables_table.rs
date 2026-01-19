@@ -320,6 +320,135 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         }
     }
 
+    /// Optimized path: lightweight permission check without loading all ownerships.
+    /// Returns Some(...) with collected data if successful, None to fall back to slow path.
+    #[allow(clippy::too_many_arguments)]
+    async fn try_optimized_path(
+        ctx: &Arc<dyn TableContext>,
+        tenant: &Tenant,
+        user_api: &Arc<UserApiProvider>,
+        ctls: &[(String, Arc<dyn Catalog>)],
+        db_names: &[String],
+        tables_ids: &[u64],
+        tables_names: &mut BTreeSet<String>,
+    ) -> Result<
+        Option<(
+            Vec<String>,                // catalogs
+            Vec<String>,                // databases
+            Vec<u64>,                   // databases_ids
+            Vec<Arc<dyn Table>>,        // database_tables
+            Vec<Option<String>>,        // owners
+        )>,
+    > {
+        let current_user = ctx.get_current_user()?;
+        let effective_roles = ctx.get_all_effective_roles().await?;
+
+        // Fall back if grants use table names (need exact match)
+        if has_table_name_grants(&current_user, &effective_roles) {
+            return Ok(None);
+        }
+
+        let mut catalogs = vec![];
+        let mut databases = vec![];
+        let mut databases_ids = vec![];
+        let mut database_tables = vec![];
+        let mut owners: Vec<Option<String>> = vec![];
+
+        for (ctl_name, ctl) in ctls.iter() {
+            // Collect databases
+            let mut dbs = Vec::new();
+            for db in db_names {
+                match ctl.get_database(tenant, db.as_str()).await {
+                    Ok(database) => dbs.push(database),
+                    Err(err) => {
+                        warn!("Failed to get database: {}, {}", db, err);
+                    }
+                }
+            }
+
+            // Resolve table IDs to names
+            match ctl.mget_table_names_by_ids(tenant, tables_ids, false).await {
+                Ok(new_tables) => {
+                    let new_table_names: BTreeSet<_> = new_tables.into_iter().flatten().collect();
+                    tables_names.extend(new_table_names);
+                }
+                Err(err) => {
+                    warn!("Failed to get tables: {}, {}", ctl.name(), err);
+                }
+            }
+
+            // Check visibility for each table
+            for table_name in tables_names.iter() {
+                for db in &dbs {
+                    let table = match ctl.get_table(tenant, db.name(), table_name).await {
+                        Ok(t) => t,
+                        Err(err) => {
+                            warn!(
+                                "Failed to get table in database: {}.{}, {}",
+                                ctl_name,
+                                db.name(),
+                                err
+                            );
+                            continue;
+                        }
+                    };
+
+                    let db_id = db.get_db_info().database_id.db_id;
+                    let table_id = table.get_id();
+
+                    let ownership = user_api
+                        .role_api(tenant)
+                        .get_ownership(&OwnershipObject::Table {
+                            catalog_name: ctl_name.to_string(),
+                            db_id,
+                            table_id,
+                        })
+                        .await?;
+
+                    let owner_role = ownership.map(|o| o.role);
+                    let is_owner = is_role_owner(owner_role.as_deref(), &effective_roles);
+                    let is_visible = is_owner
+                        || check_table_visibility_with_roles(
+                            &current_user,
+                            &effective_roles,
+                            ctl_name,
+                            db.name(),
+                            db_id,
+                            table_id,
+                        );
+
+                    if is_visible {
+                        push_table_info(
+                            &mut catalogs,
+                            &mut databases,
+                            &mut databases_ids,
+                            &mut database_tables,
+                            &mut owners,
+                            ctl_name,
+                            db.name(),
+                            db_id,
+                            table,
+                            owner_role,
+                        );
+                    }
+                }
+            }
+        }
+
+        if catalogs.is_empty() {
+            // No results from optimized path, fall back to slow path
+            Ok(None)
+        } else {
+            Ok(Some((
+                catalogs,
+                databases,
+                databases_ids,
+                database_tables,
+                owners,
+            )))
+        }
+    }
+
     /// dump all the tables from all the catalogs with pushdown, this is used for `SHOW TABLES` command.
     /// please note that this function is intended to not wrapped with Result<>, because we do not want to
     /// break ALL the output on reading ANY of the catalog, database or table failed.
@@ -467,111 +596,36 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         // Optimized path: when filter specifies limited databases and tables,
         // use lightweight permission check without loading all ownerships
         let filter_count = db_name.len() * (tables_names.len() + tables_ids.len()).max(1);
-        let mut use_optimized_path = !db_name.is_empty()
+        let use_optimized_path = !db_name.is_empty()
             && (tables_names.len() + tables_ids.len()) > 0
             && filter_count <= OPTIMIZED_PATH_THRESHOLD
             && !WITH_HISTORY
             && !is_external_catalog;
 
         if use_optimized_path {
-            // Get effective roles once for permission checking
-            let current_user = ctx.get_current_user()?;
-            let effective_roles = ctx.get_all_effective_roles().await?;
-
-            // If grants use table names, fall back to slow path for exact match.
-            if has_table_name_grants(&current_user, &effective_roles) {
-                use_optimized_path = false;
+            if let Some((opt_catalogs, opt_databases, opt_databases_ids, opt_tables, opt_owners)) =
+                Self::try_optimized_path(
+                    &ctx,
+                    &tenant,
+                    &user_api,
+                    &ctls,
+                    &db_name,
+                    &tables_ids,
+                    &mut tables_names,
+                )
+                .await?
+            {
+                catalogs = opt_catalogs;
+                databases = opt_databases;
+                databases_ids = opt_databases_ids;
+                database_tables = opt_tables;
+                owners = opt_owners;
             } else {
-                for (ctl_name, ctl) in ctls.iter() {
-                    for db in &db_name {
-                        match ctl.get_database(&tenant, db.as_str()).await {
-                            Ok(database) => dbs.push(database),
-                            Err(err) => {
-                                let msg = format!("Failed to get database: {}, {}", db, err);
-                                warn!("{}", msg);
-                            }
-                        }
-                    }
-                    match ctl
-                        .mget_table_names_by_ids(&tenant, &tables_ids, false)
-                        .await
-                    {
-                        Ok(new_tables) => {
-                            let new_table_names: BTreeSet<_> =
-                                new_tables.into_iter().flatten().collect();
-                            tables_names.extend(new_table_names);
-                        }
-                        Err(err) => {
-                            // swallow the errors related with mget tables
-                            warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                        }
-                    }
-
-                    for table_name in &tables_names {
-                        for db in &dbs {
-                            match ctl.get_table(&tenant, db.name(), table_name).await {
-                                Ok(t) => {
-                                    let db_id = db.get_db_info().database_id.db_id;
-                                    let table_id = t.get_id();
-
-                                    // Get ownership for this specific table
-                                    let ownership = user_api
-                                        .role_api(&tenant)
-                                        .get_ownership(&OwnershipObject::Table {
-                                            catalog_name: ctl_name.to_string(),
-                                            db_id,
-                                            table_id,
-                                        })
-                                        .await?;
-                                    let owner_role = ownership.map(|o| o.role);
-                                    let is_owner =
-                                        is_role_owner(owner_role.as_deref(), &effective_roles);
-
-                                    // Check visibility through grants (lightweight check)
-                                    let is_visible = is_owner
-                                        || check_table_visibility_with_roles(
-                                            &current_user,
-                                            &effective_roles,
-                                            ctl_name,
-                                            db.name(),
-                                            db_id,
-                                            table_id,
-                                        );
-
-                                    if is_visible {
-                                        push_table_info(
-                                            &mut catalogs,
-                                            &mut databases,
-                                            &mut databases_ids,
-                                            &mut database_tables,
-                                            &mut owners,
-                                            ctl_name,
-                                            db.name(),
-                                            db.get_db_info().database_id.db_id,
-                                            t,
-                                            owner_role,
-                                        );
-                                    }
-                                }
-                                Err(err) => {
-                                    let msg = format!(
-                                        "Failed to get table in database: {}.{}, {}",
-                                        ctl_name,
-                                        db.name(),
-                                        err
-                                    );
-                                    // warn no need to pad in ctx
-                                    warn!("{}", msg);
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
+                // Fall through to slow path
             }
         }
 
-        if !use_optimized_path {
+        if catalogs.is_empty() {
             // Slow path: need full visibility checker
             let visibility_checker = if is_external_catalog {
                 None
