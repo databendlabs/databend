@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use databend_common_meta_stoerr::MetaStorageError;
 
 /// Errors that occur when encode/decode
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, thiserror::Error)]
@@ -43,9 +42,8 @@ impl From<std::string::FromUtf8Error> for SledBytesError {
     }
 }
 
-// TODO: remove this: after refactoring, sled should not use MetaStorageError directly.
-impl From<SledBytesError> for MetaStorageError {
+impl From<SledBytesError> for std::io::Error {
     fn from(e: SledBytesError) -> Self {
-        MetaStorageError(AnyError::new(&e))
+        std::io::Error::other(e)
     }
 }
