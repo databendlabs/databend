@@ -374,6 +374,11 @@ impl Binder {
             _ => (),
         }
 
+        let mut other_condition_columns = ColumnSet::new();
+        for predicate in other_conditions.iter() {
+            other_condition_columns.extend(predicate.used_columns());
+        }
+
         self.push_down_other_conditions(
             &join_type,
             &mut left_child,
@@ -451,6 +456,23 @@ impl Binder {
             single_to_inner: None,
             build_side_cache_info,
         };
+
+        let mut join_condition_columns = ColumnSet::new();
+        for predicate in left_conditions.iter() {
+            join_condition_columns.extend(predicate.used_columns());
+        }
+        for predicate in right_conditions.iter() {
+            join_condition_columns.extend(predicate.used_columns());
+        }
+        for predicate in non_equi_conditions.iter() {
+            join_condition_columns.extend(predicate.used_columns());
+        }
+        join_condition_columns.extend(other_condition_columns);
+        if !join_condition_columns.is_empty() {
+            self.metadata
+                .write()
+                .add_non_lazy_columns(join_condition_columns);
+        }
 
         if logical_join.join_type.is_asof_join() {
             self.rewrite_asof(logical_join, left_child, (right_child, right_context))
