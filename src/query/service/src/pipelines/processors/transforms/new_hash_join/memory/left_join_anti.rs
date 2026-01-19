@@ -65,7 +65,7 @@ impl AntiLeftHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            &ctx.get_settings(),
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),

@@ -72,6 +72,8 @@ impl BasicHashJoinState {
         let chunk_index = self.chunks.len();
         self.chunks.as_mut().push(chunk);
         self.build_queue.as_mut().push_back(chunk_index);
+        self.scan_map.as_mut().push(vec![]);
+        self.scan_queue.as_mut().push_back(chunk_index);
     }
 
     pub fn steal_scan_chunk_index(&self) -> Option<(usize, usize)> {
