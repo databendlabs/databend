@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::vec;
 
 use databend_common_ast::Span;
@@ -148,7 +149,6 @@ use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
 use tantivy_query_grammar::parse_query_lenient;
 use unicase::Ascii;
-use std::time::Duration;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -5542,7 +5542,10 @@ impl<'a> TypeChecker<'a> {
         Ok((endpoint, resp.headers))
     }
 
-    fn build_udf_cloud_imports(&self, imports: &[String]) -> Result<Vec<databend_common_cloud_control::pb::UdfImport>> {
+    fn build_udf_cloud_imports(
+        &self,
+        imports: &[String],
+    ) -> Result<Vec<databend_common_cloud_control::pb::UdfImport>> {
         if imports.is_empty() {
             return Ok(Vec::new());
         }
@@ -5586,12 +5589,15 @@ impl<'a> TypeChecker<'a> {
                     .map(|(key, value)| {
                         Ok((
                             key.to_string(),
-                            value.to_str().map_err(|err| {
-                                ErrorCode::SemanticError(format!(
-                                    "Invalid presign header for UDF import '{}': {}",
-                                    location, err
-                                ))
-                            })?.to_string(),
+                            value
+                                .to_str()
+                                .map_err(|err| {
+                                    ErrorCode::SemanticError(format!(
+                                        "Invalid presign header for UDF import '{}': {}",
+                                        location, err
+                                    ))
+                                })?
+                                .to_string(),
                         ))
                     })
                     .collect::<Result<BTreeMap<String, String>>>()?;
