@@ -392,24 +392,44 @@ impl StreamBlockBuilder {
             // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
             // block's stats to heuristically configure the parquet writer.
 
-            // Collect NDV information from various sources
-            let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
-            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+            // Only collect stats if encoding heuristics are enabled (dictionary or delta_binary_packed)
+            let needs_stats = self.properties.write_settings.enable_parquet_dictionary
+                || self
+                    .properties
+                    .write_settings
+                    .enable_parquet_delta_binary_packed_heuristic_rule;
 
-            // Override HLL-estimated NDV with accurate counts from bloom index builders
-            // This provides more precise / supplement NDV information for encoding decisions (e.g., delta_binary_packed)
-            let bloom_ndv = self.bloom_index_builder.peek_cols_ndv();
-            for (col_id, ndv) in bloom_ndv {
-                cols_ndv.insert(col_id, ndv);
-            }
+            let cols_stats = if needs_stats {
+                // Collect NDV information from various sources
+                let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
+                cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
 
-            // Get column statistics and fill in NDV information
-            let mut cols_stats = self.column_stats_state.peek_column_stats()?;
-            for (col_id, ndv) in cols_ndv {
-                if let Some(stats) = cols_stats.get_mut(&col_id) {
-                    stats.distinct_of_values = Some(ndv as u64);
+                // Override HLL-estimated NDV with accurate counts from bloom index builders
+                // This provides more precise cardinality for delta_binary_packed encoding decisions
+                // Only collect bloom NDV when DBP heuristic is enabled
+                if self
+                    .properties
+                    .write_settings
+                    .enable_parquet_delta_binary_packed_heuristic_rule
+                {
+                    let bloom_ndv = self.bloom_index_builder.peek_cols_ndv();
+                    for (col_id, ndv) in bloom_ndv {
+                        cols_ndv.insert(col_id, ndv);
+                    }
                 }
-            }
+
+                // Get column statistics and fill in NDV information
+                let mut cols_stats = self.column_stats_state.peek_column_stats()?;
+                for (col_id, ndv) in cols_ndv {
+                    if let Some(stats) = cols_stats.get_mut(&col_id) {
+                        stats.distinct_of_values = Some(ndv as u64);
+                    }
+                }
+                cols_stats
+            } else {
+                // When no encoding heuristics are enabled, skip stats collection
+                HashMap::new()
+            };
 
             // Only compute delta ordering stats if the DBP heuristic rule is enabled
             let delta_stats = if self
