@@ -401,6 +401,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     &current_user,
                     &effective_roles,
                     user_owns_db,
+                    WITHOUT_VIEW,
                 )
                 .await?;
             }
@@ -1333,6 +1334,7 @@ async fn collect_visible_tables_in_db(
     current_user: &databend_common_meta_app::principal::UserInfo,
     effective_roles: &[databend_common_meta_app::principal::RoleInfo],
     user_owns_db: bool,
+    without_view: bool,
 ) -> Result<()> {
     let db_id = db.get_db_info().database_id.db_id;
 
@@ -1350,6 +1352,13 @@ async fn collect_visible_tables_in_db(
                 continue;
             }
         };
+
+        // Apply the same view/stream filter as the slow path:
+        // (engine == "VIEW" || WITHOUT_VIEW) && !table.is_stream()
+        let is_view = table.get_table_info().engine() == "VIEW";
+        if !((is_view || without_view) && !table.is_stream()) {
+            continue;
+        }
 
         let table_id = table.get_id();
 
