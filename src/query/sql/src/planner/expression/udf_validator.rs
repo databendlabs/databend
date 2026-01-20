@@ -112,6 +112,21 @@ impl UDFValidator {
         }
     }
 
+    pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        if !GlobalConfig::instance().query.enable_udf_cloud_script {
+            return Err(ErrorCode::Unimplemented(
+                "UDF cloud script is not enabled, you can enable it by setting 'enable_udf_cloud_script = true' in query node config",
+            ));
+        }
+        // TODO: more lang e.g. JavaScript ..
+        if *lang != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "UDF cloud script only supports python language",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {
         if !GlobalConfig::instance().query.enable_udf_server {
             return Err(ErrorCode::Unimplemented(

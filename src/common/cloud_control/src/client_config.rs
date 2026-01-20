@@ -57,6 +57,13 @@ impl ClientConfig {
             crate::notification_client::NOTIFICATION_CLIENT_VERSION,
         );
     }
+
+    pub fn add_udf_version_info(&mut self) {
+        self.add_metadata(
+            crate::udf_client::UDF_CLIENT_VERSION_NAME,
+            crate::udf_client::UDF_CLIENT_VERSION,
+        );
+    }
     pub fn get_metadata(&self) -> &Vec<(String, String)> {
         &self.metadata
     }

@@ -18,6 +18,7 @@ pub mod notification_client;
 pub mod notification_utils;
 pub mod task_client;
 pub mod task_utils;
+pub mod udf_client;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[allow(clippy::large_enum_variant)]
@@ -26,6 +27,7 @@ pub mod pb {
     // taskproto is proto package name.
     tonic::include_proto!("taskproto");
     tonic::include_proto!("notificationproto");
+    tonic::include_proto!("udfproto");
 }
 
 pub mod utils {

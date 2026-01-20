@@ -4559,6 +4559,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-cloud-control",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",

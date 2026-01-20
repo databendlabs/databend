@@ -22,6 +22,7 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UDAFStateField;
 use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -31,6 +32,7 @@ use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
+use databend_common_meta_app::principal::UDFCloudScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -179,12 +181,56 @@ impl Binder {
                 packages,
                 immutable,
             } => {
-                UDFValidator::is_udf_script_allowed(&language.parse()?)?;
-                let definition = create_udf_definition_script(
+                let parsed_language = language.parse::<UDFLanguage>()?;
+                let use_cloud = matches!(parsed_language, UDFLanguage::Python)
+                    && GlobalConfig::instance().query.enable_udf_cloud_script;
+                let definition = if use_cloud {
+                    create_udf_definition_cloud_script(
+                        arg_types,
+                        return_type,
+                        imports,
+                        packages,
+                        handler,
+                        language,
+                        code,
+                        *immutable,
+                    )?
+                } else {
+                    UDFValidator::is_udf_script_allowed(&parsed_language)?;
+                    create_udf_definition_script(
+                        arg_types,
+                        None,
+                        return_type,
+                        runtime_version,
+                        imports,
+                        packages,
+                        handler,
+                        language,
+                        code,
+                        *immutable,
+                    )?
+                };
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition,
+                    created_on: Utc::now(),
+                    update_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDFCloudScript {
+                arg_types,
+                return_type,
+                code,
+                handler,
+                language,
+                imports,
+                packages,
+                immutable,
+            } => {
+                let definition = create_udf_definition_cloud_script(
                     arg_types,
-                    None,
                     return_type,
-                    runtime_version,
                     imports,
                     packages,
                     handler,
@@ -495,4 +541,213 @@ fn create_udf_definition_script(
             immutable,
         })),
     }
+}
+
+fn create_udf_definition_cloud_script(
+    arg_types: &UDFArgs,
+    return_type: &TypeName,
+    imports: &[String],
+    packages: &[String],
+    handler: &str,
+    language: &str,
+    code: &str,
+    immutable: Option<bool>,
+) -> Result<PlanUDFDefinition> {
+    let Ok(language) = language.parse::<UDFLanguage>() else {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Unallowed UDF language {language:?}, must be python",
+        )));
+    };
+    UDFValidator::is_udf_cloud_script_allowed(&language)?;
+
+    let arg_types = arg_types
+        .types_iter()
+        .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
+        .collect::<Result<Vec<_>>>()?;
+
+    let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+    let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
+    let result_type_literal = udf_type_string(&return_type);
+
+    let dockerfile = build_udf_cloud_dockerfile(
+        code,
+        handler,
+        imports,
+        packages,
+        &input_types,
+        &result_type_literal,
+    );
+
+    Ok(PlanUDFDefinition::UDFCloudScript(UDFCloudScript {
+        code: code.to_string(),
+        arg_types,
+        return_type,
+        imports: imports.to_vec(),
+        packages: packages.to_vec(),
+        handler: handler.to_string(),
+        language: language.to_string(),
+        dockerfile,
+        immutable,
+    }))
+}
+
+fn udf_type_string(data_type: &DataType) -> String {
+    let sql_name = data_type.sql_name();
+    match sql_name.as_str() {
+        "TINYINT UNSIGNED" => "UINT8".to_string(),
+        "SMALLINT UNSIGNED" => "UINT16".to_string(),
+        "INT UNSIGNED" => "UINT32".to_string(),
+        "BIGINT UNSIGNED" => "UINT64".to_string(),
+        _ => sql_name,
+    }
+}
+
+fn build_udf_cloud_dockerfile(
+    code: &str,
+    handler: &str,
+    imports: &[String],
+    packages: &[String],
+    input_types: &[String],
+    result_type: &str,
+) -> String {
+    let server_stub = build_udf_cloud_server_stub(handler, input_types, result_type);
+    let code_marker = unique_heredoc_marker("UDF_CODE", &[code, &server_stub]);
+    let server_marker = unique_heredoc_marker("UDF_SERVER", &[code, &server_stub]);
+    let pyproject = build_udf_cloud_pyproject(packages);
+    let pyproject_marker =
+        unique_heredoc_marker("UDF_PYPROJECT", &[code, &server_stub, &pyproject]);
+
+    let mut dockerfile = String::new();
+    dockerfile.push_str("FROM python:3.12-slim\n");
+    dockerfile.push_str("WORKDIR /app\n");
+    dockerfile.push_str("RUN python -m pip install --no-cache-dir uv\n");
+    dockerfile.push_str("RUN cat <<'");
+    dockerfile.push_str(&pyproject_marker);
+    dockerfile.push_str("' > /app/pyproject.toml\n");
+    dockerfile.push_str(&pyproject);
+    if !pyproject.ends_with('\n') {
+        dockerfile.push('\n');
+    }
+    dockerfile.push_str(&pyproject_marker);
+    dockerfile.push('\n');
+    dockerfile.push_str("RUN uv sync\n");
+    if !imports.is_empty() {
+        dockerfile.push_str("# TODO: fetch stage imports: ");
+        dockerfile.push_str(&imports.join(", "));
+        dockerfile.push('\n');
+    }
+    dockerfile.push_str("RUN cat <<'");
+    dockerfile.push_str(&code_marker);
+    dockerfile.push_str("' > /app/udf.py\n");
+    dockerfile.push_str(code);
+    if !code.ends_with('\n') {
+        dockerfile.push('\n');
+    }
+    dockerfile.push_str(&code_marker);
+    dockerfile.push('\n');
+    dockerfile.push_str("RUN cat <<'");
+    dockerfile.push_str(&server_marker);
+    dockerfile.push_str("' > /app/server.py\n");
+    dockerfile.push_str(&server_stub);
+    if !server_stub.ends_with('\n') {
+        dockerfile.push('\n');
+    }
+    dockerfile.push_str(&server_marker);
+    dockerfile.push('\n');
+    dockerfile.push_str("EXPOSE 8815\n");
+    dockerfile
+        .push_str("CMD [\"uv\",\"run\",\"--project\",\"/app\",\"python\",\"/app/server.py\"]\n");
+    dockerfile
+}
+
+fn build_udf_cloud_server_stub(handler: &str, input_types: &[String], result_type: &str) -> String {
+    let handler = escape_python_double_quoted(handler);
+    let input_types_literal = python_string_list(input_types);
+    let result_type_literal = escape_python_double_quoted(result_type);
+    let lines = [
+        "import os",
+        "from databend_udf import UDFServer, udf as udf_decorator",
+        "import udf",
+        "",
+        "def _wrap_udf(func):",
+        &format!(
+            "    return udf_decorator(name=\"{handler}\", input_types={input_types_literal}, result_type=\"{result_type_literal}\")(func)"
+        ),
+        "",
+        "def main():",
+        "    address = os.getenv(\"UDF_SERVER_ADDR\", \"0.0.0.0:8815\")",
+        "    server = UDFServer(location=address)",
+        &format!("    func = getattr(udf, \"{handler}\")"),
+        "    if not hasattr(func, \"_name\"):",
+        "        func = _wrap_udf(func)",
+        "    server.add_function(func)",
+        "    server.serve()",
+        "",
+        "if __name__ == \"__main__\":",
+        "    main()",
+        "",
+    ];
+    lines.join("\n")
+}
+
+fn build_udf_cloud_pyproject(packages: &[String]) -> String {
+    let mut dependencies = Vec::new();
+    dependencies.push("databend-udf".to_string());
+    for pkg in packages {
+        let trimmed = pkg.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        dependencies.push(trimmed.to_string());
+    }
+
+    let mut deps_line = String::from("dependencies = [");
+    for (idx, dep) in dependencies.iter().enumerate() {
+        if idx > 0 {
+            deps_line.push_str(", ");
+        }
+        deps_line.push('"');
+        deps_line.push_str(&escape_toml_double_quoted(dep));
+        deps_line.push('"');
+    }
+    deps_line.push_str("]\n");
+
+    let mut pyproject = String::new();
+    pyproject.push_str("[project]\n");
+    pyproject.push_str("name = \"databend-udf-app\"\n");
+    pyproject.push_str("version = \"0.1.0\"\n");
+    pyproject.push_str(&deps_line);
+    pyproject
+}
+
+fn python_string_list(values: &[String]) -> String {
+    let mut list = String::from("[");
+    for (idx, value) in values.iter().enumerate() {
+        if idx > 0 {
+            list.push_str(", ");
+        }
+        list.push('"');
+        list.push_str(&escape_python_double_quoted(value));
+        list.push('"');
+    }
+    list.push(']');
+    list
+}
+
+fn escape_python_double_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn escape_toml_double_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
+    let mut suffix = 0;
+    let mut marker = base.to_string();
+    while contents.iter().any(|content| content.contains(&marker)) {
+        suffix += 1;
+        marker = format!("{base}_{suffix}");
+    }
+    marker
 }

@@ -186,6 +186,74 @@ impl FromToProto for mt::UDFScript {
     }
 }
 
+impl FromToProto for mt::UDFCloudScript {
+    type PB = pb::UdfCloudScript;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::UdfCloudScript) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = Vec::with_capacity(p.arg_types.len());
+        for arg_type in p.arg_types {
+            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            arg_types.push(arg_type);
+        }
+        let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
+            || Incompatible::new("UDFCloudScript.return_type can not be None".to_string()),
+        )?)?);
+
+        Ok(mt::UDFCloudScript {
+            code: p.code,
+            arg_types,
+            return_type,
+            handler: p.handler,
+            language: p.language,
+            imports: p.imports,
+            packages: p.packages,
+            dockerfile: p.dockerfile,
+            immutable: p.immutable,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::UdfCloudScript, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for arg_type in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            arg_types.push(arg_type);
+        }
+        let return_type = infer_schema_type(&self.return_type)
+            .map_err(|e| {
+                Incompatible::new(format!(
+                    "Convert DataType to TableDataType failed: {}",
+                    e.message()
+                ))
+            })?
+            .to_pb()?;
+
+        Ok(pb::UdfCloudScript {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            code: self.code.clone(),
+            handler: self.handler.clone(),
+            language: self.language.clone(),
+            arg_types,
+            return_type: Some(return_type),
+            imports: self.imports.clone(),
+            packages: self.packages.clone(),
+            dockerfile: self.dockerfile.clone(),
+            immutable: self.immutable,
+        })
+    }
+}
+
 impl FromToProto for mt::UDAFScript {
     type PB = pb::UdafScript;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -527,6 +595,9 @@ impl FromToProto for mt::UserDefinedFunction {
             Some(pb::user_defined_function::Definition::UdfScript(udf_script)) => {
                 mt::UDFDefinition::UDFScript(mt::UDFScript::from_pb(udf_script)?)
             }
+            Some(pb::user_defined_function::Definition::UdfCloudScript(udf_cloud_script)) => {
+                mt::UDFDefinition::UDFCloudScript(mt::UDFCloudScript::from_pb(udf_cloud_script)?)
+            }
             Some(pb::user_defined_function::Definition::UdafScript(udaf_script)) => {
                 mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
             }
@@ -574,6 +645,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDFScript(udf_script) => {
                 pb::user_defined_function::Definition::UdfScript(udf_script.to_pb()?)
+            }
+            mt::UDFDefinition::UDFCloudScript(udf_cloud_script) => {
+                pb::user_defined_function::Definition::UdfCloudScript(udf_cloud_script.to_pb()?)
             }
             mt::UDFDefinition::UDAFScript(udaf_script) => {
                 pb::user_defined_function::Definition::UdafScript(udaf_script.to_pb()?)
