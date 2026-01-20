@@ -120,20 +120,35 @@ impl TaskClient {
         req: crate::pb::ShowTaskRunsRequest,
     ) -> Result<Vec<crate::pb::ShowTaskRunsResponse>> {
         let mut client = self.task_client.clone();
-        let request = make_request(req.clone(), config.clone());
-        let resp = client.show_task_runs(request).await?;
-        let mut has_next = resp.get_ref().next_page_token.is_some();
-        // it is a pagination request, so we need to handle the response
-        let mut result = vec![resp.into_inner()];
-        while has_next {
-            let mut req = req.clone();
-            req.next_page_token = result.last().unwrap().next_page_token;
-            let resp = client
-                .show_task_runs(make_request(req.clone(), config.clone()))
-                .await?;
-            let resp = resp.into_inner();
-            has_next = resp.next_page_token.is_some();
+        let effective_limit = if req.result_limit <= 0 {
+            100
+        } else {
+            req.result_limit.min(10_000)
+        } as usize;
+        let mut collected = 0usize;
+        let mut result = Vec::new();
+        let mut page_req = req.clone();
+
+        loop {
+            let request = make_request(page_req.clone(), config.clone());
+            let resp = client.show_task_runs(request).await?;
+            let mut resp = resp.into_inner();
+
+            let remaining = effective_limit.saturating_sub(collected);
+            if remaining == 0 {
+                break;
+            }
+            if resp.task_runs.len() > remaining {
+                resp.task_runs.truncate(remaining);
+            }
+            collected += resp.task_runs.len();
+            let has_next = resp.next_page_token.is_some();
+            page_req.next_page_token = resp.next_page_token.clone();
             result.push(resp);
+
+            if !has_next || collected >= effective_limit {
+                break;
+            }
         }
         Ok(result)
     }
