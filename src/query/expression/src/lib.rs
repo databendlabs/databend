@@ -47,6 +47,8 @@
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
 #![feature(iter_map_windows)]
+#![feature(likely_unlikely)]
+
 #[allow(dead_code)]
 mod block;
 
