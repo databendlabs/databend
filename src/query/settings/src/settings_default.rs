@@ -755,6 +755,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_lazy_read_across_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables lazy read across join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 1MB",

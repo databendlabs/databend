@@ -512,6 +512,12 @@ impl Binder {
             return Ok(());
         }
 
+        let enable_lazy_read_across_join =
+            self.ctx.get_settings().get_enable_lazy_read_across_join()?;
+        if !enable_lazy_read_across_join && metadata.tables().len() != 1 {
+            return Ok(());
+        }
+
         for order_by_item in order_by {
             let column = metadata.column(order_by_item.index);
             // If order by contains derived column or virtual column,
