@@ -67,6 +67,7 @@ pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
     pub escape_char: u8,
     pub quote_char: u8,
+    // Output display format; CSV/TSV binary columns use common_settings.binary_format instead.
     pub binary_format: BinaryDisplayFormat,
 }
 
