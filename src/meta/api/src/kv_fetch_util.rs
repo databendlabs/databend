@@ -155,6 +155,34 @@ pub async fn list_u64_value<K: kvapi::Key>(
     Ok((structured_keys, values))
 }
 
+/// Batch get u64 values by keys.
+///
+/// Returns a vec of Option<u64> in the same order as input keys.
+/// None means the key does not exist.
+pub async fn mget_u64_values<K: kvapi::Key>(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    keys: &[K],
+) -> Result<Vec<Option<u64>>, MetaError> {
+    if keys.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let str_keys: Vec<String> = keys.iter().map(|k| k.to_string_key()).collect();
+    let seq_values = kv_api.mget_kv(&str_keys).await?;
+
+    let mut results = Vec::with_capacity(keys.len());
+    for seq_v in seq_values {
+        if let Some(seq_v) = seq_v {
+            let id = *deserialize_u64(&seq_v.data)?;
+            results.push(Some(id));
+        } else {
+            results.push(None);
+        }
+    }
+
+    Ok(results)
+}
+
 /// Generate an id on metasrv.
 ///
 /// Ids are categorized by generators.

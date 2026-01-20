@@ -625,6 +625,17 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.mget_tables(table_names).await
+    }
+
+    #[async_backtrace::framed]
     async fn get_table_history(
         &self,
         tenant: &Tenant,

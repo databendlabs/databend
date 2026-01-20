@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -30,31 +28,25 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_users::Object;
-use databend_common_users::UserApiProvider;
-use databend_common_users::has_table_name_grants;
-use databend_common_users::is_role_owner;
-use databend_common_users::is_table_visible_with_owner;
 use log::warn;
 
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::collect_visible_tables;
+use crate::util::disable_catalog_refresh;
 use crate::util::extract_leveled_strings;
-use crate::util::should_use_table_optimized_path;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -277,50 +269,22 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
-    let tenant = ctx.get_tenant();
-    const OPTIMIZED_PATH_THRESHOLD: usize = 20;
+    // For performance considerations, we do not require the most up-to-date table information here
+    let catalog = disable_catalog_refresh(catalog.clone())?;
 
-    // For performance considerations, we do not require the most up-to-date table information here:
-    // - for regular tables, the data is certainly fresh
-    // - for read-only attached tables, the data may be outdated
-    let catalog = catalog.clone().disable_table_info_refresh()?;
-
+    // Extract filters from push_downs
     let func_ctx = ctx.get_function_context()?;
     let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
 
-    // Check if optimized path should be used
-    let use_optimized_path = should_use_table_optimized_path(
-        filtered_db_names.len(),
-        filtered_table_names.len(),
-        OPTIMIZED_PATH_THRESHOLD,
-        false,
-        catalog.is_external(),
-    );
+    // Use unified visibility collection from util.rs
+    let db_with_tables =
+        collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
 
-    // Try optimized path first
-    if use_optimized_path {
-        if let Some(result) = try_collect_tables_optimized(
-            ctx,
-            &catalog,
-            &tenant,
-            &filtered_db_names,
-            &filtered_table_names,
-        )
-        .await?
-        {
-            return Ok(result);
-        }
-    }
-
-    // Fall back to slow path with full visibility checker
-    collect_tables_with_visibility_checker(
-        ctx,
-        &catalog,
-        &tenant,
-        filtered_db_names,
-        filtered_table_names,
-    )
-    .await
+    // Convert to the expected return format
+    Ok(db_with_tables
+        .into_iter()
+        .map(|db| (db.name, db.tables))
+        .collect())
 }
 
 fn extract_filters(
@@ -339,297 +303,4 @@ fn extract_filters(
     }
 
     Ok((filtered_db_names, filtered_table_names))
-}
-
-/// Optimized path: lightweight permission check without loading all ownerships.
-/// Returns Some(tables) if optimized path is applicable, None to fall back to slow path.
-async fn try_collect_tables_optimized(
-    ctx: &Arc<dyn TableContext>,
-    catalog: &Arc<dyn Catalog>,
-    tenant: &databend_common_meta_app::tenant::Tenant,
-    filtered_db_names: &[String],
-    filtered_table_names: &[String],
-) -> Result<Option<Vec<(String, Vec<Arc<dyn Table>>)>>> {
-    let current_user = ctx.get_current_user()?;
-    let effective_roles = ctx.get_all_effective_roles().await?;
-
-    // Fall back if grants use table names (need exact match)
-    if has_table_name_grants(&current_user, &effective_roles) {
-        return Ok(None);
-    }
-
-    let user_api = UserApiProvider::instance();
-    let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::new();
-
-    for db_name in filtered_db_names {
-        let db = match catalog.get_database(tenant, db_name).await {
-            Ok(db) => db,
-            Err(err) => {
-                warn!("Failed to get database {}: {}", db_name, err);
-                continue;
-            }
-        };
-
-        let db_id = db.get_db_info().database_id.db_id;
-
-        // Check database ownership first - if user owns the database, all tables are visible
-        let db_ownership = user_api
-            .get_ownership(tenant, &OwnershipObject::Database {
-                catalog_name: catalog.name().to_string(),
-                db_id,
-            })
-            .await?;
-        let db_owner_role = db_ownership.map(|o| o.role.clone());
-        let user_owns_db = is_role_owner(db_owner_role.as_deref(), &effective_roles);
-
-        let mut visible_tables = Vec::new();
-
-        for table_name in filtered_table_names {
-            let table = match catalog.get_table(tenant, db_name, table_name).await {
-                Ok(t) => t,
-                Err(err) => {
-                    warn!("Failed to get table {}.{}: {}", db_name, table_name, err);
-                    continue;
-                }
-            };
-
-            // If user owns the database, all tables in it are visible
-            if user_owns_db {
-                visible_tables.push(table);
-                continue;
-            }
-
-            let table_id = table.get_id();
-            let ownership = user_api
-                .get_ownership(tenant, &OwnershipObject::Table {
-                    catalog_name: catalog.name().to_string(),
-                    db_id,
-                    table_id,
-                })
-                .await?;
-
-            let owner_role = ownership.map(|o| o.role.clone());
-            let is_visible = is_table_visible_with_owner(
-                &current_user,
-                &effective_roles,
-                owner_role.as_deref(),
-                &catalog.name(),
-                db_name,
-                db_id,
-                table_id,
-            );
-
-            if is_visible {
-                visible_tables.push(table);
-            }
-        }
-
-        if !visible_tables.is_empty() {
-            final_tables.push((db_name.clone(), visible_tables));
-        }
-    }
-
-    Ok(Some(final_tables))
-}
-
-/// Slow path: collect tables with full visibility checker.
-async fn collect_tables_with_visibility_checker(
-    ctx: &Arc<dyn TableContext>,
-    catalog: &Arc<dyn Catalog>,
-    tenant: &databend_common_meta_app::tenant::Tenant,
-    filtered_db_names: Vec<String>,
-    filtered_table_names: Vec<String>,
-) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
-    let visibility_checker = if catalog.is_external() {
-        None
-    } else {
-        Some(ctx.get_visibility_checker(false, Object::All).await?)
-    };
-
-    let final_dbs = collect_visible_databases(
-        ctx,
-        catalog,
-        tenant,
-        &filtered_db_names,
-        &visibility_checker,
-    )
-    .await?;
-
-    let filtered_table_names = if filtered_table_names.is_empty() {
-        None
-    } else {
-        Some(filtered_table_names)
-    };
-
-    collect_visible_tables(
-        catalog,
-        tenant,
-        final_dbs,
-        filtered_table_names,
-        &visibility_checker,
-    )
-    .await
-}
-
-/// Collect visible databases based on filters and visibility checker.
-async fn collect_visible_databases(
-    ctx: &Arc<dyn TableContext>,
-    catalog: &Arc<dyn Catalog>,
-    tenant: &databend_common_meta_app::tenant::Tenant,
-    filtered_db_names: &[String],
-    visibility_checker: &Option<databend_common_users::GrantObjectVisibilityChecker>,
-) -> Result<Vec<(String, u64)>> {
-    match (filtered_db_names.is_empty(), visibility_checker) {
-        (false, Some(checker)) => {
-            // Filtered databases + Visibility check
-            let mut result = Vec::new();
-            for db_name in filtered_db_names {
-                let db = catalog.get_database(tenant, db_name).await?;
-                let db_id = db.get_db_info().database_id.db_id;
-                if checker.check_database_visibility(CATALOG_DEFAULT, db_name, db_id) {
-                    result.push((db_name.clone(), db_id));
-                }
-            }
-            Ok(result)
-        }
-        (false, None) => {
-            // Filtered databases + No visibility check
-            let mut result = Vec::new();
-            for db_name in filtered_db_names {
-                let db = catalog.get_database(tenant, db_name).await?;
-                result.push((db_name.clone(), db.get_db_info().database_id.db_id));
-            }
-            Ok(result)
-        }
-        (true, Some(checker)) => {
-            // All databases + Visibility check
-            collect_all_visible_databases(ctx, catalog, tenant, checker).await
-        }
-        (true, None) => {
-            // All databases + No visibility check
-            Ok(catalog
-                .list_databases(tenant)
-                .await?
-                .iter()
-                .map(|db| (db.name().to_string(), db.get_db_info().database_id.db_id))
-                .collect())
-        }
-    }
-}
-
-async fn collect_all_visible_databases(
-    ctx: &Arc<dyn TableContext>,
-    catalog: &Arc<dyn Catalog>,
-    tenant: &databend_common_meta_app::tenant::Tenant,
-    checker: &databend_common_users::GrantObjectVisibilityChecker,
-) -> Result<Vec<(String, u64)>> {
-    if let Some(catalog_dbs) = checker.get_visibility_database() {
-        if let Some(dbs_in_default_catalog) =
-            catalog_dbs.get(ctx.get_default_catalog()?.name().as_str())
-        {
-            let mut id_list: Vec<u64> = Vec::new();
-            let mut name_set: HashSet<String> = HashSet::new();
-
-            for (db_name_opt, db_id_opt) in dbs_in_default_catalog.iter() {
-                if let Some(db_name) = db_name_opt {
-                    name_set.insert(db_name.to_string());
-                }
-                if let Some(db_id) = db_id_opt {
-                    id_list.push(**db_id);
-                }
-            }
-
-            let db_names = catalog.mget_database_names_by_ids(tenant, &id_list).await?;
-            db_names.into_iter().flatten().for_each(|name| {
-                name_set.insert(name);
-            });
-
-            let db_idents: Vec<DatabaseNameIdent> = name_set
-                .iter()
-                .map(|name| DatabaseNameIdent::new(tenant, name))
-                .collect();
-
-            let databases = catalog.mget_databases(tenant, &db_idents).await?;
-
-            return Ok(databases
-                .into_iter()
-                .filter_map(|db| {
-                    let db_id = db.get_db_info().database_id.db_id;
-                    if checker.check_database_visibility(CATALOG_DEFAULT, db.name(), db_id) {
-                        Some((db.name().to_string(), db_id))
-                    } else {
-                        warn!(
-                            "Visibility checker returned database {} but check_database_visibility failed.",
-                            db.name()
-                        );
-                        None
-                    }
-                })
-                .collect());
-        }
-    }
-
-    // User has global privileges, check all
-    let all_databases = catalog.list_databases(tenant).await?;
-    Ok(all_databases
-        .into_iter()
-        .filter_map(|db| {
-            let db_id = db.get_db_info().database_id.db_id;
-            if checker.check_database_visibility(CATALOG_DEFAULT, db.name(), db_id) {
-                Some((db.name().to_string(), db_id))
-            } else {
-                None
-            }
-        })
-        .collect())
-}
-
-async fn collect_visible_tables(
-    catalog: &Arc<dyn Catalog>,
-    tenant: &databend_common_meta_app::tenant::Tenant,
-    final_dbs: Vec<(String, u64)>,
-    filtered_table_names: Option<Vec<String>>,
-    visibility_checker: &Option<databend_common_users::GrantObjectVisibilityChecker>,
-) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
-    let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
-
-    for (db_name, db_id) in final_dbs {
-        let tables_in_db = match &filtered_table_names {
-            Some(table_names) => {
-                let mut res = Vec::new();
-                for table_name in table_names {
-                    if let Ok(table) = catalog.get_table(tenant, &db_name, table_name).await {
-                        res.push(table);
-                    }
-                }
-                res
-            }
-            None => catalog
-                .list_tables(tenant, &db_name)
-                .await
-                .unwrap_or_default(),
-        };
-
-        let filtered_tables: Vec<_> = tables_in_db
-            .into_iter()
-            .filter(|table| {
-                visibility_checker
-                    .as_ref()
-                    .map(|c| {
-                        c.check_table_visibility(
-                            CATALOG_DEFAULT,
-                            &db_name,
-                            table.name(),
-                            db_id,
-                            table.get_id(),
-                        )
-                    })
-                    .unwrap_or(true)
-            })
-            .collect();
-
-        final_tables.push((db_name, filtered_tables));
-    }
-
-    Ok(final_tables)
 }
