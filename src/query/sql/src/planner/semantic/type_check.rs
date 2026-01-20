@@ -5580,15 +5580,12 @@ impl<'a> TypeChecker<'a> {
                         "storage doesn't support presign operation",
                     ));
                 }
-                let presigned = op
-                    .presign_read(&path, expire)
-                    .await
-                    .map_err(|err| {
-                        ErrorCode::SemanticError(format!(
-                            "Failed to presign UDF import '{}': {}",
-                            location, err
-                        ))
-                    })?;
+                let presigned = op.presign_read(&path, expire).await.map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to presign UDF import '{}': {}",
+                        location, err
+                    ))
+                })?;
                 let headers = presigned
                     .header()
                     .iter()
