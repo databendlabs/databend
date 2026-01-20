@@ -143,7 +143,7 @@ impl TaskClient {
             }
             collected += resp.task_runs.len();
             let has_next = resp.next_page_token.is_some();
-            page_req.next_page_token = resp.next_page_token.clone();
+            page_req.next_page_token = resp.next_page_token;
             result.push(resp);
 
             if !has_next || collected >= effective_limit {
