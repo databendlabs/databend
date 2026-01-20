@@ -217,7 +217,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `WORKLOAD`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `SPATIAL`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `WORKLOAD`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
 
 
 ---------- Input ----------
@@ -281,7 +281,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `TAG`, `ROLE`, `TABLE`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `SPATIAL`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `TAG`, `ROLE`, `TABLE`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
 
 
 ---------- Input ----------

@@ -61,6 +61,7 @@ impl Interpreter for DropTableIndexInterpreter {
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
+            ast::TableIndexType::Spatial => TableIndexType::Spatial,
         };
 
         let drop_index_req = DropTableIndexReq {
