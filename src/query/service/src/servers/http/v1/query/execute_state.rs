@@ -468,9 +468,13 @@ impl ExecuteState {
             .with_context(make_error)?;
         match data_stream.next().await {
             None => {
-                Self::send_data_block(&mut sender, &executor, DataBlock::empty_with_schema(schema))
-                    .await
-                    .with_context(make_error)?;
+                Self::send_data_block(
+                    &mut sender,
+                    &executor,
+                    DataBlock::empty_with_schema(&schema),
+                )
+                .await
+                .with_context(make_error)?;
                 Executor::stop::<()>(&executor, Ok(()));
                 sender.finish();
             }

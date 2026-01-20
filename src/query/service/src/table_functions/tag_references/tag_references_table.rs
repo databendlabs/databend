@@ -353,7 +353,7 @@ async fn collect_tag_references(
         .map_err(meta_service_error)?;
 
     if tags.is_empty() {
-        return Ok(DataBlock::empty_with_schema(schema));
+        return Ok(DataBlock::empty_with_schema(&schema));
     }
 
     // Batch fetch tag names

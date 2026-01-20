@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
@@ -51,6 +52,8 @@ use serde::Serializer;
 use serde::de::Visitor;
 use string::StringColumnBuilder;
 
+use crate::BlockEntry;
+use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;

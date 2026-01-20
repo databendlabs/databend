@@ -28,15 +28,6 @@ pub struct RowPtr {
     pub row_index: u32,
 }
 
-impl RowPtr {
-    pub fn new(chunk_index: u32, row_index: u32) -> Self {
-        RowPtr {
-            chunk_index,
-            row_index,
-        }
-    }
-}
-
 impl PartialEq for RowPtr {
     fn eq(&self, other: &Self) -> bool {
         self.chunk_index == other.chunk_index && self.row_index == other.row_index
