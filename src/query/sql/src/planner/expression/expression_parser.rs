@@ -41,6 +41,7 @@ use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
+use crate::ClusterKeyNormalizer;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
@@ -440,13 +441,20 @@ pub fn analyze_cluster_keys(
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
-        ctx,
+        ctx.clone(),
         &name_resolution_ctx,
         metadata,
         &[],
         true,
     )?;
 
+    let settings = ctx.get_settings();
+    let mut normalizer = ClusterKeyNormalizer {
+        force_quoted_ident: false,
+        unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+        quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+        sql_dialect: settings.get_sql_dialect()?,
+    };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(exprs.len());
     for ast in ast_exprs {
@@ -485,7 +493,6 @@ pub fn analyze_cluster_keys(
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();
-        let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
         cluster_by.drive_mut(&mut normalizer);
         cluster_keys.push(format!("{:#}", &cluster_by));
     }

@@ -109,6 +109,7 @@ use opendal::Operator;
 use uuid::Uuid;
 
 use crate::BindContext;
+use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
@@ -123,7 +124,6 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
-use crate::planner::semantic::IdentifierNormalizer;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::plans::AddColumnOption;
@@ -2271,6 +2271,12 @@ impl Binder {
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
+        let mut normalizer = ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
+            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
+            sql_dialect: self.dialect,
+        };
         let mut cluster_keys = Vec::with_capacity(expr_len);
         for cluster_expr in cluster_exprs.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
@@ -2298,7 +2304,6 @@ impl Binder {
             }
 
             let mut cluster_expr = cluster_expr.clone();
-            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
             cluster_expr.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_expr));
         }

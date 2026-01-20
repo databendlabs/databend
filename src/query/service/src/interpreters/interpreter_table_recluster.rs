@@ -36,7 +36,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
-use databend_common_sql::IdentifierNormalizer;
+use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
@@ -614,13 +614,18 @@ impl ReclusterTableInterpreter {
         let table = &self.plan.table;
         let settings = self.ctx.get_settings();
         let sample_size = settings.get_hilbert_sample_size_per_block()?;
+        let sql_dialect = settings.get_sql_dialect()?;
 
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let mut normalizer = ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+            sql_dialect,
+        };
         let ast_exprs = tbl.resolve_cluster_keys().unwrap();
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {
-            let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
             ast.drive_mut(&mut normalizer);
             cluster_key_strs.push(format!("{:#}", &ast));
         }
@@ -649,7 +654,7 @@ impl ReclusterTableInterpreter {
         let index_bound =
             plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &index_bound_query).await?;
 
-        let quote = settings.get_sql_dialect()?.default_ident_quote();
+        let quote = sql_dialect.default_ident_quote();
         let schema = tbl.schema_with_stream();
         let mut output_with_table = Vec::with_capacity(schema.fields.len());
         for field in &schema.fields {

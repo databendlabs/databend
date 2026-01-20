@@ -29,8 +29,6 @@ use databend_common_sql::normalize_identifier;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 
-use crate::interpreters::ShowCreateQuerySettings;
-
 #[derive(VisitorMut)]
 #[visitor(ColumnRef(enter))]
 struct ColumnRefCollector {
@@ -167,51 +165,6 @@ pub fn rename_column_in_comma_separated_ident(
             .join(",");
     }
     Ok(())
-}
-
-#[derive(VisitorMut)]
-#[visitor(ColumnRef(enter))]
-struct ClusterKeyColumnQuoteRewriter {
-    force_quoted_ident: bool,
-    quoted_ident_case_sensitive: bool,
-    sql_dialect: Dialect,
-}
-
-impl ClusterKeyColumnQuoteRewriter {
-    fn enter_column_ref(&mut self, column_ref: &mut ColumnRef) {
-        if let ColumnID::Name(ident) = &mut column_ref.column {
-            ident.quote = ident_opt_quote(
-                &ident.name,
-                self.force_quoted_ident,
-                self.quoted_ident_case_sensitive,
-                self.sql_dialect,
-            );
-        }
-    }
-}
-
-pub fn format_cluster_key_for_show_create(
-    cluster_key: &str,
-    settings: &ShowCreateQuerySettings,
-) -> Result<String> {
-    // `cluster_key` is stored verbatim in table metadata and may contain identifier quotes
-    // from another dialect. Re-render it using the current session dialect so that the
-    // `SHOW CREATE TABLE` output is runnable under this dialect.
-    let mut exprs = parse_cluster_key_exprs(cluster_key)?;
-    let mut rewriter = ClusterKeyColumnQuoteRewriter {
-        force_quoted_ident: settings.force_quoted_ident,
-        quoted_ident_case_sensitive: settings.quoted_ident_case_sensitive,
-        sql_dialect: settings.sql_dialect,
-    };
-    for expr in exprs.iter_mut() {
-        expr.drive_mut(&mut rewriter);
-    }
-
-    let exprs = exprs
-        .into_iter()
-        .map(|expr| format!("{:#}", expr))
-        .collect::<Vec<_>>();
-    Ok(format!("({})", exprs.join(", ")))
 }
 
 #[cfg(test)]
