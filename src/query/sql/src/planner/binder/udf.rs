@@ -632,9 +632,8 @@ fn build_udf_cloud_dockerfile(
     dockerfile.push('\n');
     dockerfile.push_str("RUN uv sync\n");
     if !imports.is_empty() {
-        dockerfile.push_str("# TODO: fetch stage imports: ");
-        dockerfile.push_str(&imports.join(", "));
-        dockerfile.push('\n');
+        dockerfile.push_str("RUN mkdir -p /app/imports\n");
+        dockerfile.push_str("COPY imports/ /app/imports/\n");
     }
     dockerfile.push_str("RUN cat <<'");
     dockerfile.push_str(&code_marker);
@@ -665,9 +664,26 @@ fn build_udf_cloud_server_stub(handler: &str, input_types: &[String], result_typ
     let input_types_literal = python_string_list(input_types);
     let result_type_literal = escape_python_double_quoted(result_type);
     let lines = [
+        "import importlib",
         "import os",
+        "import sys",
         "from databend_udf import UDFServer, udf as udf_decorator",
-        "import udf",
+        "",
+        "IMPORTS_DIR = \"/app/imports\"",
+        "",
+        "def _add_imports():",
+        "    if not os.path.isdir(IMPORTS_DIR):",
+        "        return",
+        "    sys.path.insert(0, IMPORTS_DIR)",
+        "    for name in os.listdir(IMPORTS_DIR):",
+        "        path = os.path.join(IMPORTS_DIR, name)",
+        "        if os.path.isfile(path):",
+        "            ext = os.path.splitext(name)[1].lower()",
+        "            if ext in (\".zip\", \".whl\", \".egg\"):",
+        "                sys.path.insert(0, path)",
+        "",
+        "def _load_udf():",
+        "    return importlib.import_module(\"udf\")",
         "",
         "def _wrap_udf(func):",
         &format!(
@@ -675,6 +691,8 @@ fn build_udf_cloud_server_stub(handler: &str, input_types: &[String], result_typ
         ),
         "",
         "def main():",
+        "    _add_imports()",
+        "    udf = _load_udf()",
         "    address = os.getenv(\"UDF_SERVER_ADDR\", \"0.0.0.0:8815\")",
         "    server = UDFServer(location=address)",
         &format!("    func = getattr(udf, \"{handler}\")"),

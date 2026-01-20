@@ -13,6 +13,8 @@ runs:
       shell: bash
       run: pip install uv
 
+    - uses: ./.github/actions/setup_minio
+
     - name: Run Cloud UDF Test
       shell: bash
       run: |

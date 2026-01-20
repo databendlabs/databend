@@ -148,6 +148,7 @@ use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
 use tantivy_query_grammar::parse_query_lenient;
 use unicase::Ascii;
+use std::time::Duration;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
@@ -5492,6 +5493,7 @@ impl<'a> TypeChecker<'a> {
     fn apply_udf_cloud_resource(
         &self,
         dockerfile: &str,
+        imports: &[String],
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
             .query
@@ -5519,8 +5521,10 @@ impl<'a> TypeChecker<'a> {
         );
         cfg.add_udf_version_info();
 
+        let imports = self.build_udf_cloud_imports(imports)?;
         let req = ApplyUdfResourceRequest {
             dockerfile: dockerfile.to_string(),
+            imports,
         };
 
         let resp = databend_common_base::runtime::block_on(
@@ -5537,6 +5541,72 @@ impl<'a> TypeChecker<'a> {
         }
 
         Ok((endpoint, resp.headers))
+    }
+
+    fn build_udf_cloud_imports(&self, imports: &[String]) -> Result<Vec<databend_common_cloud_control::pb::UdfImport>> {
+        if imports.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let locations = imports
+            .iter()
+            .map(|location| location.trim_start_matches('@').to_string())
+            .collect::<Vec<_>>();
+
+        let stage_locations = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &locations,
+        ))?;
+
+        databend_common_base::runtime::block_on(async move {
+            let mut results = Vec::with_capacity(stage_locations.len());
+            for ((stage_info, path), location) in stage_locations.into_iter().zip(imports.iter()) {
+                let op = init_stage_operator(&stage_info).map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to get StageTable operator for UDF import '{}': {}",
+                        location, err
+                    ))
+                })?;
+                if !op.info().full_capability().presign {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "storage doesn't support presign operation",
+                    ));
+                }
+                let presigned = op
+                    .presign_read(&path, Duration::from_secs(3600))
+                    .await
+                    .map_err(|err| {
+                        ErrorCode::SemanticError(format!(
+                            "Failed to presign UDF import '{}': {}",
+                            location, err
+                        ))
+                    })?;
+                let headers = presigned
+                    .header()
+                    .iter()
+                    .map(|(key, value)| {
+                        Ok((
+                            key.to_string(),
+                            value.to_str().map_err(|err| {
+                                ErrorCode::SemanticError(format!(
+                                    "Invalid presign header for UDF import '{}': {}",
+                                    location, err
+                                ))
+                            })?.to_string(),
+                        ))
+                    })
+                    .collect::<Result<BTreeMap<String, String>>>()?;
+
+                results.push(databend_common_cloud_control::pb::UdfImport {
+                    location: location.to_string(),
+                    method: presigned.method().as_str().to_string(),
+                    url: presigned.uri().to_string(),
+                    headers,
+                });
+            }
+
+            Ok(results)
+        })
     }
 
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
@@ -5694,7 +5764,7 @@ impl<'a> TypeChecker<'a> {
             language,
             arg_types,
             return_type,
-            imports: _imports,
+            imports,
             packages: _packages,
             immutable,
             dockerfile,
@@ -5703,7 +5773,7 @@ impl<'a> TypeChecker<'a> {
         let language = language.parse()?;
         UDFValidator::is_udf_cloud_script_allowed(&language)?;
 
-        let (endpoint, headers) = self.apply_udf_cloud_resource(&dockerfile)?;
+        let (endpoint, headers) = self.apply_udf_cloud_resource(&dockerfile, &imports)?;
         let udf_definition = UDFServer {
             address: endpoint,
             handler,

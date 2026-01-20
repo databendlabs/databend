@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.request
 
 import grpc
 import json
@@ -42,9 +43,13 @@ UDF_DOCKER_CACHE = {}
 UDF_DOCKER_LOCK = threading.Lock()
 
 
+def _log(*args):
+    print(*args, flush=True)
+
+
 def _run_command(args, input_text=None):
     if UDF_DOCKER_LOG_COMMANDS:
-        print("UDF docker exec:", " ".join(args))
+        _log("UDF docker exec:", " ".join(args))
     try:
         return subprocess.run(
             args,
@@ -55,11 +60,11 @@ def _run_command(args, input_text=None):
         )
     except subprocess.CalledProcessError as exc:
         if UDF_DOCKER_LOG_COMMANDS:
-            print("UDF docker failed:", exc)
+            _log("UDF docker failed:", exc)
             if exc.stdout:
-                print("UDF docker stdout:", exc.stdout.strip())
+                _log("UDF docker stdout:", exc.stdout.strip())
             if exc.stderr:
-                print("UDF docker stderr:", exc.stderr.strip())
+                _log("UDF docker stderr:", exc.stderr.strip())
         raise
 
 
@@ -104,19 +109,48 @@ def _wait_for_port(host, port, timeout_secs):
     return False
 
 
-def _build_udf_image(dockerfile, image_tag):
+def _import_basename(location, index):
+    name = location.strip().rstrip("/").split("/")[-1]
+    if not name:
+        return f"import_{index}"
+    return name
+
+
+def _download_udf_imports(imports, target_dir):
+    if not imports:
+        return
+    os.makedirs(target_dir, exist_ok=True)
+    for index, item in enumerate(imports):
+        name = _import_basename(item.location, index)
+        dest = os.path.join(target_dir, name)
+        if UDF_DOCKER_LOG_COMMANDS:
+            _log("UDF import download:", item.location, "->", dest)
+        req = urllib.request.Request(
+            item.url,
+            headers=dict(item.headers),
+            method=item.method or "GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as f:
+                shutil.copyfileobj(resp, f)
+        except Exception as exc:
+            raise RuntimeError(f"failed to download UDF import '{item.location}': {exc}") from exc
+
+
+def _build_udf_image(dockerfile, image_tag, imports):
     if UDF_DOCKER_LOG_COMMANDS:
-        print(f"UDF docker build image={image_tag}")
+        _log(f"UDF docker build image={image_tag}")
     with tempfile.TemporaryDirectory(prefix="udf-cloud-") as temp_dir:
         dockerfile_path = os.path.join(temp_dir, "Dockerfile")
         with open(dockerfile_path, "w") as f:
             f.write(dockerfile)
+        _download_udf_imports(imports, os.path.join(temp_dir, "imports"))
         _run_command(["docker", "build", "-t", image_tag, "-f", dockerfile_path, temp_dir])
 
 
 def _start_udf_container(image_tag, host_port, container_name):
     if UDF_DOCKER_LOG_COMMANDS:
-        print(
+        _log(
             "UDF docker run:",
             f"image={image_tag}",
             f"container={container_name}",
@@ -142,18 +176,31 @@ def _start_udf_container(image_tag, host_port, container_name):
     if UDF_DOCKER_LOG_COMMANDS:
         container_id = result.stdout.strip()
         if container_id:
-            print(f"UDF docker container_id={container_id}")
+            _log(f"UDF docker container_id={container_id}")
 
 
-def _ensure_udf_endpoint(dockerfile):
-    dockerfile_hash = hashlib.sha256(dockerfile.encode("utf-8")).hexdigest()[:12]
+def _ensure_udf_endpoint(dockerfile, imports):
+    imports_key = json.dumps(
+        [
+            {
+                "location": item.location,
+                "method": item.method,
+                "url": item.url,
+            }
+            for item in imports
+        ],
+        sort_keys=True,
+    )
+    dockerfile_hash = hashlib.sha256(
+        (dockerfile + imports_key).encode("utf-8")
+    ).hexdigest()[:12]
     image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{dockerfile_hash}"
 
     with UDF_DOCKER_LOCK:
         cached = UDF_DOCKER_CACHE.get(dockerfile_hash)
         if cached and _docker_container_running(cached["container"]):
             if UDF_DOCKER_LOG_COMMANDS:
-                print(
+                _log(
                     "UDF docker reuse:",
                     f"container={cached['container']}",
                     f"endpoint={cached['endpoint']}",
@@ -161,7 +208,7 @@ def _ensure_udf_endpoint(dockerfile):
             return cached["endpoint"]
 
         if not _docker_image_exists(image_tag):
-            _build_udf_image(dockerfile, image_tag)
+            _build_udf_image(dockerfile, image_tag, imports)
 
         host_port = _reserve_port()
         container_name = f"{UDF_DOCKER_IMAGE_PREFIX}-{dockerfile_hash}-{host_port}"
@@ -174,7 +221,7 @@ def _ensure_udf_endpoint(dockerfile):
         }
 
     if UDF_DOCKER_LOG_COMMANDS:
-        print(f"UDF docker endpoint={endpoint}")
+        _log(f"UDF docker endpoint={endpoint}")
     if not _wait_for_port(UDF_DOCKER_HOST, host_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS):
         raise RuntimeError(
             f"UDF container {container_name} did not start on {endpoint}"
@@ -617,7 +664,7 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
 
 class UdfService(udf_pb2_grpc.UdfServiceServicer):
     def ApplyUdfResource(self, request, context):
-        print("ApplyUdfResource", request)
+        _log("ApplyUdfResource", request)
         if not _docker_available():
             context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION,
@@ -625,11 +672,12 @@ class UdfService(udf_pb2_grpc.UdfServiceServicer):
             )
 
         dockerfile = request.dockerfile
+        imports = list(request.imports)
         if not dockerfile.strip():
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty dockerfile")
 
         try:
-            endpoint = _ensure_udf_endpoint(dockerfile)
+            endpoint = _ensure_udf_endpoint(dockerfile, imports)
         except Exception as exc:
             context.abort(
                 grpc.StatusCode.INTERNAL,
@@ -664,7 +712,7 @@ def serve():
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    print("Server Started at port 50051")
+    _log("Server Started at port 50051")
     server.wait_for_termination()
 
 
