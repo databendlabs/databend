@@ -623,6 +623,56 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
+    async fn mget_ownerships(
+        &self,
+        objects: &[OwnershipObject],
+    ) -> databend_common_exception::Result<Vec<Option<OwnershipInfo>>> {
+        if objects.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let keys: Vec<String> = objects
+            .iter()
+            .map(|obj| self.ownership_object_ident(obj).to_string_key())
+            .collect();
+
+        let seq_values = self
+            .kv_api
+            .mget_kv(&keys)
+            .await
+            .map_err(meta_service_error)?;
+
+        let mut results = Vec::with_capacity(objects.len());
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
+
+        for (key, seq_value_opt) in keys.into_iter().zip(seq_values.into_iter()) {
+            match seq_value_opt {
+                Some(seq_value) => {
+                    match check_and_upgrade_to_pb(
+                        &mut quota,
+                        &key,
+                        &seq_value,
+                        self.kv_api.as_ref(),
+                    )
+                    .await
+                    {
+                        Ok(seq_val) => results.push(Some(seq_val.data)),
+                        Err(err) => {
+                            // If deserialization fails, treat as not found
+                            warn!("Failed to deserialize ownership for key {}: {}", key, err);
+                            results.push(None);
+                        }
+                    }
+                }
+                None => results.push(None),
+            }
+        }
+
+        Ok(results)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     async fn revoke_ownership(
         &self,
         object: &OwnershipObject,
