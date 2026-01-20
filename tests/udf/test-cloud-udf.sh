@@ -21,6 +21,10 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+S3_ENDPOINT_URL="${S3_ENDPOINT_URL:-http://127.0.0.1:9900}"
+S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-minioadmin}"
+S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
+
 echo "Cleaning up previous runs"
 
 killall -9 databend-query || true
@@ -86,7 +90,7 @@ done
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
 
 echo "Starting cloud control mock server"
-nohup uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
+nohup env PYTHONUNBUFFERED=1 uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 50051
 
 check_response_error() {
@@ -100,17 +104,54 @@ check_response_error() {
   fi
 }
 
+echo "Preparing stage imports"
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9900
+
+create_stage_sql=$(cat <<SQL
+CREATE STAGE IF NOT EXISTS udf_import_stage
+URL = 's3://testbucket/udf-imports/'
+CONNECTION = (
+  access_key_id = '${S3_ACCESS_KEY_ID}',
+  secret_access_key = '${S3_SECRET_ACCESS_KEY}',
+  endpoint_url = '${S3_ENDPOINT_URL}'
+);
+SQL
+)
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg sql "$create_stage_sql" '{sql: $sql}')" )
+check_response_error "$response"
+
+tmp_dir="$(mktemp -d)"
+helper_file="${tmp_dir}/helper.py"
+cat <<'PY' > "$helper_file"
+def add_one(x: int) -> int:
+    return x + 1
+PY
+
+upload_response=$(curl -s -u root: -XPUT "http://localhost:8000/v1/upload_to_stage" \
+  -H "x-databend-stage-name: udf_import_stage" \
+  -H "x-databend-relative-path: imports" \
+  -F "file=@${helper_file}")
+upload_state=$(echo "$upload_response" | jq -r '.state')
+if [ "$upload_state" != "SUCCESS" ]; then
+  echo "[Test Error] upload to stage failed: $upload_response" >&2
+  exit 1
+fi
+
 echo "Creating python UDF"
 create_udf_sql=$(cat <<'SQL'
 CREATE OR REPLACE FUNCTION add_one(INT)
 RETURNS INT
 LANGUAGE PYTHON
-IMPORTS = ()
+IMPORTS = ('@udf_import_stage/imports/helper.py')
 PACKAGES = ()
 HANDLER = 'add_one'
 AS $$
+import helper
+
 def add_one(x: int) -> int:
-    return x + 1
+    return helper.add_one(x)
 $$
 SQL
 )
