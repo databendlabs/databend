@@ -408,6 +408,41 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        if table_names.is_empty() {
+            return Ok(vec![]);
+        }
+        let res = self
+            .immutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            if !tables.is_empty() {
+                return Ok(tables);
+            }
+            // If the db exists in immutable catalog, no need to check mutable.
+            if self
+                .immutable_catalog
+                .get_database(tenant, db_name)
+                .await
+                .or_unknown_database()?
+                .is_some()
+            {
+                return Ok(tables);
+            }
+        }
+        self.mutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn get_table_history(
         &self,
         tenant: &Tenant,
