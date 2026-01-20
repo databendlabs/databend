@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -224,25 +225,28 @@ impl HistoryMetaHandle {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            self.meta_client.clone(),
-            meta_key,
-            1,
-            self.node_id.clone(),
-            Duration::from_secs(3),
-        ))
-        .await
-        .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
+
+        let acquired_guard = tracking_payload
+            .clone()
+            .tracking(Semaphore::new_acquired(
+                self.meta_client.clone(),
+                meta_key,
+                1,
+                self.node_id.clone(),
+                Duration::from_secs(3),
+            ))
+            .await
+            .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await
-        .map_err(meta_service_error)?
+        if match tracking_payload
+            .tracking(
+                self.meta_client
+                    .get_kv(&format!("{}/last_timestamp", meta_key)),
+            )
+            .await
+            .map_err(meta_service_error)?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
