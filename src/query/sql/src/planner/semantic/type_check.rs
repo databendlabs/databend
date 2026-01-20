@@ -59,8 +59,13 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::ApplyUdfResourceRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -115,6 +120,7 @@ use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UDAFScript;
+use databend_common_meta_app::principal::UDFCloudScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -5265,6 +5271,9 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
                 self.resolve_udf_script(span, name, arguments, udf_def)?,
             )),
+            UDFDefinition::UDFCloudScript(udf_def) => Ok(Some(
+                self.resolve_udf_cloud_script(span, name, arguments, udf_def)?,
+            )),
             UDFDefinition::UDAFScript(udf_def) => Ok(Some(
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
@@ -5281,9 +5290,22 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         name: String,
         arguments: &[Expr],
-        mut udf_definition: UDFServer,
+        udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
+        self.resolve_udf_server_internal(span, name, arguments, udf_definition, true)
+    }
+
+    fn resolve_udf_server_internal(
+        &mut self,
+        span: Span,
+        name: String,
+        arguments: &[Expr],
+        mut udf_definition: UDFServer,
+        validate_address: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if validate_address {
+            UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
+        }
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Require {} parameters, but got: {}",
@@ -5467,6 +5489,56 @@ impl<'a> TypeChecker<'a> {
         Ok(value.to_owned())
     }
 
+    fn apply_udf_cloud_resource(
+        &self,
+        dockerfile: &str,
+    ) -> Result<(String, BTreeMap<String, String>)> {
+        let Some(_) = &GlobalConfig::instance()
+            .query
+            .cloud_control_grpc_server_address
+        else {
+            return Err(ErrorCode::Unimplemented(
+                "UDF cloud script requires cloud control enabled, please set cloud_control_grpc_server_address in config",
+            ));
+        };
+
+        let provider = CloudControlApiProvider::instance();
+        let tenant = self.ctx.get_tenant();
+        let user = self
+            .ctx
+            .get_current_user()?
+            .identity()
+            .display()
+            .to_string();
+        let query_id = self.ctx.get_id();
+        let mut cfg = build_client_config(
+            tenant.tenant_name().to_string(),
+            user,
+            query_id,
+            provider.get_timeout(),
+        );
+        cfg.add_udf_version_info();
+
+        let req = ApplyUdfResourceRequest {
+            dockerfile: dockerfile.to_string(),
+        };
+
+        let resp = databend_common_base::runtime::block_on(
+            provider
+                .get_udf_client()
+                .apply_udf_resource(make_request(req, cfg)),
+        )?;
+
+        let endpoint = resp.endpoint;
+        if endpoint.is_empty() {
+            return Err(ErrorCode::CloudControlConnectError(
+                "UDF cloud resource endpoint is empty".to_string(),
+            ));
+        }
+
+        Ok((endpoint, resp.headers))
+    }
+
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
         let file_location = match code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
@@ -5607,6 +5679,43 @@ impl<'a> TypeChecker<'a> {
             .into(),
             return_type,
         )))
+    }
+
+    fn resolve_udf_cloud_script(
+        &mut self,
+        span: Span,
+        name: String,
+        args: &[Expr],
+        udf_definition: UDFCloudScript,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let UDFCloudScript {
+            code: _code,
+            handler,
+            language,
+            arg_types,
+            return_type,
+            imports: _imports,
+            packages: _packages,
+            immutable,
+            dockerfile,
+        } = udf_definition;
+
+        let language = language.parse()?;
+        UDFValidator::is_udf_cloud_script_allowed(&language)?;
+
+        let (endpoint, headers) = self.apply_udf_cloud_resource(&dockerfile)?;
+        let udf_definition = UDFServer {
+            address: endpoint,
+            handler,
+            headers,
+            language: language.to_string(),
+            arg_names: Vec::new(),
+            arg_types,
+            return_type,
+            immutable,
+        };
+
+        self.resolve_udf_server_internal(span, name, args, udf_definition, false)
     }
 
     fn resolve_udaf_script(

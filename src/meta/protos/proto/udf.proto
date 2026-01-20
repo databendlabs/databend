@@ -56,6 +56,21 @@ message UDFScript {
   optional bool immutable = 9;
 }
 
+message UDFCloudScript {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string code = 1;
+  string handler = 2;
+  string language = 3;
+  repeated DataType arg_types = 4;
+  DataType return_type = 5;
+  repeated string imports = 7;
+  repeated string packages = 8;
+  string dockerfile = 9;
+  optional bool immutable = 10;
+}
+
 message UDAFScript {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -128,6 +143,7 @@ message UserDefinedFunction {
     UDTF udtf = 8;
     ScalarUDF scalar_udf = 9;
     UDTFServer udtf_server = 10;
+    UDFCloudScript udf_cloud_script = 12;
   }
   // The time udf created.
   optional string created_on = 5;

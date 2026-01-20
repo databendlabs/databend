@@ -21,12 +21,14 @@ use databend_common_exception::Result;
 
 use crate::notification_client::NotificationClient;
 use crate::task_client::TaskClient;
+use crate::udf_client::UdfClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
     pub notification_client: Arc<NotificationClient>,
+    pub udf_client: Arc<UdfClient>,
     pub timeout: Duration,
 }
 
@@ -41,10 +43,12 @@ impl CloudControlApiProvider {
         let endpoint = Self::get_endpoint(endpoint, timeout).await?;
         let channel = endpoint.connect_lazy();
         let task_client = TaskClient::new(channel.clone()).await?;
-        let notification_client = NotificationClient::new(channel).await?;
+        let notification_client = NotificationClient::new(channel.clone()).await?;
+        let udf_client = UdfClient::new(channel).await?;
         Ok(Arc::new(CloudControlApiProvider {
             task_client,
             notification_client,
+            udf_client,
             timeout,
         }))
     }
@@ -83,6 +87,10 @@ impl CloudControlApiProvider {
 
     pub fn get_notification_client(&self) -> Arc<NotificationClient> {
         self.notification_client.clone()
+    }
+
+    pub fn get_udf_client(&self) -> Arc<UdfClient> {
+        self.udf_client.clone()
     }
     pub fn get_timeout(&self) -> Duration {
         self.timeout

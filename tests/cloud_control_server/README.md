@@ -9,6 +9,9 @@ uv sync
 # start UDF server
 uv run python simple_server.py
 ```
+The mock UDF control plane will try to build and run a Docker
+container from the `dockerfile` sent by Databend. This requires a working
+`docker` CLI and will return a local endpoint like `http://127.0.0.1:<port>`.
 #### make sure databend config is correct
 you need to add the setting to your config.toml
 ```toml

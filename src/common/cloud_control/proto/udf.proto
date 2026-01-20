@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "databend.com/cloudcontrol/proto";
+
+package udfproto;
+
+message ApplyUdfResourceRequest {
+  string dockerfile = 1;
+}
+
+message ApplyUdfResourceResponse {
+  string endpoint = 1;
+  map<string, string> headers = 2;
+}
+
+service UdfService {
+  rpc ApplyUdfResource(ApplyUdfResourceRequest) returns (ApplyUdfResourceResponse);
+}

@@ -1,4 +1,11 @@
+import hashlib
 import os
+import shutil
+import socket
+import subprocess
+import tempfile
+import threading
+import time
 
 import grpc
 import json
@@ -12,6 +19,8 @@ import task_pb2_grpc
 import notification_pb2
 import notification_pb2_grpc
 import timestamp_pb2
+import udf_pb2
+import udf_pb2_grpc
 
 # Simple in-memory database
 TASK_DB = {}
@@ -19,6 +28,159 @@ TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+
+UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
+UDF_DOCKER_KEEP_CONTAINER = True
+UDF_DOCKER_LOG_COMMANDS = True
+UDF_DOCKER_IMAGE_PREFIX = os.getenv("UDF_DOCKER_IMAGE_PREFIX", "databend-udf-cloud")
+UDF_DOCKER_HOST = os.getenv("UDF_DOCKER_HOST", "127.0.0.1")
+UDF_DOCKER_CONTAINER_PORT = int(os.getenv("UDF_DOCKER_CONTAINER_PORT", "8815"))
+UDF_DOCKER_STARTUP_TIMEOUT_SECS = float(
+    os.getenv("UDF_DOCKER_STARTUP_TIMEOUT_SECS", "15")
+)
+UDF_DOCKER_CACHE = {}
+UDF_DOCKER_LOCK = threading.Lock()
+
+
+def _run_command(args, input_text=None):
+    if UDF_DOCKER_LOG_COMMANDS:
+        print("UDF docker exec:", " ".join(args))
+    try:
+        return subprocess.run(
+            args,
+            input=input_text,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        if UDF_DOCKER_LOG_COMMANDS:
+            print("UDF docker failed:", exc)
+            if exc.stdout:
+                print("UDF docker stdout:", exc.stdout.strip())
+            if exc.stderr:
+                print("UDF docker stderr:", exc.stderr.strip())
+        raise
+
+
+def _docker_available():
+    return shutil.which("docker") is not None
+
+
+def _docker_image_exists(image_tag):
+    try:
+        _run_command(["docker", "image", "inspect", image_tag])
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _docker_container_running(container_name):
+    try:
+        result = _run_command(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name]
+        )
+        return result.stdout.strip() == "true"
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _reserve_port():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind((UDF_DOCKER_HOST, 0))
+    _, port = sock.getsockname()
+    sock.close()
+    return port
+
+
+def _wait_for_port(host, port, timeout_secs):
+    deadline = time.time() + timeout_secs
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.2)
+    return False
+
+
+def _build_udf_image(dockerfile, image_tag):
+    if UDF_DOCKER_LOG_COMMANDS:
+        print(f"UDF docker build image={image_tag}")
+    with tempfile.TemporaryDirectory(prefix="udf-cloud-") as temp_dir:
+        dockerfile_path = os.path.join(temp_dir, "Dockerfile")
+        with open(dockerfile_path, "w") as f:
+            f.write(dockerfile)
+        _run_command(["docker", "build", "-t", image_tag, "-f", dockerfile_path, temp_dir])
+
+
+def _start_udf_container(image_tag, host_port, container_name):
+    if UDF_DOCKER_LOG_COMMANDS:
+        print(
+            "UDF docker run:",
+            f"image={image_tag}",
+            f"container={container_name}",
+            f"port={host_port}->{UDF_DOCKER_CONTAINER_PORT}",
+        )
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+    ]
+    if not UDF_DOCKER_KEEP_CONTAINER:
+        cmd.append("--rm")
+    cmd.extend(
+        [
+            "-p",
+            f"{host_port}:{UDF_DOCKER_CONTAINER_PORT}",
+            "--name",
+            container_name,
+            image_tag,
+        ]
+    )
+    result = _run_command(cmd)
+    if UDF_DOCKER_LOG_COMMANDS:
+        container_id = result.stdout.strip()
+        if container_id:
+            print(f"UDF docker container_id={container_id}")
+
+
+def _ensure_udf_endpoint(dockerfile):
+    dockerfile_hash = hashlib.sha256(dockerfile.encode("utf-8")).hexdigest()[:12]
+    image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{dockerfile_hash}"
+
+    with UDF_DOCKER_LOCK:
+        cached = UDF_DOCKER_CACHE.get(dockerfile_hash)
+        if cached and _docker_container_running(cached["container"]):
+            if UDF_DOCKER_LOG_COMMANDS:
+                print(
+                    "UDF docker reuse:",
+                    f"container={cached['container']}",
+                    f"endpoint={cached['endpoint']}",
+                )
+            return cached["endpoint"]
+
+        if not _docker_image_exists(image_tag):
+            _build_udf_image(dockerfile, image_tag)
+
+        host_port = _reserve_port()
+        container_name = f"{UDF_DOCKER_IMAGE_PREFIX}-{dockerfile_hash}-{host_port}"
+        _start_udf_container(image_tag, host_port, container_name)
+
+        endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
+        UDF_DOCKER_CACHE[dockerfile_hash] = {
+            "container": container_name,
+            "endpoint": endpoint,
+        }
+
+    if UDF_DOCKER_LOG_COMMANDS:
+        print(f"UDF docker endpoint={endpoint}")
+    if not _wait_for_port(UDF_DOCKER_HOST, host_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS):
+        raise RuntimeError(
+            f"UDF container {container_name} did not start on {endpoint}"
+        )
+
+    return endpoint
 
 
 def load_data_from_json():
@@ -453,6 +615,32 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         )
 
 
+class UdfService(udf_pb2_grpc.UdfServiceServicer):
+    def ApplyUdfResource(self, request, context):
+        print("ApplyUdfResource", request)
+        if not _docker_available():
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "docker not found; a working docker CLI is required",
+            )
+
+        dockerfile = request.dockerfile
+        if not dockerfile.strip():
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty dockerfile")
+
+        try:
+            endpoint = _ensure_udf_endpoint(dockerfile)
+        except Exception as exc:
+            context.abort(
+                grpc.StatusCode.INTERNAL,
+                f"failed to provision udf container: {exc}",
+            )
+
+        return udf_pb2.ApplyUdfResourceResponse(
+            endpoint=endpoint, headers=UDF_HEADERS
+        )
+
+
 def timestamp_to_datetime(timestamp):
     # Convert google.protobuf.Timestamp to Python datetime
     return datetime.fromtimestamp(timestamp.seconds + timestamp.nanos / 1e9)
@@ -464,10 +652,12 @@ def serve():
     notification_pb2_grpc.add_NotificationServiceServicer_to_server(
         NotificationService(), server
     )
+    udf_pb2_grpc.add_UdfServiceServicer_to_server(UdfService(), server)
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
         notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
+        udf_pb2.DESCRIPTOR.services_by_name["UdfService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
