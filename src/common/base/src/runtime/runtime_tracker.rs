@@ -200,7 +200,6 @@ impl TrackingPayloadExt for Option<TrackingPayload> {
     }
 }
 
-
 impl Clone for TrackingPayload {
     fn clone(&self) -> Self {
         TrackingPayload {
