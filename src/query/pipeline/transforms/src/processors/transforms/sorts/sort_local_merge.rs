@@ -240,7 +240,6 @@ where
                 }
                 let mut merger = create_memory_merger::<A>(
                     input_data,
-                    self.base.schema.clone(),
                     self.base.sort_row_offset,
                     self.base.limit,
                     self.max_block_size,

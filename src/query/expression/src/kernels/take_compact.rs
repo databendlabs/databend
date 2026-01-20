@@ -17,26 +17,32 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
+use super::RepeatIndex;
 use crate::BlockEntry;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::TakeIndex;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
+use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
+use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
+use crate::with_number_mapped_type;
+use crate::with_opaque_mapped_type;
 
 impl DataBlock {
-    pub fn take_compacted_indices(&self, indices: &[(u32, u32)], num_rows: usize) -> Result<Self> {
+    pub fn take_compacted_indices(&self, indices: &[RepeatIndex], num_rows: usize) -> Result<Self> {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
 
-        // Each item in the `indices` consists of an `index` and a `cnt`, the sum
-        // of the `cnt` must be equal to the `num_rows`.
+        // Each [`RepeatIndex`] holds an `index` and a repeat `count`, whose sum must equal `num_rows`.
         debug_assert_eq!(
-            indices.iter().fold(0, |acc, &(_, x)| acc + x as usize),
+            indices.iter().fold(0, |acc, idx| acc + idx.count as usize),
             num_rows
         );
 
@@ -60,13 +66,13 @@ impl DataBlock {
 }
 
 struct TakeCompactVisitor<'a> {
-    indices: &'a [(u32, u32)],
+    indices: &'a [RepeatIndex],
     num_rows: usize,
     result: Option<Value<AnyType>>,
 }
 
 impl<'a> TakeCompactVisitor<'a> {
-    fn new(indices: &'a [(u32, u32)], num_rows: usize) -> Self {
+    fn new(indices: &'a [RepeatIndex], num_rows: usize) -> Self {
         Self {
             indices,
             num_rows,
@@ -78,6 +84,22 @@ impl<'a> TakeCompactVisitor<'a> {
 impl ValueVisitor for TakeCompactVisitor<'_> {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
         self.result = Some(Value::Scalar(scalar));
+        Ok(())
+    }
+
+    fn visit_column(&mut self, column: Column) -> Result<()> {
+        Self::visit_column_use_simple_type(column, self)
+    }
+
+    fn visit_simple_type<T: simple_type::SimpleType>(
+        &mut self,
+        buffer: Buffer<T::Scalar>,
+        data_type: &DataType,
+    ) -> Result<()> {
+        self.result = Some(Value::Column(T::upcast_column(
+            self.take_primitive_types(buffer),
+            data_type,
+        )));
         Ok(())
     }
 
@@ -106,53 +128,14 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
         let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut inner_builder = T::downcast_builder(&mut builder);
 
-        for (index, cnt) in self.indices {
-            for _ in 0..*cnt {
+        for repeat in self.indices {
+            for _ in 0..repeat.count as usize {
                 inner_builder
-                    .push_item(unsafe { T::index_column_unchecked(&column, *index as usize) });
+                    .push_item(unsafe { T::index_column_unchecked(&column, repeat.row as usize) });
             }
         }
         drop(inner_builder);
         self.result = Some(Value::Column(builder.build()));
-        Ok(())
-    }
-
-    fn visit_number<T: Number>(
-        &mut self,
-        buffer: <NumberType<T> as AccessType>::Column,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(NumberType::<T>::upcast_column_with_type(
-            self.take_primitive_types(buffer),
-            &DataType::Number(T::data_type()),
-        )));
-        Ok(())
-    }
-
-    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
-        self.result = Some(Value::Column(TimestampType::upcast_column_with_type(
-            self.take_primitive_types(buffer),
-            &DataType::Timestamp,
-        )));
-        Ok(())
-    }
-
-    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
-        self.result = Some(Value::Column(DateType::upcast_column_with_type(
-            self.take_primitive_types(buffer),
-            &DataType::Date,
-        )));
-        Ok(())
-    }
-
-    fn visit_decimal<T: crate::types::Decimal>(
-        &mut self,
-        buffer: Buffer<T>,
-        size: DecimalSize,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(T::upcast_column(
-            self.take_primitive_types(buffer),
-            size,
-        )));
         Ok(())
     }
 
@@ -173,10 +156,27 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
     }
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
-        self.result = Some(Value::Column(VariantType::upcast_column_with_type(
+        self.result = Some(Value::Column(VariantType::upcast_column(
             self.take_binary_types(&column),
-            &DataType::Variant,
         )));
+        Ok(())
+    }
+
+    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
+        self.result = Some(Value::Column(BitmapType::upcast_column(
+            self.take_binary_types(&column),
+        )));
+        Ok(())
+    }
+
+    fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
+        self.result = Some(Value::Column(
+            (with_opaque_mapped_type!(|T| match column {
+                OpaqueColumn::T(column) => {
+                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+                }
+            })),
+        ));
         Ok(())
     }
 }
@@ -185,36 +185,9 @@ impl TakeCompactVisitor<'_> {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let buffer = buffer.as_slice();
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
-        let mut remain;
 
-        unsafe {
-            for (index, cnt) in self.indices.iter() {
-                if *cnt == 1 {
-                    builder.push_unchecked(buffer[*index as usize]);
-                    continue;
-                }
-
-                // Using the doubling method to copy the max segment memory.
-                // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
-                // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-                let max_segment = 1 << (31 - cnt.leading_zeros());
-                let base_pos = builder.len();
-                builder.push_unchecked(buffer[*index as usize]);
-
-                let mut cur_segment = 1;
-                while cur_segment < max_segment {
-                    builder.extend_from_within(base_pos..base_pos + cur_segment);
-                    cur_segment <<= 1;
-                }
-
-                // Copy the remaining memory directly.
-                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
-                //  ^^^^ ---> ^^^^
-                remain = *cnt as usize - max_segment;
-                if remain > 0 {
-                    builder.extend_from_within(base_pos..base_pos + remain)
-                }
-            }
+        for repeat in self.indices.iter() {
+            repeat.take_primitive_types(buffer, &mut builder);
         }
 
         builder.into()
@@ -223,10 +196,10 @@ impl TakeCompactVisitor<'_> {
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
         let num_rows = self.num_rows;
         let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
-        for (index, cnt) in self.indices.iter() {
-            for _ in 0..*cnt {
+        for repeat in self.indices.iter() {
+            for _ in 0..repeat.count as usize {
                 unsafe {
-                    builder.put_slice(col.index_unchecked(*index as usize));
+                    builder.put_slice(col.index_unchecked(repeat.row as usize));
                     builder.commit_row();
                 }
             }

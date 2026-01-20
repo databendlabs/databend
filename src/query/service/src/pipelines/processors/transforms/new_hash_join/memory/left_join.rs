@@ -206,7 +206,10 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
                 let probe_block = match self.probe_data_block.num_columns() {
                     0 => None,
-                    _ => Some(DataBlock::take(&self.probe_data_block, &unmatched_row_id)?),
+                    _ => Some(DataBlock::take(
+                        &self.probe_data_block,
+                        unmatched_row_id.as_slice(),
+                    )?),
                 };
 
                 let types = &self.join_state.column_types;
@@ -228,7 +231,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -240,7 +243,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     );
 
                     let true_validity = Bitmap::new_constant(true, row_ptrs.len());
