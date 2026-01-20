@@ -591,12 +591,12 @@ impl Utf8ViewColumn {
         )
     }
 
-    pub fn compare_str(col: &Self, i: usize, value: &str) -> std::cmp::Ordering {
-        let view = unsafe { col.views().as_slice().get_unchecked(i) };
+    pub fn compare_str(&self, i: usize, value: &str) -> std::cmp::Ordering {
+        let view = unsafe { self.views().as_slice().get_unchecked(i) };
         let prefix = load_prefix(value.as_bytes());
 
         if view.prefix == prefix {
-            let value_i = unsafe { col.value_unchecked(i) };
+            let value_i = unsafe { self.value_unchecked(i) };
             value_i.cmp(value)
         } else {
             view.prefix.to_le_bytes().as_slice().cmp(value.as_bytes())
@@ -606,9 +606,13 @@ impl Utf8ViewColumn {
 
 impl<T: ViewType + ?Sized> PartialEq for BinaryViewColumnGeneric<T> {
     fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
         self.cmp(other) == std::cmp::Ordering::Equal
     }
 }
+
 impl<T: ViewType + ?Sized> Eq for BinaryViewColumnGeneric<T> {}
 
 impl<T: ViewType + ?Sized> PartialOrd for BinaryViewColumnGeneric<T> {

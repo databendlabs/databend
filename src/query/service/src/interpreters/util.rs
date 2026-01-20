@@ -166,10 +166,10 @@ impl Client for ScriptClient {
             schema = real_schema;
         }
 
-        let block = match blocks.len() {
-            0 => DataBlock::empty_with_schema(schema.clone()),
-            1 => blocks[0].clone(),
-            _ => DataBlock::concat(&blocks)?,
+        let block = match blocks.as_slice() {
+            [] => DataBlock::empty_with_schema(&schema),
+            [block] => block.clone(),
+            blocks => DataBlock::concat(blocks)?,
         };
 
         Ok(QueryResult { schema, block })
