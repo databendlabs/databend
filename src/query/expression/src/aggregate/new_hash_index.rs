@@ -20,6 +20,7 @@ use std::ptr::NonNull;
 use databend_common_ast::parser::token::GROUP;
 
 use crate::ProbeState;
+use crate::aggregate::BATCH_SIZE;
 use crate::aggregate::hash_index::TableAdapter;
 use crate::aggregate::row_ptr::RowPtr;
 
@@ -175,6 +176,24 @@ impl NewHashIndex {
 
 impl NewHashIndex {
     #[inline]
+    fn ctrl(&mut self, index: usize) -> *mut Tag {
+        debug_assert!(index < self.ctrls.len());
+        unsafe { self.ctrls.as_mut_ptr().add(index) }
+    }
+
+    #[inline]
+    fn set_ctrl(&mut self, index: usize, tag: Tag) {
+        // This is the same as `(index.wrapping_sub(Group::WIDTH)) % self.num_buckets() + Group::WIDTH`
+        // because the number of buckets is a power of two, and `self.bucket_mask = self.num_buckets() - 1`.
+        let index2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
+
+        unsafe {
+            *self.ctrl(index) = tag;
+            *self.ctrl(index2) = tag;
+        }
+    }
+
+    #[inline]
     fn probe_seq(&self, hash: u64) -> ProbeSeq {
         ProbeSeq {
             pos: hash as usize & self.bucket_mask,
@@ -204,15 +223,22 @@ impl NewHashIndex {
                 return (index, false);
             }
             insert_index = self.find_insert_index_in_group(&group, &probe_seq.pos);
-            if insert_index.is_some() {
-                return (insert_index.unwrap(), true);
+            if let Some(index) = insert_index {
+                return (index, true);
             }
             probe_seq.move_next(self.bucket_mask);
         }
     }
 
     pub fn probe_slot(&mut self, hash: u64) -> usize {
-        todo!()
+        let mut probe_seq = self.probe_seq(hash);
+        loop {
+            let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
+            if let Some(index) = self.find_insert_index_in_group(&group, &probe_seq.pos) {
+                return index;
+            }
+            probe_seq.move_next(self.bucket_mask);
+        }
     }
 
     pub fn probe_and_create(
@@ -221,6 +247,5 @@ impl NewHashIndex {
         row_count: usize,
         mut adapter: impl TableAdapter,
     ) -> usize {
-        todo!()
     }
 }
