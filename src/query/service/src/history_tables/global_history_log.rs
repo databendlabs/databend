@@ -22,6 +22,7 @@ use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -208,8 +209,9 @@ impl GlobalHistoryLog {
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
+        tracking_payload
+            .tracking(self.do_execute(sql, query_id))
+            .await?;
         Ok(())
     }
 

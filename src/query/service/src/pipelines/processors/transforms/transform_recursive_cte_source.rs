@@ -167,7 +167,7 @@ impl TransformRecursiveCteSource {
             let stream = PullingExecutorStream::create(pulling_executor)?;
             stream.try_collect::<Vec<DataBlock>>().await
         });
-        let data_blocks = join_handle.await.flatten()?;
+        let data_blocks = join_handle.await??;
         Ok((data_blocks, cte_scan_tables))
     }
 }

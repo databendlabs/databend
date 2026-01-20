@@ -1,0 +1,41 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0051
+
+statement ok
+CREATE DATABASE db_09_0051
+
+statement ok
+USE db_09_0051
+
+statement ok
+CREATE TABLE t(a int not null, b string not null)
+
+query I
+SELECT count() FROM fuse_page('db_09_0051', 't')
+----
+0
+
+statement ok
+INSERT INTO t VALUES (1, 'x'), (2, 'y'), (3, 'z'), (4, 'w')
+
+query B
+SELECT count() > 0 FROM fuse_page('db_09_0051', 't')
+----
+1
+
+query B
+SELECT count() = count(num_rows)
+FROM fuse_page('db_09_0051', 't')
+WHERE page_type LIKE 'data_page%'
+----
+1
+
+query B
+SELECT count(distinct column_name) >= 2 FROM fuse_page('db_09_0051', 't')
+----
+1
+
+query B
+SELECT min(page_offset) >= 0 FROM fuse_page('db_09_0051', 't')
+----
+1

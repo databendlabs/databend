@@ -16,7 +16,6 @@ async-trait = { workspace = true }
 bincode = { workspace = true }
 databend-base = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
@@ -28,6 +27,7 @@ fastrace = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
+hickory-resolver = { workspace = true }
 hostname = { workspace = true }
 log = { workspace = true }
 map-api = { workspace = true }

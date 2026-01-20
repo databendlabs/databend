@@ -20,6 +20,7 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
+use super::TakeIndex;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -34,13 +35,13 @@ use crate::types::string::StringColumn;
 use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
-use crate::with_number_mapped_type;
+use crate::with_opaque_mapped_type;
 
 pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
 impl DataBlock {
-    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
-    where I: databend_common_column::types::Index {
+    pub fn take<I>(&self, indices: &I) -> Result<Self>
+    where I: TakeIndex + ?Sized {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -49,8 +50,8 @@ impl DataBlock {
         self.take_inner(taker)
     }
 
-    pub fn take_with_optimize_size<I>(&self, indices: &[I]) -> Result<Self>
-    where I: databend_common_column::types::Index {
+    pub fn take_with_optimize_size<I>(&self, indices: &I) -> Result<Self>
+    where I: TakeIndex + ?Sized {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -60,39 +61,31 @@ impl DataBlock {
     }
 
     fn take_inner<I>(&self, mut taker: TakeVisitor<I>) -> Result<Self>
-    where I: databend_common_column::types::Index {
-        let after_columns = self
+    where I: TakeIndex + ?Sized {
+        let entries = self
             .columns()
             .iter()
-            .map(|entry| {
-                taker.visit_value(entry.value())?;
-                let result = taker.result.take().unwrap();
-                Ok(BlockEntry::new(result, || {
-                    (entry.data_type(), taker.indices.len())
-                }))
-            })
+            .map(|entry| taker.take_entry(entry))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::new_with_meta(
-            after_columns,
+            entries,
             taker.indices.len(),
             self.get_meta().cloned(),
         ))
     }
 }
 
-struct TakeVisitor<'a, I>
-where I: databend_common_column::types::Index
-{
-    indices: &'a [I],
+pub(super) struct TakeVisitor<'a, I: ?Sized> {
+    indices: &'a I,
     result: Option<Value<AnyType>>,
     optimize_size_enable: bool,
 }
 
 impl<'a, I> TakeVisitor<'a, I>
-where I: databend_common_column::types::Index
+where I: TakeIndex + ?Sized
 {
-    fn new(indices: &'a [I]) -> Self {
+    pub fn new(indices: &'a I) -> Self {
         Self {
             indices,
             result: None,
@@ -109,10 +102,22 @@ where I: databend_common_column::types::Index
         self.optimize_size_enable
             || num_rows as f64 * SELECTIVITY_THRESHOLD > self.indices.len() as f64
     }
+
+    pub fn take_any_value(&mut self, value: Value<AnyType>) -> Result<Value<AnyType>> {
+        self.visit_value(value)?;
+        Ok(self.result.take().unwrap())
+    }
+
+    pub fn take_entry(&mut self, entry: &BlockEntry) -> Result<BlockEntry> {
+        let value = self.take_any_value(entry.value())?;
+        Ok(BlockEntry::new(value, || {
+            (entry.data_type(), self.indices.len())
+        }))
+    }
 }
 
-impl<I> ValueVisitor for TakeVisitor<'_, I>
-where I: databend_common_column::types::Index
+impl<'a, I> ValueVisitor for TakeVisitor<'a, I>
+where I: TakeIndex + ?Sized
 {
     fn visit_scalar(&mut self, scalar: crate::Scalar) -> Result<()> {
         self.result = Some(Value::Scalar(scalar));
@@ -120,21 +125,7 @@ where I: databend_common_column::types::Index
     }
 
     fn visit_column(&mut self, column: Column) -> Result<()> {
-        match column {
-            Column::Date(buffer) => self.visit_simple_type::<CoreDate>(buffer, &DataType::Date),
-            Column::Timestamp(buffer) => {
-                self.visit_simple_type::<CoreTimestamp>(buffer, &DataType::Timestamp)
-            }
-            Column::Number(number) => {
-                with_number_mapped_type!(|NUM_TYPE| match number {
-                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<CoreNumber<NUM_TYPE>>(
-                        b,
-                        &DataType::Number(NUM_TYPE::data_type())
-                    ),
-                })
-            }
-            _ => Self::default_visit_column(column, self),
-        }
+        Self::visit_column_use_simple_type(column, self)
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
@@ -162,9 +153,8 @@ where I: databend_common_column::types::Index
         let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut inner_builder = T::downcast_builder(&mut builder);
 
-        for index in self.indices {
-            inner_builder
-                .push_item(unsafe { T::index_column_unchecked(&column, index.to_usize()) });
+        for index in self.indices.iter() {
+            inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
         }
         drop(inner_builder);
         self.result = Some(Value::Column(builder.build()));
@@ -179,18 +169,6 @@ where I: databend_common_column::types::Index
         self.result = Some(Value::Column(T::upcast_column(
             self.take_primitive_types(buffer),
             data_type,
-        )));
-        Ok(())
-    }
-
-    fn visit_decimal<T: crate::types::Decimal>(
-        &mut self,
-        buffer: Buffer<T>,
-        size: DecimalSize,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(T::upcast_column(
-            self.take_primitive_types(buffer),
-            size,
         )));
         Ok(())
     }
@@ -214,7 +192,7 @@ where I: databend_common_column::types::Index
         let mut i = 0;
 
         for index in self.indices.iter() {
-            if col.get_bit(index.to_usize()) {
+            if col.get_bit(index) {
                 value |= BIT_MASK[i % 8];
             } else {
                 unset_bits += 1;
@@ -258,19 +236,27 @@ where I: databend_common_column::types::Index
         )));
         Ok(())
     }
+
+    fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
+        self.result = Some(Value::Column(
+            (with_opaque_mapped_type!(|T| match column {
+                OpaqueColumn::T(column) => {
+                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+                }
+            })),
+        ));
+        Ok(())
+    }
 }
 
-impl<I> TakeVisitor<'_, I>
-where I: databend_common_column::types::Index
+impl<'a, I> TakeVisitor<'a, I>
+where I: TakeIndex + ?Sized
 {
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
-        let col = buffer.as_slice();
-        let result: Vec<T> = self
-            .indices
-            .iter()
-            .map(|index| unsafe { *col.get_unchecked(index.to_usize()) })
-            .collect();
-        result.into()
+        let mut builder = Vec::with_capacity(self.indices.len());
+        self.indices
+            .take_primitive_types(buffer.as_slice(), &mut builder);
+        builder.into()
     }
 
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
@@ -278,7 +264,7 @@ where I: databend_common_column::types::Index
         let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
         for index in self.indices.iter() {
             unsafe {
-                builder.put_slice(col.index_unchecked(index.to_usize()));
+                builder.put_slice(col.index_unchecked(index));
                 builder.commit_row();
             }
         }
@@ -290,7 +276,7 @@ where I: databend_common_column::types::Index
             let mut builder = StringColumnBuilder::with_capacity(self.indices.len());
             for index in self.indices.iter() {
                 unsafe {
-                    builder.put_and_commit(col.index_unchecked(index.to_usize()));
+                    builder.put_and_commit(col.index_unchecked(index));
                 }
             }
             builder.build()
@@ -313,5 +299,27 @@ impl Column {
             }
             other => other,
         }
+    }
+}
+
+impl BlockEntry {
+    pub fn take<I>(&self, indices: &I) -> Result<Self>
+    where I: TakeIndex + ?Sized {
+        if indices.is_empty() {
+            return Ok(self.slice(0..0));
+        }
+
+        let mut taker = TakeVisitor::new(indices);
+        taker.take_entry(self)
+    }
+
+    pub fn take_with_optimize_size<I>(&self, indices: &I) -> Result<Self>
+    where I: TakeIndex + ?Sized {
+        if indices.is_empty() {
+            return Ok(self.slice(0..0));
+        }
+
+        let mut taker = TakeVisitor::new(indices).with_optimize_size_enable(true);
+        taker.take_entry(self)
     }
 }

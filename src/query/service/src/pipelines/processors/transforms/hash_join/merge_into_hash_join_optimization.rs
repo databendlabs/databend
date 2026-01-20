@@ -344,7 +344,7 @@ impl TransformHashJoinProbe {
             {
                 let end = (interval.1 - chunk_start).min(start + self.max_block_size as u32 - 1);
                 let range = (start..=end).collect::<Vec<u32>>();
-                let data_block = chunk_block.take(&range)?;
+                let data_block = chunk_block.take(range.as_slice())?;
                 assert!(!data_block.is_empty());
                 let (segment_idx, block_idx) = split_prefix(prefix);
                 info!(

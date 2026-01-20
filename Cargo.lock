@@ -3619,6 +3619,7 @@ dependencies = [
  "sqlx",
  "tantivy",
  "thiserror 1.0.69",
+ "tokio",
  "tonic 0.13.1",
 ]
 
@@ -4155,7 +4156,6 @@ dependencies = [
  "bincode 2.0.1",
  "databend-base",
  "databend-common-base",
- "databend-common-grpc",
  "databend-common-meta-kvapi",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
@@ -4167,6 +4167,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "futures-util",
+ "hickory-resolver",
  "hostname",
  "log",
  "map-api",
@@ -4237,7 +4238,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "byteorder",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "fastrace",
  "log",

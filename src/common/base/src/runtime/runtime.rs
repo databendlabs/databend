@@ -14,17 +14,13 @@
 
 use std::backtrace::Backtrace;
 use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use futures::FutureExt;
 use futures::future;
 use log::warn;
 use tokio::runtime::Builder;
@@ -32,49 +28,13 @@ use tokio::runtime::Handle;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::drop_guard;
-
-pub struct JoinHandle<Output> {
-    inner: tokio::task::JoinHandle<Output>,
-}
-
-impl<Output> JoinHandle<Output> {
-    pub fn create(inner: tokio::task::JoinHandle<Output>) -> Self {
-        Self { inner }
-    }
-
-    pub fn abort(&self) {
-        self.inner.abort();
-    }
-}
-
-impl<Output> Future for JoinHandle<Output> {
-    type Output = Result<Output>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.inner.poll_unpin(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(Ok(res)) => Poll::Ready(Ok(res)),
-            Poll::Ready(Err(error)) if error.is_panic() => {
-                let cause = error.into_panic();
-                let message = cause
-                    .downcast_ref::<&'static str>()
-                    .map(|s| s.to_string())
-                    .or_else(|| cause.downcast_ref::<String>().cloned())
-                    .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
-                Poll::Ready(Err(ErrorCode::PanicError(message)))
-            }
-            Poll::Ready(Err(_)) => {
-                Poll::Ready(Err(ErrorCode::TokioError("Tokio task is cancelled")))
-            }
-        }
-    }
-}
 
 /// Tokio Runtime wrapper.
 /// If a runtime is in an asynchronous context, shutdown it first.
@@ -244,7 +204,7 @@ impl Runtime {
                     fut(permit).await
                 }),
             ));
-            handlers.push(JoinHandle::create(handler))
+            handlers.push(handler)
         }
 
         Ok(handlers)
@@ -259,11 +219,9 @@ impl Runtime {
         R: Send + 'static,
     {
         #[allow(clippy::disallowed_methods)]
-        let handle = JoinHandle::create(
-            self.handle
-                .spawn_blocking(ThreadTracker::tracking_function(f)),
-        );
-        handle.await.flatten()
+        self.handle
+            .spawn_blocking(ThreadTracker::tracking_function(f))
+            .await?
     }
 }
 
@@ -306,7 +264,7 @@ impl Runtime {
         let task = async_backtrace::location!(location_name).frame(task);
 
         #[expect(clippy::disallowed_methods)]
-        JoinHandle::create(self.handle.spawn(task))
+        self.handle.spawn(task)
     }
 }
 
@@ -366,7 +324,7 @@ where
     let join_handlers = runtime.try_spawn_batch(semaphore, futures).await?;
 
     // 3. get all the result.
-    future::try_join_all(join_handlers).await
+    Ok(future::try_join_all(join_handlers).await?)
 }
 
 pub const GLOBAL_TASK: &str = "Zxv39PlwG1ahbF0APRUf03";

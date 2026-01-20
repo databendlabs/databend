@@ -35,17 +35,22 @@ use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 
-/// Input:  Filter
-///           \
+/// Input:
+/// (1)    Filter
+///          \
 ///          Scan
+/// (2)    Filter
+///          \
+///          SecureFilter
+///            \
+///            Scan
 ///
 /// Output:
-///         Filter
-///           \
-///           Scan(padding prewhere)
+/// Preserve the original plan structure, but write eligible Filter.predicates into Scan.prewhere.
 pub struct RulePushDownPrewhere {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -56,13 +61,25 @@ impl RulePushDownPrewhere {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownPrewhere,
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Filter,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            }],
+            matchers: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::SecureFilter,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Scan,
+                            children: vec![],
+                        }],
+                    }],
+                },
+            ],
             metadata,
         }
     }
@@ -138,7 +155,19 @@ impl RulePushDownPrewhere {
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut scan: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter: Filter = s_expr.plan().clone().try_into()?;
+
+        let child = s_expr.child(0)?;
+        let (mut scan, secure_filter) = match child.plan() {
+            crate::plans::RelOperator::Scan(_) => (child.plan().clone().try_into()?, None),
+            crate::plans::RelOperator::SecureFilter(_) => {
+                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
+                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
+                (scan, Some(secure_filter))
+            }
+            _ => unreachable!(),
+        };
+
         if scan.update_stream_columns {
             return Ok(s_expr.clone());
         }
@@ -149,7 +178,6 @@ impl RulePushDownPrewhere {
             // cannot optimize
             return Ok(s_expr.clone());
         }
-        let filter: Filter = s_expr.plan().clone().try_into()?;
 
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
@@ -177,7 +205,16 @@ impl RulePushDownPrewhere {
                 predicates: prewhere_pred,
             });
         }
-        Ok(SExpr::create_leaf(Arc::new(scan.into())))
+
+        let scan_expr = SExpr::create_leaf(Arc::new(scan.into()));
+        if let Some(secure_filter) = secure_filter {
+            Ok(SExpr::create_unary(
+                Arc::new(secure_filter.into()),
+                Arc::new(scan_expr),
+            ))
+        } else {
+            Ok(scan_expr)
+        }
     }
 }
 
