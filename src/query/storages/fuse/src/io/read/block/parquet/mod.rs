@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
@@ -76,7 +75,7 @@ impl BlockReader {
         }
 
         if result_rows == 0 {
-            return Ok(DataBlock::empty_with_schema(Arc::new(self.data_schema())));
+            return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
         let has_selection = selection.is_some();
