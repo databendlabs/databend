@@ -107,9 +107,7 @@ impl TableMetaFunc for FusePage {
 
         let limit = limit.unwrap_or(usize::MAX);
         if limit == 0 {
-            return Ok(DataBlock::empty_with_schema(Arc::new(
-                Self::schema().into(),
-            )));
+            return Ok(DataBlock::empty_with_schema(&Self::schema().into()));
         }
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
