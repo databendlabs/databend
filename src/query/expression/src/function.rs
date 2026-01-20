@@ -34,6 +34,7 @@ use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
 
+use self::function_factory::FunctionFactoryHelper;
 use crate::Column;
 use crate::ColumnIndex;
 use crate::Expr;
@@ -47,6 +48,8 @@ use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
+pub mod function_factory;
+
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;
 
@@ -55,52 +58,6 @@ pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send 
 /// The first argument is the const parameters and the second argument is the types of arguments.
 pub trait FunctionFactoryClosure =
     Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
-
-pub struct FunctionFactoryHelper {
-    fixed_arg_count: Option<usize>,
-    passthrough_nullable: bool,
-    create: Box<dyn FunctionFactoryClosure>,
-}
-
-impl Debug for FunctionFactoryHelper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FunctionFactoryHelper")
-            .field("fixed_arg_count", &self.fixed_arg_count)
-            .field("passthrough_nullable", &self.passthrough_nullable)
-            .finish()
-    }
-}
-
-impl FunctionFactoryHelper {
-    pub fn create_1_arg_core(
-        create: fn(&[Scalar], &DataType) -> Option<Function>,
-    ) -> FunctionFactory {
-        FunctionFactory::Helper(Self {
-            fixed_arg_count: Some(1),
-            passthrough_nullable: false,
-            create: Box::new(move |params, args: &[DataType]| match args {
-                [arg0] => create(params, arg0).map(Arc::new),
-                _ => None,
-            }),
-        })
-    }
-
-    pub fn create_1_arg_passthrough_nullable(
-        create: fn(&[Scalar], &DataType) -> Option<Function>,
-    ) -> FunctionFactory {
-        FunctionFactory::Helper(Self {
-            fixed_arg_count: Some(1),
-            passthrough_nullable: true,
-            create: Box::new(move |params, args: &[DataType]| match args {
-                [DataType::Nullable(box arg0)] => {
-                    create(params, arg0).map(|func| Arc::new(func.passthrough_nullable()))
-                }
-                [arg0] => create(params, arg0).map(Arc::new),
-                _ => None,
-            }),
-        })
-    }
-}
 
 pub enum FunctionFactory {
     Closure(Box<dyn FunctionFactoryClosure>),
@@ -128,18 +85,23 @@ pub struct FunctionSignature {
     pub return_type: DataType,
 }
 
+pub trait ScalarFunctionDomain: Send + Sync + 'static {
+    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType>;
+}
+
+pub trait ScalarFunction: Send + Sync + 'static {
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>;
+}
+
 #[derive(EnumAsInner)]
-#[allow(unused, dead_code)]
-#[allow(clippy::type_complexity)]
 pub enum FunctionEval {
     /// Scalar function that returns a single value.
     Scalar {
         /// Given the domains of the arguments, return the domain of the output value.
-        calc_domain:
-            Box<dyn Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
+        calc_domain: Box<dyn ScalarFunctionDomain>,
         /// Given a set of arguments, return a single value.
         /// The result must be in the same length as the input arguments if its a column.
-        eval: Box<dyn Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+        eval: Box<dyn ScalarFunction>,
     },
     /// Set-returning-function that input a scalar and then return a set.
     SRF {
@@ -246,127 +208,6 @@ pub struct FunctionRegistry {
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
-}
-
-impl Function {
-    pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(
-            self.signature
-                .args_type
-                .iter()
-                .all(|ty| !ty.is_nullable_or_null())
-        );
-
-        let (calc_domain, eval) = self.eval.into_scalar().unwrap();
-
-        let signature = FunctionSignature {
-            name: self.signature.name.clone(),
-            args_type: self
-                .signature
-                .args_type
-                .iter()
-                .map(|ty| ty.wrap_nullable())
-                .collect(),
-            return_type: self.signature.return_type.wrap_nullable(),
-        };
-
-        let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
-            let mut args_has_null = false;
-            let mut args_domain = Vec::with_capacity(domains.len());
-            for domain in domains {
-                match domain {
-                    Domain::Nullable(NullableDomain {
-                        has_null,
-                        value: Some(value),
-                    }) => {
-                        args_has_null = args_has_null || *has_null;
-                        args_domain.push(value.as_ref().clone());
-                    }
-                    Domain::Nullable(NullableDomain { value: None, .. }) => {
-                        return FunctionDomain::Domain(Domain::Nullable(NullableDomain {
-                            has_null: true,
-                            value: None,
-                        }));
-                    }
-                    _ => unreachable!(),
-                }
-            }
-
-            calc_domain(ctx, &args_domain).map(|result_domain| {
-                let (result_has_null, result_domain) = match result_domain {
-                    Domain::Nullable(NullableDomain { has_null, value }) => (has_null, value),
-                    domain => (false, Some(Box::new(domain))),
-                };
-                Domain::Nullable(NullableDomain {
-                    has_null: args_has_null || result_has_null,
-                    value: result_domain,
-                })
-            })
-        });
-
-        Function {
-            signature,
-            eval: FunctionEval::Scalar {
-                calc_domain: new_calc_domain,
-                eval: Box::new(passthrough_nullable(eval)),
-            },
-        }
-    }
-
-    pub fn error_to_null(self) -> Self {
-        debug_assert!(!self.signature.return_type.is_nullable_or_null());
-
-        let mut signature = self.signature;
-        let return_type = signature.return_type.wrap_nullable();
-        signature.return_type = return_type.clone();
-
-        let (calc_domain, eval) = self.eval.into_scalar().unwrap();
-
-        let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
-            let domain = calc_domain(ctx, domains);
-            match domain {
-                FunctionDomain::Domain(domain) => {
-                    let new_domain = NullableDomain {
-                        has_null: false,
-                        value: Some(Box::new(domain)),
-                    };
-                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain_with_type(
-                        new_domain,
-                        &return_type,
-                    ))
-                }
-                FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
-            }
-        });
-        let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
-            let num_rows = ctx.num_rows;
-            let output = eval(val, ctx);
-            if let Some((validity, _)) = ctx.errors.take() {
-                match output {
-                    Value::Scalar(_) => Value::Scalar(Scalar::Null),
-                    Value::Column(column) => {
-                        Value::Column(NullableColumn::new_column(column, validity.into()))
-                    }
-                }
-            } else {
-                match output {
-                    Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => Value::Column(NullableColumn::new_column(
-                        column,
-                        Bitmap::new_constant(true, num_rows),
-                    )),
-                }
-            }
-        });
-
-        Function {
-            signature,
-            eval: FunctionEval::Scalar {
-                calc_domain: new_calc_domain,
-                eval: new_eval,
-            },
-        }
-    }
 }
 
 impl FunctionRegistry {
@@ -727,75 +568,6 @@ impl EvalContext<'_> {
         };
 
         Err(ErrorCode::BadArguments(err_msg).set_span(span))
-    }
-}
-
-pub fn passthrough_nullable<F>(
-    f: F,
-) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>
-where F: Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
-    move |args, ctx| {
-        type T = NullableType<AnyType>;
-        type Result = AnyType;
-
-        let mut bitmap: Option<MutableBitmap> = None;
-        let mut nonull_args: Vec<Value<Result>> = Vec::with_capacity(args.len());
-
-        let mut len = 1;
-        for arg in args {
-            let arg = arg.try_downcast::<T>().unwrap();
-            match arg {
-                Value::Scalar(None) => return Value::Scalar(Scalar::Null),
-                Value::Scalar(Some(s)) => {
-                    nonull_args.push(Value::Scalar(s.clone()));
-                }
-                Value::Column(v) => {
-                    len = v.len();
-                    nonull_args.push(Value::Column(v.column.clone()));
-                    bitmap = match bitmap {
-                        Some(m) => Some(m.bitand(&v.validity)),
-                        None => Some(v.validity.clone().make_mut()),
-                    };
-                }
-            }
-        }
-        let results = f(&nonull_args, ctx);
-        let bitmap = bitmap.unwrap_or_else(|| Bitmap::new_constant(true, len).make_mut());
-        if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
-            // If the original value is NULL, we can ignore the error.
-            let rhs: Bitmap = bitmap.clone().not().into();
-            let res = error_bitmap.clone().bitor(&rhs);
-            if res.null_count() == 0 {
-                ctx.errors = None;
-            } else {
-                *error_bitmap = res;
-            }
-        }
-
-        match results {
-            Value::Scalar(s) => {
-                if bitmap.get(0) {
-                    Value::Scalar(s)
-                } else {
-                    Value::Scalar(Scalar::Null)
-                }
-            }
-            Value::Column(column) => {
-                let result = match column {
-                    Column::Nullable(box nullable_column) => {
-                        let validity: Bitmap = bitmap.into();
-                        let validity = databend_common_column::bitmap::and(
-                            &nullable_column.validity,
-                            &validity,
-                        );
-
-                        NullableColumn::new_column(nullable_column.column, validity)
-                    }
-                    _ => NullableColumn::new_column(column, bitmap.into()),
-                };
-                Value::Column(result)
-            }
-        }
     }
 }
 

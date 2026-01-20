@@ -26,7 +26,9 @@ use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
 use databend_common_expression::error_to_null;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::BooleanType;
@@ -64,12 +66,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_, _| {
+                    calc_domain: domain_evaluator(move |_, _| {
                         unreachable!(
                             "cal_domain of `{func_name}` should be handled by the `Evaluator`"
                         )
                     }),
-                    eval: Box::new(move |_, _| {
+                    eval: scalar_evaluator(move |_, _| {
                         unreachable!("`{func_name}` should be handled by the `Evaluator`")
                     }),
                 },

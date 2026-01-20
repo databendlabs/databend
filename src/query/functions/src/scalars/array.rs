@@ -42,6 +42,8 @@ use databend_common_expression::aggregate::AggregateFunctionRef;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
 use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
@@ -136,14 +138,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     FunctionDomain::Domain(
                         args_domain.iter().fold(Domain::Array(None), |acc, x| {
                             acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
                         }),
                     )
                 }),
-                eval: Box::new(|args, ctx| {
+                eval: scalar_evaluator(|args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -211,7 +213,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     let inner_domains = args_domain
                         .iter()
                         .map(|arg_domain| match arg_domain {
@@ -232,7 +234,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         inner_domains,
                     )))))
                 }),
-                eval: Box::new(move |args, ctx| {
+                eval: scalar_evaluator(move |args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -1397,8 +1399,8 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     return_type,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
-                    eval: Box::new(move |args, ctx| impl_info.eval(args, ctx)),
+                    calc_domain: domain_evaluator(move |_, _| FunctionDomain::MayThrow),
+                    eval: scalar_evaluator(move |args, ctx| impl_info.eval(args, ctx)),
                 },
             }))
         }));

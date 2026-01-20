@@ -25,6 +25,8 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
@@ -247,10 +249,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: return_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     FunctionDomain::Domain(args_domain[0].clone())
                 }),
-                eval: Box::new(move |args, _ctx| {
+                eval: scalar_evaluator(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -444,10 +446,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: args_type[0].clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     FunctionDomain::Domain(args_domain[0].clone())
                 }),
-                eval: Box::new(move |args, _ctx| {
+                eval: scalar_evaluator(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,

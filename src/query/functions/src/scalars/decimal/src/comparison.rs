@@ -14,17 +14,20 @@
 
 use std::cmp::Ordering;
 use std::hint::unlikely;
+use std::marker::PhantomData;
 use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarFunction;
+use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 use databend_common_expression::types::compute_view::ComputeView;
@@ -62,101 +65,110 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
         ];
 
         // Comparison between different decimal types must be same siganature types
-        let function = Function {
-            signature: FunctionSignature {
-                name: Op::NAME.to_string(),
-                args_type: sig_types.clone(),
-                return_type: DataType::Boolean,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, d| {
-                    let d1 = d[0].as_decimal().unwrap();
-                    let d2 = d[1].as_decimal().unwrap();
-
-                    let (s1, s2) = (d1.decimal_size().scale(), d2.decimal_size().scale());
-                    let (m1, m2) = compare_multiplier(s1, s2);
-
-                    let (min1, max1) = match d1 {
-                        DecimalDomain::Decimal64(domain, _) => {
-                            (domain.min.into(), domain.max.into())
-                        }
-                        DecimalDomain::Decimal128(domain, _) => {
-                            (domain.min.into(), domain.max.into())
-                        }
-                        DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
-                    };
-
-                    let (min2, max2) = match d2 {
-                        DecimalDomain::Decimal64(domain, _) => {
-                            (domain.min.into(), domain.max.into())
-                        }
-                        DecimalDomain::Decimal128(domain, _) => {
-                            (domain.min.into(), domain.max.into())
-                        }
-                        DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
-                    };
-
-                    let d1 = SimpleDomain {
-                        min: min1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
-                        max: max1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
-                    };
-
-                    let d2 = SimpleDomain {
-                        min: min2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
-                        max: max2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
-                    };
-                    let new_domain = Op::domain_op(&d1, &d2);
-                    new_domain.map(Domain::Boolean)
-                }),
-                eval: Box::new(move |args, ctx| op_decimal::<Op>(&args[0], &args[1], ctx)),
-            },
+        let signature = FunctionSignature {
+            name: Op::NAME.to_string(),
+            args_type: sig_types,
+            return_type: DataType::Boolean,
         };
-        if has_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
+
+        let eval = DecimalCmp::<Op>::default();
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            DecimalComparisonDomain::<Op>::default(),
+            eval,
+            has_nullable,
+        )))
     }));
     registry.register_function_factory(Op::NAME, factory);
 }
 
-fn op_decimal<Op: CmpOp>(
-    a: &Value<AnyType>,
-    b: &Value<AnyType>,
-    ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    let (a_type, _) = DecimalDataType::from_value(a).unwrap();
-    let (b_type, _) = DecimalDataType::from_value(b).unwrap();
-    let size_calc = calc_size(&a_type.size(), &b_type.size());
+#[derive(Clone, Copy, Default)]
+struct DecimalComparisonDomain<Op> {
+    _op: PhantomData<fn(Op)>,
+}
 
-    with_decimal_mapped_type!(|T| match DecimalDataType::from(size_calc) {
-        DecimalDataType::T(_) => {
-            with_decimal_mapped_type!(|A| match a_type {
-                DecimalDataType::A(_) => {
-                    with_decimal_mapped_type!(|B| match b_type {
-                        DecimalDataType::B(_) => {
-                            let a = a
-                                .try_downcast::<ComputeView<DecimalConvert<A, T>, _, _>>()
-                                .unwrap();
-                            let b = b
-                                .try_downcast::<ComputeView<DecimalConvert<B, T>, _, _>>()
-                                .unwrap();
-                            let (f_a, f_b) = (
-                                T::e(size_calc.scale() - a_type.scale()),
-                                T::e(size_calc.scale() - b_type.scale()),
-                            );
+impl<Op: CmpOp> ScalarFunctionDomain for DecimalComparisonDomain<Op> {
+    fn calc_domain(&self, _: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+        let d1 = domains[0].as_decimal().unwrap();
+        let d2 = domains[1].as_decimal().unwrap();
 
-                            if (f_a == f_b) {
-                                compare_decimal(a, b, |a, b, _| Op::is(a.cmp(&b)), ctx)
-                            } else {
-                                compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+        let (s1, s2) = (d1.decimal_size().scale(), d2.decimal_size().scale());
+        let (m1, m2) = compare_multiplier(s1, s2);
+
+        let (min1, max1) = match d1 {
+            DecimalDomain::Decimal64(domain, _) => (domain.min.into(), domain.max.into()),
+            DecimalDomain::Decimal128(domain, _) => (domain.min.into(), domain.max.into()),
+            DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
+        };
+
+        let (min2, max2) = match d2 {
+            DecimalDomain::Decimal64(domain, _) => (domain.min.into(), domain.max.into()),
+            DecimalDomain::Decimal128(domain, _) => (domain.min.into(), domain.max.into()),
+            DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
+        };
+
+        let d1 = SimpleDomain {
+            min: min1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
+            max: max1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
+        };
+
+        let d2 = SimpleDomain {
+            min: min2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
+            max: max2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
+        };
+
+        let new_domain = Op::domain_op(&d1, &d2);
+        new_domain.map(Domain::Boolean)
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct DecimalCmp<Op> {
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<Op: CmpOp> ScalarFunction for DecimalCmp<Op> {
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        let a = &args[0];
+        let b = &args[1];
+        let (a_type, _) = DecimalDataType::from_value(a).unwrap();
+        let (b_type, _) = DecimalDataType::from_value(b).unwrap();
+        let size_calc = calc_size(&a_type.size(), &b_type.size());
+
+        with_decimal_mapped_type!(|T| match DecimalDataType::from(size_calc) {
+            DecimalDataType::T(_) => {
+                with_decimal_mapped_type!(|A| match a_type {
+                    DecimalDataType::A(_) => {
+                        with_decimal_mapped_type!(|B| match b_type {
+                            DecimalDataType::B(_) => {
+                                let a = a
+                                    .try_downcast::<ComputeView<DecimalConvert<A, T>, _, _>>()
+                                    .unwrap();
+                                let b = b
+                                    .try_downcast::<ComputeView<DecimalConvert<B, T>, _, _>>()
+                                    .unwrap();
+                                let (f_a, f_b) = (
+                                    T::e(size_calc.scale() - a_type.scale()),
+                                    T::e(size_calc.scale() - b_type.scale()),
+                                );
+
+                                if (f_a == f_b) {
+                                    compare_decimal(a, b, |a, b, _| Op::is(a.cmp(&b)), ctx)
+                                } else {
+                                    compare_decimal(
+                                        a,
+                                        b,
+                                        |a, b, _| Op::compare(a, b, f_a, f_b),
+                                        ctx,
+                                    )
+                                }
                             }
-                        }
-                    })
-                }
-            })
-        }
-    })
+                        })
+                    }
+                })
+            }
+        })
+    }
 }
 
 fn calc_size(a: &DecimalSize, b: &DecimalSize) -> DecimalSize {
@@ -190,7 +202,7 @@ where
     value.upcast()
 }
 
-trait CmpOp {
+trait CmpOp: 'static + Default {
     const NAME: &str;
     fn is(o: Ordering) -> bool;
     fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType>;
@@ -228,6 +240,7 @@ trait CmpOp {
 
 macro_rules! define_cmp_op {
     ($name:ident, $func_name:expr, $is_fn:ident, $domain_op:ident) => {
+        #[derive(Default)]
         struct $name;
 
         impl CmpOp for $name {

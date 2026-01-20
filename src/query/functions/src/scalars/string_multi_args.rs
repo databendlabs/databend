@@ -18,14 +18,17 @@ use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::PassthroughNullable;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::passthrough_nullable;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::array::ArrayColumnBuilder;
@@ -44,29 +47,26 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
 
-        let f = Function {
-            signature: FunctionSignature {
-                name: "concat".to_string(),
-                args_type: vec![DataType::String; args_type.len()],
-                return_type: DataType::String,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
-                    let domain = args_domain[0].as_string().unwrap();
-                    FunctionDomain::Domain(Domain::String(StringDomain {
-                        min: domain.min.clone(),
-                        max: None,
-                    }))
-                }),
-                eval: Box::new(concat_fn),
-            },
+        let signature = FunctionSignature {
+            name: "concat".to_string(),
+            args_type: vec![DataType::String; args_type.len()],
+            return_type: DataType::String,
         };
 
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
+        fn concat_domain(_: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+            let domain = domains[0].as_string().unwrap();
+            FunctionDomain::Domain(Domain::String(StringDomain {
+                min: domain.min.clone(),
+                max: None,
+            }))
         }
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            concat_domain,
+            concat_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("concat", concat);
 
@@ -82,8 +82,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(passthrough_nullable(concat_fn)),
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: Box::new(PassthroughNullable(concat_fn)),
             },
         }))
     }));
@@ -100,14 +100,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     let domain = args_domain[1].as_string().unwrap();
                     FunctionDomain::Domain(Domain::String(StringDomain {
                         min: domain.min.clone(),
                         max: None,
                     }))
                 }),
-                eval: Box::new(|args, _| {
+                eval: scalar_evaluator(|args, _| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -167,8 +167,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, _| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, _| {
                     type T = NullableType<StringType>;
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
@@ -284,22 +284,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let f = Function {
-            signature: FunctionSignature {
-                name: "regexp_instr".to_string(),
-                args_type,
-                return_type: DataType::Number(NumberDataType::UInt64),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(regexp_instr_fn),
-            },
+        let signature = FunctionSignature {
+            name: "regexp_instr".to_string(),
+            args_type,
+            return_type: DataType::Number(NumberDataType::UInt64),
         };
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            regexp_instr_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("regexp_instr", regexp_instr);
 
@@ -312,23 +308,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let f = Function {
-            signature: FunctionSignature {
-                name: "regexp_like".to_string(),
-                args_type,
-                return_type: DataType::Boolean,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(regexp_like_fn),
-            },
+        let signature = FunctionSignature {
+            name: "regexp_like".to_string(),
+            args_type,
+            return_type: DataType::Boolean,
         };
 
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            regexp_like_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("regexp_like", regexp_like);
 
@@ -463,23 +454,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let f = Function {
-            signature: FunctionSignature {
-                name: "regexp_replace".to_string(),
-                args_type,
-                return_type: DataType::String,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(regexp_replace_fn),
-            },
+        let signature = FunctionSignature {
+            name: "regexp_replace".to_string(),
+            args_type,
+            return_type: DataType::String,
         };
 
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            regexp_replace_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("regexp_replace", regexp_replace);
 
@@ -509,23 +495,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let f = Function {
-            signature: FunctionSignature {
-                name: "regexp_substr".to_string(),
-                args_type,
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(regexp_substr_fn),
-            },
+        let signature = FunctionSignature {
+            name: "regexp_substr".to_string(),
+            args_type,
+            return_type: DataType::Nullable(Box::new(DataType::String)),
         };
 
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            regexp_substr_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("regexp_substr", regexp_substr);
 
@@ -535,23 +516,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-        let f = Function {
-            signature: FunctionSignature {
-                name: "char".to_string(),
-                args_type: vec![DataType::Number(NumberDataType::Int64); args_type.len()],
-                return_type: DataType::String,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(char_fn),
-            },
+        let signature = FunctionSignature {
+            name: "char".to_string(),
+            args_type: vec![DataType::Number(NumberDataType::Int64); args_type.len()],
+            return_type: DataType::String,
         };
 
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::Full,
+            char_fn,
+            has_null,
+        )))
     }));
     registry.register_function_factory("char", char);
     registry.register_aliases("char", &["chr"]);

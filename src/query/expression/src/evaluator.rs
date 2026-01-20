@@ -322,7 +322,7 @@ impl<'a> Evaluator<'a> {
         };
 
         let (_, eval) = function.eval.as_scalar().unwrap();
-        let result = (eval)(&args, &mut ctx);
+        let result = eval.eval(&args, &mut ctx);
 
         if options.suppress_error {
             // inject errors into options, parent will handle it
@@ -2011,7 +2011,7 @@ impl<'a> Evaluator<'a> {
                     strict_eval: options.strict_eval,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(&args, &mut ctx);
+                let result = eval.eval(&args, &mut ctx);
 
                 // inject errors into options, parent will handle it
                 if options.suppress_error {

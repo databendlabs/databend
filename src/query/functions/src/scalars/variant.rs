@@ -35,6 +35,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
@@ -270,8 +272,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Variant)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, false)),
             },
         }))
     }));
@@ -294,8 +296,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, true)),
             },
         }))
     }));
@@ -544,8 +546,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, true)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, true)),
             },
         }))
     }));
@@ -568,8 +570,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, false)),
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, false)),
             },
         }))
     }));
@@ -1190,7 +1192,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| match &args_domain[0] {
+                calc_domain: domain_evaluator(|_, args_domain| match &args_domain[0] {
                     Domain::Nullable(nullable_domain) => {
                         FunctionDomain::Domain(Domain::Nullable(NullableDomain {
                             has_null: nullable_domain.has_null,
@@ -1199,7 +1201,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     _ => FunctionDomain::Domain(Domain::Undefined),
                 }),
-                eval: Box::new(|args, ctx| match &args[0] {
+                eval: scalar_evaluator(|args, ctx| match &args[0] {
                     Value::Scalar(scalar) => match scalar {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         _ => {
@@ -2468,7 +2470,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Variant)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(delete_by_keypath_fn),
             },
         }))
@@ -2523,7 +2525,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_fn),
             },
         }))
@@ -2538,7 +2540,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_fn),
             },
         };
@@ -2554,7 +2556,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_keep_null_fn),
             },
         }))
@@ -2569,7 +2571,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_keep_null_fn),
             },
         };
@@ -2588,7 +2590,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(array_construct_fn),
             },
         }))
@@ -2735,8 +2737,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
             },
         }))
     }));
@@ -2767,8 +2769,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| {
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, true, is_nullable)
                 }),
             },
@@ -2801,8 +2803,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| {
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, false, is_nullable)
                 }),
             },
