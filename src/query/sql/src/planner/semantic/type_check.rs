@@ -5521,7 +5521,11 @@ impl<'a> TypeChecker<'a> {
         );
         cfg.add_udf_version_info();
 
-        let imports = self.build_udf_cloud_imports(imports)?;
+        let settings = self.ctx.get_settings();
+        let imports = self.build_udf_cloud_imports(
+            imports,
+            Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
+        )?;
         let req = ApplyUdfResourceRequest {
             dockerfile: dockerfile.to_string(),
             imports,
@@ -5546,6 +5550,7 @@ impl<'a> TypeChecker<'a> {
     fn build_udf_cloud_imports(
         &self,
         imports: &[String],
+        expire: Duration,
     ) -> Result<Vec<databend_common_cloud_control::pb::UdfImport>> {
         if imports.is_empty() {
             return Ok(Vec::new());
@@ -5576,7 +5581,7 @@ impl<'a> TypeChecker<'a> {
                     ));
                 }
                 let presigned = op
-                    .presign_read(&path, Duration::from_secs(3600))
+                    .presign_read(&path, expire)
                     .await
                     .map_err(|err| {
                         ErrorCode::SemanticError(format!(

@@ -790,6 +790,10 @@ impl Settings {
         self.try_get_u64("external_server_request_timeout_secs")
     }
 
+    pub fn get_udf_cloud_import_presign_expire_secs(&self) -> Result<u64> {
+        self.try_get_u64("udf_cloud_import_presign_expire_secs")
+    }
+
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_batch_rows")
     }
