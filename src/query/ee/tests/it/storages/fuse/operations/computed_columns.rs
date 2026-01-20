@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_computed_column() -> Result<()> {
+async fn test_computed_column() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
     fixture.create_default_database().await?;

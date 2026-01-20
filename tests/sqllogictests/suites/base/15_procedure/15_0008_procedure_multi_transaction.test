@@ -64,19 +64,19 @@ call procedure proc_update_status();
 statement ok
 COMMIT;
 
-query IS
+query IT
 SELECT * FROM t1 ORDER BY id;
 ----
 1 Alice
 2 Bob
 
-query IF
+query IR
 SELECT * FROM t2 ORDER BY id;
 ----
 1 1000.50
 2 2000.75
 
-query IS
+query IT
 SELECT * FROM t3 ORDER BY id;
 ----
 1 confirmed
@@ -135,15 +135,15 @@ call procedure proc_more_updates();
 COMMIT;
 
 # Verify all tables are empty due to rollback
-query IS
+query IT
 SELECT * FROM t1;
 ----
 
-query IF
+query IR
 SELECT * FROM t2;
 ----
 
-query IS
+query IT
 SELECT * FROM t3;
 ----
 
@@ -190,19 +190,19 @@ call procedure proc_final_adjustments();
 statement ok
 COMMIT;
 
-query IS
+query IT
 SELECT * FROM t1 ORDER BY id;
 ----
 5 Eve
 6 Frank
 
-query IF
+query IR
 SELECT * FROM t2 ORDER BY id;
 ----
 5 5500.00
 6 6000.00
 
-query IS
+query IT
 SELECT * FROM t3 ORDER BY id;
 ----
 5 finalized

@@ -1139,4 +1139,12 @@ impl Settings {
     pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_spill_level")
     }
+
+    pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
+    }
+
+    pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
+        self.try_get_string("force_aggregate_shuffle_mode")
+    }
 }

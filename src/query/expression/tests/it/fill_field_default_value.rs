@@ -16,7 +16,6 @@
 
 use std::collections::HashSet;
 
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::*;
@@ -26,7 +25,7 @@ use goldenfile::Mint;
 use crate::common::*;
 
 #[test]
-fn test_data_block_create_with_default_value_functions() -> Result<()> {
+fn test_data_block_create_with_default_value_functions() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("fill_field_default_value.txt").unwrap();
 

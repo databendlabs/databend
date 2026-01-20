@@ -343,6 +343,7 @@ impl SubqueryDecorrelatorOptimizer {
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
     /// and the outer s_expr.
+    #[recursive::recursive]
     fn try_rewrite_subquery(
         &mut self,
         scalar: &ScalarExpr,

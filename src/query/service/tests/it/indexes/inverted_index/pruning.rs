@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
@@ -74,7 +73,7 @@ async fn apply_block_pruning(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_block_pruner() -> Result<()> {
+async fn test_block_pruner() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;

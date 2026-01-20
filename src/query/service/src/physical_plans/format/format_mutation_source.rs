@@ -44,7 +44,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
     #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table = ctx.metadata.table(self.inner.table_index);
-        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+        let table_name = table.qualified_name();
 
         let filters = self
             .inner
@@ -84,7 +84,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
     #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table = ctx.metadata.table(self.inner.table_index).clone();
-        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+        let table_name = table.qualified_name();
         let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
         if let Some(filters) = &self.inner.filters {
             let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display();

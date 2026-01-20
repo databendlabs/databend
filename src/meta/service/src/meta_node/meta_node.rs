@@ -22,13 +22,6 @@ use std::sync::atomic::AtomicI32;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::base::tokio::sync::watch;
-use databend_common_base::base::tokio::task::JoinHandle;
-use databend_common_base::base::tokio::time::Instant;
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::RequestFor;
@@ -49,6 +42,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
 use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaError;
@@ -57,6 +51,8 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
+use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
@@ -73,6 +69,7 @@ use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::snapshot_db::DBStat;
 use fastrace::func_name;
 use fastrace::prelude::*;
+use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
@@ -87,8 +84,14 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
+use semver::Version;
 use state_machine_api::UserKey;
+use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio::time::sleep;
 use tonic::Status;
 use watcher::EventFilter;
 use watcher::dispatch::Command;
@@ -109,8 +112,6 @@ use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
 use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::MetaForwarder;
-use crate::meta_service::MetaKVApi;
-use crate::meta_service::MetaKVApiOwned;
 use crate::meta_service::MetaNodeBuilder;
 use crate::meta_service::RaftServiceImpl;
 use crate::meta_service::errors::grpc_error_to_network_err;
@@ -145,7 +146,7 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
-    pub version: BuildInfoRef,
+    pub version: Version,
 }
 
 impl Drop for MetaNode {
@@ -267,7 +268,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn open(
         config: &RaftConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
@@ -298,7 +299,7 @@ impl MetaNode {
     pub async fn open_boot(
         config: &RaftConfig,
         initialize_cluster: Option<Node>,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(config, version).await?;
 
@@ -780,7 +781,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn start(
         config: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config, version).await?;
@@ -1061,7 +1062,7 @@ impl MetaNode {
 
     async fn do_start(
         conf: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
@@ -1080,7 +1081,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn boot(
         config: &MetaConfig,
-        version: BuildInfoRef,
+        version: Version,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(&config.raft_config, version).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -1227,7 +1228,7 @@ impl MetaNode {
 
         MetaNodeStatus {
             id: self.raft_store.id,
-            binary_version: self.version.semantic.to_string(),
+            binary_version: self.version.to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.map(|x| x.to_string()),
             raft_log: raft_log_status,
@@ -1644,17 +1645,64 @@ impl MetaNode {
         Ok(sender)
     }
 
-    /// Get a kvapi::KVApi implementation.
-    pub fn kv_api(&self) -> MetaKVApi<'_> {
-        MetaKVApi::new(self)
-    }
-
-    pub fn kv_api_owned(self: &Arc<Self>) -> MetaKVApiOwned {
-        MetaKVApiOwned::new(self.clone())
-    }
-
     pub fn runtime_config(&self) -> &RuntimeConfig {
         &self.runtime_config
+    }
+
+    /// Get the gRPC endpoint for the leader node.
+    async fn get_leader_endpoint(&self, leader_id: Option<NodeId>) -> Option<Endpoint> {
+        let leader_id = leader_id?;
+        let node = self.get_node(&leader_id).await?;
+        let addr = node.grpc_api_advertise_address.as_ref()?;
+        Endpoint::parse(addr).ok()
+    }
+
+    /// Handle KvList request. Must be leader to process.
+    ///
+    /// Returns a stream of key-value pairs matching the prefix.
+    /// If this node is not the leader, returns a `Status` error with leader endpoint in metadata.
+    pub async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let leader = match self.assume_leader().await {
+            Ok(leader) => leader,
+            Err(forward) => {
+                let endpoint = self.get_leader_endpoint(forward.leader_id).await;
+                return Err(GrpcHelper::status_forward_to_leader(endpoint.as_ref()));
+            }
+        };
+
+        let strm = leader
+            .kv_list(&prefix, limit)
+            .await
+            .map_err(|e| Status::internal(format!("kv_list error: {}", e)))?;
+
+        Ok(strm)
+    }
+
+    /// Handle KvGetMany request. Must be leader to process.
+    ///
+    /// Takes a stream of keys and returns a stream of key-value pairs.
+    /// If this node is not the leader, returns a `Status` error with leader endpoint in metadata.
+    pub async fn handle_kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<'static, Result<StreamItem, Status>>, Status> {
+        let leader = match self.assume_leader().await {
+            Ok(leader) => leader,
+            Err(forward) => {
+                let endpoint = self.get_leader_endpoint(forward.leader_id).await;
+                return Err(GrpcHelper::status_forward_to_leader(endpoint.as_ref()));
+            }
+        };
+
+        let strm = leader
+            .kv_get_many(input)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(strm)
     }
 }
 

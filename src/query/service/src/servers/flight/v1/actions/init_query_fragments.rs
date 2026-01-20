@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -28,17 +29,19 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());
-    let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("init query fragments with {:?}", fragments);
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();
-    let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
+    let join_handler = ctx.try_spawn(tracking_payload.tracking(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
-    }));
+    }))?;
 
-    if let Err(cause) = join_handler.await.flatten() {
+    // Flatten nested Result: both JoinError and inner error should trigger cleanup
+    let result = join_handler.await.map_err(ErrorCode::from).and_then(|r| r);
+
+    if let Err(cause) = result {
         DataExchangeManager::instance().on_finished_query(&query_id, Some(cause.clone()));
         return Err(cause);
     }

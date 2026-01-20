@@ -19,6 +19,7 @@ use std::any::type_name;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
@@ -130,7 +131,9 @@ pub async fn list_u64_value<K: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
 ) -> Result<(Vec<K>, Vec<u64>), MetaError> {
-    let res = kv_api.list_kv_collect(&key.to_string_key()).await?;
+    let res = kv_api
+        .list_kv_collect(ListOptions::unlimited(&key.to_string_key()))
+        .await?;
 
     let n = res.len();
 

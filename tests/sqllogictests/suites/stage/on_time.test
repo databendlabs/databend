@@ -11,7 +11,7 @@ copy into ontime from @data/ontime_200.csv pattern = '' FILE_FORMAT = (type = CS
 ----
 ontime_200.csv	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -24,7 +24,7 @@ copy into ontime from @data/ontime_200.csv.bz2 FILE_FORMAT = (type = CSV skip_he
 ----
 ontime_200.csv.bz2	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -37,7 +37,7 @@ copy into ontime from @data/ontime_200.csv.gz FILE_FORMAT = (type = CSV skip_hea
 ----
 ontime_200.csv.gz	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -50,7 +50,7 @@ copy into ontime from @data/ontime_200.csv.xz FILE_FORMAT = (type = CSV skip_hea
 ----
 ontime_200.csv.xz	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -63,7 +63,7 @@ copy into ontime from @data/ontime_200.csv.zst FILE_FORMAT = (type = CSV skip_he
 ----
 ontime_200.csv.zst	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -76,7 +76,7 @@ copy into ontime from @data/ontime_200.ndjson PATTERN = '' FILE_FORMAT = (type =
 ----
 ontime_200.ndjson	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -89,7 +89,7 @@ copy into ontime from @data/ontime_200.parquet pattern = '' FILE_FORMAT = (type 
 ----
 ontime_200.parquet	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769
@@ -102,7 +102,7 @@ copy into ontime from @data/ontime_200.csv.zip pattern = '' FILE_FORMAT = (type 
 ----
 ontime_200.csv.zip	199	0	NULL	NULL
 
-query III
+query IRI
 select count(1), avg(Year), sum(DayOfWeek)  from ontime
 ----
 199 2020.0 769

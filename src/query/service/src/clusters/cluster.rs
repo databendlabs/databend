@@ -24,16 +24,12 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_flight::flight_service_client::FlightServiceClient;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
-use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::base::tokio::sync::Notify;
-use databend_common_base::base::tokio::task::JoinHandle;
-use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
@@ -72,6 +68,10 @@ use rand::Rng;
 use rand::thread_rng;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::Mutex;
+use tokio::sync::Notify;
+use tokio::task::JoinHandle;
+use tokio::time::sleep as tokio_async_sleep;
 use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
@@ -228,7 +228,8 @@ impl ClusterHelper for Cluster {
 impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
+        let meta_api_provider =
+            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -643,7 +644,7 @@ impl ClusterDiscovery {
             cache_id = match tokio::fs::read_to_string(path.clone()).await {
                 Ok(content) => content,
                 Err(e) if e.kind() == tokio::io::ErrorKind::NotFound => {
-                    let cache_id = GlobalUniqName::unique();
+                    let cache_id = GlobalUniq::unique();
                     if let Err(e) = tokio::fs::write(path, cache_id.clone()).await {
                         return Err(ErrorCode::TokioError(format!(
                             "Cannot write cache id file, cause: {:?}",

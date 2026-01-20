@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::PoisonError;
 
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -37,6 +38,9 @@ pub struct BasicHashJoinState {
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
+    pub scan_map: CStyleCell<Vec<Vec<u8>>>,
+    pub scan_queue: CStyleCell<VecDeque<usize>>,
+
     level: usize,
     factory: Arc<HashJoinFactory>,
 }
@@ -55,7 +59,15 @@ impl BasicHashJoinState {
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
             packets: CStyleCell::new(Vec::new()),
+            scan_map: CStyleCell::new(Vec::new()),
+            scan_queue: CStyleCell::new(VecDeque::new()),
         }
+    }
+
+    pub fn steal_scan_chunk_index(&self) -> Option<(usize, usize)> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.scan_queue.as_mut().pop_front().map(|x| (x, 0))
     }
 }
 

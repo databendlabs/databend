@@ -1,4 +1,4 @@
-query T
+query ?
 SELECT CHAR_LENGTH(NULL)
 ----
 NULL
@@ -18,7 +18,7 @@ SELECT CHAR_LENGTH('早ab')
 ----
 3
 
-query T
+query ?
 SELECT CHARACTER_LENGTH(NULL)
 ----
 NULL

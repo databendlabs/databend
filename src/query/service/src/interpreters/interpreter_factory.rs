@@ -40,6 +40,7 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::AlterUserStageInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::CreateTagInterpreter;
 use crate::interpreters::DescUserInterpreter;
@@ -569,6 +570,10 @@ impl InterpreterFactory {
             Plan::CreateStage(create_stage) => Ok(Arc::new(
                 CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
             )),
+            Plan::AlterStage(stage) => Ok(Arc::new(AlterUserStageInterpreter::try_create(
+                ctx,
+                *stage.clone(),
+            )?)),
             Plan::DropStage(s) => Ok(Arc::new(DropUserStageInterpreter::try_create(
                 ctx,
                 *s.clone(),

@@ -437,7 +437,7 @@ create table test (a int, b string);
 statement ok
 insert into test values (1, 'a'), (2, 'b');
 
-query TT rowsort
+query T rowsort
 WITH tTqmc(cC0, cC1) AS (SELECT a AS cC0, b AS cC1 FROM test) SELECT tTqmc.cC1 FROM tTqmc;
 ----
 a
@@ -562,7 +562,7 @@ drop table if exists t1;
 statement ok
 drop table if exists t2;
 
-query T
+query I
 with t(tt) as (select number as tt from numbers(10)),  t2(tt) AS MATERIALIZED (SELECT tt FROM t) select * from t2;
 ----
 0

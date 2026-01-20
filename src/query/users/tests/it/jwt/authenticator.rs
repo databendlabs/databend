@@ -14,9 +14,7 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use databend_common_base::base::tokio;
 use databend_common_config::QueryConfig;
-use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
@@ -45,7 +43,7 @@ fn get_jwks_file_rs256(kid: &str) -> (RS256KeyPair, String) {
     (key_pair, j)
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parse_non_custom_claim() -> Result<()> {
+async fn test_parse_non_custom_claim() -> anyhow::Result<()> {
     let (pair1, pbkey1) = get_jwks_file_rs256("test_kid");
     let template1 = ResponseTemplate::new(200).set_body_raw(pbkey1, "application/json");
     let server = MockServer::start().await;
@@ -82,7 +80,7 @@ async fn test_parse_non_custom_claim() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parse_jwt_claims_with_ensure_user_scenarios() -> Result<()> {
+async fn test_parse_jwt_claims_with_ensure_user_scenarios() -> anyhow::Result<()> {
     let (pair1, pbkey1) = get_jwks_file_rs256("test_kid");
     let template1 = ResponseTemplate::new(200).set_body_raw(pbkey1, "application/json");
     let server = MockServer::start().await;

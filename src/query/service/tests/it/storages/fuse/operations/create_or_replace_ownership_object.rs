@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_config::MetaConfig;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
@@ -28,15 +25,13 @@ use databend_common_version::BUILD_INFO;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
+async fn test_fuse_db_table_create_replace_clean_ownership_key() -> anyhow::Result<()> {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
     let meta = {
-        let config = meta_config.to_meta_grpc_client_conf(version);
+        let config = meta_config.to_meta_grpc_client_conf(version.semver());
         let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await.map_err(|e| {
-            ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-        })?
+        provider.create_meta_store().await?
     };
 
     // Extracts endpoints to communicate with meta service

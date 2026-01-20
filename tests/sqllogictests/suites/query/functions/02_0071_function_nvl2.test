@@ -28,7 +28,7 @@ SELECT NVL2('', 'b', 'c')
 ----
 b
 
-query T
+query ?
 SELECT NVL2('a', NULL, 'c')
 ----
 NULL
@@ -38,7 +38,7 @@ SELECT NVL2('a', 'b', NULL)
 ----
 b
 
-query T
+query ?
 SELECT NVL2(NULL, NULL, NULL)
 ----
 NULL
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS t(a INT, b INT, c INT) ENGINE=Memory
 statement ok
 INSERT INTO t VALUES (0, 1, 2), (1, 2, 3), (NULL, 3, 4), (NULL, NULL, 5)
 
-query III
+query IIII
 SELECT a, b, c, NVL2(a, b, c) FROM t
 ----
 0 1 2 1

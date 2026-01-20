@@ -85,9 +85,19 @@ impl IPhysicalPlan for CacheScan {
                             max_block_size,
                         ))
                     }
-                    Some(HashJoinStateRef::NewHashJoinState(hash_join_state)) => {
+                    Some(HashJoinStateRef::NewHashJoinState(hash_join_state, column_map)) => {
+                        let mut column_offsets = Vec::with_capacity(column_indexes.len());
+                        for index in column_indexes {
+                            let Some(offset) = column_map.get(index) else {
+                                return Err(ErrorCode::Internal(format!(
+                                    "Hash join cache column {} not found in build projection",
+                                    index
+                                )));
+                            };
+                            column_offsets.push(*offset);
+                        }
                         CacheSourceState::NewHashJoinCacheState(NewHashJoinCacheState::new(
-                            column_indexes.clone(),
+                            column_offsets,
                             hash_join_state.clone(),
                         ))
                     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
@@ -51,6 +52,8 @@ use serde::Serializer;
 use serde::de::Visitor;
 use string::StringColumnBuilder;
 
+use crate::BlockEntry;
+use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
@@ -423,6 +426,13 @@ impl Value<AnyType> {
 
     pub fn is_scalar_null(&self) -> bool {
         *self == Value::Scalar(Scalar::Null)
+    }
+
+    pub fn is_value_of_type(&self, data_type: &DataType) -> bool {
+        match self {
+            Value::Scalar(scalar) => scalar.as_ref().is_value_of_type(data_type),
+            Value::Column(column) => column.data_type() == *data_type,
+        }
     }
 }
 

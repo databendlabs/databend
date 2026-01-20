@@ -39,7 +39,7 @@ DROP DATABASE IF EXISTS ss1
 statement ok
 DROP DATABASE IF EXISTS ss2
 
-query T
+query TB
 select name, dropped_on is not null from system.databases_with_history where name='ss1' order by dropped_on limit 1;
 ----
 ss1 1

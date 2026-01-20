@@ -14,8 +14,6 @@
 
 use std::str::FromStr;
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -30,7 +28,7 @@ use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use jsonb::OwnedJsonb;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_virtual_column_builder() -> Result<()> {
+async fn test_virtual_column_builder() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
@@ -398,7 +396,7 @@ async fn test_virtual_column_builder() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_virtual_column_builder_stream_write() -> Result<()> {
+async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()

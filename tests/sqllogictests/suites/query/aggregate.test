@@ -50,39 +50,39 @@ select * from numbers(10) order by sum(number)
 
 ## decimal types
 
-query I
+query RR
 select sum(number::Decimal(19, 1)) as c, sum(number::Decimal(66, 1)) as c from numbers(10000);
 ----
 49995000.0 49995000.0
 
-query T
+query TT
 select typeof(sum(number::Decimal(19, 1))), typeof(sum(number::Decimal(66, 1)))  from numbers(1000);
 ----
 DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
 
-query IIT
+query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
 ----
 3283.5 3283.500000000000 DECIMAL(76, 12) NULL
 
-query IIT
+query RRT
 select avg(number),  avg( number::Decimal(36, 7) ), typeof(avg( number::Decimal(36, 7) )) from numbers(100);
 ----
 49.5 49.500000000000 DECIMAL(38, 12) NULL
 
 ## chatgpt tests
 
-query I
+query R
 SELECT CAST(SUM(value) AS DECIMAL(10, 2)) AS sum FROM (SELECT CAST(number AS DECIMAL(10, 2)) / 100 AS value FROM numbers(5)) AS t;
 ----
 0.10
 
-query I
+query R
 SELECT CAST(SUM(value) AS DECIMAL(30, 10)) AS sum FROM (SELECT CAST(number AS DECIMAL(30, 10)) / 10000000000 AS value FROM numbers(5)) AS t;
 ----
 0.0000000010
 
-query I
+query R
 SELECT CAST(AVG(value) AS DECIMAL(30, 10)) AS avg FROM (SELECT CAST(number AS DECIMAL(30, 10)) / 10000000000 AS value FROM numbers(5)) AS t;
 ----
 0.0000000002
@@ -100,7 +100,7 @@ select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc ;
 statement ok
 insert into tc values(null, '2022-02-03');
 
-query III
+query RII
 SELECT AVG(1 + a), sum(1 + a), count(1 + a) FROM tc;
 ----
 3.0 9 3
@@ -168,7 +168,7 @@ INSERT INTO time_periods VALUES
 (102, '2021-07-01', '2021-12-31', 'TYPE_2', 'TYPE_1', null, null);
 
 ## Query that reproduces the issue
-query ??????? rowsort
+query TIIII?ITTITT rowsort
 with date_sequence as (
     select min(start_date) as min_date, max(end_date) as max_date,
     ((YEAR(max(end_date)) - YEAR(min(start_date)))*12) + (MONTH(max(end_date)) - MONTH(min(start_date))) as total_months
@@ -230,3 +230,55 @@ X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
 
 statement ok
 drop database sample_test
+
+statement ok
+set enable_experiment_aggregate = 1;
+
+statement ok
+set force_aggregate_shuffle_mode = 'bucket';
+
+query I
+select count(*) from (select number from numbers(1) group by number);
+----
+1
+
+query I
+select count(*) from (select number from numbers(2) group by number);
+----
+2
+
+query I
+select count(*) from (select number from numbers(2000000) group by number);
+----
+2000000
+
+
+## Aggregation without Exchange source
+query III
+SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+----
+1 0 0
+
+statement ok
+set force_aggregate_shuffle_mode = 'row';
+
+query I
+select count(*) from (select number from numbers(1) group by number);
+----
+1
+
+query I
+select count(*) from (select number from numbers(2) group by number);
+----
+2
+
+query I
+select count(*) from (select number from numbers(2000000) group by number);
+----
+2000000
+
+## Aggregation without Exchange source
+query III
+SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+----
+1 0 0

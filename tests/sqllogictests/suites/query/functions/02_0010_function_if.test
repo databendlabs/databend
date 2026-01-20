@@ -22,7 +22,7 @@ select [{}] from numbers(3)
 [{}]
 [{}]
 
-query ?
+query B
 select if(number>1, true, false) from numbers(3) order by number
 ----
 0
@@ -51,21 +51,21 @@ zero
 Z+
 Z+
 
-query ?
+query B
 select if(number<1, true, null) from numbers(3) order by number
 ----
 1
 NULL
 NULL
 
-query ?
+query R
 select if(number<4, number, number / 0) from numbers(3) order by number
 ----
 0.0
 1.0
 2.0
 
-query ?
+query R
 select if(number>4, number / 0, number) from numbers(3) order by number
 ----
 0.0
@@ -75,7 +75,7 @@ select if(number>4, number / 0, number) from numbers(3) order by number
 statement error 1006
 select if(number<4, number / 0, number) from numbers(3) order by number
 
-query ?
+query R
 select if (number > 0, 1 / number, null) from numbers(2);
 ----
 NULL
@@ -111,12 +111,12 @@ multi-if
 statement error 1065
 select if(number = 4, 3) from numbers(1)
 
-query ?
+query R
 select if(number = 1, number, number = 0, number, number / 0) from numbers(1)
 ----
 0.0
 
-query ?
+query R
 select if (number > 0, 1 / number, null) from numbers(2);
 ----
 NULL
@@ -149,12 +149,12 @@ SELECT 'constant'
 ----
 constant
 
-query II
+query ?I
 select if(true, null, number), if(false, null, number) from numbers(1)
 ----
 NULL 0
 
-query II
+query I?
 select if(true, number, null), if(false, number, null) from numbers(1)
 ----
 0 NULL
@@ -169,7 +169,7 @@ INSERT INTO t (a) VALUES
     (NULL),
     (4);
 
-query II
+query III
 select a, a*2, if(a=1, a*2, a*3) from t
 ----
 1 2 2
@@ -177,7 +177,7 @@ select a, a*2, if(a=1, a*2, a*3) from t
 NULL NULL NULL
 4 8 12
 
-query II
+query IT
 select a, decode(a, 1, 'one',
 	2, 'two',
 	NULL, '-NULL-',

@@ -20,10 +20,10 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::future::TimedFutureExt;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingGuard;
+use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
@@ -41,6 +41,8 @@ use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -50,7 +52,9 @@ use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_metrics::count::Count;
+use databend_common_metrics::count::WithCount;
 use databend_common_tracing::start_trace_for_remote_request;
+use display_more::DisplayOptionExt;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -61,6 +65,7 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
+use semver::Version;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::Request;
@@ -82,24 +87,71 @@ use crate::version::MIN_METACLI_SEMVER;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 
-/// Metrics collector that logs when dropped
-struct MetricsCollector {
-    count: u64,
-    start: Instant,
-    req_str: String,
+/// Guard type for in-flight read requests.
+type InFlightReadGuard = WithCount<InFlightRead, ()>;
+
+/// A request that is currently being processed.
+///
+/// Created when request handling begins, dropped when stream completes.
+/// Holds guards that should live for the entire streaming lifecycle.
+struct InFlightRequest {
+    /// Guard to track in-flight request count.
+    _guard: InFlightReadGuard,
+    /// Label for `incr_stream_sent_item` metrics.
+    metrics_label: &'static str,
+    /// Logs stream throughput stats when dropped.
+    throughput_logger: ThroughputLogger,
 }
 
-impl MetricsCollector {
-    fn new(req_str: String) -> Self {
+impl InFlightRequest {
+    /// Create from request reference (extracts thread tracking automatically).
+    fn new(metrics_label: &'static str, log_label: String) -> Self {
         Self {
-            count: 0,
-            start: Instant::now(),
-            req_str,
+            _guard: InFlightRead::guard(),
+            metrics_label,
+            throughput_logger: ThroughputLogger::new(log_label),
         }
+    }
+
+    /// Wrap a stream with in-flight tracking; logs throughput when stream completes.
+    fn track<S>(mut self, strm: S) -> impl Stream<Item = Result<StreamItem, Status>>
+    where S: Stream<Item = Result<StreamItem, Status>> {
+        let metrics_label = self.metrics_label;
+        strm.map(move |item| {
+            // Reference guards to keep them alive for stream lifetime.
+            // Rust 2021 closures only capture fields that are used;
+            // without these references, guards would be dropped when track() returns.
+            let _guard = &self._guard;
+
+            network_metrics::incr_stream_sent_item(metrics_label);
+            self.throughput_logger.incr_count();
+            item
+        })
     }
 }
 
-impl Drop for MetricsCollector {
+/// Logs stream throughput stats (items/ms, latency) when dropped.
+struct ThroughputLogger {
+    count: u64,
+    start: Instant,
+    log_label: String,
+}
+
+impl ThroughputLogger {
+    fn new(log_label: String) -> Self {
+        Self {
+            count: 0,
+            start: Instant::now(),
+            log_label,
+        }
+    }
+
+    fn incr_count(&mut self) {
+        self.count += 1;
+    }
+}
+
+impl Drop for ThroughputLogger {
     fn drop(&mut self) {
         let total = self.start.elapsed();
         let total_items = self.count;
@@ -107,14 +159,14 @@ impl Drop for MetricsCollector {
         let latency = total / (total_items.max(1) as u32);
         info!(
             "StreamElapsed: total: {:?}; items: {}, items/ms: {}, item_latency: {:?}; {}",
-            total, total_items, items_per_ms, latency, self.req_str
+            total, total_items, items_per_ms, latency, self.log_label
         );
     }
 }
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
-    version: BuildInfoRef,
+    version: Version,
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
@@ -134,7 +186,7 @@ impl Drop for MetaServiceImpl {
 impl MetaServiceImpl {
     pub fn create(meta_handle: Weak<MetaHandle>) -> Self {
         Self {
-            version: meta_handle.upgrade().unwrap().version,
+            version: meta_handle.upgrade().unwrap().version.clone(),
             token: GrpcToken::create(),
             meta_handle,
         }
@@ -206,6 +258,42 @@ impl MetaServiceImpl {
             .map_err(GrpcHelper::internal_err);
 
         network_metrics::incr_request_result(res.is_ok());
+        res
+    }
+
+    #[fastrace::trace]
+    async fn handle_kv_list(
+        &self,
+        prefix: String,
+        limit: Option<u64>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        debug!(
+            "{}: Received KvListRequest: prefix={}, limit={}",
+            func_name!(),
+            prefix,
+            limit.display()
+        );
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let res = meta_handle.handle_kv_list(prefix, limit).await;
+        network_metrics::incr_request_result(res.is_ok());
+
+        res
+    }
+
+    #[fastrace::trace]
+    async fn handle_kv_get_many(
+        &self,
+        input: impl Stream<Item = Result<KvGetManyRequest, Status>> + Send + 'static,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        debug!("{}: Received KvGetMany stream", func_name!());
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let res = meta_handle.handle_kv_get_many(input).await;
+        network_metrics::incr_request_result(res.is_ok());
+
         res
     }
 
@@ -293,7 +381,7 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
-                protocol_version: to_digit_ver(&self.version.semantic),
+                protocol_version: to_digit_ver(&self.version),
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });
@@ -311,62 +399,114 @@ impl MetaService for MetaServiceImpl {
     async fn kv_api(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         self.check_token(request.metadata())?;
 
-        let _guard = thread_tracking_guard(&request);
-        ThreadTracker::tracking_future(async move {
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = start_trace_for_remote_request(func_path!(), &request);
+        let tracking_payload = new_tracking_payload(&request);
+
+        let fu = async move {
             let _guard = InFlightWrite::guard();
 
-            let root = start_trace_for_remote_request(func_path!(), &request);
-            let reply = self.handle_kv_api(request).in_span(root).await?;
+            let reply = self.handle_kv_api(request).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
             Ok(Response::new(reply))
-        })
-        .await
+        };
+
+        tracking_payload.tracking(fu.in_span(root)).await
     }
 
     type KvReadV1Stream = BoxStream<StreamItem>;
 
-    #[allow(unused)]
     async fn kv_read_v1(
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
         self.check_token(request.metadata())?;
 
-        let _guard = thread_tracking_guard(&request);
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = start_trace_for_remote_request(func_path!(), &request);
+        let tracking_payload = new_tracking_payload(&request);
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+        let in_flight = InFlightRequest::new(req.type_name(), format!("ReadRequest: {:?}", req));
+
+        let fut = async {
+            let (endpoint, strm) = self.handle_kv_read_v1(req).await?;
+
+            let strm = in_flight.track(strm);
+
+            let mut resp = Response::new(strm.boxed());
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+            Ok(resp)
+        };
+
+        tracking_payload.tracking(fut.in_span(root)).await
+    }
+
+    type KvListStream = BoxStream<StreamItem>;
+
+    /// List key-value pairs by prefix.
+    ///
+    /// This RPC requires leadership. If this node is not the leader,
+    /// it returns a `Status::unavailable` error with the leader's endpoint in metadata.
+    /// Clients should retry with the leader directly.
+    async fn kv_list(
+        &self,
+        request: Request<KvListRequest>,
+    ) -> Result<Response<Self::KvListStream>, Status> {
+        self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = start_trace_for_remote_request(func_path!(), &request);
+        let tracking_payload = new_tracking_payload(&request);
+        let in_flight = InFlightRequest::new(
+            "kv_list",
+            format!(
+                "KvList: prefix={}, limit={}",
+                request.get_ref().prefix,
+                request.get_ref().limit.display()
+            ),
+        );
+        let req = request.into_inner();
+
+        let fut = async {
+            let strm = self.handle_kv_list(req.prefix, req.limit).await?;
+
+            let strm = in_flight.track(strm);
+            Ok(Response::new(strm.boxed()))
+        };
+
+        tracking_payload.tracking(fut.in_span(root)).await
+    }
+
+    type KvGetManyStream = BoxStream<StreamItem>;
+
+    /// Get multiple key-value pairs by streaming keys.
+    ///
+    /// This RPC requires leadership. If this node is not the leader,
+    /// it returns a `Status::unavailable` error with the leader's endpoint in metadata.
+    /// Clients should retry with the leader directly.
+    async fn kv_get_many(
+        &self,
+        request: Request<Streaming<KvGetManyRequest>>,
+    ) -> Result<Response<Self::KvGetManyStream>, Status> {
+        self.check_token(request.metadata())?;
 
         let root = start_trace_for_remote_request(func_path!(), &request);
+        let tracking_payload = new_tracking_payload(&request);
+        let in_flight = InFlightRequest::new("kv_get_many", "KvGetMany".to_string());
+        let input = request
+            .into_inner()
+            .inspect_ok(|req| network_metrics::incr_recv_bytes(req.encoded_len() as u64));
 
-        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
-        let req_typ = req.type_name();
-        let req_str = format!("ReadRequest: {:?}", req);
+        let fut = async {
+            let strm = self.handle_kv_get_many(input).await?;
 
-        ThreadTracker::tracking_future(async move {
-            let guard = InFlightRead::guard();
-            let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
+            let strm = in_flight.track(strm);
+            Ok(Response::new(strm.boxed()))
+        };
 
-            // MetricsCollector logs metrics when dropped
-            let mut _collector = MetricsCollector::new(req_str);
-
-            let strm = strm.map(move |item| {
-                let _g = &guard; // hold the guard until the stream is done.
-                network_metrics::incr_stream_sent_item(req_typ);
-                _collector.count += 1;
-                item
-            });
-
-            let strm = strm.boxed();
-
-            let mut resp = Response::new(strm);
-            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
-
-            Ok(resp)
-        })
-        .await
+        tracking_payload.tracking(fut.in_span(root)).await
     }
 
     async fn transaction(
@@ -375,23 +515,24 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
 
-        let _guard = thread_tracking_guard(&request);
+        let tracking_payload = new_tracking_payload(&request);
 
-        ThreadTracker::tracking_future(async move {
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = InFlightWrite::guard();
+        tracking_payload
+            .tracking(async move {
+                network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+                let _guard = InFlightWrite::guard();
 
-            let root = start_trace_for_remote_request(func_path!(), &request);
-            let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
+                let root = start_trace_for_remote_request(func_path!(), &request);
+                let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
-            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+                network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-            let mut resp = Response::new(reply);
-            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+                let mut resp = Response::new(reply);
+                GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
 
-            Ok(resp)
-        })
-        .await
+                Ok(resp)
+            })
+            .await
     }
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
@@ -592,16 +733,15 @@ impl MetaService for MetaServiceImpl {
     }
 }
 
-fn thread_tracking_guard<T>(req: &tonic::Request<T>) -> Option<TrackingGuard> {
-    if let Some(value) = req.metadata().get("QueryID") {
-        if let Ok(value) = value.to_str() {
-            let mut tracking_payload = ThreadTracker::new_tracking_payload();
-            tracking_payload.query_id = Some(value.to_string());
-            return Some(ThreadTracker::tracking(tracking_payload));
-        }
-    }
+fn new_tracking_payload<T>(req: &Request<T>) -> Option<Arc<TrackingPayload>> {
+    let value = req.metadata().get("QueryID")?;
 
-    None
+    let value = value.to_str().ok()?;
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(value.to_string());
+
+    Some(Arc::new(tracking_payload))
 }
 
 /// Try to remove a [`WatchStream`] from the subscriber.

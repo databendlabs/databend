@@ -20,9 +20,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use databend_common_base::base::GlobalSequence;
-use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
+use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -67,7 +65,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         .await??;
 
     let mut srv = GrpcServer::create(tc.config.clone(), mh);
-    srv.start().await?;
+    srv.do_start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 
     Ok(())
@@ -102,7 +100,7 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
 pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses,
-        &BUILD_INFO,
+        BUILD_INFO.semver(),
         "root",
         "xxx",
         Some(Duration::from_secs(2)), // timeout
@@ -114,7 +112,7 @@ pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, Cre
 }
 
 pub fn next_port() -> u16 {
-    29000u16 + (GlobalSequence::next() as u16)
+    29000u16 + (GlobalSeq::next() as u16)
 }
 
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
@@ -210,7 +208,7 @@ impl MetaSrvTestContext {
 
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            &BUILD_INFO,
+            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
@@ -269,9 +267,16 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client =
-            MetaGrpcClient::try_create(vec![addr], &BUILD_INFO, "root", "xxx", None, None, None)
-                .unwrap();
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            BUILD_INFO.semver(),
+            "root",
+            "xxx",
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

@@ -68,37 +68,37 @@ SELECT INSTR('', '')
 ----
 1
 
-query T
+query I
 SELECT INSTR('你你好你', '你', 1);
 ----
 1
 
-query T
+query I
 SELECT INSTR('你你好你', '你', 1, 1);
 ----
 1
 
-query T
+query I
 SELECT INSTR('你你好你', '你', 1, 2);
 ----
 2
 
-query T
+query I
 SELECT INSTR('你你好你', '你', -1, 1);
 ----
 4
 
-query T
+query I
 SELECT INSTR('你你好你', '你', -1, 2);
 ----
 2
 
-query T
+query I
 SELECT INSTR('CORPORATE FLOOR','OR', 3, 2);
 ----
 14
 
-query T
+query I
 SELECT INSTR('CORPORATE FLOOR','OR', -3, 2)
 ----
 2
@@ -109,13 +109,13 @@ create or replace table t(c1 string);
 statement ok
 insert into t values('CORPORATE FLOOR'),('你你好你');
 
-query T
+query I
 select instr(c1,'OR', -3, 2) from t;
 ----
 2
 0
 
-query T
+query I
 select instr(c1,'你', -1) from t;
 ----
 0

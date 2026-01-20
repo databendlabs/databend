@@ -12,7 +12,6 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
@@ -39,9 +38,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thrift = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+databend-base = { workspace = true }
 goldenfile = { workspace = true }
 maplit = { workspace = true }
 

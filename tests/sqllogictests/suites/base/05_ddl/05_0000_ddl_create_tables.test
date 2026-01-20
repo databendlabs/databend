@@ -158,7 +158,7 @@ insert into db2.test55(id) select number % 3 from numbers(1000)
 statement ok
 insert into db2.test55(id) select number % 3 from numbers(1000)
 
-query I
+query B
 select count(distinct created) > 1 from db2.test55;
 ----
 1
@@ -179,7 +179,7 @@ created TIMESTAMP NO now() (empty)
 statement ok
 INSERT INTO db2.test6 (id) VALUES (1)
 
-query IIT
+query IIB
 SELECT id, a, now() >= created FROM db2.test6;
 ----
 1 3 1
@@ -261,7 +261,7 @@ c ARRAY(INT32) YES [10, 20] (empty)
 statement ok
 insert into test10 (a) values (100),(200)
 
-query ITT
+query I??
 select * from test10
 ----
 100 (1,2) [10,20]
@@ -459,7 +459,7 @@ c VARIANT NO '{"k":"v"}' (empty)
 statement ok
 insert into t_default (a) values(1),(2)
 
-query ITT
+query IT?
 select a, to_string(b), c from t_default
 ----
 1 1,2 {"k":"v"}
@@ -632,18 +632,18 @@ set ddl_column_type_nullable=0;
 statement ok
 create or replace table b as select 123 as col1, null  as col2;
 
-query T
+query TTTTT
 desc b;
 ----
 col1 TINYINT UNSIGNED NO 0 (empty)
 col2 VARCHAR YES NULL (empty)
 
-query T
+query TT
 show create table b;
 ----
 b CREATE TABLE b (     col1 TINYINT UNSIGNED NOT NULL,     col2 VARCHAR NULL   ) ENGINE=FUSE
 
-query TT
+query IT
 select * from b;
 ----
 123 NULL
@@ -657,7 +657,7 @@ set ddl_column_type_nullable=1;
 statement ok
 create or replace table b as select 123 as col1;
 
-query T
+query TTTTT
 desc b;
 ----
 col1 TINYINT UNSIGNED YES NULL (empty)
@@ -668,7 +668,7 @@ set ddl_column_type_nullable=0;
 statement ok
 create or replace table b as select 123 as col1;
 
-query T
+query TTTTT
 desc b;
 ----
 col1 TINYINT UNSIGNED NO 0 (empty)
@@ -688,7 +688,7 @@ create or replace table t (a string default '\'0\'', b int);
 statement ok
 insert into t(b)  values (1)
 
-query
+query ?
 select '\'0\'' = a from t
 ----
 1
@@ -705,7 +705,7 @@ insert into test_timestamp_tz values(0, '2024-10-22 12:00:00+0900');
 statement ok
 insert into test_timestamp_tz values(1, '2024-10-22 12:00:00');
 
-query T rowsort
+query IT rowsort
 select c1, c2::STRING from test_timestamp_tz;
 ----
 0 2024-10-22 12:00:00.000000 +0900

@@ -91,7 +91,7 @@ impl Join for OuterLeftHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<false>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -110,7 +110,7 @@ impl Join for OuterLeftHashJoin {
                 .map(|x| x.data_type().clone())
                 .collect::<Vec<_>>();
 
-            let build_block = null_build_block(&types, data.num_rows());
+            let build_block = null_block(&types, data.num_rows());
             let probe_block = Some(data.project(&self.desc.probe_projections));
             let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
             return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
@@ -206,11 +206,14 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
                 let probe_block = match self.probe_data_block.num_columns() {
                     0 => None,
-                    _ => Some(DataBlock::take(&self.probe_data_block, &unmatched_row_id)?),
+                    _ => Some(DataBlock::take(
+                        &self.probe_data_block,
+                        unmatched_row_id.as_slice(),
+                    )?),
                 };
 
                 let types = &self.join_state.column_types;
-                let build_block = null_build_block(types, unmatched_row_id.len());
+                let build_block = null_block(types, unmatched_row_id.len());
 
                 return Ok(Some(final_result_block(
                     &self.desc,
@@ -228,7 +231,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -240,7 +243,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     );
 
                     let true_validity = Bitmap::new_constant(true, row_ptrs.len());
@@ -316,7 +318,7 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
     }
 }
 
-fn final_result_block(
+pub fn final_result_block(
     desc: &HashJoinDesc,
     probe_block: Option<DataBlock>,
     build_block: Option<DataBlock>,
@@ -357,7 +359,7 @@ fn final_result_block(
     result_block
 }
 
-fn null_build_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
+pub fn null_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
     match types.is_empty() {
         true => None,
         false => {

@@ -16,8 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyerror::AnyError;
-use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio::sync::broadcast;
+use databend_base::shutdown::Graceful;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
 use databend_common_http::health_handler;
@@ -26,6 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_meta_types::MetaNetworkError;
+use futures::future::BoxFuture;
 use log::info;
 use log::warn;
 use poem::Endpoint;
@@ -123,30 +123,31 @@ impl HttpService {
             .await?;
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl Stoppable for HttpService {
-    type Error = AnyError;
-
-    async fn start(&mut self) -> Result<(), Self::Error> {
+    pub async fn do_start(&mut self) -> Result<(), HttpError> {
         let conf = self.cfg.clone();
         let listening = conf
             .admin_api_address
             .parse::<SocketAddr>()
-            .map_err(|e| AnyError::new(&e))?;
+            .map_err(|e| HttpError::BadAddressFormat(AnyError::new(&e)))?;
 
-        let res =
-            match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
-                true => self.start_without_tls(listening).await,
-                false => self.start_with_tls(listening).await,
-            };
-
-        res.map_err(|e| AnyError::new(&e))
+        match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
+            true => self.start_without_tls(listening).await,
+            false => self.start_with_tls(listening).await,
+        }
     }
 
-    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<(), Self::Error> {
+    pub async fn do_stop(&mut self, force: Option<BoxFuture<'static, ()>>) {
         self.shutdown_handler.stop(force).await;
+    }
+}
+
+#[async_trait::async_trait]
+impl Graceful for HttpService {
+    type Error = AnyError;
+
+    async fn shutdown(&mut self, force: Option<BoxFuture<'static, ()>>) -> Result<(), Self::Error> {
+        self.do_stop(force).await;
         Ok(())
     }
 }

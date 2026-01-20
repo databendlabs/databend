@@ -19,7 +19,6 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use databend_common_ast::ast::UriLocation;
-use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -38,7 +37,7 @@ use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_sql::planner::binder::parse_uri_location;
 
 #[tokio::test]
-async fn test_parse_uri_location() -> Result<()> {
+async fn test_parse_uri_location() -> anyhow::Result<()> {
     let thread_name = std::thread::current()
         .name()
         .map(ToString::to_string)

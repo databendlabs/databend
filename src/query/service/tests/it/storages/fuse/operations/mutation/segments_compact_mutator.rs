@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -66,7 +65,7 @@ use rand::Rng;
 use rand::thread_rng;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact_segment_normal_case() -> Result<()> {
+async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     // setup
@@ -106,7 +105,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact_segment_resolvable_conflict() -> Result<()> {
+async fn test_compact_segment_resolvable_conflict() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
@@ -164,7 +163,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
+async fn test_compact_segment_unresolvable_conflict() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     // setup
@@ -280,7 +279,7 @@ async fn build_mutator(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_segment_compactor() -> Result<()> {
+async fn test_segment_compactor() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let threshold_10 = BlockThresholds {
@@ -966,7 +965,7 @@ impl CompactCase {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact_segment_with_cluster() -> Result<()> {
+async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
     let cluster_key_id = 0;
     let chunk_size = 6;
     let threshold = BlockThresholds {

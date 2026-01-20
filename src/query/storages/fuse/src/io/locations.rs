@@ -198,19 +198,18 @@ impl TableMetaLocationGenerator {
         }
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
-        let snapshot_version = SnapshotVersion::try_from(version)?;
-        Ok(snapshot_version.create(id, &self.prefix))
-    }
-
-    pub fn ref_snapshot_location_from_uuid(
+    pub fn gen_snapshot_location(
         &self,
-        table_ref: u64,
+        branch_id: Option<u64>,
         id: &Uuid,
         version: u64,
     ) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
-        Ok(snapshot_version.create_ref(table_ref, id, &self.prefix))
+        let location = match branch_id {
+            Some(branch) => snapshot_version.create_ref(branch, id, &self.prefix),
+            _ => snapshot_version.create(id, &self.prefix),
+        };
+        Ok(location)
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {

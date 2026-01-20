@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use async_channel::bounded;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_tracing::Config;
 use databend_common_tracing::GlobalLogger;
@@ -58,7 +57,7 @@ fn get_remote_log_elements() -> RemoteLogElement {
 }
 
 #[test]
-fn test_basic_parse() -> Result<()> {
+fn test_basic_parse() -> anyhow::Result<()> {
     let (remote_log, _guard) = setup()?;
     let record = Record::builder()
         .args(format_args!("begin to list files"))
@@ -84,14 +83,14 @@ fn test_basic_parse() -> Result<()> {
 }
 
 #[test]
-fn test_convert_to_batch() -> Result<()> {
+fn test_convert_to_batch() -> anyhow::Result<()> {
     let elements = vec![get_remote_log_elements()];
     let _ = convert_to_batch(elements).unwrap();
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_buffer_flush_with_buffer_limit() -> Result<()> {
+async fn test_buffer_flush_with_buffer_limit() -> anyhow::Result<()> {
     let (tx, rx) = bounded(10);
     let interval = Duration::from_secs(100).as_micros() as u64;
     let buffer = Arc::new(RemoteLogBuffer::new(tx.clone(), interval));
@@ -106,7 +105,7 @@ async fn test_buffer_flush_with_buffer_limit() -> Result<()> {
 }
 
 #[test]
-fn test_buffer_flush_with_buffer_interval() -> Result<()> {
+fn test_buffer_flush_with_buffer_interval() -> anyhow::Result<()> {
     init_global_logger()?;
     let (tx, rx) = bounded(10);
     let interval = Duration::from_secs(1).as_micros() as u64;
@@ -124,7 +123,7 @@ fn test_buffer_flush_with_buffer_interval() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_buffer_flush_with_force_collect() -> Result<()> {
+async fn test_buffer_flush_with_force_collect() -> anyhow::Result<()> {
     // This simulates guard is dropped and collect is called
     let (tx, rx) = bounded(10);
     let interval = Duration::from_secs(100).as_micros() as u64;
@@ -141,7 +140,7 @@ async fn test_buffer_flush_with_force_collect() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_do_flush() -> Result<()> {
+async fn test_do_flush() -> anyhow::Result<()> {
     let builder = services::Memory::default();
     let op = Operator::new(builder)?.finish();
 

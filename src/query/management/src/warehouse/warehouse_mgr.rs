@@ -17,16 +17,16 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::time::Duration;
 
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::escape_for_key;
-use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
@@ -47,6 +47,7 @@ use databend_common_meta_types::txn_op_response::Response;
 use log::error;
 use log::info;
 
+use crate::errors::meta_service_error;
 use crate::warehouse::WarehouseApi;
 use crate::warehouse::warehouse_api::SelectedNode;
 use crate::warehouse::warehouse_api::SystemManagedCluster;
@@ -130,7 +131,13 @@ impl WarehouseMgr {
             txn.if_then.push(TxnOp::delete(cluster_node_key));
         }
 
-        match self.metastore.transaction(txn).await?.success {
+        match self
+            .metastore
+            .transaction(txn)
+            .await
+            .map_err(meta_service_error)?
+            .success
+        {
             true => Ok(()),
             false => Err(ErrorCode::ClusterUnknownNode(format!(
                 "Node with ID '{}' does not exist in the cluster.",
@@ -231,7 +238,11 @@ impl WarehouseMgr {
                 .condition
                 .push(TxnCondition::eq_seq(&warehouse_key, wh_seq));
 
-            let mut txn_reply = self.metastore.transaction(warehouse_txn).await?;
+            let mut txn_reply = self
+                .metastore
+                .transaction(warehouse_txn)
+                .await
+                .map_err(meta_service_error)?;
 
             if txn_reply.success {
                 return Ok(txn_reply);
@@ -244,7 +255,9 @@ impl WarehouseMgr {
                 let first = txn_reply.responses.first();
 
                 let node_get_resp = first.map(|r| r.as_get());
-                let node_get_resp = node_get_resp.ok_or_else(|| invalid_get_resp(first))?;
+                let node_get_resp = node_get_resp
+                    .ok_or_else(|| invalid_get_resp(first))
+                    .map_err(meta_service_error)?;
 
                 let exact_seq = MatchSeq::Exact(0);
                 if exact_seq.match_seq(&node_get_resp.value).is_err() {
@@ -259,7 +272,9 @@ impl WarehouseMgr {
                 let last = txn_reply.responses.pop();
 
                 let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
-                let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
+                let wh_get_resp = wh_get_resp
+                    .ok_or_else(|| invalid_get_resp(last.as_ref()))
+                    .map_err(meta_service_error)?;
 
                 if let Some(wh_seqv) = &wh_get_resp.value {
                     let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
@@ -323,7 +338,11 @@ impl WarehouseMgr {
 
         txn.else_then = vec![TxnOp::get(&node_key), TxnOp::get(&warehouse_key)];
 
-        let mut txn_reply = self.metastore.transaction(txn).await?;
+        let mut txn_reply = self
+            .metastore
+            .transaction(txn)
+            .await
+            .map_err(meta_service_error)?;
 
         if !txn_reply.success {
             // txn_reply includes: 1. get node response 2. get warehouse response
@@ -333,7 +352,9 @@ impl WarehouseMgr {
             let last = txn_reply.responses.pop();
 
             let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
-            let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
+            let wh_get_resp = wh_get_resp
+                .ok_or_else(|| invalid_get_resp(last.as_ref()))
+                .map_err(meta_service_error)?;
 
             if let Some(wh_seqv) = &wh_get_resp.value {
                 let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
@@ -369,8 +390,9 @@ impl WarehouseMgr {
 
         let list_reply = self
             .metastore
-            .list_kv_collect(&self.warehouse_info_key_prefix)
-            .await?;
+            .list_kv_collect(ListOptions::unlimited(&self.warehouse_info_key_prefix))
+            .await
+            .map_err(meta_service_error)?;
 
         let mut unhealthy_warehouses = HashMap::with_capacity(list_reply.len());
 
@@ -525,7 +547,13 @@ impl WarehouseMgr {
                 ),
             ];
 
-            if self.metastore.transaction(txn).await?.success {
+            if self
+                .metastore
+                .transaction(txn)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(true);
             }
 
@@ -556,11 +584,18 @@ impl WarehouseMgr {
                 TxnOp::get(node_key.clone()),
             ];
 
-            return Ok(self.metastore.transaction(txn).await?);
+            return self
+                .metastore
+                .transaction(txn)
+                .await
+                .map_err(meta_service_error);
         }
 
         txn.if_then = vec![TxnOp::get(node_key.clone())];
-        Ok(self.metastore.transaction(txn).await?)
+        self.metastore
+            .transaction(txn)
+            .await
+            .map_err(meta_service_error)
     }
 
     async fn update_system_managed_node(&self, node: NodeInfo, seq: u64) -> Result<TxnReply> {
@@ -590,7 +625,10 @@ impl WarehouseMgr {
 
         txn.if_then.push(TxnOp::get(node_key.clone()));
         txn.else_then.push(TxnOp::get(node_key.clone()));
-        Ok(self.metastore.transaction(txn).await?)
+        self.metastore
+            .transaction(txn)
+            .await
+            .map_err(meta_service_error)
     }
 
     async fn heartbeat_system_managed(&self, node: NodeInfo, seq: u64) -> Result<TxnReply> {
@@ -620,7 +658,10 @@ impl WarehouseMgr {
 
         txn.if_then.push(TxnOp::get(node_key.clone()));
         txn.else_then.push(TxnOp::get(node_key.clone()));
-        Ok(self.metastore.transaction(txn).await?)
+        self.metastore
+            .transaction(txn)
+            .await
+            .map_err(meta_service_error)
     }
 
     async fn leave_warehouse(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
@@ -701,14 +742,23 @@ impl WarehouseMgr {
         let nodes_prefix = format!("{}/{}/", self.cluster_node_key_prefix, escape_for_key(id)?);
 
         'get_warehouse_snapshot: for _idx in 0..64 {
-            let Some(before_info) = self.metastore.get_kv(&warehouse_info_key).await? else {
+            let Some(before_info) = self
+                .metastore
+                .get_kv(&warehouse_info_key)
+                .await
+                .map_err(meta_service_error)?
+            else {
                 return Err(ErrorCode::UnknownWarehouse(format!(
                     "Unknown warehouse or self managed warehouse {:?}",
                     id
                 )));
             };
 
-            let values = self.metastore.list_kv_collect(&nodes_prefix).await?;
+            let values = self
+                .metastore
+                .list_kv_collect(ListOptions::unlimited(&nodes_prefix))
+                .await
+                .map_err(meta_service_error)?;
 
             let mut after_txn = TxnRequest::default();
             let mut cluster_node_seq = Vec::with_capacity(values.len());
@@ -734,7 +784,11 @@ impl WarehouseMgr {
             let condition = map_condition(&warehouse_info_key, MatchSeq::Exact(before_info.seq));
             after_txn.condition.push(condition);
 
-            let txn_reply = self.metastore.transaction(after_txn).await?;
+            let txn_reply = self
+                .metastore
+                .transaction(after_txn)
+                .await
+                .map_err(meta_service_error)?;
 
             if !txn_reply.success {
                 // The snapshot version status has changed; need to retry obtaining the snapshot.
@@ -811,7 +865,13 @@ impl WarehouseMgr {
             txn.if_then.push(TxnOp::delete(node_key));
             txn.if_then.push(TxnOp::delete(cluster_node_key));
 
-            if self.metastore.transaction(txn).await?.success {
+            if self
+                .metastore
+                .transaction(txn)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(());
             }
         }
@@ -824,8 +884,9 @@ impl WarehouseMgr {
     async fn unassigned_nodes(&self) -> Result<HashMap<Option<String>, Vec<(u64, NodeInfo)>>> {
         let online_nodes = self
             .metastore
-            .list_kv_collect(&self.node_key_prefix)
-            .await?;
+            .list_kv_collect(ListOptions::unlimited(&self.node_key_prefix))
+            .await
+            .map_err(meta_service_error)?;
         let mut unassigned_nodes = HashMap::with_capacity(online_nodes.len());
 
         for (_, seq_data) in online_nodes {
@@ -989,7 +1050,12 @@ impl WarehouseApi for WarehouseMgr {
     async fn shutdown_node(&self, node_id: String) -> Result<()> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(&node_id)?);
 
-        if let Some(info) = self.metastore.get_kv(&node_key).await? {
+        if let Some(info) = self
+            .metastore
+            .get_kv(&node_key)
+            .await
+            .map_err(meta_service_error)?
+        {
             let node_info: NodeInfo = serde_json::from_slice(&info.data)?;
 
             return match node_info.node_type {
@@ -1085,7 +1151,13 @@ impl WarehouseApi for WarehouseMgr {
                 ));
             }
 
-            if !self.metastore.transaction(delete_txn).await?.success {
+            if !self
+                .metastore
+                .transaction(delete_txn)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 // seq is changed, will retry
                 continue;
             }
@@ -1149,7 +1221,7 @@ impl WarehouseApi for WarehouseMgr {
             let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
 
             let warehouse_info = WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                role_id: GlobalUniqName::unique(),
+                role_id: GlobalUniq::unique(),
                 status: "Running".to_string(),
                 id: warehouse.clone(),
                 clusters: HashMap::from([(
@@ -1168,7 +1240,12 @@ impl WarehouseApi for WarehouseMgr {
             ));
             txn.else_then.push(TxnOp::get(warehouse_info_key));
 
-            return match self.metastore.transaction(txn).await? {
+            return match self
+                .metastore
+                .transaction(txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 res if res.success => Ok(warehouse_info),
                 res => match res.responses.last() {
                     Some(TxnOpResponse {
@@ -1226,8 +1303,9 @@ impl WarehouseApi for WarehouseMgr {
             // get online nodes
             let online_nodes = self
                 .metastore
-                .list_kv_collect(&self.node_key_prefix)
-                .await?;
+                .list_kv_collect(ListOptions::unlimited(&self.node_key_prefix))
+                .await
+                .map_err(meta_service_error)?;
 
             let mut unassign_online_nodes = Vec::with_capacity(online_nodes.len());
 
@@ -1298,7 +1376,13 @@ impl WarehouseApi for WarehouseMgr {
                 serde_json::to_vec(&warehouse_info.warehouse_info)?,
             ));
 
-            if self.metastore.transaction(resume_txn).await?.success {
+            if self
+                .metastore
+                .transaction(resume_txn)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(());
             }
         }
@@ -1372,7 +1456,13 @@ impl WarehouseApi for WarehouseMgr {
                 ));
             }
 
-            if self.metastore.transaction(suspend_txn).await?.success {
+            if self
+                .metastore
+                .transaction(suspend_txn)
+                .await
+                .map_err(meta_service_error)?
+                .success
+            {
                 return Ok(());
             }
         }
@@ -1385,8 +1475,9 @@ impl WarehouseApi for WarehouseMgr {
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         let values = self
             .metastore
-            .list_kv_collect(&self.warehouse_info_key_prefix)
-            .await?;
+            .list_kv_collect(ListOptions::unlimited(&self.warehouse_info_key_prefix))
+            .await
+            .map_err(meta_service_error)?;
 
         let mut warehouses = Vec::with_capacity(values.len());
         for (_warehouse_key, value) in values {
@@ -1480,7 +1571,12 @@ impl WarehouseApi for WarehouseMgr {
                 ));
             }
 
-            return match self.metastore.transaction(rename_txn).await? {
+            return match self
+                .metastore
+                .transaction(rename_txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 response if response.success => Ok(()),
                 response => match response.responses.last() {
                     Some(TxnOpResponse {
@@ -1512,7 +1608,11 @@ impl WarehouseApi for WarehouseMgr {
             escape_for_key(&warehouse)?
         );
 
-        let values = self.metastore.list_kv_collect(&nodes_prefix).await?;
+        let values = self
+            .metastore
+            .list_kv_collect(ListOptions::unlimited(&nodes_prefix))
+            .await
+            .map_err(meta_service_error)?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
@@ -1647,7 +1747,12 @@ impl WarehouseApi for WarehouseMgr {
                 ));
             }
 
-            return match self.metastore.transaction(create_cluster_txn).await? {
+            return match self
+                .metastore
+                .transaction(create_cluster_txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 res if res.success => Ok(()),
                 _res => {
                     continue;
@@ -1746,7 +1851,12 @@ impl WarehouseApi for WarehouseMgr {
                 }
             }
 
-            return match self.metastore.transaction(drop_cluster_txn).await? {
+            return match self
+                .metastore
+                .transaction(drop_cluster_txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 res if res.success => Ok(()),
                 _ => {
                     continue;
@@ -1867,7 +1977,12 @@ impl WarehouseApi for WarehouseMgr {
                 }
             }
 
-            return match self.metastore.transaction(rename_cluster_txn).await? {
+            return match self
+                .metastore
+                .transaction(rename_cluster_txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 res if res.success => Ok(()),
                 _ => {
                     continue;
@@ -1991,7 +2106,12 @@ impl WarehouseApi for WarehouseMgr {
                 }
             }
 
-            return match self.metastore.transaction(add_cluster_node_txn).await? {
+            return match self
+                .metastore
+                .transaction(add_cluster_node_txn)
+                .await
+                .map_err(meta_service_error)?
+            {
                 res if res.success => Ok(()),
                 _res => {
                     continue;
@@ -2110,7 +2230,11 @@ impl WarehouseApi for WarehouseMgr {
                 }
             }
 
-            let txn_reply = self.metastore.transaction(drop_cluster_node_txn).await?;
+            let txn_reply = self
+                .metastore
+                .transaction(drop_cluster_node_txn)
+                .await
+                .map_err(meta_service_error)?;
 
             if txn_reply.success {
                 return Ok(());
@@ -2138,8 +2262,9 @@ impl WarehouseApi for WarehouseMgr {
 
         let values = self
             .metastore
-            .list_kv_collect(&cluster_nodes_prefix)
-            .await?;
+            .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
+            .await
+            .map_err(meta_service_error)?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
@@ -2157,14 +2282,19 @@ impl WarehouseApi for WarehouseMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn get_local_addr(&self) -> Result<String> {
-        Ok(self.metastore.get_local_addr().await?)
+        Ok(self
+            .metastore
+            .get_local_addr()
+            .await
+            .map_err(meta_service_error)?)
     }
 
     async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
         let reply = self
             .metastore
-            .list_kv_collect(&self.node_key_prefix)
-            .await?;
+            .list_kv_collect(ListOptions::unlimited(&self.node_key_prefix))
+            .await
+            .map_err(meta_service_error)?;
         let mut online_nodes = Vec::with_capacity(reply.len());
 
         for (_, seq_data) in reply {
@@ -2180,7 +2310,12 @@ impl WarehouseApi for WarehouseMgr {
     async fn discover(&self, node_id: &str) -> Result<Vec<NodeInfo>> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
 
-        let Some(seq) = self.metastore.get_kv(&node_key).await? else {
+        let Some(seq) = self
+            .metastore
+            .get_kv(&node_key)
+            .await
+            .map_err(meta_service_error)?
+        else {
             return Err(ErrorCode::NotFoundClusterNode(format!(
                 "Node {} is offline, Please restart this node.",
                 node_id
@@ -2204,7 +2339,12 @@ impl WarehouseApi for WarehouseMgr {
     async fn discover_warehouse_nodes(&self, node_id: &str) -> Result<Vec<NodeInfo>> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
 
-        let Some(seq) = self.metastore.get_kv(&node_key).await? else {
+        let Some(seq) = self
+            .metastore
+            .get_kv(&node_key)
+            .await
+            .map_err(meta_service_error)?
+        else {
             return Err(ErrorCode::NotFoundClusterNode(format!(
                 "Node {} is offline, Please restart this node.",
                 node_id
@@ -2227,7 +2367,12 @@ impl WarehouseApi for WarehouseMgr {
 
     async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
-        match self.metastore.get_kv(&node_key).await? {
+        match self
+            .metastore
+            .get_kv(&node_key)
+            .await
+            .map_err(meta_service_error)?
+        {
             None => Ok(None),
             Some(seq) => Ok(Some(serde_json::from_slice(&seq.data)?)),
         }

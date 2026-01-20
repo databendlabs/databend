@@ -60,6 +60,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
 use crate::interpreters::access::AccessChecker;
+use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sql::plans::Plan;
@@ -849,7 +850,11 @@ impl PrivilegeAccess {
     async fn resolve_masking_policy_id_by_name(&self, policy_name: &str) -> Result<u64> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let ident = DataMaskNameIdent::new(self.ctx.get_tenant(), policy_name);
-        if let Some(policy_id) = meta_api.get_data_mask_id(&ident).await? {
+        if let Some(policy_id) = meta_api
+            .get_data_mask_id(&ident)
+            .await
+            .map_err(meta_service_error)?
+        {
             Ok(*policy_id.data)
         } else {
             Err(ErrorCode::UnknownDatamask(format!(
@@ -960,7 +965,11 @@ impl PrivilegeAccess {
     async fn resolve_row_access_policy_id_by_name(&self, policy_name: &str) -> Result<u64> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let ident = RowAccessPolicyNameIdent::new(self.ctx.get_tenant(), policy_name.to_string());
-        if let Some((policy_id, _)) = meta_api.get_row_access_policy(&ident).await? {
+        if let Some((policy_id, _)) = meta_api
+            .get_row_access_policy(&ident)
+            .await
+            .map_err(meta_service_error)?
+        {
             Ok(*policy_id.data)
         } else {
             Err(ErrorCode::UnknownRowAccessPolicy(format!(
@@ -1067,7 +1076,8 @@ impl PrivilegeAccess {
         let procedure = UserApiProvider::instance()
             .procedure_api(tenant)
             .get_procedure(&req)
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         match procedure {
             Some(procedure) => {
@@ -1403,6 +1413,35 @@ impl AccessChecker for PrivilegeAccess {
                                 {
                                     Ok(())
                                 }
+                            _ => Err(e.add_message("error on validating stage access")),
+                        }
+                    }
+                }
+            }
+            Plan::AlterStage(plan) => {
+                match UserApiProvider::instance()
+                    .get_stage(&tenant, &plan.stage_name)
+                    .await
+                {
+                    Ok(stage) => {
+                        if enable_experimental_rbac_check {
+                            let privileges = vec![UserPrivilegeType::Read, UserPrivilegeType::Write];
+                            for privilege in privileges {
+                                self.validate_stage_access(&stage, privilege).await?;
+                            }
+                        } else {
+                            self.validate_access(
+                                &GrantObject::Global,
+                                UserPrivilegeType::Super,
+                                false,
+                                false,
+                            )
+                            .await?;
+                        }
+                    }
+                    Err(e) => {
+                        return match e.code() {
+                            ErrorCode::UNKNOWN_STAGE if plan.if_exists => Ok(()),
                             _ => Err(e.add_message("error on validating stage access")),
                         }
                     }

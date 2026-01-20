@@ -107,6 +107,7 @@ impl Binder {
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);
+
         Ok((new_expr, scalar))
     }
 
@@ -120,10 +121,16 @@ impl Binder {
         all: &bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
+        let prev_recursive = self.bind_recursive_cte.clone();
+        if cte_name.is_some() {
+            // Anchor part should not treat self references as recursive scans.
+            self.set_bind_recursive_cte(None);
+        }
         let (left_expr, left_bind_context) =
             self.bind_set_expr(bind_context, left, &[], None, cte_name.clone())?;
         if let Some(cte_name) = cte_name.as_ref() {
             if !all {
+                self.set_bind_recursive_cte(prev_recursive);
                 return Err(ErrorCode::Internal(
                     "Currently, recursive cte only support union all".to_string(),
                 ));
@@ -148,8 +155,15 @@ impl Binder {
         bind_context
             .cte_context
             .merge(left_bind_context.cte_context.clone());
+        if let Some(cte_name) = cte_name.clone() {
+            // Recursive part should treat self references as recursive scans.
+            self.set_bind_recursive_cte(Some(cte_name));
+        }
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None, None)?;
+        if cte_name.is_some() {
+            self.set_bind_recursive_cte(prev_recursive);
+        }
 
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
@@ -205,10 +219,18 @@ impl Binder {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
         let mut cte_scan_names = Vec::new();
         if cte_name.is_some() {
-            self.count_r_cte_scan(&right_expr, &mut cte_scan_names, &mut coercion_types)?;
+            // FIXME: RecursiveCteScan plan fields type may be inconsistent with the type of left_context.columns.
+            // ref case: https://github.com/databendlabs/databend/issues/17162
+            self.count_r_cte_scan(&right_expr, &mut cte_scan_names, &mut Vec::new())?;
             if cte_scan_names.is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "Recursive cte should be used in recursive cte".to_string(),
+                ));
+            }
+            // force the use of the type of left columns
+            for left_col in left_context.columns.iter() {
+                coercion_types.push(Binder::recursive_cte_column_type(
+                    left_col.data_type.as_ref(),
                 ));
             }
         } else {
@@ -377,7 +399,7 @@ impl Binder {
         parent_context: Option<&BindContext>,
         left_bind_context: &BindContext,
         right_bind_context: &BindContext,
-        coercion_types: Vec<DataType>,
+        mut coercion_types: Vec<DataType>,
     ) -> Result<(
         BindContext,
         Vec<(IndexType, Option<ScalarExpr>)>,
@@ -386,6 +408,16 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::with_opt_parent(parent_context)?;
+
+        // When recursive branches fail to report all column types (e.g. no RecursiveCteScan is found),
+        // pad the missing entries with the anchor's schema so we can still cast the right branch.
+        if coercion_types.len() < left_bind_context.columns.len() {
+            let skip_len = coercion_types.len();
+            coercion_types.resize(left_bind_context.columns.len(), DataType::Null);
+            for (i, col) in left_bind_context.columns.iter().enumerate().skip(skip_len) {
+                coercion_types[i] = *col.data_type.clone();
+            }
+        }
 
         new_bind_context
             .cte_context

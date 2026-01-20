@@ -65,6 +65,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 use databend_storages_common_table_meta::table::ChangeType;
+use log::debug;
 use log::info;
 
 use crate::BaseTableColumn;
@@ -88,7 +89,6 @@ use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SecureFilter;
-use crate::plans::Statistics;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -167,7 +167,7 @@ impl Binder {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
 
-        info!("bind_stage_table cost: {:?}", start.elapsed());
+        debug!("bind_stage_table cost: {:?}", start.elapsed());
         Ok((s_expr, bind_context))
     }
 
@@ -332,7 +332,6 @@ impl Binder {
                         "Recursive CTE must contain a UNION(ALL) query".to_string(),
                     ));
                 }
-                self.set_bind_recursive_cte(true);
                 let (union_s_expr, mut new_bind_ctx) = self.bind_set_operator(
                     bind_context,
                     &set_expr.left,
@@ -341,10 +340,14 @@ impl Binder {
                     &set_expr.all,
                     Some(cte_name.to_string()),
                 )?;
-                self.set_bind_recursive_cte(false);
+                let has_column_alias = alias
+                    .as_ref()
+                    .map(|alias| !alias.columns.is_empty())
+                    .unwrap_or(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
-                } else {
+                }
+                if !has_column_alias {
                     for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
                         new_bind_ctx.columns[index].column_name = column_name.clone();
                     }
@@ -443,7 +446,6 @@ impl Binder {
             Scan {
                 table_index,
                 columns: columns.into_iter().map(|col| col.index()).collect(),
-                statistics: Arc::new(Statistics::default()),
                 change_type,
                 sample: sample.clone(),
                 scan_id,
@@ -512,11 +514,18 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
+        let start = std::time::Instant::now();
         let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
             meta_api,
             &self.ctx.get_tenant(),
             policy,
         ))?;
+        let fetch_elapsed = start.elapsed();
+        info!(
+            "row_access_policy: policy_id={}, fetch_ms={:.3}",
+            policy,
+            fetch_elapsed.as_secs_f64() * 1000.0,
+        );
         let body = res.data.body;
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -547,6 +556,7 @@ impl Binder {
             }
             Ok(None)
         })?;
+
         let res = self.bind_secure_filter(bind_context, &[], &expr, table_index, scan_s_expr)?;
 
         Ok(res.0)

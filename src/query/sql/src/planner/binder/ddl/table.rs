@@ -62,9 +62,7 @@ use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
@@ -108,6 +106,7 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
+use uuid::Uuid;
 
 use crate::BindContext;
 use crate::DefaultExprBinder;
@@ -1082,16 +1081,11 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            ref_name,
-            ..
-        } = table_reference
+        let (catalog, database, table) = if let TableReference::Table { table, .. } =
+            table_reference
         {
-            debug_assert!(ref_name.is_none());
-            self.normalize_object_identifier_triple(catalog, database, table)
+            debug_assert!(table.branch.is_none());
+            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
         } else {
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",

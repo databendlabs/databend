@@ -46,7 +46,7 @@ Exchange
 ├── exchange type: Merge
 └── Filter
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
-    ├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
+    ├── filters: [t1.a (#0) > 3 or t2.a (#2) > 5 and t1.a (#0) > 1]
     ├── estimated rows: 99.68
     └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
@@ -63,7 +63,7 @@ Exchange
         │   ├── exchange type: Broadcast
         │   └── Filter
         │       ├── output columns: [t2.a (#2), t2.b (#3)]
-        │       ├── filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)]
+        │       ├── filters: [t2.a (#2) > 3 or t2.a (#2) > 1]
         │       ├── estimated rows: 99.92
         │       └── TableScan
         │           ├── table: default.default.t2
@@ -74,11 +74,11 @@ Exchange
         │           ├── partitions total: 3
         │           ├── partitions scanned: 3
         │           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        │           ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
+        │           ├── push downs: [filters: [t2.a (#2) > 3 or t2.a (#2) > 1], limit: NONE]
         │           └── estimated rows: 100.00
         └── Filter(Probe)
             ├── output columns: [t1.a (#0), t1.b (#1)]
-            ├── filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)]
+            ├── filters: [t1.a (#0) > 3 or t1.a (#0) > 1]
             ├── estimated rows: 99.92
             └── TableScan
                 ├── table: default.default.t1
@@ -89,7 +89,7 @@ Exchange
                 ├── partitions total: 3
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-                ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
+                ├── push downs: [filters: [t1.a (#0) > 3 or t1.a (#0) > 1], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 100.00
 

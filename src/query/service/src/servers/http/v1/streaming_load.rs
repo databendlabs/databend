@@ -19,13 +19,11 @@ use std::future::Future;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -52,6 +50,7 @@ use poem::web::Json;
 use poem::web::Multipart;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc::Sender;
 
 use super::HttpQueryContext;
@@ -95,9 +94,9 @@ fn execute_query(
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
     tracking_payload.mem_stat = Some(mem_stat);
-    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
     let root = get_http_tracing_span("http::execute_query", &http_query_context, &id);
-    ThreadTracker::tracking_future(fut.in_span(root))
+    tracking_payload.tracking(fut.in_span(root))
 }
 
 #[poem::handler]
@@ -111,7 +110,7 @@ pub async fn streaming_load_handler(
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(ctx.query_id.clone());
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
-    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
     let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);
     let mut session_conf: Option<HttpSessionConf> =
         match req.headers().get(HEADER_QUERY_CONTEXT) {
@@ -130,11 +129,12 @@ pub async fn streaming_load_handler(
             }
             None => None,
         };
-    let res = ThreadTracker::tracking_future(
-        streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
-            .in_span(root),
-    )
-    .await;
+    let res = tracking_payload
+        .tracking(
+            streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
+                .in_span(root),
+        )
+        .await;
     let is_failed = res.is_err();
 
     let mut resp = match res {
@@ -241,12 +241,14 @@ async fn streaming_load_handler_inner(
                 *streaming_load.receiver.lock() = Some(rx);
 
                 let format = streaming_load.file_format.clone();
-                let handler = query_context.spawn(execute_query(
-                    http_context.clone(),
-                    query_context.clone(),
-                    plan,
-                    mem_stat,
-                ));
+                let handler = query_context
+                    .try_spawn(execute_query(
+                        http_context.clone(),
+                        query_context.clone(),
+                        plan,
+                        mem_stat,
+                    ))
+                    .map_err(InternalServerError)?;
                 read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
                 match handler.await {

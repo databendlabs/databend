@@ -12,16 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_session_context() -> Result<()> {
+async fn test_session_context() -> anyhow::Result<()> {
     let settings = Settings::create(Tenant::new_literal("default"));
     let session_ctx = SessionContext::try_create(settings, SessionType::MySQL, None)?;
 

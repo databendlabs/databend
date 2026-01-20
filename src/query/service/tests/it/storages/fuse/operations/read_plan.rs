@@ -19,10 +19,8 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowType;
 use arrow_schema::Field;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
@@ -38,7 +36,7 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::TryStreamExt;
 
 #[test]
-fn test_to_partitions() -> Result<()> {
+fn test_to_partitions() -> anyhow::Result<()> {
     // setup
     let num_of_col = 10;
     let num_of_block = 5;
@@ -157,7 +155,7 @@ fn test_to_partitions() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_exact_statistic() -> Result<()> {
+async fn test_fuse_table_exact_statistic() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 

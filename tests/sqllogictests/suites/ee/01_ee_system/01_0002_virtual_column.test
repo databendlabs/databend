@@ -33,7 +33,7 @@ create table t1(id int, val json) storage_format = 'native'
 statement ok
 insert into t1 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-query TTT
+query TTTITT
 show virtual columns from t1
 ----
 
@@ -133,7 +133,7 @@ create table t2(id int, val json) storage_format = 'parquet'
 statement ok
 insert into t2 values(1, '{"a":11,"b":1,"c":"test"}'), (2, '{"a":22,"b":2,"c":"data"}'), (3, '3')
 
-query TTTTTT
+query TTTITT
 show virtual columns from t2
 ----
 test_virtual_column t2 val 3000000000 ['a'] UInt64
@@ -632,7 +632,7 @@ INSERT INTO Academic_Record VALUES
     "eligible_schools": ["HIGH_SCHOOL", "ELEMENTARY"]
   }');
 
-query T
+query ??
 MERGE INTO STUDENT_GRADES tgt USING
 (
   SELECT *
@@ -704,7 +704,7 @@ INSERT INTO test_stream (id, data1, data2) VALUES
 (9, '{"name": "Richard", "age": 33, "address": {"city": "Austin", "district": "Downtown"}}', '{"scores": [91, 87, 93], "hobbies": ["hiking", "cycling"]}'),
 (10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago", "district": "River North"}}', '{"scores": [83, 81, 89], "hobbies": ["gaming", "reading"]}');
 
-query TTT
+query ??????
 show virtual columns from test_stream;
 ----
 test_virtual_column test_stream data1 3000000000 ['address']['city'] String
@@ -758,7 +758,7 @@ INSERT INTO test2 (id, data1, data2) VALUES
 (9, '{"name": "Richard", "age": 33, "address": {"city": "Austin"}}', '{"product_id": "109", "price": "10.9"}'),
 (10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago"}}', '{"price": "10.10"}');
 
-query TTT
+query ??????
 show virtual columns from test2;
 ----
 test_virtual_column test2 data1 3000000000 ['address']['city'] String
@@ -768,7 +768,7 @@ test_virtual_column test2 data1 3000000003 ['name'] String
 test_virtual_column test2 data2 3000000004 ['price'] Jsonb
 test_virtual_column test2 data2 3000000005 ['product_id'] Jsonb
 
-query ITTTTT
+query ???????
 SELECT 
     id,
     data1:name AS name,

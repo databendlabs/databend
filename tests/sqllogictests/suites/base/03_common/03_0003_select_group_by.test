@@ -21,7 +21,7 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
-query I
+query TI
 SELECT try_cast(number % 3 as string) c1, count()  FROM numbers_mt(10) where number > 2 group by c1 order by c1
 ----
 0 3
@@ -90,13 +90,13 @@ CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32)
 statement ok
 insert into t_datetime select to_date('2022-04-01') + number % 2,  to_datetime('2022-04-01 00:00:00') + number % 2, 1 from numbers(10)
 
-query TI
+query ?I
 select created_at, sum(count) from t_datetime group by created_at order by created_at
 ----
 2022-04-01 5
 2022-04-02 5
 
-query TI
+query ?I
 select created_time, sum(count) from t_datetime group by created_time order by created_time
 ----
 2022-04-01 00:00:00.000000 5
@@ -168,14 +168,14 @@ select (number%3 + 1) c , (number%3 + 2) d, count() from numbers(100) group by c
 2 3 33
 3 4 33
 
-query II
+query RI
 select (number % 3)::Decimal(19, 2) c , count() from numbers(100) group by c order by c;
 ----
 0.00 34
 1.00 33
 2.00 33
 
-query ITI
+query RTI
 select (number % 3)::Decimal(19, 2) c, to_string(number % 3) d, count() from numbers(100) group by c,d order by c, d;
 ----
 0.00 0 34
@@ -192,7 +192,7 @@ select number::Variant a, count()  from numbers(3) group by a order by a;
 1 1
 2 1
 
-query TI
+query TII
 select number::Variant a, number as b, count()  from numbers(3) group by a, b order by a;
 ----
 0 0 1
@@ -200,7 +200,7 @@ select number::Variant a, number as b, count()  from numbers(3) group by a, b or
 2 2 1
 
 # group by Decimal
-query TI
+query RI
 select number::Decimal(15,2) a, number % 3 b from numbers(5) group by a, b order by a;
 ----
 0.00 0
@@ -277,14 +277,14 @@ test
 statement ok
 DROP TABLE t_str
 
-query TTT rowsort
+query T rowsort
 SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
 (NULL,18,"1970-01-01")
 (NULL,18,"1970-01-02")
 (NULL,18,"1970-01-03")
 
-query TTT rowsort
+query ?R rowsort
 SELECT TRY_CAST('1900-12-30 12:00:00' AS TIMESTAMP) AS "TEMP(Test)(4058757556)(0)",
   1.1000000000000001 AS "$__alias__0"
 FROM  numbers(10)

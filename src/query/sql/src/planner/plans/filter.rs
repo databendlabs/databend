@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 
 use crate::ColumnSet;
-use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SelectivityEstimator;
@@ -88,23 +86,17 @@ impl Operator for Filter {
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
-        let (input_cardinality, mut statistics) =
-            (stat_info.cardinality, stat_info.statistics.clone());
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(&mut statistics, input_cardinality, HashSet::new());
-        let mut selectivity = MAX_SELECTIVITY;
-        for pred in self.predicates.iter() {
-            // Compute selectivity for each conjunction
-            selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
-        }
-        // Update other columns's statistic according to selectivity.
-        sb.update_other_statistic_by_selectivity(selectivity);
-        let cardinality = input_cardinality * selectivity;
+        let mut sb = SelectivityEstimator::new(
+            stat_info.statistics.column_stats.clone(),
+            stat_info.cardinality,
+        );
+        let cardinality = sb.apply(&self.predicates)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
         } else {
-            statistics.column_stats
+            sb.into_column_stats()
         };
         Ok(Arc::new(StatInfo {
             cardinality,

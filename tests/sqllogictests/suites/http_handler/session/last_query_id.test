@@ -3,18 +3,18 @@
 statement ok
 select last_query_id();
 
-query
+query ?
 select is_null(last_query_id());
 ----
 0
 
 
-query
+query ?
 select last_query_id(-200000);
 ----
 NULL
 
-query
+query ?
 select last_query_id(100);
 ----
 NULL

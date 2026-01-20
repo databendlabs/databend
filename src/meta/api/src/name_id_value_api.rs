@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -292,7 +293,7 @@ where
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(prefix).await?;
+            let strm = self.list_pb(ListOptions::unlimited(prefix)).await?;
             let name_ids = strm.try_collect::<Vec<_>>().await?;
 
             let id_idents = name_ids
@@ -406,6 +407,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
+    use databend_common_meta_kvapi::kvapi::ListOptions;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
@@ -415,6 +417,7 @@ mod tests {
     use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
+    use futures::stream::BoxStream;
     use prost::Message;
 
     use crate::name_id_value_api::NameIdValueApiCompat;
@@ -431,24 +434,26 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_kv_stream(
+        async fn get_many_kv(
             &self,
-            keys: &[String],
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            let mut res = Vec::with_capacity(keys.len());
-            for key in keys.iter() {
-                let k = key.clone();
-                let v = self.kvs.get(key).cloned();
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+            use futures::TryStreamExt;
 
-                let item = StreamItem::new(k, v.map(|v| v.into()));
-                res.push(Ok(item));
-            }
+            let kvs = self.kvs.clone();
 
-            let strm = futures::stream::iter(res);
+            let strm = fail_fast(keys).map_ok(move |key| {
+                let v = kvs.get(&key).cloned();
+                StreamItem::new(key, v.map(|v| v.into()))
+            });
             Ok(strm.boxed())
         }
 
-        async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        async fn list_kv(
+            &self,
+            _opts: ListOptions<'_, str>,
+        ) -> Result<KVStream<Self::Error>, Self::Error> {
             unimplemented!()
         }
 

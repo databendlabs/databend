@@ -1,14 +1,14 @@
-query T
+query ?
 SELECT LEFT(NULL, 1)
 ----
 NULL
 
-query T
+query ?
 SELECT LEFT('aaa', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT LEFT(NULL, NULL)
 ----
 NULL
@@ -69,17 +69,17 @@ SELECT LEFT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
 300
 4000
 
-query T
+query ?
 SELECT RIGHT(NULL, 1)
 ----
 NULL
 
-query T
+query ?
 SELECT RIGHT('aaa', NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT RIGHT(NULL, NULL)
 ----
 NULL

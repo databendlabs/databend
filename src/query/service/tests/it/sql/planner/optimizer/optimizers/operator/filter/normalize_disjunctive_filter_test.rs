@@ -166,7 +166,7 @@ fn compare_exprs(
 /// ```
 ///
 /// Optimization: Extracts common terms from both sides of the OR, even when columns are from different tables
-fn test_different_table_columns() -> Result<()> {
+fn test_different_table_columns() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
 
@@ -272,7 +272,7 @@ fn test_different_table_columns() -> Result<()> {
 /// ```
 ///
 /// Optimization: Applies the inverse OR distributive law to extract common terms
-fn test_basic_normalization() -> Result<()> {
+fn test_basic_normalization() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -315,7 +315,7 @@ fn test_basic_normalization() -> Result<()> {
 /// ```
 ///
 /// Optimization: Applies the inverse OR distributive law to extract common terms from nested OR expressions
-fn test_nested_normalization() -> Result<()> {
+fn test_nested_normalization() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -362,7 +362,7 @@ fn test_nested_normalization() -> Result<()> {
 ///
 /// Optimization: Extracts multiple common terms from both sides of the OR
 #[test]
-fn test_multiple_common_terms() -> Result<()> {
+fn test_multiple_common_terms() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -409,7 +409,7 @@ fn test_multiple_common_terms() -> Result<()> {
 /// ```
 ///
 /// Optimization: No change since there are no common terms to extract
-fn test_no_common_terms() -> Result<()> {
+fn test_no_common_terms() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -454,7 +454,7 @@ fn test_no_common_terms() -> Result<()> {
 /// ```
 ///
 /// Optimization: Simplifies duplicate terms in OR expressions
-fn test_single_term_expressions() -> Result<()> {
+fn test_single_term_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -493,7 +493,7 @@ fn test_single_term_expressions() -> Result<()> {
 /// ```
 ///
 /// Optimization: Correctly handles nested OR expressions within AND expressions
-fn test_complex_nested_expressions() -> Result<()> {
+fn test_complex_nested_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -540,7 +540,7 @@ fn test_complex_nested_expressions() -> Result<()> {
 ///
 /// Optimization: Handles empty OR arguments by returning false
 /// Note: This is a potential bug as empty OR should evaluate to false
-fn test_empty_or_arguments() -> Result<()> {
+fn test_empty_or_arguments() -> anyhow::Result<()> {
     // Create a builder for expressions
     let _builder = ExprBuilder::new();
 
@@ -586,7 +586,7 @@ fn test_empty_or_arguments() -> Result<()> {
 /// ```
 ///
 /// Optimization: Simplifies OR with a single argument to just that argument
-fn test_single_or_argument() -> Result<()> {
+fn test_single_or_argument() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -632,7 +632,7 @@ fn test_single_or_argument() -> Result<()> {
 /// ```
 ///
 /// Optimization: No change since there are no common AND terms to extract
-fn test_mixed_and_or_no_common() -> Result<()> {
+fn test_mixed_and_or_no_common() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -678,7 +678,7 @@ fn test_mixed_and_or_no_common() -> Result<()> {
 ///
 /// Optimization: Should recognize that these expressions are equivalent despite different order
 /// Potential bug: The optimizer might not recognize that (A > B AND C) is the same as (C AND A > B)
-fn test_non_commutative_expressions() -> Result<()> {
+fn test_non_commutative_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -727,7 +727,7 @@ fn test_non_commutative_expressions() -> Result<()> {
 /// ```
 ///
 /// Optimization: Simplifies expressions with boolean constants
-fn test_optimization_with_constants() -> Result<()> {
+fn test_optimization_with_constants() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -772,7 +772,7 @@ fn test_optimization_with_constants() -> Result<()> {
 /// ```
 ///
 /// Optimization: Extracts common terms from multiple OR expressions
-fn test_multiple_or_expressions() -> Result<()> {
+fn test_multiple_or_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -809,7 +809,7 @@ fn test_multiple_or_expressions() -> Result<()> {
 /// Test boundary case in normalize_predicate_scalar
 ///
 /// Potential issue: Function assumes args.len() >= 2 but doesn't explicitly verify
-fn test_normalize_predicate_scalar_boundary() -> Result<()> {
+fn test_normalize_predicate_scalar_boundary() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -844,7 +844,7 @@ fn test_normalize_predicate_scalar_boundary() -> Result<()> {
 ///
 /// Potential issue: In process_duplicate_or_exprs, when comparing shortest_exprs_len,
 /// non-AND expressions are not considered
-fn test_non_and_or_expressions() -> Result<()> {
+fn test_non_and_or_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -878,7 +878,7 @@ fn test_non_and_or_expressions() -> Result<()> {
 /// Test complex nested expressions that might lead to incorrect optimization
 ///
 /// Potential issue: Complex nested expressions may cause inconsistent optimizer behavior
-fn test_complex_nested_optimization() -> Result<()> {
+fn test_complex_nested_optimization() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -913,7 +913,7 @@ fn test_complex_nested_optimization() -> Result<()> {
 /// Test handling of duplicate expressions
 ///
 /// Potential issue: Optimizer may not correctly handle duplicate expressions
-fn test_duplicate_expressions() -> Result<()> {
+fn test_duplicate_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -943,7 +943,7 @@ fn test_duplicate_expressions() -> Result<()> {
 /// Test special case: (A AND B) OR A => A
 ///
 /// Potential issue: Optimizer may not correctly handle this special case
-fn test_special_case_and_or() -> Result<()> {
+fn test_special_case_and_or() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -973,7 +973,7 @@ fn test_special_case_and_or() -> Result<()> {
 /// Test handling of multiple predicates
 ///
 /// Potential issue: Optimizer may not correctly handle multiple predicates
-fn test_multiple_predicates() -> Result<()> {
+fn test_multiple_predicates() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -1012,7 +1012,7 @@ fn test_multiple_predicates() -> Result<()> {
 /// Test extreme case: very deeply nested expressions
 ///
 /// Potential issue: Deep nesting may cause stack overflow
-fn test_deeply_nested_expressions() -> Result<()> {
+fn test_deeply_nested_expressions() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 
@@ -1045,7 +1045,7 @@ fn test_deeply_nested_expressions() -> Result<()> {
 /// Test (A OR B) AND (A OR C) case
 ///
 /// Potential issue: Optimizer may not correctly handle this distributive law case
-fn test_distributive_law() -> Result<()> {
+fn test_distributive_law() -> anyhow::Result<()> {
     // Create a builder for expressions
     let builder = ExprBuilder::new();
 

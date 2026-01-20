@@ -23,7 +23,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
@@ -54,6 +53,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
 use log::info;
+use tokio::sync::OwnedSemaphorePermit;
 
 use crate::io::read::VectorIndexReader;
 use crate::pruning::PruningContext;

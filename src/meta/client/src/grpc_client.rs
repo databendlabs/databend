@@ -21,18 +21,9 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_flight::BasicAuth;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::tokio::select;
-use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
-use databend_common_base::base::tokio::time::sleep;
-use databend_common_base::containers::Pool;
-use databend_common_base::future::TimedFutureExt;
+use databend_base::futures::ElapsedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -69,6 +60,12 @@ use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
+use tokio::select;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::Sender as OneSend;
+use tokio::time::sleep;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
@@ -92,6 +89,7 @@ use crate::from_digit_ver;
 use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
+use crate::pool::Pool;
 use crate::required::Features;
 use crate::required::features;
 use crate::required::std;
@@ -153,7 +151,7 @@ impl MetaGrpcClient {
     pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
-            conf.version,
+            conf.version.clone(),
             &conf.username,
             &conf.password,
             conf.timeout,
@@ -166,7 +164,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
-        version: BuildInfoRef,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -201,7 +199,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create_with_features(
         endpoints_str: Vec<String>,
-        version: BuildInfoRef,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -221,6 +219,7 @@ impl MetaGrpcClient {
             tls_config,
             required_features,
             endpoints.clone(),
+            None, // Use default connection TTL
         );
 
         let rt = Runtime::with_worker_threads(
@@ -254,17 +253,15 @@ impl MetaGrpcClient {
 
         let worker_name = worker.to_string();
 
-        rt.try_spawn(
+        rt.spawn_named(
             UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
-            Some(format!("{}::worker_loop()", worker_name)),
-        )
-        .unwrap();
+            format!("{}::worker_loop()", worker_name),
+        );
 
-        rt.try_spawn(
+        rt.spawn_named(
             UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_rx)),
-            Some(format!("{}::auto_sync_endpoints()", worker_name)),
-        )
-        .unwrap();
+            format!("{}::auto_sync_endpoints()", worker_name),
+        );
 
         Ok(handle)
     }
@@ -835,7 +832,7 @@ impl MetaGrpcClient {
 
             let result = established
                 .kv_read_v1(req)
-                .with_timing_threshold(threshold(), info_spent(service_spec.0))
+                .inspect_elapsed_over(threshold(), info_spent(service_spec.0))
                 .await;
 
             debug!("{self}::kv_read_v1 result: {:?}", result);
@@ -873,7 +870,7 @@ impl MetaGrpcClient {
 
             let result = established
                 .transaction(req)
-                .with_timing_threshold(threshold(), info_spent(service_spec.0))
+                .inspect_elapsed_over(threshold(), info_spent(service_spec.0))
                 .await;
 
             let retryable = rpc_handler.process_response_result(&txn, result)?;

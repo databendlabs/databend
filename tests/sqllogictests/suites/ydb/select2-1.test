@@ -317,7 +317,7 @@ statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1
 from t1
 
-query IIF
+query IIR
 select d-e as col1,
        c-d as col2,
        (a+b+c+d+e)/5 as col3
@@ -489,7 +489,7 @@ NULL NULL 117 NULL NULL
 NULL NULL NULL NULL NULL
 NULL NULL NULL NULL NULL
 
-query TTTIT
+query IIIII
 select e as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        d-e as col3,
@@ -683,7 +683,7 @@ order by col1,col2
 555 NULL
 555 NULL
 
-query ITITTII
+query IIIIIII
 select case when c>avg_c then a*2 else b*10 end as col1,
        abs(a) as col2,
        case a+1 when b then 111 when c then 222
@@ -800,7 +800,7 @@ select (a+b+c+d+e)/5 as col1,
        b-c as col6
 from t1
 
-query IITIII
+query IIIIII
 select case when c>avg_c then a*2 else b*10 end as col1,
        abs(a) as col2,
        a+b*2+c*3+d*4+e*5 as col3,
@@ -981,7 +981,7 @@ from t1
 where (a>b-2 and a<b+2)
 or (e>a and e<b)
 
-query ITITI
+query IIIII
 select b-c as col1,
        a+b*2+c*3 as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -1000,7 +1000,7 @@ order by col3,col1,col5,col2,col4
 -1 NULL 1120 NULL 555
 -2 NULL NULL NULL 555
 
-query ITI
+query III
 select c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        c-d as col3
@@ -1916,7 +1916,7 @@ where c between b-2 and d+2
    and (c<=d-2 or c>=d+2)
 order by col1,col2
 
-query IIITI
+query IIIII
 select a+b*2+c*3 as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        a+b*2 as col3,
@@ -2357,7 +2357,7 @@ where a>b
    and a is null
 order by col5,col3,col2,col4,col1
 
-query TTIII
+query IIIII
 select a+b*2+c*3 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d as col3,
@@ -2756,7 +2756,7 @@ NULL 207 NULL 444
 149 NULL 4 444
 179 NULL 4 444
 
-query TIIT
+query IIII
 select d as col1,
        c as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -2926,7 +2926,7 @@ order by col1
 247
 NULL
 
-query FIIIII
+query RIIIII
 select (a+b+c+d+e)/5 as col1,
        c-d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -3157,7 +3157,7 @@ where (e>c or e<d)
     or coalesce(a,b,c,d,e)<>0
 or exists(select 1 from t1 as x where x.b<t1.b)
 
-query TTIIT
+query IIIII
 select a-b as col1,
        b as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -3851,7 +3851,7 @@ order by col1
 NULL
 NULL
 
-query ITITT
+query IIIII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a+b*2 as col2,
@@ -4192,7 +4192,7 @@ from t1
 where e+d between a+b-10 and c+130
 order by col4,col2,col3,col5,col1,col6
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -4508,7 +4508,7 @@ where a>b
     or a is null
 or b is not null
 
-query IIFI
+query IIRI
 select a+b*2+c*3 as col1,
        d-e as col2,
        (a+b+c+d+e)/5 as col3,

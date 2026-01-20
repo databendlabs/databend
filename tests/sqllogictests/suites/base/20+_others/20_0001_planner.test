@@ -45,13 +45,13 @@ select date_part(week, to_timestamp('2016-01-02T23:39:20.123-07:00'))
 ----
 53
 
-query T
+query ?
 select date_trunc(month, to_date('2022-07-07'))
 ----
 2022-07-01
 
 
-query T
+query ?
 select date_trunc('month', to_date('2022-07-07'))
 ----
 2022-07-01
@@ -75,13 +75,13 @@ select * from numbers(10) where try_cast(number as string) = '5'
 5
 
 
-query F
+query R
 select (number + 1 - 2) * 3 / 4 from numbers(1)
 ----
 -0.75
 
 
-query F
+query R
 select sin(cos(number)) from numbers(1)
 ----
 0.8414709848078965
@@ -94,19 +94,19 @@ select * from numbers(5) where number in (1, 3)
 3
 
 
-query T
+query ?
 select parse_json('{"k1": [0, 1, 2]}'): k1[2]
 ----
 2
 
 
-query T
+query ?
 select parse_json('{"k1": [0, 1, 2]}')['k1'][2]
 ----
 2
 
 
-query T
+query ?
 select parse_json('{"k1": {"k2": [0, 1, 2]}}'): k1.k2[2]
 ----
 2
@@ -402,7 +402,7 @@ select sum((number > 314)::uint32) from numbers(1000)
 685
 
 
-query F
+query R
 select avg((number > 314)::uint32) from numbers(1000)
 ----
 0.685
@@ -438,7 +438,7 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1 desc, c2 
 0 1
 
 
-query IT
+query I?
 SELECT number, null from numbers(3) order by number desc
 ----
 2 NULL
@@ -523,7 +523,7 @@ select number + 3 as c from numbers(3) order by c + 1, -number
 5
 
 
-query IF
+query IR
 select number, avg(number) c from numbers(3) group by number order by c + 1, number + 1
 ----
 0 0.0
@@ -621,7 +621,7 @@ select number from numbers(100) order by number asc limit 10 offset 10
 19
 
 
-query F
+query R
 select number/2 as number from numbers(100) order by number asc limit 10 offset 10
 ----
 5.0
@@ -698,7 +698,7 @@ ge1
 ge2
 
 
-query F
+query R
 select case when 1 = 3 then null when 1 = 2 then 20.0 when 1 = 1 then 1 ELSE null END
 ----
 1.0
@@ -779,19 +779,19 @@ SELECT DISTINCT count(number %3) as c FROM numbers(10)  group by number % 3 ORDE
 3
 4
 
-query I
+query ?
 select [1, 2, 3]
 ----
 [1,2,3]
 
 
-query T
+query ?
 select []
 ----
 []
 
 
-query T
+query ?
 select [[1, 2, 3],[1, 2, 3]]
 ----
 [[1,2,3],[1,2,3]]
@@ -853,7 +853,7 @@ statement ok
 drop table t
 
 
-query T
+query ?
 select ('field', number) from numbers(5) order by number
 ----
 ("field",0)
@@ -944,7 +944,7 @@ statement ok
 CREATE FUNCTION cal1 AS (a,b,c,d,e) -> a + c * (e / b) - d
 
 
-query F
+query R
 SELECT cal1(1, 2, 3, 4, 6)
 ----
 6.0

@@ -16,9 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -49,6 +47,7 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::warn;
+use tokio::sync::Semaphore;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;

@@ -33,12 +33,12 @@ use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
-use crate::parser::common::table_ref;
 use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
 use crate::parser::query::query;
+use crate::parser::query::with_options;
 use crate::parser::stage::file_format_clause;
 use crate::parser::stage::file_location;
 use crate::parser::statement::hint;
@@ -62,16 +62,28 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         rule! {
             #with? ~ COPY
             ~ #hint?
-            ~ INTO ~ #table_ref ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ INTO ~ #dot_separated_idents_1_to_3 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ^FROM ~ ^#copy_into_table_source
             ~ #copy_into_table_option*
         },
-        |(with, _copy, opt_hints, _into, dst, dst_columns, _from, src, opts)| {
+        |(
+            with,
+            _copy,
+            opt_hints,
+            _into,
+            (catalog, database, table),
+            dst_columns,
+            _from,
+            src,
+            opts,
+        )| {
             let mut copy_stmt = CopyIntoTableStmt {
                 with,
                 hints: opt_hints,
                 src,
-                dst,
+                catalog,
+                database,
+                table,
                 dst_columns: dst_columns.map(|(_, columns, _)| columns),
                 files: Default::default(),
                 pattern: Default::default(),
@@ -91,7 +103,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
 
 fn copy_into_location(i: Input) -> IResult<Statement> {
     let copy_into_location_source = alt((
-        map(table_ref, CopyIntoLocationSource::Table),
+        map(
+            rule! { #dot_separated_idents_1_to_3 ~ #with_options? },
+            |((catalog, database, table), with_options)| CopyIntoLocationSource::Table {
+                catalog,
+                database,
+                table,
+                with_options,
+            },
+        ),
         map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
             CopyIntoLocationSource::Query(Box::new(query))
         }),

@@ -14,11 +14,10 @@
 
 use std::io::Cursor;
 
-use databend_common_exception::Result;
 use databend_common_io::prelude::*;
 
 #[test]
-fn test_write_and_read() -> Result<()> {
+fn test_write_and_read() -> anyhow::Result<()> {
     // impl Write for Cursor<&mut [u8]>
     let mut buffer = vec![0u8; 1024];
     let mut buff: Cursor<&mut [u8]> = Cursor::new(buffer.as_mut());

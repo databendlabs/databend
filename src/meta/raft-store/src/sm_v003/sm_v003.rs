@@ -242,19 +242,31 @@ impl SMV003 {
         WriterAcquirer::new(self.write_semaphore.clone())
     }
 
+    /// Apply entries from the stream to the state machine.
+    ///
+    /// Responses are only sent AFTER commit succeeds to ensure consistency.
+    /// If we sent responses before commit, clients would consider their operations complete
+    /// and might immediately read the state machine, but the data wouldn't be persisted yet.
+    /// This could lead to clients observing stale or missing data.
     pub async fn apply_entries<S>(&self, mut entries: S) -> Result<(), io::Error>
     where S: Stream<Item = Result<EntryResponder, io::Error>> + Unpin {
         let mut applier = self.new_applier().await;
+        let mut pending_responses = Vec::new();
 
         while let Some(result) = entries.next().await {
             let (entry, responder) = result?;
             let applied = applier.apply(&entry).await?;
             if let Some(responder) = responder {
-                responder.send(applied);
+                pending_responses.push((responder, applied));
             }
         }
 
         applier.commit().await?;
+
+        for (responder, applied) in pending_responses {
+            responder.send(applied);
+        }
+
         Ok(())
     }
 

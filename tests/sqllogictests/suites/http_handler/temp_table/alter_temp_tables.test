@@ -142,7 +142,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TEMP TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY NULL) NULL, d TUPLE(1 BINARY NULL, 2 BINARY NULL) NULL ) ENGINE=FUSE
 
-query 
+query ????
 SELECT * FROM `05_0003_at_t4`
 ----
 61 62 [6331,6332] (6431,6432)
@@ -181,7 +181,7 @@ create temp table t(c1 int, c2 int);
 statement ok
 alter table t modify c1 varchar, c2 varchar;
 
-query TT
+query ?????
 DESC t;
 ----
 c1 VARCHAR YES NULL (empty)

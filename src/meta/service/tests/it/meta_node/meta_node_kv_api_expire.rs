@@ -14,7 +14,6 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -24,6 +23,7 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use log::info;
 use test_harness::test;
+use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
 use crate::testing::since_epoch_sec;
@@ -67,7 +67,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- get kv with expire now+3");
     let seq = {
-        let resp = leader.kv_api().get_kv(key).await?;
+        let resp = leader.raft_store.get_sm_v003().kv_api().get_kv(key).await?;
         let seq_v = resp.unwrap();
         assert_eq!(Some(now_sec + 3), seq_v.meta.unwrap().expires_at_sec_opt());
         seq_v.seq
@@ -84,7 +84,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- get updated kv with new expire now+1000, assert the updated value");
     {
-        let resp = leader.kv_api().get_kv(key).await?;
+        let resp = leader.raft_store.get_sm_v003().kv_api().get_kv(key).await?;
         let seq_v = resp.unwrap();
         let want = (now_sec + 1000) * 1000;
         let expire_ms = seq_v.meta.unwrap().get_expire_at_ms().unwrap();

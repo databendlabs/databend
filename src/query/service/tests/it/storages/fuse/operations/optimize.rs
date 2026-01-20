@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
@@ -23,17 +21,19 @@ use futures_util::TryStreamExt;
 use crate::storages::fuse::utils::do_purge_test;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
-    do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1, 1).await
+async fn test_fuse_snapshot_optimize_purge() -> anyhow::Result<()> {
+    do_purge_test("test_fuse_snapshot_optimize_purge", 1, 0, 1, 1, 1, 1).await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_optimize_all() -> Result<()> {
-    do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1, 1).await
+async fn test_fuse_snapshot_optimize_all() -> anyhow::Result<()> {
+    do_purge_test("test_fuse_snapshot_optimize_all", 1, 0, 1, 1, 1, 1).await?;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_optimize() -> Result<()> {
+async fn test_fuse_table_optimize() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();

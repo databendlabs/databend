@@ -65,7 +65,7 @@ RENAME WORKLOAD GROUP valid_mem to new_valid_mem;
 statement error 3140
 RENAME WORKLOAD GROUP new_valid_mem to valid_timeout;
 
-query T
+query ??????
 SHOW WORKLOAD GROUPS;
 ----
 new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
@@ -80,7 +80,7 @@ ALTER WORKLOAD GROUP valid_timeout SET cpu_quota = '50%', memory_quota = '20%', 
 statement ok
 ALTER WORKLOAD GROUP valid_timeout SET query_queued_timeout = '15min', max_concurrency = 10;
 
-query T
+query ??????
 SHOW WORKLOAD GROUPS;
 ----
 new_valid_mem (empty) 4294967296 (empty) (empty) (empty)
@@ -95,7 +95,7 @@ ALTER WORKLOAD GROUP valid_timeout UNSET query_queued_timeout;
 statement ok
 create user test_user_workload_group identified by '123' with SET WORKLOAD GROUP='valid_timeout';
 
-query T
+query ??
 select name, workload_groups from system.users where name='test_user_workload_group'
 ----
 test_user_workload_group valid_timeout
@@ -103,7 +103,7 @@ test_user_workload_group valid_timeout
 statement ok
 alter user test_user_workload_group with SET WORKLOAD GROUP='new_valid_mem';
 
-query T
+query ??
 select name, workload_groups from system.users where name='test_user_workload_group'
 ----
 test_user_workload_group new_valid_mem
@@ -119,7 +119,7 @@ select workload_groups is null from system.users where name='test_user_workload_
 statement ok
 create user test_user_workload_group1 identified by '123' with SET WORKLOAD GROUP='new_valid_mem';
 
-query T
+query ??
 select name, workload_groups from system.users where name='test_user_workload_group1'
 ----
 test_user_workload_group1 new_valid_mem
@@ -133,7 +133,7 @@ drop workload group new_valid_mem;
 statement error 3142
 create user test_user_workload_group2 identified by '123' with SET WORKLOAD GROUP='invalid_name';
 
-query T
+query ??
 select name, workload_groups from system.users where name='test_user_workload_group'
 ----
 test_user_workload_group NULL

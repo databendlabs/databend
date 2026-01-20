@@ -336,7 +336,7 @@ fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrie
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_segment_builder() -> Result<()> {
+async fn test_segment_builder() -> anyhow::Result<()> {
     let (column_oriented_segment, block_metas, _) = generate_column_oriented_segment().await?;
 
     check_block_level_meta(&block_metas, &column_oriented_segment);
@@ -347,7 +347,7 @@ async fn test_segment_builder() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_segment_cache() -> Result<()> {
+async fn test_segment_cache() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup_with_segment_cache_bytes(1024 * 1024 * 10).await?;
     let operator = Operator::new(opendal::services::Memory::default())
         .unwrap()

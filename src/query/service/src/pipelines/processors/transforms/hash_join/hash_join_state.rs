@@ -20,9 +20,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::base::tokio::sync::watch;
-use databend_common_base::base::tokio::sync::watch::Receiver;
-use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +41,9 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::RwLock;
+use tokio::sync::watch;
+use tokio::sync::watch::Receiver;
+use tokio::sync::watch::Sender;
 
 use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::HashJoinDesc;
@@ -330,15 +330,11 @@ impl HashJoinState {
         num_rows: &usize,
     ) -> Result<DataBlock> {
         if *num_rows != 0 {
-            let data_block = DataBlock::take_column_vec(
-                build_columns,
-                build_columns_data_type,
-                row_ptrs,
-                row_ptrs.len(),
-            );
+            let data_block =
+                DataBlock::take_column_vec(build_columns, build_columns_data_type, row_ptrs);
             Ok(data_block)
         } else {
-            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
+            Ok(DataBlock::empty_with_schema(&self.build_schema))
         }
     }
 }

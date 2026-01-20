@@ -149,7 +149,7 @@ delete from t where c >= 1
 1
 
 
-query T
+query I
 select * from t
 ----
 NULL
@@ -388,7 +388,7 @@ VALUES ('af_cohort_retained', 50594),
 statement ok
 delete from test_delete_or_filters where group_flag in ('af_cohort_deposit', 'af_cohort_receipt', 'af_cohort_retained');
 
-query TI
+query TR
 select * from test_delete_or_filters;
 ----
 normal_data 10000.0

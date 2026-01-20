@@ -58,7 +58,7 @@ SELECT HUMANIZE_SIZE(0)
 ----
 0.00 B
 
-query T
+query ?
 SELECT HUMANIZE_SIZE(NULL)
 ----
 NULL
@@ -113,7 +113,7 @@ SELECT HUMANIZE_NUMBER(0)
 ----
 0
 
-query T
+query ?
 SELECT HUMANIZE_NUMBER(NULL)
 ----
 NULL

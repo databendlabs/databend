@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -362,9 +361,10 @@ fn get_test_suites() -> Vec<TestSuite> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_query_rewrite() -> Result<()> {
+async fn test_query_rewrite() -> anyhow::Result<()> {
     test_query_rewrite_impl("parquet").await?;
-    test_query_rewrite_impl("native").await
+    test_query_rewrite_impl("native").await?;
+    Ok(())
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {
@@ -381,7 +381,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         {
             let mut metadata = metadata.write();
-            metadata.add_agg_indexes("default.default.t".to_string(), vec![(
+            metadata.add_agg_indices("default.default.t".to_string(), vec![(
                 0,
                 suite.index.to_string(),
                 index,

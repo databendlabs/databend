@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod barrier;
 mod build_info;
 mod dma;
-mod drop_callback;
 mod net;
 mod ordered_float;
 mod profiling;
@@ -23,16 +23,13 @@ mod select;
 mod semaphore;
 mod shutdown_signal;
 mod singleton_instance;
-mod stop_handle;
-mod stoppable;
 mod string;
 mod take_mut;
-mod uniq_id;
 mod watch_notify;
 
+pub use barrier::Barrier;
 pub use build_info::*;
 pub use dma::*;
-pub use drop_callback::DropCallback;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use ordered_float::OrderedFloat;
@@ -48,8 +45,6 @@ pub use shutdown_signal::SignalStream;
 pub use shutdown_signal::SignalType;
 pub use shutdown_signal::signal_stream;
 pub use singleton_instance::GlobalInstance;
-pub use stop_handle::StopHandle;
-pub use stoppable::Stoppable;
 pub use string::convert_byte_size;
 pub use string::convert_number_size;
 pub use string::escape_for_key;
@@ -61,7 +56,5 @@ pub use string::unescape_for_key;
 pub use string::unescape_string;
 pub use take_mut::take_mut;
 pub use tokio;
-pub use uniq_id::GlobalSequence;
-pub use uniq_id::GlobalUniqName;
 pub use uuid;
 pub use watch_notify::WatchNotify;

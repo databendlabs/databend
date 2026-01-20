@@ -1,18 +1,18 @@
 statement ok
 create or replace table t(scores map(string, int))
 
-query 
+query ?????
 copy into t from @data/avro/map.avro file_format = (type=avro)
 ----
 avro/map.avro 2 0 NULL NULL
 
-query 
+query ?
 select * from t
 ----
 {"math":100}
 {}
 
-query 
+query ?
 select scores['math'] from t
 ----
 100
@@ -21,18 +21,18 @@ NULL
 statement ok
 create or replace table t(tags array(string))
 
-query 
+query ?????
 copy into t from @data/avro/array.avro file_format = (type=avro)
 ----
 avro/array.avro 2 0 NULL NULL
 
-query 
+query ?
 select * from t
 ----
 ["tall","rich","handsome"]
 []
 
-query 
+query ?
 select tags[1] from t;
 ----
 tall
@@ -44,12 +44,12 @@ create or replace table t(id int64, level int not null default 1, info tuple(nam
 query error missing
 copy into t from @data/avro/nested_record.avro file_format = (type=avro)
 
-query 
+query ?????
 copy into t from @data/avro/nested_record.avro file_format = (type=avro missing_field_as=field_default)
 ----
 avro/nested_record.avro 2 0 NULL NULL
 
-query 
+query ???
 select * from t
 ----
 0 1 ("yang",NULL,(NULL,"yang@m","911"))
@@ -58,18 +58,18 @@ select * from t
 statement ok
 create or replace table t(info variant)
 
-query 
+query ?????
 copy into t from @data/avro/nested_record.avro file_format = (type=avro)
 ----
 avro/nested_record.avro 2 0 NULL NULL
 
-query 
+query ?
 select * from t
 ----
 {"contact":{"email":"yang@m","phone":"911"},"name":"yang"}
 {"contact":{"email":"wang@m","phone":null},"name":"wang"}
 
-query
+query ?
 select info:name from t
 ----
 "yang"
@@ -78,13 +78,13 @@ select info:name from t
 statement ok
 create or replace table t(c_int int32, c_long int64, c_float float, c_double double)
 
-query
+query ?????
 copy into t from @data/avro/number.avro file_format = (type=avro)
 ----
 avro/number.avro 2 0 NULL NULL
 
-query
+query ????
 select * from t
 ----
-2147483647 9223372036854775807 3.4028235e38 1.7976931348623157e308
--2147483648 -9223372036854775808 -3.4028235e38 -1.7976931348623157e308
+2147483647 9223372036854775807 3.4028235e+38 1.7976931348623157e+308
+-2147483648 -9223372036854775808 -3.4028235e+38 -1.7976931348623157e+308

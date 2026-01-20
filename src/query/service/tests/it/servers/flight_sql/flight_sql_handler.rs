@@ -22,7 +22,6 @@ use arrow_cast::pretty::pretty_format_batches;
 use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_flight::sql::client::FlightSqlServiceClient;
 use arrow_schema::ArrowError;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::InnerConfig;
 use databend_common_config::UserAuthConfig;

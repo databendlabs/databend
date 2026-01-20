@@ -54,6 +54,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::meta_service_error;
 
 #[derive(Clone)]
 pub struct DefaultDatabase {
@@ -125,7 +126,12 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let name_ident = DBIdTableName::new(self.get_db_info().database_id.db_id, table_name);
-        let table_niv = self.ctx.meta.get_table_in_db(&name_ident).await?;
+        let table_niv = self
+            .ctx
+            .meta
+            .get_table_in_db(&name_ident)
+            .await
+            .map_err(meta_service_error)?;
 
         let Some(table_niv) = table_niv else {
             return Err(AppError::from(UnknownTable::new(
@@ -163,7 +169,8 @@ impl Database for DefaultDatabase {
                 database_id: self.db_info.database_id.db_id,
                 table_name: table_name.to_string(),
             })
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         let table_infos: Vec<Arc<TableInfo>> = metas
             .into_iter()
@@ -314,7 +321,12 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
-        let res = self.ctx.meta.list_table_copied_file_info(table_id).await?;
+        let res = self
+            .ctx
+            .meta
+            .list_table_copied_file_info(table_id)
+            .await
+            .map_err(meta_service_error)?;
         Ok(res)
     }
 

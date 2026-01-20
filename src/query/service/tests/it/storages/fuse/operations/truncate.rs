@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,7 +26,7 @@ use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate() -> Result<()> {
+async fn test_fuse_table_truncate() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -90,7 +89,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
+async fn test_fuse_table_truncate_appending_concurrently() -> anyhow::Result<()> {
     // the test scenario is as follows:
     // ┌──────┐
     // │  s0  │
@@ -168,11 +167,8 @@ async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
         fixture.default_table_name()
     );
     // - full scan should work
-    let result = fixture
-        .execute_query(qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    let result = strm.try_collect::<Vec<DataBlock>>().await?;
 
     // - and the number of rows should be as expected
     assert_eq!(

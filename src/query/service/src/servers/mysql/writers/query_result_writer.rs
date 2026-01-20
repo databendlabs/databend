@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column as ExprColumn;
@@ -30,6 +29,7 @@ use databend_common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
 use log::error;
 use opensrv_mysql::*;
+use tokio::io::AsyncWrite;
 
 use crate::sessions::Session;
 /// Reports progress information as string, intend to be put into the mysql Ok packet.

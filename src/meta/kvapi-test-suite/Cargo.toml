@@ -14,6 +14,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
+futures-util = { workspace = true }
 log = { workspace = true }
 state-machine-api = { workspace = true }
 tokio = { workspace = true }

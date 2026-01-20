@@ -16,9 +16,6 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::to_digit_ver;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -28,6 +25,8 @@ use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeResponse;
 use databend_common_meta_types::protobuf::KeysCount;
 use databend_common_meta_types::protobuf::KeysLayoutRequest;
+use databend_common_meta_types::protobuf::KvGetManyRequest;
+use databend_common_meta_types::protobuf::KvListRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -41,6 +40,8 @@ use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use futures::Stream;
 use rand::Rng;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
@@ -85,6 +86,24 @@ impl MetaService for GrpcServiceForTestImpl {
         let itm = StreamItem::new("kv_read_v1".to_string(), None);
         let output = futures::stream::once(async { Ok(itm) });
         Ok(Response::new(Box::pin(output)))
+    }
+
+    type KvListStream = BoxStream<StreamItem>;
+
+    async fn kv_list(
+        &self,
+        _request: Request<KvListRequest>,
+    ) -> Result<Response<Self::KvListStream>, Status> {
+        unimplemented!()
+    }
+
+    type KvGetManyStream = BoxStream<StreamItem>;
+
+    async fn kv_get_many(
+        &self,
+        _request: Request<Streaming<KvGetManyRequest>>,
+    ) -> Result<Response<Self::KvGetManyStream>, Status> {
+        unimplemented!()
     }
 
     type ExportStream =

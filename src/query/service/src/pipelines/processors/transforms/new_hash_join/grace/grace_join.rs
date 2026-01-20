@@ -17,7 +17,7 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::PoisonError;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -392,7 +392,7 @@ impl GraceJoinPartition {
 
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
+        let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
         let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
 
         Ok(GraceJoinPartition {

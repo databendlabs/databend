@@ -19,9 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -47,6 +45,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::io::BlockBuilder;
@@ -438,13 +437,13 @@ impl AggregationContext {
                 block_builder.build(res_block, |block, generator| {
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                        info!(
-                            "[MERGE-INTO] Serializing block with cluster stats: {:?}",
-                            cluster_stats
-                        );
-                        Ok((cluster_stats, block))
-                    })
+                    info!(
+                        "[MERGE-INTO] Serializing block with cluster stats: {:?}",
+                        cluster_stats
+                    );
+                    Ok((cluster_stats, block))
                 })
+            })
             .await
             .map_err(|e| {
                 ErrorCode::Internal(

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::base::tokio;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::AlterTableClusterKeyPlan;
 use databend_common_sql::plans::CreateTablePlan;
@@ -28,7 +27,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Result<()> {
+async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

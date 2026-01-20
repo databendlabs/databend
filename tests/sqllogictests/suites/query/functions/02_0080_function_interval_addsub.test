@@ -1,209 +1,209 @@
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('1 year')
 ----
 1993-03-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('0 month')
 ----
 1992-03-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('0 month')
 ----
 1992-03-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('1 month')
 ----
 1992-04-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('1 month')
 ----
 1992-02-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('2 month')
 ----
 1992-05-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('2 month')
 ----
 1992-01-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('3 month')
 ----
 1992-06-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('3 month')
 ----
 1991-12-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('4 month')
 ----
 1992-07-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('4 month')
 ----
 1991-11-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('5 month')
 ----
 1992-08-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('5 month')
 ----
 1991-10-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('6 month')
 ----
 1992-09-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('6 month')
 ----
 1991-09-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('7 month')
 ----
 1992-10-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('7 month')
 ----
 1991-08-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('8 month')
 ----
 1992-11-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('8 month')
 ----
 1991-07-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('9 month')
 ----
 1992-12-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('9 month')
 ----
 1991-06-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('10 month')
 ----
 1993-01-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('10 month')
 ----
 1991-05-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('11 month')
 ----
 1993-02-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('11 month')
 ----
 1991-04-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('12 month')
 ----
 1993-03-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('12 month')
 ----
 1991-03-01
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('10 day')
 ----
 1992-03-11
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('10 day')
 ----
 1992-02-20
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1993-03-01' - to_interval('10 day')
 ----
 1993-02-19
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1993-03-01' - to_interval('1 second')
 ----
 1993-02-28 23:59:59.000000
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' + to_interval('1 second')
 ----
 1992-03-01 00:00:01.000000
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1992-03-01' - to_interval('1 second')
 ----
 1992-02-29 23:59:59.000000
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1993-03-01' + to_interval('1000000 second')
 ----
 1993-03-12 13:46:40.000000
 
 skipif mysql
-query T
+query ?
 SELECT DATE '1993-03-01' - to_interval('1000000 second')
 ----
 1993-02-17 10:13:20.000000
@@ -213,49 +213,49 @@ statement error
 SELECT to_interval('1000000 second') - DATE '1993-03-01'
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '1992-01-01 10:00:00' + to_interval('1 day')
 ----
 1992-01-02 10:00:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT to_interval('1 day') + TIMESTAMP '1992-01-01 10:00:00'
 ----
 1992-01-02 10:00:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '1992-01-01 10:00:05' + to_interval('17 years 3 months 1 day 2 hours 1 minute 57 seconds')
 ----
 2009-04-02 12:02:02.000000
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '1992-01-01 10:00:00' - to_interval('1 day')
 ----
 1991-12-31 10:00:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP_TZ '1992-01-01 10:00:00 +0800' + to_interval('1 day')
 ----
 1992-01-02 10:00:00.000000 +0800
 
 skipif mysql
-query T
+query ?
 SELECT to_interval('1 day') + TIMESTAMP_TZ '1992-01-01 10:00:00 +0800'
 ----
 1992-01-02 10:00:00.000000 +0800
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP_TZ '1992-01-01 10:00:05 +0800' + to_interval('17 years 3 months 1 day 2 hours 1 minute 57 seconds')
 ----
 2009-04-02 12:02:02.000000 +0800
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP_TZ '1992-01-01 10:00:00 +0800' - to_interval('1 day')
 ----
 1991-12-31 10:00:00.000000 +0800
@@ -270,7 +270,7 @@ statement ok
 INSERT INTO nullable_date_interval_test VALUES ('2022-03-15'), (NULL), ('2022-06-20')
 
 skipif mysql
-query T
+query ?
 SELECT d - INTERVAL '1 hour' FROM nullable_date_interval_test ORDER BY d NULLS LAST
 ----
 2022-03-14 23:00:00.000000
@@ -278,7 +278,7 @@ SELECT d - INTERVAL '1 hour' FROM nullable_date_interval_test ORDER BY d NULLS L
 NULL
 
 skipif mysql
-query T
+query ?
 SELECT d + INTERVAL '30 minutes' FROM nullable_date_interval_test ORDER BY d NULLS LAST
 ----
 2022-03-15 00:30:00.000000
@@ -286,7 +286,7 @@ SELECT d + INTERVAL '30 minutes' FROM nullable_date_interval_test ORDER BY d NUL
 NULL
 
 skipif mysql
-query T
+query ?
 SELECT d - interval '2 days' FROM nullable_date_interval_test ORDER BY d NULLS LAST
 ----
 2022-03-13
@@ -294,7 +294,7 @@ SELECT d - interval '2 days' FROM nullable_date_interval_test ORDER BY d NULLS L
 NULL
 
 skipif mysql
-query T
+query ?
 SELECT d + interval '2 days' FROM nullable_date_interval_test ORDER BY d NULLS LAST
 ----
 2022-03-17
@@ -302,7 +302,7 @@ SELECT d + interval '2 days' FROM nullable_date_interval_test ORDER BY d NULLS L
 NULL
 
 skipif mysql
-query T
+query ?
 SELECT (interval '2 days') + d FROM nullable_date_interval_test ORDER BY d NULLS LAST
 ----
 2022-03-17

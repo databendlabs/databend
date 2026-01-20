@@ -14,13 +14,13 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf as pb;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;

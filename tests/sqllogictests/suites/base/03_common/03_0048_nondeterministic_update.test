@@ -79,7 +79,7 @@ statement ok
 with tbb(col1, col2, col3) as (values ('1', 'add', '11'), ('4', 'add', '44'))
 update test_merge tba set tba.col1 =tbb.col1, tba.col2 = 'update', tba.col3 = tbb.col3 from tbb where tba.col1 = tbb.col1;
 
-query ITI
+query TTT
 select * from test_merge order by col1;
 ----
 2 abc 2

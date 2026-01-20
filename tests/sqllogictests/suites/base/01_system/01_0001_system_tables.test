@@ -13,7 +13,7 @@ statement ok
 create or replace table default.tables(id int)
 
 # default.tables, system.tables, system.columns, and other table under system database
-query T
+query B
 select count() > 10 from system.tables where database='system' or name in ('tables', 'columns');
 ----
 1
@@ -42,7 +42,7 @@ create or replace table c.t100(id int);
 statement ok
 insert into c.t100 values(1), (2), (3), (4), (5), (6), (7), (8);
 
-query T
+query TT
 select name, database from system.tables where database='c' or name ='t' order by name,database;
 ----
 t a
@@ -50,17 +50,17 @@ t b
 t c
 t100 c
 
-query T
+query B
 select count() > 0 from system.tables where database not in ('system', 'default');
 ----
 1
 
-query T
+query B
 select count() > 0 from system.tables where database not in ('default');
 ----
 1
 
-query T
+query TT
 select name, database from system.tables where database='c' or name ='t' or name like 't10%' order by name, database;
 ----
 t a
@@ -71,12 +71,12 @@ t100 c
 statement ok
 drop table default.tables
 
-query T
+query TTI
 select name, database, num_rows from system.tables where database='c' and name ='t100';
 ----
 t100 c 8
 
-query T
+query TTT
 select name, database, owner from system.tables where database='c' and name ='t100';
 ----
 t100 c account_admin
@@ -87,7 +87,7 @@ select * from system.malloc_stats_totals;
 statement ok
 CREATE or replace TABLE default.test(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
-query T
+query TB
 select table_option, is_external from system.tables where name='test' and database='default'
 ----
 BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native' 0

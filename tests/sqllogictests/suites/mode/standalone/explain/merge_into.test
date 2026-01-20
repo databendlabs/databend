@@ -16,7 +16,7 @@ INSERT INTO employees2 VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', 
 statement ok
 INSERT INTO salaries2 VALUES(1, 50000.00),(2, 60000.00);
 
-query TT
+query II
 MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON salaries2.employee_id = employees2.employee_id WHEN MATCHED AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees2.employee_id, 55000.00);
 ----
 2 2
@@ -27,7 +27,7 @@ explain merge into salaries2 using employees2 on 1 != 1 when matched AND employe
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: salaries2]
+    ├── target table: default.default.salaries2
     └── MutationManipulate
         ├── matched delete: [condition: None]
         ├── unmatched insert: [condition: None, insert into (employee_id,salary) values(employees2.employee_id (#0),55000.00)]
@@ -62,7 +62,7 @@ explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON s
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: salaries2]
+    ├── target table: default.default.salaries2
     └── MutationManipulate
         ├── matched update: [condition: employees2.department (#2) = 'HR', update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 1000.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
         ├── matched update: [condition: None, update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 500.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
@@ -109,7 +109,7 @@ explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON s
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: salaries2]
+    ├── target table: default.default.salaries2
     └── MutationManipulate
         ├── matched update: [condition: employees2.department (#2) = 'HR', update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 1000.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
         ├── matched update: [condition: None, update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 500.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
@@ -156,7 +156,7 @@ explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON s
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: salaries2]
+    ├── target table: default.default.salaries2
     └── MutationManipulate
         ├── matched update: [condition: employees2.department (#2) = 'HR', update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 1000.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
         ├── matched update: [condition: None, update set salary = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(salaries2.salary (#4) + 500.00 AS Decimal(10, 2) NULL), salaries2.salary (#4))]
@@ -220,7 +220,7 @@ on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then in
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: column_only_optimization_target]
+    ├── target table: default.default.column_only_optimization_target
     └── MutationManipulate
         ├── matched update: [condition: None, update set b = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), t2.b (#1), t1.b (#3))]
         ├── unmatched insert: [condition: None, insert into (a,b) values(a (#0),b (#1))]
@@ -262,7 +262,7 @@ on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: column_only_optimization_target]
+    ├── target table: default.default.column_only_optimization_target
     └── MutationManipulate
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), a (#0), t1.a (#2)),b = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), b (#1), t1.b (#3))]
         ├── unmatched insert: [condition: None, insert into (a,b) values(a (#0),b (#1))]
@@ -307,7 +307,7 @@ on t1.a = t2.a when matched then update set t1.b = 'test' when not matched then 
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: column_only_optimization_target]
+    ├── target table: default.default.column_only_optimization_target
     └── MutationManipulate
         ├── matched update: [condition: None, update set b = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 'test', t1.b (#3))]
         ├── unmatched insert: [condition: None, insert into (a,b) values(a (#0),b (#1))]
@@ -349,7 +349,7 @@ on t1.a = t2.a when matched then update set t1.b = concat(t2.b,'test') when not 
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: column_only_optimization_target]
+    ├── target table: default.default.column_only_optimization_target
     └── MutationManipulate
         ├── matched update: [condition: None, update set b = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), concat(t2.b (#1), 'test'), t1.b (#3))]
         ├── unmatched insert: [condition: None, insert into (a,b) values(a (#0),b (#1))]

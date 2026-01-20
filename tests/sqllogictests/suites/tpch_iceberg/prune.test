@@ -41,11 +41,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 or l_commitdate < 
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 120114.40
 └── Filter
     ├── output columns: []
-    ├── filters: [is_true((lineitem.l_orderkey (#0) < 1 OR lineitem.l_commitdate (#11) < '1992-01-31'))]
-    ├── estimated rows: 0.00
+    ├── filters: [lineitem.l_orderkey (#0) < 1 or lineitem.l_commitdate (#11) < '1992-01-31']
+    ├── estimated rows: 120114.40
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0
@@ -54,7 +54,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true((lineitem.l_orderkey (#0) < 1 OR lineitem.l_commitdate (#11) < '1992-01-31'))], limit: NONE]
+        ├── push downs: [filters: [lineitem.l_orderkey (#0) < 1 or lineitem.l_commitdate (#11) < '1992-01-31'], limit: NONE]
         └── estimated rows: 600572.00
 
 query T
@@ -76,7 +76,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) < 1, lineitem.l_commitdate (#11) > '1992-01-31')], limit: NONE]
+        ├── push downs: [filters: [lineitem.l_orderkey (#0) < 1 and lineitem.l_commitdate (#11) > '1992-01-31'], limit: NONE]
         └── estimated rows: 600572.00
 
 query T
@@ -98,7 +98,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) > 1, lineitem.l_commitdate (#11) = '1992-01-22')], limit: NONE]
+        ├── push downs: [filters: [lineitem.l_orderkey (#0) > 1 and lineitem.l_commitdate (#11) = '1992-01-22'], limit: NONE]
         └── estimated rows: 600572.00
 
 

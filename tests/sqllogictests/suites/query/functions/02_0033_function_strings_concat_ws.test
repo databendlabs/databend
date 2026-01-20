@@ -13,7 +13,7 @@ SELECT CONCAT_WS(',', 'data', NULL, NULL, 'bend')
 ----
 data,bend
 
-query T
+query ?
 SELECT CONCAT_WS(NULL, 'data', 'fuse', 'labs')
 ----
 NULL

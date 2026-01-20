@@ -19,14 +19,14 @@ remove @s10;
 statement ok
 copy into '@s10/a b' from (select 2);
 
-query
+query ?
 select * from '@s10/a b/'
 ----
 2
 
 # for compatibility with old versions only, should fail in future
 skipif mysql
-query ??
+query I
 select * from @s10/a\ b/
 ----
 2

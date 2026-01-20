@@ -52,6 +52,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -187,9 +188,8 @@ where
             }
 
             // Transaction failed. Check if it's due to references or concurrent modification.
-            let refs: Vec<String> = self
-                .list_pb(&refs_dir)
-                .await?
+            let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
+            let refs: Vec<String> = strm
                 .map_ok(|entry| entry.key.name().object.to_string())
                 .try_collect()
                 .await?;
@@ -456,7 +456,7 @@ where
         let obj_ref_key =
             ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
-        let stream = self.list_pb(&refs_dir).await?;
+        let stream = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
         Ok(stream
             .map_ok(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
@@ -481,9 +481,8 @@ where
             TagIdObjectRefIdent::new_generic(tenant, TagIdObjectRef::prefix(tag_id)),
             2,
         );
-        let refs = self
-            .list_pb(&refs_dir)
-            .await?
+        let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
+        let refs = strm
             .map_ok(|entry| {
                 let object = entry.key.name().object.clone();
                 let value_key = ObjectTagIdRefIdent::new_generic(

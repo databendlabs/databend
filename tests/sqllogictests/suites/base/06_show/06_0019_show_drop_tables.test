@@ -31,12 +31,12 @@ show drop tables from db1 like '%t';
 statement ok
 show drop tables from db1 where name='t_never_exist$$$$';
 
-query T
+query B
 select count(name)>=2 from system.tables_with_history where name='t' and database='db1';
 ----
 1
 
-query T
+query TT
 select name, database from system.tables_with_history where database='db1' and dropped_on is not null;
 ----
 t db1

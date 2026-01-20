@@ -16,11 +16,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::net::TcpStream;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::StreamExt;
@@ -30,6 +26,8 @@ use futures::future::Abortable;
 use log::error;
 use rustls::ServerConfig;
 use socket2::TcpKeepalive;
+use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;

@@ -20,6 +20,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
+use crate::meta_service_error;
 
 /// user connection operations.
 impl UserApiProvider {
@@ -54,10 +55,10 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_connections(&self, tenant: &Tenant) -> Result<Vec<UserDefinedConnection>> {
         let connection_api_provider = self.connection_api(tenant);
-        let get_connections = connection_api_provider.list();
+        let get_connections = connection_api_provider.list(None);
 
         match get_connections.await {
-            Err(e) => Err(ErrorCode::from(e).add_message_back(" (while get connection)")),
+            Err(e) => Err(meta_service_error(e).add_message_back(" (while get connection)")),
             Ok(seq_connections_info) => Ok(seq_connections_info),
         }
     }

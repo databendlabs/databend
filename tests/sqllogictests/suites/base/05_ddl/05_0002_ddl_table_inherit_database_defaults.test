@@ -23,7 +23,7 @@ CREATE TABLE test_db_inherit.table_with_defaults (
 ) ENGINE = Fuse
 
 # Verify table metadata inherits the database defaults
-query I
+query T
 SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_defaults'
 ----
 fs | root=/tmp/05_0002/
@@ -41,7 +41,7 @@ CREATE TABLE test_db_inherit.table_after_alter (
     name VARCHAR(100)
 ) ENGINE = Fuse
 
-query I
+query T
 SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_after_alter'
 ----
 fs | root=/tmp/05_0002_updated/
@@ -60,7 +60,7 @@ CREATE TABLE test_db_inherit.table_with_explicit (
     name VARCHAR(100)
 ) ENGINE = Fuse 'fs:///tmp/05_0002_explicit/' CONNECTION = (connection_name = 'explicit_conn')
 
-query I
+query T
 SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_explicit'
 ----
 fs | root=/tmp/05_0002_explicit/

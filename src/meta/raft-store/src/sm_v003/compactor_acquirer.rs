@@ -16,7 +16,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::DropCallback;
+use databend_base::drop_guard::DropGuard;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -58,7 +58,7 @@ impl CompactorAcquirer {
 
         CompactorPermit {
             _permit: permit,
-            _drop: DropCallback::new(move || {
+            _drop: DropGuard::new(move || {
                 info!(
                     "CompactorPermit({})-Drop: total: {:?}",
                     name,
@@ -72,5 +72,5 @@ impl CompactorAcquirer {
 #[derive(Debug)]
 pub struct CompactorPermit {
     _permit: OwnedSemaphorePermit,
-    _drop: DropCallback,
+    _drop: DropGuard,
 }

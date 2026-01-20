@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -42,6 +43,7 @@ use log::warn;
 
 use crate::error_util::unknown_database_error;
 use crate::kv_app_error::KVAppError;
+use crate::kv_app_error::KVAppResultExt;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
 use crate::txn_condition_util::txn_cond_seq;
@@ -63,17 +65,10 @@ pub(crate) async fn drop_database_meta(
     )
     .await;
 
-    let (seq_db_id, mut db_meta) = match res {
+    let (seq_db_id, mut db_meta) = match res.into_nested()? {
         Ok(x) => x,
-        Err(e) => {
-            if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
-                if if_exists {
-                    return Ok(0);
-                }
-            }
-
-            return Err(e);
-        }
+        Err(AppError::UnknownDatabase(_)) if if_exists => return Ok(0),
+        Err(app_err) => return Err(app_err.into()),
     };
 
     // remove db_name -> db id
@@ -153,7 +148,8 @@ pub(crate) async fn drop_database_meta(
         ObjectTagIdRef::new(taggable_object.clone(), 0),
     );
     let obj_tag_dir = DirName::new(obj_tag_prefix);
-    let tag_entries: Vec<_> = kv_api.list_pb(&obj_tag_dir).await?.try_collect().await?;
+    let strm = kv_api.list_pb(ListOptions::unlimited(&obj_tag_dir)).await?;
+    let tag_entries: Vec<_> = strm.try_collect().await?;
     for entry in tag_entries {
         let tag_id = entry.key.name().tag_id;
         // Delete object -> tag reference

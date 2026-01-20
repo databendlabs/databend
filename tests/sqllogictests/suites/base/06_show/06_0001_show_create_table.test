@@ -70,7 +70,7 @@ select * from default.v_subquery order by c1;
 3
 3
 
-query III
+query IIT
 select * from default.v_join order by c2;
 ----
 1 1 x

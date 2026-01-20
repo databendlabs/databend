@@ -50,6 +50,7 @@ use crate::BindContext;
 use crate::Binder;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
+use crate::meta_service_error;
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::GrantPrivilegePlan;
@@ -213,7 +214,8 @@ impl Binder {
                             ProcedureIdentity::from(p.clone()),
                         ),
                     })
-                    .await?;
+                    .await
+                    .map_err(meta_service_error)?;
 
                 if let Some(p) = procedure {
                     Ok(GrantObject::Procedure(p.id))
@@ -305,7 +307,8 @@ impl Binder {
                             ProcedureIdentity::from(p.clone()),
                         ),
                     })
-                    .await?;
+                    .await
+                    .map_err(meta_service_error)?;
 
                 if let Some(p) = procedure {
                     Ok(vec![GrantObject::Procedure(p.id)])
@@ -330,7 +333,11 @@ impl Binder {
     async fn resolve_masking_policy_id(&self, policy: &str) -> Result<u64> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let ident = DataMaskNameIdent::new(self.ctx.get_tenant(), policy);
-        if let Some(policy_id) = meta_api.get_data_mask_id(&ident).await? {
+        if let Some(policy_id) = meta_api
+            .get_data_mask_id(&ident)
+            .await
+            .map_err(meta_service_error)?
+        {
             Ok(*policy_id.data)
         } else {
             Err(ErrorCode::UnknownDatamask(format!(
@@ -343,7 +350,11 @@ impl Binder {
     async fn resolve_row_access_policy_id(&self, policy: &str) -> Result<u64> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let ident = RowAccessPolicyNameIdent::new(self.ctx.get_tenant(), policy.to_string());
-        if let Some((policy_id, _)) = meta_api.get_row_access_policy(&ident).await? {
+        if let Some((policy_id, _)) = meta_api
+            .get_row_access_policy(&ident)
+            .await
+            .map_err(meta_service_error)?
+        {
             Ok(*policy_id.data)
         } else {
             Err(ErrorCode::UnknownRowAccessPolicy(format!(
@@ -620,7 +631,8 @@ impl Binder {
                     .get_procedure(&GetProcedureReq {
                         inner: ProcedureNameIdent::new(tenant, procedure_ident),
                     })
-                    .await?;
+                    .await
+                    .map_err(meta_service_error)?;
                 if let Some(procedure) = procedure {
                     format!("SELECT * FROM show_grants('procedure', '{}')", procedure.id)
                 } else {

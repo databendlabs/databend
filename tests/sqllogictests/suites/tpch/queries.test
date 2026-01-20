@@ -205,7 +205,7 @@ LIMIT 100;
 7843.52 Supplier#000006683 FRANCE 11680 Manufacturer#4 Z1,hkHIw,Z3,,Comv6kLxIiPJtoNt 16-464-517-8943 sits. blithely regular requests above the pending, regular ideas boo
 
 # Q3
-query IRTI
+query IR?I
 SELECT
     l_orderkey,
     sum(l_extendedprice * (1 - l_discount)) AS revenue,
@@ -319,7 +319,7 @@ where
 123141078.228
 
 # Q7
-query TTTR
+query TTIR
 select
     supp_nation,
     cust_nation,
@@ -366,7 +366,7 @@ GERMANY FRANCE 1995 52531746.669
 GERMANY FRANCE 1996 52520549.022
 
 # Q8
-query TR
+query IR
 select
     o_year,
     truncate(sum(case
@@ -409,7 +409,7 @@ order by
 1996 0.04148552
 
 # Q9
-query TTR
+query TIR
 SELECT
     nation,
     o_year,
@@ -20310,7 +20310,7 @@ where
 348406.05428571
 
 # Q18
-query TIITRR
+query TII?RR
 select
     c_name,
     c_custkey,

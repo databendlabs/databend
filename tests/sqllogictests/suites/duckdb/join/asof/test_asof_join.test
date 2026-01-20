@@ -36,7 +36,7 @@ create table trades(wh timestamp, symbol int);
 statement ok
 insert into trades values ('2020-01-01 00:00:03', 1);
 
-query III
+query ?II
 SELECT t.*, p.price
 FROM trades t ASOF JOIN prices p 
   ON t.symbol = p.symbol AND t.wh >= p.wh;

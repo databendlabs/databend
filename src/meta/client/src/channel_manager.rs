@@ -16,8 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::containers::ItemManager;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -29,6 +27,7 @@ use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient
 use log::info;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+use semver::Version;
 use tonic::async_trait;
 use tonic::transport::Channel;
 
@@ -38,10 +37,20 @@ use crate::endpoints::Endpoints;
 use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
+use crate::pool::ItemManager;
+
+/// Default connection TTL: 20 seconds.
+///
+/// This prevents h2 stream reset accumulation that can lead to
+/// `too_many_internal_resets` errors (ENHANCE_YOUR_CALM).
+/// The h2 library has a default limit of 1024 locally-reset streams
+/// per connection. By refreshing connections periodically, we prevent
+/// hitting this limit.
+pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
 
 #[derive(Debug)]
 pub struct MetaChannelManager {
-    version: BuildInfoRef,
+    version: Version,
     username: String,
     password: String,
     timeout: Option<Duration>,
@@ -54,17 +63,24 @@ pub struct MetaChannelManager {
     /// The endpoints will be added to a built client item
     /// and will be updated when a error or successful response is received.
     endpoints: Arc<Mutex<Endpoints>>,
+
+    /// Maximum time a connection can live before being refreshed.
+    ///
+    /// This prevents h2 stream reset accumulation that can lead to
+    /// `too_many_internal_resets` errors.
+    connection_ttl: Duration,
 }
 
 impl MetaChannelManager {
     pub fn new(
-        version: BuildInfoRef,
+        version: Version,
         username: impl ToString,
         password: impl ToString,
         timeout: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
         required_features: &'static [FeatureSpec],
         endpoints: Arc<Mutex<Endpoints>>,
+        connection_ttl: Option<Duration>,
     ) -> Self {
         Self {
             version,
@@ -74,6 +90,7 @@ impl MetaChannelManager {
             tls_config,
             required_features,
             endpoints,
+            connection_ttl: connection_ttl.unwrap_or(DEFAULT_CONNECTION_TTL),
         }
     }
 
@@ -93,7 +110,7 @@ impl MetaChannelManager {
 
         let handshake_res = MetaGrpcClient::handshake(
             &mut real_client,
-            &self.version.semantic,
+            &self.version,
             self.required_features,
             &self.username,
             &self.password,
@@ -187,6 +204,22 @@ impl ItemManager for MetaChannelManager {
         if let Some(e) = ch.take_error() {
             return Err(MetaNetworkError::from(e).into());
         }
+
+        // Check if the connection has exceeded its TTL.
+        // This prevents h2 stream reset accumulation that can lead to
+        // `too_many_internal_resets` errors (ENHANCE_YOUR_CALM).
+        if ch.is_expired(self.connection_ttl) {
+            info!(
+                "Connection {} has exceeded TTL ({:?}), will create a new one",
+                ch, self.connection_ttl
+            );
+            return Err(MetaNetworkError::ConnectionError(ConnectionError::new(
+                AnyError::error("connection TTL exceeded"),
+                "refreshing connection to prevent h2 stream reset accumulation",
+            ))
+            .into());
+        }
+
         Ok(ch)
     }
 }

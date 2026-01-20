@@ -49,7 +49,7 @@ statement ok
 SHOW USER FUNCTIONS WHERE LANGUAGE = 'SQL';
 
 # TEST： SYSTEM.USER_FUNCTIONS
-query 
+query ?
 SELECT definition FROM SYSTEM.USER_FUNCTIONS ORDER BY name;
 ----
  (a) -> a + 3

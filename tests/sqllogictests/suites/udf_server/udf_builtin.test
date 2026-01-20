@@ -25,35 +25,35 @@ SET external_server_request_batch_rows = 1024;
 statement ok
 SET external_server_request_max_threads=1;
 
-query
+query T
 SELECT ping(number) FROM numbers(100000) IGNORE_RESULT;
 ----
 
 statement ok
 SET external_server_request_max_threads=8;
 
-query
+query T
 SELECT ping(number) FROM numbers(100000) IGNORE_RESULT;
 ----
 
 statement ok
 SET external_server_request_max_threads=64;
 
-query
+query T
 SELECT ping(number) FROM numbers(100000) IGNORE_RESULT;
 ----
 
 statement ok
 SET external_server_request_max_threads=256;
 
-query
+query T
 SELECT ping(number) FROM numbers(100000) IGNORE_RESULT;
 ----
 
 statement ok
 SET external_server_request_max_threads=1024;
 
-query
+query T
 SELECT ping(number) FROM numbers(100000) IGNORE_RESULT;
 ----
 

@@ -14,15 +14,15 @@
 
 //! Raft cluster configuration including networking, storage, and performance tuning.
 
+use std::io;
 use std::net::Ipv4Addr;
 use std::path::Path;
 
-use databend_common_exception::Result;
-use databend_common_grpc::DNSResolver;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::raft_types::NodeId;
 
+use crate::dns_resolver;
 use crate::ondisk::DATA_VERSION;
 use crate::raft_log_v004;
 
@@ -268,17 +268,22 @@ impl RaftConfig {
     }
 
     /// Resolves the advertise host to an endpoint, supporting both IP addresses and hostnames.
-    pub async fn raft_api_addr(&self) -> Result<Endpoint> {
-        let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
-        match ipv4_addr {
-            Ok(addr) => Ok(Endpoint::new(addr, self.raft_api_port)),
-            Err(_) => {
-                let _ip_addrs = DNSResolver::instance()?
-                    .resolve(self.raft_advertise_host.clone())
-                    .await?;
-                Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
-            }
+    pub async fn raft_api_addr(&self) -> Result<Endpoint, io::Error> {
+        if let Ok(addr) = self.raft_advertise_host.parse::<Ipv4Addr>() {
+            return Ok(Endpoint::new(addr, self.raft_api_port));
         }
+
+        let ip = dns_resolver::resolve(&self.raft_advertise_host)
+            .await?
+            .next()
+            .ok_or_else(|| {
+                io::Error::other(format!(
+                    "No IP address found for hostname: {}",
+                    self.raft_advertise_host
+                ))
+            })?;
+
+        Ok(Endpoint::new(ip, self.raft_api_port))
     }
 
     /// Returns the min and max election timeout, in milli seconds.
@@ -295,7 +300,7 @@ impl RaftConfig {
     /// - Neither `single` nor `join` is specified
     /// - Both `single` and `join` are specified
     /// - Node tries to join itself (self-reference in join addresses)
-    pub fn check(&self) -> std::result::Result<(), MetaStartupError> {
+    pub fn check(&self) -> Result<(), MetaStartupError> {
         // If just leaving, does not need to check other config
         if !self.leave_via.is_empty() {
             return Ok(());

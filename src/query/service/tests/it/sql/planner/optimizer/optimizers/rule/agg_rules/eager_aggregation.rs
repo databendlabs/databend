@@ -40,10 +40,8 @@ use goldenfile::Mint;
 use super::test_utils::execute_sql;
 use super::test_utils::raw_plan;
 
-// FIXME:
-#[ignore]
 #[tokio::test(flavor = "multi_thread")]
-async fn test_eager_aggregation() -> Result<()> {
+async fn test_eager_aggregation() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/sql/planner/optimizer/optimizers/rule/agg_rules/testdata");
     let mut file = mint.new_goldenfile("eager_aggregation.txt")?;
 

@@ -16,11 +16,9 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::types::DataType;
@@ -43,7 +41,7 @@ use databend_storages_common_io::ReadSettings;
 use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
+async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture

@@ -32,6 +32,8 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 
+use crate::errors::meta_service_error;
+
 pub struct ClientSessionMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
@@ -73,7 +75,11 @@ impl ClientSessionMgr {
             .with(seq)
             .with_ttl(Duration::from_secs(ttl.as_secs()));
 
-        let res = self.kv_api.upsert_pb(&upsert).await?;
+        let res = self
+            .kv_api
+            .upsert_pb(&upsert)
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(res.prev.is_none())
     }
@@ -82,7 +88,11 @@ impl ClientSessionMgr {
     #[fastrace::trace]
     pub async fn get_token(&self, token_hash: &str) -> Result<Option<QueryTokenInfo>> {
         let ident = self.token_ident(token_hash);
-        let res = self.kv_api.get_pb(&ident).await?;
+        let res = self
+            .kv_api
+            .get_pb(&ident)
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(res.map(|r| r.data))
     }
@@ -100,7 +110,8 @@ impl ClientSessionMgr {
                 Operation::Delete,
                 None,
             ))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(())
     }
@@ -119,7 +130,11 @@ impl ClientSessionMgr {
             .with(seq)
             .with_ttl(ttl);
 
-        let res = self.kv_api.upsert_pb(&upsert).await?;
+        let res = self
+            .kv_api
+            .upsert_pb(&upsert)
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(res.prev.is_none())
     }
@@ -132,7 +147,11 @@ impl ClientSessionMgr {
         client_session_id: &str,
     ) -> Result<Option<ClientSession>> {
         let ident = self.session_ident(user_name, client_session_id);
-        let res = self.kv_api.get_pb(&ident).await?;
+        let res = self
+            .kv_api
+            .get_pb(&ident)
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(res.map(|r| r.data))
     }
@@ -156,7 +175,8 @@ impl ClientSessionMgr {
                 Operation::Delete,
                 None,
             ))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(())
     }

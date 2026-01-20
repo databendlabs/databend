@@ -25,7 +25,7 @@ select value, default = value  from system.settings where name in ('max_threads'
 statement ok
 UNSET GLOBAL (max_threads, storage_io_min_bytes_for_seek);
 
-query TT
+query ?
 select  default = value from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek');
 ----
 1
@@ -37,7 +37,7 @@ set variable a = 1;
 statement ok
 set variable (b, c) = ('yy', 'zz');
 
-query ITT
+query ????
 select $a + getvariable('a') + $a, getvariable('b'), getvariable('c'), getvariable('d')
 ----
 3 yy zz NULL
@@ -45,7 +45,7 @@ select $a + getvariable('a') + $a, getvariable('b'), getvariable('c'), getvariab
 statement ok
 unset variable (a, b)
 
-query ITT
+query ????
 select getvariable('a'), getvariable('b'), 'xx' || 'yy' || getvariable('c') , getvariable('d')
 ----
 NULL NULL xxyyzz NULL
@@ -119,7 +119,7 @@ create or replace table t1(id int null, c datetime null);
 statement ok
 insert into t1 values(1,'2022-02-02 00:00:00'), (null, '2022-02-02 00:00:00');
 
-query TTTT
+query ??
 select id, c from t union all select id, c from t1 order by id, c;
 ----
 1 2022-02-01 16:00:00.000000
@@ -132,7 +132,7 @@ settings (timezone='Aisa/Shanghai', default_order_by_null='nulls_first') select 
 statement error 1005
 settings (max_thread=select 1, default_order_by_null='nulls_first') select id, c from t union all select id, c from t1 order by id, c;
 
-query TTTT
+query ??
 settings (timezone='Asia/Shanghai', default_order_by_null='nulls_first') select id, c from t union all select id, c from t1 order by id, c;
 ----
 NULL 2022-02-02 08:00:00.000000
@@ -140,7 +140,7 @@ NULL 2022-02-02 08:00:00.000000
 1 2022-02-02 08:00:00.000000
 
 
-query T
+query ???????
 show settings where name in ('timezone', 'default_order_by_null')
 ----
 default_order_by_null nulls_last nulls_last ["nulls_first", "nulls_last", "nulls_first_on_asc_last_on_desc",... DEFAULT Set numeric default_order_by_null mode String
@@ -161,7 +161,7 @@ WHERE
 ----
 max_threads max_threads 100 100
 
-query
+query ??
 select value=default, level from system.settings where name='max_threads';
 ----
 1 DEFAULT

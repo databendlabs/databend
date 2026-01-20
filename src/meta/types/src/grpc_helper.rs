@@ -42,72 +42,72 @@ impl GrpcHelper {
         reply: &mut tonic::Response<T>,
         endpoint: Option<&Endpoint>,
     ) {
-        if let Some(endpoint) = endpoint {
-            let metadata = reply.metadata_mut();
+        Self::insert_endpoint_to_metadata(reply.metadata_mut(), endpoint, "building a response");
+    }
 
-            match MetadataValue::from_str(&endpoint.to_string()) {
-                Ok(v) => {
-                    metadata.insert(HEADER_LEADER, v);
-                }
-                Err(err) => {
-                    error!(
-                        "fail to add response meta leader endpoint({:?}), error: {}",
-                        endpoint, err
-                    )
-                }
+    /// Create a Status error with leader endpoint in metadata.
+    /// Similar to `add_response_meta_leader` but for error Status.
+    pub fn status_forward_to_leader(endpoint: Option<&Endpoint>) -> tonic::Status {
+        let ctx = "building a status for leader redirection";
+
+        if endpoint.is_none() {
+            log::warn!(
+                "no leader endpoint available for client redirection; when:({})",
+                ctx
+            );
+        }
+
+        let mut status = tonic::Status::unavailable("not leader");
+        Self::insert_endpoint_to_metadata(
+            status.metadata_mut(),
+            endpoint,
+            "building a status for leader redirection",
+        );
+        status
+    }
+
+    /// Insert leader endpoint into metadata for client redirection.
+    fn insert_endpoint_to_metadata(
+        metadata: &mut tonic::metadata::MetadataMap,
+        endpoint: Option<&Endpoint>,
+        ctx: &str,
+    ) {
+        let Some(endpoint) = endpoint else {
+            return;
+        };
+
+        match MetadataValue::from_str(&endpoint.to_string()) {
+            Ok(v) => {
+                metadata.insert(HEADER_LEADER, v);
             }
-
-            // // Binary format. Not used.
-            // metadata.insert_bin(
-            //     HEADER_LEADER_BIN,
-            //     MetadataValue::from_bytes(endpoint.to_string().as_bytes()),
-            // );
-            // === loading:
-            // let Some(values) = metadata.get_bin(HEADER_LEADER_BIN) else {
-            //     return None;
-            // };
-            //
-            // let value = match values.to_bytes() {
-            //     Ok(value) => value,
-            //     Err(e) => {
-            //         error!("invalid response leader endpoint, error: {}", e);
-            //         return None;
-            //     }
-            // };
-            //
-            // let s = match String::from_utf8(value.to_vec()) {
-            //     Ok(s) => s,
-            //     Err(err) => {
-            //         error!("invalid response leader endpoint, error: {}", err);
-            //         return None;
-            //     }
-            // };
+            Err(err) => {
+                error!(
+                    "fail to insert leader endpoint({:?}) to metadata: {}; when:({})",
+                    endpoint, err, ctx
+                );
+            }
         }
     }
 
-    /// Retrieve leader endpoint from the reply.
-    pub fn get_response_meta_leader<T>(reply: &tonic::Response<T>) -> Option<Endpoint> {
-        let metadata = reply.metadata();
-
+    /// Parse leader endpoint from metadata map.
+    pub fn parse_leader_from_metadata(metadata: &tonic::metadata::MetadataMap) -> Option<Endpoint> {
         let meta_leader = metadata.get(HEADER_LEADER)?;
 
         let s = match meta_leader.to_str() {
             Ok(x) => x,
             Err(err) => {
                 error!(
-                    "invalid response meta leader endpoint({:?}), error: {}",
+                    "invalid leader endpoint in metadata({:?}), error: {}",
                     meta_leader, err
                 );
                 return None;
             }
         };
 
-        let endpoint = Endpoint::parse(s);
-
-        match endpoint {
+        match Endpoint::parse(s) {
             Ok(endpoint) => Some(endpoint),
             Err(e) => {
-                error!("invalid response leader endpoint: {}, error: {}", s, e);
+                error!("invalid leader endpoint: {}, error: {}", s, e);
                 None
             }
         }

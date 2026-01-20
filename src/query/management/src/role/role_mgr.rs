@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
@@ -44,6 +43,7 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
@@ -61,7 +61,9 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use tokio::sync::Mutex;
 
+use crate::errors::meta_service_error;
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;
 use crate::serde::check_and_upgrade_to_pb;
@@ -127,7 +129,8 @@ impl RoleMgr {
         let res = self
             .kv_api
             .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownRole(format!(
@@ -207,7 +210,7 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn get_role(&self, role: &str, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.role_ident(role).to_string_key();
-        let res = self.kv_api.get_kv(&key).await?;
+        let res = self.kv_api.get_kv(&key).await.map_err(meta_service_error)?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?;
 
@@ -216,7 +219,8 @@ impl RoleApi for RoleMgr {
                 let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
                 let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
-                    .await?;
+                    .await
+                    .map_err(meta_service_error)?;
 
                 // Keep the original seq.
                 Ok(SeqV::new(seq_value.seq, u.data))
@@ -238,7 +242,9 @@ impl RoleApi for RoleMgr {
         let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
+            let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref())
+                .await
+                .map_err(meta_service_error)?;
             r.push(u);
         }
 
@@ -249,7 +255,11 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
-        Ok(self.kv_api.list_kv_collect(role_prefix.as_str()).await?)
+        Ok(self
+            .kv_api
+            .list_kv_collect(ListOptions::unlimited(role_prefix.as_str()))
+            .await
+            .map_err(meta_service_error)?)
     }
 
     #[async_backtrace::framed]
@@ -289,8 +299,9 @@ impl RoleApi for RoleMgr {
             kvs
         } else {
             self.kv_api
-                .list_kv_collect(object_owner_prefix.as_str())
-                .await?
+                .list_kv_collect(ListOptions::unlimited(object_owner_prefix.as_str()))
+                .await
+                .map_err(meta_service_error)?
         };
 
         let mut r = vec![];
@@ -322,8 +333,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let udfs = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let udfs = values.try_collect().await.map_err(meta_service_error)?;
         Ok(udfs)
     }
 
@@ -336,8 +351,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let stages = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let stages = values.try_collect().await.map_err(meta_service_error)?;
         Ok(stages)
     }
 
@@ -350,8 +369,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let seqs = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let seqs = values.try_collect().await.map_err(meta_service_error)?;
         Ok(seqs)
     }
 
@@ -364,8 +387,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let seqs = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let seqs = values.try_collect().await.map_err(meta_service_error)?;
         Ok(seqs)
     }
 
@@ -380,8 +407,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let conns = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let conns = values.try_collect().await.map_err(meta_service_error)?;
         Ok(conns)
     }
 
@@ -396,8 +427,12 @@ impl RoleApi for RoleMgr {
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let ws = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let ws = values.try_collect().await.map_err(meta_service_error)?;
         Ok(ws)
     }
 
@@ -476,7 +511,11 @@ impl RoleApi for RoleMgr {
 
             if need_transfer {
                 let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
-                let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+                let tx_reply = self
+                    .kv_api
+                    .transaction(txn_req.clone())
+                    .await
+                    .map_err(meta_service_error)?;
                 let (succ, _) = unpack_txn_reply(tx_reply);
                 debug!(
                     succ = succ;
@@ -540,7 +579,11 @@ impl RoleApi for RoleMgr {
 
             let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
-            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+            let tx_reply = self
+                .kv_api
+                .transaction(txn_req.clone())
+                .await
+                .map_err(meta_service_error)?;
             let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
@@ -562,7 +605,7 @@ impl RoleApi for RoleMgr {
         let key = self.ownership_object_ident(object);
         let key = key.to_string_key();
 
-        let res = self.kv_api.get_kv(&key).await?;
+        let res = self.kv_api.get_kv(&key).await.map_err(meta_service_error)?;
         let seq_value = match res {
             Some(value) => value,
             None => return Ok(None),
@@ -571,8 +614,9 @@ impl RoleApi for RoleMgr {
         let mut quota = quota(func_name!(), self.upgrade_to_pb);
 
         // if can not get ownership, will directly return None.
-        let seq_val =
-            check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref()).await?;
+        let seq_val = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(Some(seq_val.data))
     }
@@ -625,7 +669,11 @@ impl RoleApi for RoleMgr {
 
             let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
-            let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
+            let tx_reply = self
+                .kv_api
+                .transaction(txn_req.clone())
+                .await
+                .map_err(meta_service_error)?;
             let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
@@ -646,7 +694,8 @@ impl RoleApi for RoleMgr {
         let res = self
             .kv_api
             .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         res.removed_or_else(|_p| {
             ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role))

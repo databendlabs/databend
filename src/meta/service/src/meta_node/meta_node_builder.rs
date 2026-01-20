@@ -15,12 +15,12 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 
-use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_sled_store::openraft::Config;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::raft_types::NodeId;
 use log::info;
+use semver::Version;
 use tokio::sync::Mutex;
 use tokio::sync::watch;
 use watcher::dispatch::Dispatcher;
@@ -37,7 +37,7 @@ pub struct MetaNodeBuilder {
     pub(crate) raft_config: Option<Config>,
     pub(crate) sto: Option<RaftStore>,
     pub(crate) raft_service_endpoint: Option<Endpoint>,
-    pub(crate) version: Option<BuildInfoRef>,
+    pub(crate) version: Option<Version>,
 }
 
 impl MetaNodeBuilder {
@@ -144,7 +144,7 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn version(mut self, version: BuildInfoRef) -> Self {
+    pub fn version(mut self, version: Version) -> Self {
         self.version = Some(version);
         self
     }

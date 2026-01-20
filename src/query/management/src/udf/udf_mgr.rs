@@ -24,12 +24,14 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 
+use crate::errors::meta_service_error;
 use crate::udf::UdfApiError;
 use crate::udf::UdfError;
 
@@ -123,7 +125,11 @@ impl UdfMgr {
     #[fastrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = DirName::new(UdfIdent::new(&self.tenant, ""));
-        let strm = self.kv_api.list_pb_values(&key).await?;
+        let strm = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&key))
+            .await
+            .map_err(meta_service_error)?;
 
         match strm.try_collect().await {
             Ok(udfs) => Ok(udfs),
@@ -136,12 +142,15 @@ impl UdfMgr {
     pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = UdfIdent::new(&self.tenant, "dummy");
         let dir = DirName::new(key);
-        let udfs = self
+        let strm = self
             .kv_api
-            .list_pb_values(&dir)
-            .await?
+            .list_pb_values(ListOptions::unlimited(&dir))
+            .await
+            .map_err(meta_service_error)?;
+        let udfs = strm
             .try_collect::<Vec<_>>()
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(udfs)
     }

@@ -40,10 +40,8 @@ impl<'a> PhysicalFormat for MutationFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table_entry = ctx.metadata.table(self.inner.target_table_index).clone();
         let mut node_children = vec![FormatTreeNode::new(format!(
-            "target table: [catalog: {}] [database: {}] [table: {}]",
-            table_entry.catalog(),
-            table_entry.database(),
-            table_entry.name()
+            "target table: {}",
+            table_entry.qualified_name()
         ))];
 
         let input_formatter = self.inner.input.formatter()?;

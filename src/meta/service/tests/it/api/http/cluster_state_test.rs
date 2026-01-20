@@ -18,10 +18,8 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::Stoppable;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::time::Instant;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::Cmd;
+use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
@@ -41,6 +39,7 @@ use poem::Route;
 use poem::get;
 use pretty_assertions::assert_eq;
 use test_harness::test;
+use tokio::time::Instant;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
@@ -59,7 +58,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
+    let _mn0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
 
     let mn1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
     let meta_handle_1 = Arc::new(mn1);
@@ -106,9 +105,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mn0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
+    let mn0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
 
-    let mn1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
+    let mn1 = MetaNode::start(&tc1.config, BUILD_INFO.semver()).await?;
     let _ = mn1
         .join_cluster(
             &tc1.config.raft_config,
@@ -118,21 +117,26 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     info!("--- write sample data to the cluster ---");
     {
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo2", b"foo2"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo3", b"foo3"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo4", b"foo4"))
-            .await?;
-        mn0.kv_api()
-            .upsert_kv(UpsertKV::update("foo5", b"foo5"))
-            .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(
+            UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
+        )))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo2", b"foo2",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo3", b"foo3",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo4", b"foo4",
+        ))))
+        .await?;
+        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+            "foo5", b"foo5",
+        ))))
+        .await?;
     }
 
     info!("--- trigger snapshot ---");
@@ -258,7 +262,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
+    let _meta_node0 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
 
     let meta_handle_1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
     let meta_handle_1 = Arc::new(meta_handle_1);
@@ -285,7 +289,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
 
-    srv.start().await.expect("HTTP: admin api error");
+    srv.do_start().await.expect("HTTP: admin api error");
 
     // kick off
     let client = reqwest::Client::builder()

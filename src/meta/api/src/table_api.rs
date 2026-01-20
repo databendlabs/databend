@@ -95,6 +95,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -952,7 +953,7 @@ where
                 file: "dummy".to_string(),
             };
             let dir_name = DirName::new(copied_file_ident);
-            let copied_files = self.list_pb_vec(&dir_name).await?;
+            let copied_files = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
             let seq_2 = self.get_seq(&table_id).await?;
 
@@ -1489,12 +1490,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let dbid_tbname = DBIdTableName {
             db_id: *seq_db_id.data,
@@ -1627,7 +1623,7 @@ where
 
         let dir_name = DirName::new(table_id_history_ident);
 
-        let ident_histories = self.list_pb_vec(&dir_name).await?;
+        let ident_histories = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
         let mut res = vec![];
         let now = Utc::now();
@@ -1762,7 +1758,9 @@ where
             file: "".to_string(),
         };
 
-        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let res = self
+            .list_pb_vec(ListOptions::unlimited(&DirName::new(key)))
+            .await?;
         let mut file_info = BTreeMap::new();
         for (name_key, seqv) in res {
             file_info.insert(name_key.file, seqv.data);
@@ -1872,12 +1870,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let database_id = seq_db_id.data;
         let table_nivs = get_history_tables_for_gc(

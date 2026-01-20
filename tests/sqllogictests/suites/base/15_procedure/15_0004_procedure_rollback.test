@@ -20,7 +20,7 @@ begin;
 call procedure test_rollback_on_error();
 commit;
 
-query I
+query T
 select * from t_rollback_1;
 ----
 
@@ -47,7 +47,7 @@ begin;
 call procedure test_rollback_on_syntax_error();
 commit;
 
-query I
+query T
 select * from t_rollback_1;
 ----
 
@@ -74,7 +74,7 @@ begin;
 call procedure test_rollback_on_column_error();
 commit;
 
-query I
+query T
 select * from t_rollback_1;
 ----
 

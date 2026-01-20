@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -31,7 +30,7 @@ use goldenfile::Mint;
 use super::eliminate_cast::parse_expr;
 
 #[test]
-fn test_page_index() -> Result<()> {
+fn test_page_index() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_page_indies.txt").unwrap();
 

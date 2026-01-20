@@ -25,6 +25,7 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -82,8 +83,9 @@ impl Interpreter for ReportIssueInterpreter {
             report_context.logs.clone(),
         ));
 
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.detection_error(&mut report_context)).await?;
+        tracking_payload
+            .tracking(self.detection_error(&mut report_context))
+            .await?;
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(vec![format!("{}", report_context)]),
@@ -263,27 +265,21 @@ impl RewriteVisitor {
     }
 
     fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
-        if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            ..
-        } = table_ref
-        {
-            if let Some(v) = catalog.as_mut() {
+        if let TableReference::Table { table, .. } = table_ref {
+            if let Some(v) = table.catalog.as_mut() {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
                     v.name = mapped_name.clone();
                 }
             }
 
-            if let Some(v) = database.as_mut() {
+            if let Some(v) = table.database.as_mut() {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
                     v.name = mapped_name.clone();
                 }
             }
 
-            if let Some(mapped_name) = self.mapping.get(&table.name) {
-                table.name = mapped_name.clone();
+            if let Some(mapped_name) = self.mapping.get(&table.table.name) {
+                table.table.name = mapped_name.clone();
             }
         }
     }

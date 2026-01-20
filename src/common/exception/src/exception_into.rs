@@ -436,3 +436,19 @@ impl From<redis::RedisError> for ErrorCode {
         ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
     }
 }
+
+impl From<tokio::task::JoinError> for ErrorCode {
+    fn from(error: tokio::task::JoinError) -> Self {
+        if error.is_panic() {
+            let cause = error.into_panic();
+            let message = cause
+                .downcast_ref::<&'static str>()
+                .map(|s| s.to_string())
+                .or_else(|| cause.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
+            ErrorCode::PanicError(message)
+        } else {
+            ErrorCode::TokioError("Tokio task is cancelled")
+        }
+    }
+}

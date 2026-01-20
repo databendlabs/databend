@@ -93,7 +93,7 @@ create table t2(a int)
 statement ok
 insert into t2 values(0),(2),(1)
 
-query TTT
+query III
 merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.a = 8 when matched and t2.a = 2 then delete when not matched then insert *
 ----
 1 1 1
@@ -126,7 +126,7 @@ insert into t1 values(3)
 statement ok
 optimize table t1 compact
 
-query T
+query I
 merge into t using t1 on t.a = t1.a when matched and t1.a = 0 then update set t.a = 1 when matched and t1.a = 3 then update set t.a = 2
 ----
 2

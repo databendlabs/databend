@@ -1,11 +1,11 @@
 skipif mysql
-query T
+query ?
 select interval '1 month 1 hour 1 microsecond ago'
 ----
 -1 month -1:00:00.000001
 
 skipif mysql
-query T
+query ???
 select interval  (number::string) month  a , a * 3, -3 * a  from numbers(4) where number > 0;
 ----
 1 month 3 months -3 months
@@ -22,20 +22,20 @@ statement ok
 insert into t values('1 year 1 month ago', '1'),('1 month 1 hour ago', '1000');
 
 skipif mysql
-query TT
+query ??
 select * from t order by c1;
 ----
 -1 year -1 month 0:00:00.000001
 -1 month -1:00:00 0:00:00.001
 
 skipif mysql
-query TT
+query ??
 select * from t where c1 > to_interval('-1 year');
 ----
 -1 month -1:00:00 0:00:00.001
 
 skipif mysql
-query TT
+query ??
 select * from t where c1 > '-1 year';
 ----
 -1 month -1:00:00 0:00:00.001
@@ -45,169 +45,169 @@ statement error 1006
 select to_interval('1 month 1 hour ago 1 micros');
 
 skipif mysql
-query T
+query ?
 select to_interval('1 month 1 hour 1 microsecond');
 ----
 1 month 1:00:00.000001
 
 skipif mysql
-query T
+query ?
 select to_interval('1 month 1 hour 1 microsecond ago');
 ----
 -1 month -1:00:00.000001
 
 skipif mysql
-query T
+query ?
 select to_interval('1 month 1 hour 1 microsecond ago');
 ----
 -1 month -1:00:00.000001
 
 skipif mysql
-query T
+query B
 select to_interval('12 month') = to_interval('360 days')
 ----
 1
 
 skipif mysql
-query T
+query B
 select to_interval('12 month') = to_interval('1 year');
 ----
 1
 
 skipif mysql
-query TT
+query II
 select to_month(to_interval('12 month')), to_month(to_interval('1 year'));
 ----
 0 0
 
 skipif mysql
-query T
+query BB
 select to_interval('1 hours') = to_interval('3600 seconds') as eq, to_interval('2 hours') > to_interval('3600 seconds');
 ----
 1 1
 
 skipif mysql
-query T
+query ?
 SELECT to_centuries(2);
 ----
 200 years
 
 skipif mysql
-query T
+query ?
 SELECT to_days(5);
 ----
 5 days
 
 skipif mysql
-query T
+query ?
 SELECT to_decades(3);
 ----
 30 years
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_hours(4);
 ----
 2024-12-20 14:00:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_microseconds(500000);
 ----
 2024-12-20 10:00:00.500000
 
 skipif mysql
-query T
+query ?
 SELECT to_millennia(1);
 ----
 1000 years
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_milliseconds(750);
 ----
 2024-12-20 10:00:00.750000
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_minutes(30);
 ----
 2024-12-20 10:30:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT to_months(3);
 ----
 3 months
 
 skipif mysql
-query T
+query ?
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_seconds(60);
 ----
 2024-12-20 10:01:00.000000
 
 skipif mysql
-query T
+query ?
 SELECT to_weeks(2);
 ----
 14 days
 
 skipif mysql
-query T
+query ?
 SELECT to_years(10);
 ----
 10 years
 
 skipif mysql
-query T
+query ?
 select to_interval('1200000000 months');
 ----
 100000000 years
 
 skipif mysql
-query T
+query ?
 select to_interval('120000000000 months');
 ----
 00:00:00
 
 skipif mysql
-query T
+query ?
 select plus('2022-02-02'::date, interval '1 day 1 second');
 ----
 2022-02-03 00:00:01.000000
 
 skipif mysql
-query T
+query ?
 select plus('2022-02-02'::date, interval '1 day');
 ----
 2022-02-03
 
 skipif mysql
-query T
+query I
 select '2022-01-01'::timestamp - '2021-01-01'::timestamp
 ----
 31536000000000
 
 skipif mysql
-query T
+query ?
 select timestamp_diff('2022-01-01'::timestamp,'2021-01-01'::timestamp);
 ----
 8760:00:00
 
 skipif mysql
-query T
+query ?
 select timestamp_diff('2021-01-01'::timestamp, '2022-01-01'::timestamp);
 ----
 -8760:00:00
 
 skipif mysql
-query T
+query ?
 select timestamp_diff('2022-01-01'::timestamp,'2021-12-01'::timestamp);
 ----
 744:00:00
 
 skipif mysql
-query T
+query I
 select '2022-01-01'::timestamp-'2021-12-01'::timestamp;
 ----
 2678400000000
@@ -221,12 +221,12 @@ select '1 days'::INTERVAL::String, '11 days'::INTERVAL::String;
 statement ok
 set timezone='America/New_York';
 
-query T
+query B
 select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -254,12 +254,12 @@ Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 2
 statement ok
 set timezone='Asia/Shanghai';
 
-query T
+query B
 select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -288,12 +288,12 @@ Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 2
 statement ok
 set timezone='UTC';
 
-query T
+query B
 select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
 ----
 1
 
-query T
+query T??TIII
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -324,7 +324,7 @@ unset timezone;
 statement ok
 set timezone='Asia/Shanghai'
 
-query T
+query B
 select age(to_timestamp_tz(today()), '2022-02-02 01:00:00 +0800'::timestamp_tz)=age('2022-02-02 01:00:00 +0800'::timestamp_tz);
 ----
 1

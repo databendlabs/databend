@@ -199,7 +199,7 @@ EvalScalar
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
 
-query T
+query ??
 select v['d']::string, v['d']::int from t2;
 ----
 20 20
@@ -538,7 +538,7 @@ EvalScalar
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [and_filters(and_filters(is_not_null(CAST(a.content_object['category_a'] (#6) AS String NULL)), is_not_null(CAST(a.content_object['category_b'] (#7) AS String NULL))), is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#8) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)))], limit: NONE]
+                │       ├── push downs: [filters: [is_not_null(CAST(a.content_object['category_a'] (#6) AS String NULL)) and is_not_null(CAST(a.content_object['category_b'] (#7) AS String NULL)) and is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#8) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                 │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
                 │       └── estimated rows: 1.00
                 └── EvalScalar(Probe)
@@ -698,7 +698,7 @@ UPDATE SET
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: test_virtual_db] [table: data_main]
+    ├── target table: default.test_virtual_db.data_main
     └── MutationManipulate
         ├── matched update: [condition: None, update set data_object = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), object_insert(target.data_object (#7), 'metadata', object_insert(object_insert(get_by_keypath(target.data_object (#7), '{"metadata"}'), 'reference_time', CAST(source.reference_time (#4) AS Variant), true), 'time_difference', if(CAST(is_not_null((TRY_CAST(get_by_keypath(target.data_object (#7), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#4) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Boolean NULL), CAST(assume_not_null((TRY_CAST(get_by_keypath(target.data_object (#7), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#4) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Float64 NULL), NULL), true), true), target.data_object (#7))]
         └── RowFetch

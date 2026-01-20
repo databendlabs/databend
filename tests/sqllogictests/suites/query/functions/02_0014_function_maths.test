@@ -7,22 +7,22 @@ CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse
 statement ok
 INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3')
 
-query F
+query R
 SELECT 'inf'::float
 ----
 Infinity
 
-query F
+query R
 SELECT '-inf'::float
 ----
 -Infinity
 
-query F
+query R
 SELECT 'nan'::float
 ----
 NaN
 
-query F
+query R
 SELECT pi()
 ----
 3.141592653589793
@@ -39,7 +39,7 @@ SELECT abs(-10086)
 
 
 
-query T
+query ?
 SELECT abs(NULL)
 ----
 NULL
@@ -70,57 +70,57 @@ CREATE TABLE math_log_numbers (a Float null, b Float null) Engine = Fuse
 statement ok
 INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL)
 
-query T
+query ?
 SELECT log(NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT log(NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT log(1, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT log(NULL, 1)
 ----
 NULL
 
-query F
+query R
 SELECT log(10, 100)
 ----
 2.0
 
-query T
+query ?
 SELECT ln(NULL)
 ----
 NULL
 
-query F
+query R
 SELECT log(1, 2)
 ----
 Infinity
 
-query T
+query ?
 SELECT log10(NULL)
 ----
 NULL
 
-query F
+query R
 SELECT log10(100)
 ----
 2.0
 
-query F
+query R
 SELECT log2(2)
 ----
 1.0
 
-query F
+query R
 SELECT log(a, b) FROM math_log_numbers
 ----
 10.0
@@ -140,141 +140,141 @@ SELECT mod(29, 9)
 ----
 2
 
-query F
+query R
 SELECT mod(34.5, 3)
 ----
 1.5
 
-query T
+query ?
 SELECT exp(NULL)
 ----
 NULL
 
-query F
+query RR
 SELECT exp(2), exp('2')
 ----
 7.38905609893065 7.38905609893065
 
 
-query F
+query R
 SELECT sin(0)
 ----
 0.0
 
-query F
+query R
 SELECT cos(0)
 ----
 1.0
 
-query F
+query R
 SELECT tan(0)
 ----
 0.0
 
-query F
+query R
 SELECT tan(pi()/4)
 ----
 0.9999999999999999
 
-query F
+query R
 SELECT cot(0)
 ----
 Infinity
 
-query F
+query R
 SELECT cot(pi()/4)
 ----
 1.0000000000000002
 
-query F
+query R
 SELECT asin(0.2)
 ----
 0.2013579207903308
 
-query F
+query R
 SELECT asin(1.1)
 ----
 NaN
 
-query F
+query R
 SELECT acos(1)
 ----
 0.0
 
-query F
+query R
 SELECT acos(1.0001)
 ----
 NaN
 
-query F
+query R
 SELECT atan(1)
 ----
 0.7853981633974483
 
-query F
+query R
 SELECT atan(-1)
 ----
 -0.7853981633974483
 
-query F
+query R
 SELECT atan2(-2, 2)
 ----
 -0.7853981633974483
 
 
-query F
+query R
 SELECT atan2(pi(), 0)
 ----
 1.5707963267948966
 
-query T
+query ?
 SELECT atan2(-2, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT atan2(NULL, 2)
 ----
 NULL
 
-query T
+query ?
 SELECT atan2(NULL, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT atan2(NULL, number) from numbers(2)
 ----
 NULL
 NULL
 
-query T
+query ?
 SELECT atan2(number, NULL) from numbers(2)
 ----
 NULL
 NULL
 
-query F
+query R
 SELECT sqrt(4)
 ----
 2.0
 
-query F
+query R
 SELECT sqrt(0)
 ----
 0.0
 
-query F
+query R
 SELECT sqrt(-4)
 ----
 NaN
 
-query F
+query R
 SELECT cbrt(0)
 ----
 0.0
 
-query F
+query R
 SELECT cbrt(-64)
 ----
 -4.0
@@ -282,49 +282,49 @@ SELECT cbrt(-64)
 statement error 1006
 SELECT sqrt('a')
 
-query F
+query R
 SELECT pow(2, 2)
 ----
 4.0
 
-query F
+query R
 SELECT pow(-2, 2)
 ----
 4.0
 
-query F
+query R
 SELECT pow(2, -2)
 ----
 0.25
 
-query T
+query ?
 SELECT pow(NULL, 2)
 ----
 NULL
 
-query T
+query ?
 SELECT pow(2, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT pow(NULL, number) from numbers(2)
 ----
 NULL
 NULL
 
-query T
+query ?
 SELECT pow(number, NULL) from numbers(2)
 ----
 NULL
 NULL
 
-query T
+query I
 SELECT factorial(3)
 ----
 6
 
-query T
+query I
 SELECT factorial(5)
 ----
 120
@@ -369,54 +369,53 @@ SELECT ceil(123.45), ceil(-123.45), ceil(0.0), ceil(123456789.123), ceil(-123456
 124 -123 0 123456790 -123456789 123457
 
 
-query FFFFFFFFFF
+query RRIRRRRRRI
 SELECT truncate(123.4567, 2), truncate(-123.4567, 2), truncate(123.4567, 0), truncate(123.456789123, 6), truncate(0.0, 2), truncate(123456789.123, 2), truncate(-123456789.123, 2), truncate(123456.7891, 1), truncate(123456789012345.12345, 3), truncate(123.45, -1)
 ----
 123.45 -123.45 123 123.456789 0.0 123456789.12 -123456789.12 123456.7 123456789012345.123 120
 
 
-query FFFFFFFFFF
+query RRRRRRRRRIIR
 SELECT round(123.4567, 2), round(-123.4567, 2), round(123.455, 2), round(123.445, 2), round(123.456789123, 6), round(0.0, 2), round(123456789.123, 2), round(-123456789.123, 2), round(123456.7891, 1), round(123456.789, -2), round(-123456.789, -3), round(123456789012345.12345, 3)
 ----
 123.46 -123.46 123.46 123.45 123.456789 0.0 123456789.12 -123456789.12 123456.8 123500 -123000 123456789012345.123
 
 
-query FFF
+query RRRR
 SELECT
     (POW(FLOOR(ABS(9876.54321) * 10000), 2) % 18446744073709551615) a,
     (FLOOR(EXP(SQRT(1234.56789)) * 10000) % 18446744073709551615) b,
     (FLOOR(PI() * 10000) % 18446744073709551615) c, a + b - c
 ----
-9.754610558146624e15 1.817827108747062e19 31415.0 1.8188025698028737e19
+9754610558146624.0 1.817827108747062e+19 31415.0 1.8188025698028737e+19
 
-
-query F
+query R
 SELECT power(-2, 2)
 ----
 4.0
 
-query F
+query R
 SELECT power(2, -2)
 ----
 0.25
 
-query T
+query ?
 SELECT power(NULL, 2)
 ----
 NULL
 
-query T
+query ?
 SELECT power(2, NULL)
 ----
 NULL
 
-query T
+query ?
 SELECT power(NULL, number) from numbers(2)
 ----
 NULL
 NULL
 
-query T
+query ?
 SELECT power(number, NULL) from numbers(2)
 ----
 NULL
@@ -428,112 +427,112 @@ SELECT power('a', 2)
 statement error 1006
 SELECT power(2, 'a')
 
-query FFF
+query RRRR
 SELECT
     (POWER(FLOOR(ABS(9876.54321) * 10000), 2) % 18446744073709551615) a,
     (FLOOR(EXP(SQRT(1234.56789)) * 10000) % 18446744073709551615) b,
     (FLOOR(PI() * 10000) % 18446744073709551615) c, a + b - c
 ----
-9.754610558146624e15 1.817827108747062e19 31415.0 1.8188025698028737e19
+9754610558146624.0 1.817827108747062e+19 31415.0 1.8188025698028737e+19
 
-query T
+query I
 SELECT TRUNC(10.6);
 ----
 10
 
-query T
+query R
 SELECT TRUNC(1.234, 2);
 ----
 1.23
 
-query T
+query I
 SELECT TRUNC(150.45,-2);
 ----
 100
 
 # Test isnan function
-query T
+query B
 SELECT isnan('nan'::float)
 ----
 1
 
-query T
+query B
 SELECT isnan(0.0::float)
 ----
 0
 
-query T
+query B
 SELECT isnan('inf'::float)
 ----
 0
 
-query T
+query B
 SELECT isnan('-inf'::float)
 ----
 0
 
-query T
+query B
 SELECT isnan(1.23::float)
 ----
 0
 
-query T
+query ?
 SELECT isnan(NULL::float)
 ----
 NULL
 
-query T
+query B
 SELECT isnan('nan'::double)
 ----
 1
 
-query T
+query B
 SELECT isnan(0.0::double)
 ----
 0
 
 # Test isinf function
-query T
+query B
 SELECT isinf('inf'::float)
 ----
 1
 
-query T
+query B
 SELECT isinf('-inf'::float)
 ----
 1
 
-query T
+query B
 SELECT isinf('nan'::float)
 ----
 0
 
-query T
+query B
 SELECT isinf(0.0::float)
 ----
 0
 
-query T
+query B
 SELECT isinf(1.23::float)
 ----
 0
 
-query T
+query ?
 SELECT isinf(NULL::float)
 ----
 NULL
 
-query T
+query B
 SELECT isinf('inf'::double)
 ----
 1
 
-query T
+query B
 SELECT isinf('-inf'::double)
 ----
 1
 
-query T
+query B
 SELECT isinf(0.0::double)
 ----
 0

@@ -131,7 +131,7 @@ create table tt2(a int, b bool);
 statement ok
 insert into tt2 values(1, true), (2, null), (null, false);
 
-query II rowsort
+query T rowsort
 SELECT (1078286207, tt1.b) FROM tt1 CROSS JOIN tt2;
 ----
 (1078286207,0)

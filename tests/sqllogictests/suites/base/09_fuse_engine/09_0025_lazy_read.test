@@ -16,61 +16,61 @@ insert into t_lazy values (4, 5.5, 'b', (2, 2), '2020-01-02'), (5, 0.1, 'a', (3,
 statement ok
 insert into t_lazy values (6, 8.5, 'c', (2, 2), '2020-02-02'), (7, 0.2, 'd', (3, 1), '2020-01-05')
 
-query ITTTT
+query IRT??
 select * from t_lazy order by a desc limit 2
 ----
 7 0.2 d (3,1) 2020-01-05
 6 8.5 c (2,2) 2020-02-02
 
-query ITTTT
+query IRT??
 select * from t_lazy where b > 2 order by a limit 2
 ----
 2 2.2 b (2,2) 2020-01-02
 3 3.3 c (3,3) 2020-01-03
 
-query TTT
+query RT?
 select b, c, d from t_lazy where b < 1 order by a limit 2
 ----
 0.1 a (3,1)
 0.2 d (3,1)
 
-query TTTT
+query IRT?
 select a, b, c, d from t_lazy where b < 1 order by c limit 2
 ----
 5 0.1 a (3,1)
 7 0.2 d (3,1)
 
-query TTTT
+query IRT?
 select a, b, c, d from t_lazy where b < 1 order by e limit 2
 ----
 5 0.1 a (3,1)
 7 0.2 d (3,1)
 
-query TTT
+query RT?
 select b, c, d from t_lazy where b < 1 order by a, e limit 2
 ----
 0.1 a (3,1)
 0.2 d (3,1)
 
-query TT
+query RT
 select b, c from t_lazy order by d:a desc, a limit 2
 ----
 3.3 c
 0.1 a
 
-query TT
+query R?T
 select b, d, c from t_lazy order by d:a desc, a limit 2
 ----
 3.3 (3,3) c
 0.1 (3,1) a
 
-query TT
+query RI
 select b, d:a from t_lazy order by a desc limit 2
 ----
 0.2 3
 8.5 2
 
-query TT
+query I??
 select d:b, d, e from t_lazy order by a desc limit 2
 ----
 1 (3,1) 2020-01-05

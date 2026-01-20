@@ -226,7 +226,7 @@ INSERT INTO observation_period VALUES
 ;
 
 # Statistics propagation with condition pruning
-query IIIIIIII
+query II????BB
 select cohort_definition_id, subject_id, cohort_start_date, cohort_end_date, op1.observation_period_start_date, op1.observation_period_end_date,
   tc1.cohort_start_date >= op1.observation_period_start_date as gt_test,
   tc1.cohort_start_date <= op1.observation_period_end_date as lt_test

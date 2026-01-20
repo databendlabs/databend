@@ -16,11 +16,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::broadcast;
-use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::task::JoinHandle;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use futures::future::Either;
 use log::error;
 use log::info;
@@ -31,6 +28,8 @@ use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
 use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use crate::HttpError;
 
@@ -112,14 +111,13 @@ impl HttpShutdownHandler {
     }
 
     /// Stop service gracefully. If `force` is ready, force shutdown the service.
-    pub async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) {
+    pub async fn stop(&mut self, force: Option<BoxFuture<'static, ()>>) {
         let join_handle = self.send_stop_signal();
 
-        if let Some(mut force) = force {
+        if let Some(force) = force {
             let h = Box::pin(join_handle);
-            let f = Box::pin(force.recv());
 
-            match futures::future::select(f, h).await {
+            match futures::future::select(force, h).await {
                 Either::Left((_x, h)) => {
                     info!("{}: received force shutdown signal", self.service_name);
                     h.abort();

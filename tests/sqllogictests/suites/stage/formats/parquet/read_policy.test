@@ -1,6 +1,6 @@
 # No nested types.
 # POLICY NO FETCH
-query T
+query I
 select id from @data/parquet/ (files => ('alltypes_plain.parquet')) ;
 ----
 4
@@ -15,14 +15,14 @@ select id from @data/parquet/ (files => ('alltypes_plain.parquet')) ;
 # POLICY PREDICATE ONLY
 
 # predicate does not contain output
-query T
+query I
 select tinyint_col from @data/parquet/alltypes_plain.parquet ( pattern => '') where id > 3 and bool_col = true;
 ----
 0
 0
 
 # predicate contains output
-query TT
+query II
 select tinyint_col, id from @data/parquet/alltypes_plain.parquet ( pattern => '') where id > 3 and bool_col = true;
 ----
 0 4
@@ -31,7 +31,7 @@ select tinyint_col, id from @data/parquet/alltypes_plain.parquet ( pattern => ''
 # POLICY TOPK ONLY
 
 # topk does not contain output
-query T
+query I
 select dayofweek from @data/ontime_200.parquet order by flightdate desc limit 3;
 ----
 4
@@ -39,7 +39,7 @@ select dayofweek from @data/ontime_200.parquet order by flightdate desc limit 3;
 4
 
 # topk contains output
-query TT
+query TI
 select flightdate, dayofweek from @data/ontime_200.parquet order by flightdate desc limit 3;
 ----
 2020-12-31 4
@@ -49,7 +49,7 @@ select flightdate, dayofweek from @data/ontime_200.parquet order by flightdate d
 # POLICY PREDICATE AND TOPK
 
 # predicate contains topk, but not output
-query T
+query I
 select dayofweek from @data/ontime_200.parquet where dayofmonth > 4 and flightdate > '2020-11-30' order by flightdate desc limit 3;
 ----
 4
@@ -57,7 +57,7 @@ select dayofweek from @data/ontime_200.parquet where dayofmonth > 4 and flightda
 4
 
 # predicate contains topk and output
-query TT
+query II
 select dayofweek, dayofmonth from @data/ontime_200.parquet where dayofmonth > 4 and flightdate > '2020-11-30' order by flightdate desc limit 3;
 ----
 4 31
@@ -65,7 +65,7 @@ select dayofweek, dayofmonth from @data/ontime_200.parquet where dayofmonth > 4 
 4 31
 
 # predicate contains output, but not topk
-query TT
+query II
 select dayofweek, dayofmonth from @data/ontime_200.parquet where dayofmonth > 4 order by flightdate desc limit 3;
 ----
 4 31
@@ -73,7 +73,7 @@ select dayofweek, dayofmonth from @data/ontime_200.parquet where dayofmonth > 4 
 4 31
 
 # predicate does not contain topk and output
-query T
+query I
 select dayofweek from @data/ontime_200.parquet where dayofmonth > 4 order by flightdate desc limit 3;
 ----
 4
@@ -83,7 +83,7 @@ select dayofweek from @data/ontime_200.parquet where dayofmonth > 4 order by fli
 # Has nested types.
 
 # POLICY NO FETCH
-query TT
+query II
 select t:a, id from @data/parquet/tuple.parquet;
 ----
 1 1
@@ -93,26 +93,26 @@ select t:a, id from @data/parquet/tuple.parquet;
 # POLICY PREDICATE ONLY
 
 # predicate does not contain output
-query T
+query I
 select id from @data/parquet/tuple.parquet where t:a > 1;
 ----
 2
 3
 
-query T
+query I
 select t:a from @data/parquet/tuple.parquet where id > 1;
 ----
 3
 3
 
 # predicate contains output
-query TT
+query II
 select id, t:a from @data/parquet/tuple.parquet where id > 1;
 ----
 2 3
 3 3
 
-query TT
+query II
 select id, t:a from @data/parquet/tuple.parquet where t:a > 1;
 ----
 2 3
@@ -121,26 +121,26 @@ select id, t:a from @data/parquet/tuple.parquet where t:a > 1;
 # POLICY TOPK ONLY
 
 # topk does not contain output
-query TT
+query IT
 select id, t:b from @data/parquet/tuple.parquet order by t:a desc, id desc limit 2;
 ----
 3 c
 2 b
 
-query TT
+query ?I
 select t, t:a from @data/parquet/tuple.parquet order by id desc limit 2;
 ----
 (3,"c") 3
 (3,"b") 3
 
 # topk contains output
-query TT
+query ITI
 select id, t:b, t:a from @data/parquet/tuple.parquet order by t:a desc, id desc limit 2;
 ----
 3 c 3
 2 b 3
 
-query TT
+query ITI?
 select id, t:b, t:a, t from @data/parquet/tuple.parquet order by id desc limit 2;
 ----
 3 c 3 (3,"c")
@@ -149,30 +149,30 @@ select id, t:b, t:a, t from @data/parquet/tuple.parquet order by id desc limit 2
 # POLICY PREDICATE AND TOPK
 
 # predicate contains topk, but not output
-query TT
+query TI
 select t:b, t:a from @data/parquet/tuple.parquet where id > 1 order by id desc limit 1;
 ----
 c 3
 
 # predicate contains topk and output
-query TT
+query TI
 select t:b, t:a from @data/parquet/tuple.parquet where id > 1 and t:a > 2 order by id desc limit 1;
 ----
 c 3
 
-query TT
+query ?
 select t from @data/parquet/tuple.parquet where id > 1 and t:a > 2 order by id desc limit 1;
 ----
 (3,"c")
 
 # predicate contains output, but not topk
-query TT
+query TI
 select t:b, t:a from @data/parquet/tuple.parquet where t:a > 2 order by id desc limit 1;
 ----
 c 3
 
 # predicate does not contain topk and output
-query TT
+query T
 select t:b from @data/parquet/tuple.parquet where t:a > 2 order by id desc limit 1;
 ----
 c

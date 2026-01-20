@@ -43,6 +43,42 @@ pub enum Matcher {
     Leaf,
 }
 
+/// Build [`Matcher`] trees with a compact DSL.
+///
+/// * Use `->` to describe a unary chain: `match_op!(EvalScalar -> Aggregate -> *)`.
+/// * Use `*` for [`Matcher::Leaf`], meaning "any subtree".
+/// * Use brackets for explicit child lists: `match_op!(Join[*, *])` or
+///   `match_op!(Join[(EvalScalar -> *), (Aggregate -> *)])`.
+/// * Because the macro returns a single [`Matcher`], wrap multiple patterns in
+///   `vec![match_op!(...), match_op!(...)]`.
+#[macro_export]
+macro_rules! match_op {
+    (@node *) => {
+        $crate::optimizer::ir::Matcher::Leaf
+    };
+    (@node $op:ident [$($child:tt),* $(,)?]) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![$(match_op!($child)),*],
+        }
+    };
+    (@node $op:ident -> $($rest:tt)+) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![match_op!(@node $($rest)+)],
+        }
+    };
+    (@node $op:ident) => {
+        $crate::optimizer::ir::Matcher::MatchOp {
+            op_type: $crate::plans::RelOp::$op,
+            children: vec![],
+        }
+    };
+    ($($pattern:tt)+) => {
+        match_op!(@node $($pattern)+)
+    };
+}
+
 impl Matcher {
     /// Check if the `SExpr` can be matched by the `Matcher`.
     #[recursive::recursive]

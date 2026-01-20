@@ -8,7 +8,7 @@ BEGIN
 END;
 $$;
 
-query T
+query TT
 desc procedure p1(int);
 ----
 signature (x)
@@ -47,7 +47,7 @@ END;
 $$;
 
 
-query T
+query I
 call procedure p1();
 ----
 2
@@ -64,7 +64,7 @@ BEGIN
 END;
 $$;
 
-query T
+query I
 call procedure p1();
 ----
 12
@@ -101,22 +101,22 @@ BEGIN
 END;
 $$;
 
-query T
+query I
 call procedure p1();
 ----
 2
 
-query T
+query I
 call procedure p1(0, 0);
 ----
 6
 
-query T
+query I
 call procedure p1(1,10);
 ----
 20
 
-query T
+query TT
 select name, arguments from system.procedures where name = 'p1';
 ----
 p1 p1() RETURN (Int32)
@@ -170,12 +170,12 @@ BEGIN
 END;
 $$;
 
-query T
+query I
 call procedure sum_even_numbers(1, 2)
 ----
 2
 
-query T
+query I
 call procedure sum_even_numbers(1::INT, 2::INT)
 ----
 2
@@ -231,7 +231,7 @@ BEGIN
 END;
 $$;
 
-query T
+query IIT
 call procedure p3('x');
 ----
 0 3 x
@@ -255,7 +255,7 @@ BEGIN
 END;
 $$;
 
-query T
+query I
 call procedure test_cast_int64(1);
 ----
 101
@@ -427,12 +427,12 @@ BEGIN
 END;
 $$;
 
-query T
+query R
 call procedure test_decimal(10);
 ----
 11.50
 
-query T
+query R
 call procedure test_decimal(10.25);
 ----
 11.75
@@ -547,3 +547,43 @@ drop procedure test_overload_arity();
 
 statement ok
 drop procedure test_overload_arity(INT64);
+
+statement ok
+DROP PROCEDURE IF EXISTS test_desc_type_case(STRING, Int32);
+
+statement ok
+CREATE PROCEDURE test_desc_type_case(a STRING, b Int32) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN a;
+END;
+$$;
+
+## Should work with uppercase type names (as used in CREATE)
+query TT
+DESC PROCEDURE test_desc_type_case(STRING, Int32);
+----
+signature (a,b)
+returns (String)
+language SQL
+body BEGIN RETURN a; END;
+
+## Should work with lowercase type names
+query TT
+DESC PROCEDURE test_desc_type_case(string, int32);
+----
+signature (a,b)
+returns (String)
+language SQL
+body BEGIN RETURN a; END;
+
+## Should work with mixed case type names
+query TT
+DESC PROCEDURE test_desc_type_case(String, Int32);
+----
+signature (a,b)
+returns (String)
+language SQL
+body BEGIN RETURN a; END;
+
+statement ok
+DROP PROCEDURE test_desc_type_case(STRING, Int32);

@@ -28,6 +28,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
@@ -400,7 +401,7 @@ pub trait KVPbApi: KVApi {
     /// Same as [`list_pb`](Self::list_pb)` but collect the result in a `Vec` instead of a stream.
     fn list_pb_vec<K>(
         &self,
-        prefix: &DirName<K>,
+        opts: ListOptions<'_, DirName<K>>,
     ) -> impl Future<Output = Result<Vec<(K, SeqV<K::ValueType>)>, Self::Error>> + Send
     where
         K: kvapi::Key + Send + Sync + 'static,
@@ -408,7 +409,7 @@ pub trait KVPbApi: KVApi {
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
         async move {
-            let strm = self.list_pb(prefix).await?;
+            let strm = self.list_pb(opts).await?;
             let kvs = strm
                 .map_ok(|itm| (itm.key, itm.seqv))
                 .try_collect::<Vec<_>>()
@@ -420,15 +421,16 @@ pub trait KVPbApi: KVApi {
     /// Same as `list_pb` but does not return values, only keys.
     fn list_pb_keys<K>(
         &self,
-        prefix: &DirName<K>,
+        opts: ListOptions<'_, DirName<K>>,
     ) -> impl Future<Output = Result<BoxStream<'static, Result<K, Self::Error>>, Self::Error>> + Send
     where
         K: kvapi::Key + 'static,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        let prefix = prefix.dir_name_with_slash();
+        let prefix = opts.prefix.dir_name_with_slash();
+        let limit = opts.limit;
         async move {
-            let strm = self.list_kv(&prefix).await?;
+            let strm = self.list_kv(ListOptions::new(&prefix, limit)).await?;
 
             let strm = strm.map(|r: Result<StreamItem, Self::Error>| {
                 //
@@ -444,7 +446,7 @@ pub trait KVPbApi: KVApi {
     /// Same as `list_pb` but does not return key, only values.
     fn list_pb_values<K>(
         &self,
-        prefix: &DirName<K>,
+        opts: ListOptions<'_, DirName<K>>,
     ) -> impl Future<
         Output = Result<BoxStream<'static, Result<K::ValueType, Self::Error>>, Self::Error>,
     > + Send
@@ -453,7 +455,7 @@ pub trait KVPbApi: KVApi {
         K::ValueType: FromToProto,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        self.list_pb(prefix)
+        self.list_pb(opts)
             .map_ok(|strm| strm.map_ok(|x| x.seqv.data).boxed())
     }
 
@@ -464,7 +466,7 @@ pub trait KVPbApi: KVApi {
     /// thus it requires KVApi::Error can describe a decoding error, i.e., `impl From<PbApiReadError>`.
     fn list_pb<K>(
         &self,
-        prefix: &DirName<K>,
+        opts: ListOptions<'_, DirName<K>>,
     ) -> impl Future<
         Output = Result<BoxStream<'static, Result<NonEmptyItem<K>, Self::Error>>, Self::Error>,
     > + Send
@@ -473,7 +475,7 @@ pub trait KVPbApi: KVApi {
         K::ValueType: FromToProto,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        self.list_pb_low(prefix).map(|r| match r {
+        self.list_pb_low(opts).map(|r| match r {
             Ok(strm) => Ok(strm.map_err(Self::Error::from).boxed()),
             Err(e) => Err(Self::Error::from(e)),
         })
@@ -482,7 +484,7 @@ pub trait KVPbApi: KVApi {
     /// Same as `list_pb` but returns [`PbApiReadError`]. No require of `From<PbApiReadError>` for `Self::Error`.
     fn list_pb_low<K>(
         &self,
-        prefix: &DirName<K>,
+        opts: ListOptions<'_, DirName<K>>,
     ) -> impl Future<
         Output = Result<
             BoxStream<'static, Result<NonEmptyItem<K>, PbApiReadError<Self::Error>>>,
@@ -493,10 +495,11 @@ pub trait KVPbApi: KVApi {
         K: kvapi::Key + 'static,
         K::ValueType: FromToProto,
     {
-        let prefix = prefix.dir_name_with_slash();
+        let prefix = opts.prefix.dir_name_with_slash();
+        let limit = opts.limit;
         async move {
             let strm = self
-                .list_kv(&prefix)
+                .list_kv(ListOptions::new(&prefix, limit))
                 .await
                 .map_err(PbApiReadError::KvApiError)?;
             let strm = strm.map(decode_non_empty_item::<K, Self::Error>);
@@ -523,7 +526,9 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::DirName;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
+    use databend_common_meta_kvapi::kvapi::ListOptions;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+    use databend_common_meta_kvapi::kvapi::limit_stream;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
     use databend_common_meta_types::TxnReply;
@@ -533,6 +538,7 @@ mod tests {
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use futures::TryStreamExt;
+    use futures::stream::BoxStream;
     use prost::Message;
     use seq_marked::SeqValue;
 
@@ -540,7 +546,7 @@ mod tests {
 
     //
     struct FooKV {
-        /// Whether to return without exhausting the input for `get_kv_stream`.
+        /// Whether to return without exhausting the input for `get_many_kv`.
         early_return: Option<usize>,
         kvs: BTreeMap<String, SeqV>,
     }
@@ -553,40 +559,39 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_kv_stream(
+        async fn get_many_kv(
             &self,
-            keys: &[String],
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            let mut res = Vec::with_capacity(keys.len());
-            for (i, key) in keys.iter().enumerate() {
-                // For testing early return stream.
-                if let Some(early_return) = self.early_return {
-                    if i >= early_return {
-                        break;
-                    }
-                }
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+            use futures::TryStreamExt;
 
-                let k = key.clone();
-                let v = self.kvs.get(key).cloned();
+            let kvs = self.kvs.clone();
+            let early_return = self.early_return;
 
-                let item = StreamItem::new(k, v.map(|v| v.into()));
-                res.push(Ok(item));
-            }
-
-            let strm = futures::stream::iter(res);
+            // early_return limits total items for testing
+            let strm = fail_fast(keys)
+                .take(early_return.unwrap_or(usize::MAX))
+                .map_ok(move |key| {
+                    let v = kvs.get(&key).cloned();
+                    StreamItem::new(key, v.map(|v| v.into()))
+                });
             Ok(strm.boxed())
         }
 
-        async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        async fn list_kv(
+            &self,
+            opts: ListOptions<'_, str>,
+        ) -> Result<KVStream<Self::Error>, Self::Error> {
             let items = self
                 .kvs
                 .iter()
-                .filter(|(k, _)| k.starts_with(prefix))
+                .filter(|(k, _)| k.starts_with(opts.prefix))
                 .map(|(k, v)| Ok(StreamItem::new(k.clone(), Some(v.clone().into()))))
                 .collect::<Vec<_>>();
 
             let strm = futures::stream::iter(items);
-            Ok(strm.boxed())
+            Ok(limit_stream(strm, opts.limit))
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
@@ -799,7 +804,7 @@ mod tests {
         let tenant = Tenant::new_literal("dummy");
 
         let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
-        let mut strm = foo.list_pb_values(&dir).await?;
+        let mut strm = foo.list_pb_values(ListOptions::unlimited(&dir)).await?;
         let mut errors = vec![];
         while let Some(r) = strm.next().await {
             if let Err(e) = r {
@@ -814,6 +819,85 @@ mod tests {
         ];
 
         assert_eq!(errors, want);
+
+        Ok(())
+    }
+
+    /// Create a FooKV with 5 catalog entries for testing limit functionality.
+    fn new_foo_kv_for_limit_test() -> anyhow::Result<(FooKV, CatalogMeta)> {
+        let catalog_meta = CatalogMeta {
+            catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                address: "127.0.0.1:10000".to_string(),
+                storage_params: None,
+            }),
+            created_on: DateTime::<Utc>::MIN_UTC,
+        };
+        let v = catalog_meta.to_pb()?.encode_to_vec();
+
+        let kvs: BTreeMap<_, _> = (1..=5)
+            .map(|i| {
+                (
+                    s(format!("__fd_catalog_by_id/{}", i)),
+                    SeqV::new(i, v.clone()),
+                )
+            })
+            .collect();
+
+        Ok((
+            FooKV {
+                early_return: None,
+                kvs,
+            },
+            catalog_meta,
+        ))
+    }
+
+    /// Test `list_pb_values` with limit parameter
+    #[tokio::test]
+    async fn test_list_pb_values_with_limit() -> anyhow::Result<()> {
+        let (foo, catalog_meta) = new_foo_kv_for_limit_test()?;
+        let tenant = Tenant::new_literal("dummy");
+        let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
+
+        // List all with no limit
+        let strm = foo.list_pb_values(ListOptions::unlimited(&dir)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
+        assert_eq!(res.len(), 5);
+        assert_eq!(res[0].catalog_option, catalog_meta.catalog_option);
+
+        // List with limit 3
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 3)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
+        assert_eq!(res.len(), 3);
+
+        // List with limit 0
+        let strm = foo.list_pb_values(ListOptions::limited(&dir, 0)).await?;
+        let res: Vec<_> = strm.try_collect().await?;
+        assert!(res.is_empty());
+
+        Ok(())
+    }
+
+    /// Test `list_pb_vec` with limit parameter
+    #[tokio::test]
+    async fn test_list_pb_vec_with_limit() -> anyhow::Result<()> {
+        let (foo, _) = new_foo_kv_for_limit_test()?;
+        let tenant = Tenant::new_literal("dummy");
+        let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
+
+        // List all with no limit
+        let res = foo.list_pb_vec(ListOptions::unlimited(&dir)).await?;
+        let ids: Vec<_> = res.iter().map(|(k, _)| *k.catalog_id()).collect();
+        assert_eq!(ids, vec![1u64, 2, 3, 4, 5]);
+
+        // List with limit 2
+        let res = foo.list_pb_vec(ListOptions::limited(&dir, 2)).await?;
+        let ids: Vec<_> = res.iter().map(|(k, _)| *k.catalog_id()).collect();
+        assert_eq!(ids, vec![1u64, 2]);
+
+        // List with limit 0
+        let res = foo.list_pb_vec(ListOptions::limited(&dir, 0)).await?;
+        assert!(res.is_empty());
 
         Ok(())
     }

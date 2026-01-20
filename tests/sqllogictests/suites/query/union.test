@@ -94,7 +94,7 @@ SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as
 NULL NULL NULL NULL 1
 Кирилл Müller 我是谁 ASCII 2
 
-query TT?I
+query TTRI
 SELECT 'Кирилл' as a, 'Müller' as b, 1.0 as c, 2 as id UNION SELECT NULL as a, NULL as b, 1 as c,  1 as id order by id
 ----
 NULL NULL 1.0 1
@@ -149,7 +149,7 @@ INSERT INTO t0(c0varchar) VALUES (''), ('R6a')
 statement ok
 INSERT INTO t1(c0boolean) VALUES (true), (false)
 
-query IT rowsort
+query BT rowsort
 SELECT t1.c0boolean, t0.c0varchar FROM t0 NATURAL LEFT JOIN t1 UNION SELECT t1.c0boolean, t0.c0varchar FROM t0 NATURAL LEFT JOIN t1 where t1.c0boolean
 ----
 0 (empty)
@@ -232,7 +232,7 @@ CREATE OR REPLACE TABLE `test3` (
 );
 
 
-query II
+query III
 SELECT * FROM (SELECT 3,
           user_id AS r_uid,
           user_id AS w_uid
@@ -244,7 +244,7 @@ SELECT 3 AS id,
 ----
 3 10086 1111
 
-query II
+query III
 SELECT * FROM (SELECT 3,
           user_id AS r_uid,
           user_id AS w_uid
@@ -256,7 +256,7 @@ SELECT 3 AS id,
 ----
 3 10086 1111
 
-query II
+query III
 select w_uid, id, id + 5 from (
 SELECT * FROM (SELECT 3 as id,
           user_id AS r_uid,
@@ -279,7 +279,7 @@ CREATE OR REPLACE TABLE `test4` (
   `parent` BIGINT NULL
 );
 
-query II
+query I
 SELECT * FROM (SELECT
           user_id AS root_uid
    FROM test4 where parent is not null limit 2) t
@@ -333,11 +333,11 @@ SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
 statement ok
 unset max_set_operator_count;
 
-query I
+query II
 select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0 ignore_result;
 ----
 
-query I
+query II
 select t, sum(number) as number from (select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0) group by t ignore_result;
 ----
 

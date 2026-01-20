@@ -71,10 +71,13 @@ sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }
 tantivy-query-grammar = { workspace = true }
+tokio = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
+goldenfile = { workspace = true }
 
 [lints]
 workspace = true

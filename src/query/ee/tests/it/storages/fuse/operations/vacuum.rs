@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
@@ -35,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::TxnRequest;
@@ -59,7 +59,7 @@ use opendal::raw::OpStat;
 use opendal::raw::RpStat;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
 
     fixture
@@ -138,7 +138,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_do_vacuum_temporary_files() -> Result<()> {
+async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let operator = DataOperator::instance().spill_operator();
@@ -383,7 +383,7 @@ mod test_accessor {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_table_deletion_error() -> anyhow::Result<()> {
     // do_vacuum_drop_table should return Err if file deletion failed
 
     let mut table_info = TableInfo::default();
@@ -412,7 +412,7 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Result<()> {
+async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyhow::Result<()> {
     let mut table_info = TableInfo::default();
     table_info
         .meta
@@ -459,7 +459,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Result<()> {
+async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> anyhow::Result<()> {
     let mut table_info = TableInfo::default();
     table_info
         .meta
@@ -502,7 +502,7 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
 
 // fuse table on external storage is same as internal storage.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
+async fn test_fuse_do_vacuum_drop_table_external_storage() -> anyhow::Result<()> {
     let meta = TableMeta {
         storage_params: Some(StorageParams::default()),
         ..Default::default()
@@ -531,7 +531,7 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
+async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()> {
     // errors should not be swallowed in remove_file_in_batch
     let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
@@ -550,7 +550,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -646,7 +646,7 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -733,7 +733,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
+async fn test_gc_in_progress_db_not_undroppable() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -809,7 +809,7 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_drop_create_or_replace() -> Result<()> {
+async fn test_vacuum_drop_create_or_replace() -> anyhow::Result<()> {
     // vacuum dropped tables by specific database names
     test_vacuum_drop_create_or_replace_impl(&[
         "vacuum drop table from db1",
@@ -822,7 +822,7 @@ async fn test_vacuum_drop_create_or_replace() -> Result<()> {
     Ok(())
 }
 
-async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Result<()> {
+async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyhow::Result<()> {
     // Setup
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
@@ -860,12 +860,12 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // there should be 6 table ids : create or replace table 6 times
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 6);
 
     // there should be ownerships for 2 db ids and 5 table ids, one of the ownership is revoked by drop table
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 7);
 
     for sql in vacuum_stmts {
@@ -874,16 +874,16 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 
     // After vacuum, 1 table ids left
     let prefix = "__fd_table_by_id";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 1);
 
     let prefix = "__fd_table_id_to_name";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 1);
 
     // There are ownership objs of  2 dbs and 1 tables
     let prefix = "__fd_object_owners";
-    let items = meta.list_kv_collect(prefix).await?;
+    let items = meta.list_kv_collect(ListOptions::unlimited(prefix)).await?;
     assert_eq!(items.len(), 3);
 
     // db1.t1 should still be accessible
@@ -901,13 +901,13 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Resul
 async fn new_local_meta() -> MetaStore {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
-    let config = meta_config.to_meta_grpc_client_conf(version);
+    let config = meta_config.to_meta_grpc_client_conf(version.semver());
     let provider = MetaStoreProvider::new(config);
     provider.create_meta_store().await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_tag_refs() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_tag_refs() -> anyhow::Result<()> {
     use databend_common_meta_api::tag_api::TagApi;
     use databend_common_meta_app::schema::CreateTagReq;
     use databend_common_meta_app::schema::SetObjectTagsReq;
@@ -1040,6 +1040,189 @@ async fn test_vacuum_dropped_table_clean_tag_refs() -> Result<()> {
 
     // Cleanup: drop the tag
     let _ = meta.drop_tag(&tag_ident).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_table_clean_policies() -> anyhow::Result<()> {
+    use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+    use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
+    use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+    use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // Enable row access policy feature
+    fixture
+        .execute_command("set global enable_experimental_row_access_policy = 1")
+        .await?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_policies";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(
+            format!("create table {db_name}.{tbl_name} (id int, name string, email string)")
+                .as_str(),
+        )
+        .await?;
+
+    // 4. Create masking policies and row access policy
+    fixture
+        .execute_command(
+            "CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() = 'admin' THEN val ELSE '***' END",
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            "CREATE MASKING POLICY name_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() = 'admin' THEN val ELSE 'REDACTED' END",
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            "CREATE ROW ACCESS POLICY row_filter AS (id int) RETURNS boolean -> current_role() = 'admin' OR id > 0",
+        )
+        .await?;
+
+    // 5. Apply policies to table columns
+    fixture
+        .execute_command(
+            format!(
+                "ALTER TABLE {db_name}.{tbl_name} MODIFY COLUMN email SET MASKING POLICY email_mask"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            format!(
+                "ALTER TABLE {db_name}.{tbl_name} MODIFY COLUMN name SET MASKING POLICY name_mask"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    fixture
+        .execute_command(
+            format!("ALTER TABLE {db_name}.{tbl_name} ADD ROW ACCESS POLICY row_filter ON (id)")
+                .as_str(),
+        )
+        .await?;
+
+    // 6. Get table ID and verify policy references exist
+    let tenant = ctx.get_tenant();
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+    let table_id = table.get_id();
+
+    // Get policy IDs from table metadata
+    let table_meta = table.get_table_info().meta.clone();
+
+    // Verify masking policy references exist
+    assert!(
+        !table_meta.column_mask_policy_columns_ids.is_empty(),
+        "masking policy references should exist after applying policies"
+    );
+
+    // Verify row access policy reference exists
+    assert!(
+        table_meta.row_access_policy_columns_ids.is_some(),
+        "row access policy reference should exist after applying policy"
+    );
+
+    let mask_policy_ids: Vec<u64> = table_meta
+        .column_mask_policy_columns_ids
+        .values()
+        .map(|policy_map| policy_map.policy_id)
+        .collect();
+
+    let row_policy_id = table_meta
+        .row_access_policy_columns_ids
+        .as_ref()
+        .unwrap()
+        .policy_id;
+
+    // Verify policy references in meta store
+    for policy_id in &mask_policy_ids {
+        let mask_policy_key =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            });
+        let v = meta.get_pb(&mask_policy_key).await?;
+        assert!(
+            v.is_some(),
+            "masking policy reference should exist in meta store"
+        );
+    }
+
+    let row_policy_key =
+        RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+            policy_id: row_policy_id,
+            table_id,
+        });
+    let v = meta.get_pb(&row_policy_key).await?;
+    assert!(
+        v.is_some(),
+        "row access policy reference should exist in meta store"
+    );
+
+    // 7. Drop database (this will mark both database and table as dropped)
+    fixture
+        .execute_command(format!("drop database {db_name}").as_str())
+        .await?;
+
+    // 8. Vacuum dropped tables
+    fixture.execute_command("vacuum drop table").await?;
+
+    // 9. Ensure that policy references are cleaned up
+    for policy_id in &mask_policy_ids {
+        let mask_policy_key =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            });
+        let v = meta.get_pb(&mask_policy_key).await?;
+        assert!(
+            v.is_none(),
+            "masking policy reference should be cleaned up after vacuum"
+        );
+    }
+
+    let row_policy_key =
+        RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+            policy_id: row_policy_id,
+            table_id,
+        });
+    let v = meta.get_pb(&row_policy_key).await?;
+    assert!(
+        v.is_none(),
+        "row access policy reference should be cleaned up after vacuum"
+    );
 
     Ok(())
 }

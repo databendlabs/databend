@@ -15,6 +15,7 @@
 use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::Result;
 
@@ -50,10 +51,12 @@ impl Binder {
 
         let target_table_reference = TableReference::Table {
             span: None,
-            catalog: catalog.clone(),
-            database: database.clone(),
-            table: table.clone(),
-            ref_name: None,
+            table: TableRef {
+                catalog: catalog.clone(),
+                database: database.clone(),
+                table: table.clone(),
+                branch: None,
+            },
             alias: table_alias.clone(),
             temporal: None,
             with_options: None,

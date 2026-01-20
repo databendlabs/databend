@@ -50,12 +50,15 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
+
+use crate::meta_service_error;
 
 const POLICY_REFERENCES_FUNC: &str = "policy_references";
 const POLICY_REFERENCES_ENGINE: &str = "POLICY_REFERENCES";
@@ -224,7 +227,7 @@ impl AsyncSource for PolicyReferencesSource {
 
         let rows = collect_policy_reference_rows(self.ctx.clone(), self.args.clone()).await?;
         let block = if rows.is_empty() {
-            DataBlock::empty_with_schema(self.schema.clone())
+            DataBlock::empty_with_schema(&self.schema)
         } else {
             let mut policy_names = Vec::with_capacity(rows.len());
             let mut policy_kinds = Vec::with_capacity(rows.len());
@@ -309,11 +312,13 @@ async fn collect_policy_reference_rows(
     match (policy_name, ref_entity_name, ref_entity_domain) {
         (Some(name), None, None) => {
             let mask_ident = DataMaskNameIdent::new(&tenant, &name);
-            let (policy_id, kind) = if let Some(seq_id) = meta.get_pb(&mask_ident).await? {
+            let (policy_id, kind) = if let Some(seq_id) =
+                meta.get_pb(&mask_ident).await.map_err(meta_service_error)?
+            {
                 (*seq_id.data, PolicyKind::Masking)
             } else {
                 let row_ident = RowAccessPolicyNameIdent::new(&tenant, &name);
-                if let Some(seq_id) = meta.get_pb(&row_ident).await? {
+                if let Some(seq_id) = meta.get_pb(&row_ident).await.map_err(meta_service_error)? {
                     (*seq_id.data, PolicyKind::RowAccess)
                 } else {
                     return Ok(vec![]);
@@ -327,8 +332,9 @@ async fn collect_policy_reference_rows(
                             policy_id,
                             table_id: 0,
                         });
-                    meta.list_pb_vec(&DirName::new(ident))
-                        .await?
+                    meta.list_pb_vec(ListOptions::unlimited(&DirName::new(ident)))
+                        .await
+                        .map_err(meta_service_error)?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)
                         .collect::<Vec<_>>()
@@ -341,8 +347,9 @@ async fn collect_policy_reference_rows(
                             table_id: 0,
                         },
                     );
-                    meta.list_pb_vec(&DirName::new(ident))
-                        .await?
+                    meta.list_pb_vec(ListOptions::unlimited(&DirName::new(ident)))
+                        .await
+                        .map_err(meta_service_error)?
                         .into_iter()
                         .map(|(key, _)| key.name().table_id)
                         .collect::<Vec<_>>()
@@ -356,7 +363,11 @@ async fn collect_policy_reference_rows(
                 };
 
                 let id_to_name_key = TableIdToName { table_id };
-                let Some(name_entry) = meta.get_pb(&id_to_name_key).await? else {
+                let Some(name_entry) = meta
+                    .get_pb(&id_to_name_key)
+                    .await
+                    .map_err(meta_service_error)?
+                else {
                     continue;
                 };
 
@@ -461,7 +472,8 @@ async fn collect_policy_reference_rows(
             let mask_names = {
                 let ident = DataMaskNameIdent::new(&tenant, "");
                 meta.list_id_value(&DirName::new(ident))
-                    .await?
+                    .await
+                    .map_err(meta_service_error)?
                     .map(|(key, id_seqv, _)| (*id_seqv.data, key.data_mask_name().to_string()))
                     .collect::<HashMap<_, _>>()
             };
@@ -469,7 +481,8 @@ async fn collect_policy_reference_rows(
             let row_names = {
                 let ident = RowAccessPolicyNameIdent::new(&tenant, "");
                 meta.list_id_value(&DirName::new(ident))
-                    .await?
+                    .await
+                    .map_err(meta_service_error)?
                     .map(|(key, id_seqv, _)| (*id_seqv.data, key.row_access_name().to_string()))
                     .collect::<HashMap<_, _>>()
             };

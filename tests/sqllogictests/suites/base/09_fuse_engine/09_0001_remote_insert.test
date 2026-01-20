@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS t2(a Boolean, b Timestamp, c Date) Engine = fuse
 statement ok
 INSERT INTO t2 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877)
 
-query BTT
+query B??
 SELECT * FROM t2
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS t3(a Boolean, b Timestamp, c Date, d Array(Int), e Tu
 statement ok
 INSERT INTO t3 (a,b,c,d,e,f) values(true, '2021-09-07 21:38:35.000000', '2021-09-07', [1, 2, 3], (10, 'abc'), '2024-10-22 12:00:00+0900'), (false, 1631050715000000, 18877, [4, 5, 6], (20, 'xyz'), '2024-10-22 12:00:00');
 
-query BTTTTT
+query B?????
 SELECT a, b, c, d, e, f FROM t3 order by a desc;
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07 [1,2,3] (10,"abc") 2024-10-22 12:00:00.000000 +0900
@@ -72,12 +72,12 @@ INSERT INTO t3 (b) select to_timestamp(number) from numbers(1000);
 statement ok
 INSERT INTO t3 (b) select to_timestamp(number) from numbers(1000);
 
-query TI
+query ?I
 SELECT max(b), count(1) from t3;
 ----
 2021-09-07 21:38:35.000000 3002
 
-query II
+query III
 SELECT segment_count, block_count, row_count from FUSE_SNAPSHOT('db1', 't3') limit 1;
 ----
 4 4 3002
@@ -102,7 +102,7 @@ select * from t4 where number = '15' limit 1;
 ----
 15
 
-query II
+query III
 SELECT segment_count, block_count, row_count from FUSE_SNAPSHOT('db1', 't4') limit 2;
 ----
 1 1 300
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS t_compression_none(a Boolean, b Timestamp, c Date) En
 statement ok
 INSERT INTO t_compression_none (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
 
-query BTT
+query B??
 SELECT * FROM t_compression_none order by a desc;
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date, e 
 statement ok
 INSERT INTO t_compression_zstd (a,b,c,e) values(true, '2021-09-07 21:38:35.000000', '2021-09-07', '2024-10-22 12:00:00+0900'), (false, 1631050715000000, 18877, '2024-10-22 12:00:00');
 
-query BTTT
+query B???
 SELECT a, b, c, e FROM t_compression_zstd order by a desc;
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07 2024-10-22 12:00:00.000000 +0900

@@ -54,7 +54,7 @@ statement ok
 drop table "T"
 
 onlyif mysql
-query I
+query ?
 select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A
 ----
 1

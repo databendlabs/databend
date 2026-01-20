@@ -108,7 +108,7 @@ Memo
 ├── Group #13
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_1000.a (#0)::Int32 NULL, t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: 111816.000, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_1000.a (#0)::Int32 NULL, t_1000.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 Aggregate [#12]
 │   └── #1 Exchange: (Hash(t_1000.a (#0)::Int32 NULL,t_1000.a (#0)::Int32 NULL)) [#13]
 ├── Group #14

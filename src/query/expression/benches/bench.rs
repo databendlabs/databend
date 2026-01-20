@@ -20,6 +20,7 @@ use databend_common_column::buffer::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::RepeatIndex;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::BinaryType;
@@ -70,9 +71,12 @@ fn take_compact_string_offset(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (s, b) = generate_random_string_data(&mut rng, length);
     let block_bin = DataBlock::new_from_columns(vec![BinaryType::from_data(b.clone())]);
-    let indices: Vec<(u32, u32)> = (0..s.len())
+    let indices: Vec<RepeatIndex> = (0..s.len())
         .filter(|x| x % 10 == 0)
-        .map(|x| (x as u32, 1000))
+        .map(|x| RepeatIndex {
+            row: x as u32,
+            count: 1000,
+        })
         .collect();
     let num_rows = indices.len() * 1000;
     bencher.bench(|| {
@@ -87,9 +91,12 @@ fn take_compact_string_view(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (s, _b) = generate_random_string_data(&mut rng, length);
     let block_view = DataBlock::new_from_columns(vec![StringType::from_data(s.clone())]);
-    let indices: Vec<(u32, u32)> = (0..s.len())
+    let indices: Vec<RepeatIndex> = (0..s.len())
         .filter(|x| x % 10 == 0)
-        .map(|x| (x as u32, 1000))
+        .map(|x| RepeatIndex {
+            row: x as u32,
+            count: 1000,
+        })
         .collect();
     let num_rows = indices.len() * 1000;
     bencher.bench(|| {

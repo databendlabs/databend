@@ -44,7 +44,7 @@ create or replace table redis_t1(key string null)
 statement ok
 insert into redis_t1 values('a'),('b'),('%c'),(null)
 
-query T
+query TT
 select key, dict_get(redis_d1, 'value', key) from redis_t1
 ----
 a a_value
@@ -52,7 +52,7 @@ b b_value
 %c (empty)
 NULL (empty)
 
-query T
+query TT
 select key, dict_get(redis_d2, 'value', key) from redis_t1
 ----
 a a_value
@@ -60,7 +60,7 @@ b b_value
 %c NULL
 NULL NULL
 
-query T
+query TT
 select key, dict_get(redis_d3, 'value', key) from redis_t1
 ----
 a a_value
@@ -68,7 +68,7 @@ b b_value
 %c (empty)
 NULL (empty)
 
-query T
+query TT
 select key, dict_get(redis_d4, 'value', key) from redis_t1
 ----
 a a_value
@@ -76,7 +76,7 @@ b b_value
 %c NULL
 NULL NULL
 
-query T
+query TT
 select key, dict_get(redis_d5, 'value', key) from redis_t1
 ----
 a a_value
@@ -84,7 +84,7 @@ b b_value
 %c default_value
 NULL default_value
 
-query T
+query TT
 select key, dict_get(redis_d6, 'value', key) from redis_t1
 ----
 a a_value
@@ -92,7 +92,7 @@ b b_value
 %c default_value
 NULL default_value
 
-query T
+query TT
 select key, dict_get(redis_d7, 'value', key) from redis_t1
 ----
 a a_value
@@ -100,7 +100,7 @@ b b_value
 %c default_value
 NULL default_value
 
-query T
+query TT
 select key, dict_get(redis_d8, 'value', key) from redis_t1
 ----
 a a_value
@@ -114,7 +114,7 @@ create or replace table redis_t2(key string not null)
 statement ok
 insert into redis_t2 values('a'),('a'),('b'),('b'),('%c')
 
-query T
+query TT
 select key, dict_get(redis_d1, 'value', key) from redis_t2
 ----
 a a_value
@@ -129,19 +129,19 @@ create or replace table redis_t3(key string null)
 statement ok
 insert into redis_t3 values(null),(null)
 
-query T
+query TT
 select key, dict_get(redis_d2, 'value', key) from redis_t3
 ----
 NULL NULL
 NULL NULL
 
-query T
+query TT
 select key, dict_get(redis_d3, 'value', key) from redis_t3
 ----
 NULL (empty)
 NULL (empty)
 
-query T
+query TT
 select key, dict_get(redis_d7, 'value', key) from redis_t3
 ----
 NULL default_value
@@ -166,17 +166,17 @@ statement ok
 CREATE OR REPLACE DICTIONARY mysql_dic_active(id int, name string, age uint16, salary float, active bool) PRIMARY KEY active SOURCE(mysql(host='localhost' port='3306' username='root' password='' db='test' table='user'));
 
 # Scalar
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_id, 'id', 1), dict_get(mysql_dic_id, 'name', 1), dict_get(mysql_dic_id, 'age', 1), dict_get(mysql_dic_id, 'salary', 1), dict_get(mysql_dic_id, 'active', 1)
 ----
 1 Alice 24 100.0 1
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_id, 'id', 5), dict_get(mysql_dic_id, 'name', 5), dict_get(mysql_dic_id, 'age', 5), dict_get(mysql_dic_id, 'salary', 5), dict_get(mysql_dic_id, 'active', 5)
 ----
 5 NULL NULL NULL NULL
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_id_not_null, 'id', 5), dict_get(mysql_dic_id_not_null, 'name', 5), dict_get(mysql_dic_id_not_null, 'age', 5), dict_get(mysql_dic_id_not_null, 'salary', 5), dict_get(mysql_dic_id_not_null, 'active', 5)
 ----
 5 default_name 0 0.0 0
@@ -187,37 +187,37 @@ select dict_get(mysql_dic_id, 'id2', 5)
 statement error 1006
 select dict_get(mysql_dic_id, 'id', 'Alice')
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_name, 'id', 'Alice'), dict_get(mysql_dic_name, 'name', 'Alice'), dict_get(mysql_dic_name, 'age', 'Alice'), dict_get(mysql_dic_name, 'salary', 'Alice'), dict_get(mysql_dic_name, 'active', 'Alice')
 ----
 1 Alice 24 100.0 1
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_name, 'id', '\'Alice\''), dict_get(mysql_dic_name, 'name', '\'Alice\''), dict_get(mysql_dic_name, 'age', '\'Alice\''), dict_get(mysql_dic_name, 'salary', '\'Alice\''), dict_get(mysql_dic_name, 'active', '\'Alice\'')
 ----
 NULL NULL NULL NULL NULL
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_age, 'id', 24), dict_get(mysql_dic_age, 'name', 24), dict_get(mysql_dic_age, 'age', 24), dict_get(mysql_dic_age, 'salary', 24), dict_get(mysql_dic_age, 'active', 24)
 ----
 1 Alice 24 100.0 1
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_age, 'id', 999), dict_get(mysql_dic_age, 'name', 999), dict_get(mysql_dic_age, 'age', 999), dict_get(mysql_dic_age, 'salary', 999), dict_get(mysql_dic_age, 'active', 999)
 ----
 NULL NULL NULL NULL NULL
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_salary, 'id', 100.0), dict_get(mysql_dic_salary, 'name', 100.0), dict_get(mysql_dic_salary, 'age', 100.0), dict_get(mysql_dic_salary, 'salary', 100.0), dict_get(mysql_dic_salary, 'active', 100.0)
 ----
 1 Alice 24 100.0 1
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_salary, 'id', -1.0), dict_get(mysql_dic_salary, 'name', -1.0), dict_get(mysql_dic_salary, 'age', -1.0), dict_get(mysql_dic_salary, 'salary', -1.0), dict_get(mysql_dic_salary, 'active', -1.0)
 ----
 NULL NULL NULL NULL NULL
 
-query ITI?T
+query ITIRB
 select dict_get(mysql_dic_active, 'id', true), dict_get(mysql_dic_active, 'name', true), dict_get(mysql_dic_active, 'age', true), dict_get(mysql_dic_active, 'salary', true), dict_get(mysql_dic_active, 'active', true)
 ----
 1 Alice 24 100.0 1
@@ -229,7 +229,7 @@ create or replace table mysql_t(id int, name string, age uint16, salary float, a
 statement ok
 insert into mysql_t values(1, 'Alice', 24, 100.0, true),(2, 'Bob', 35, 200.1, false),(3, '\'Lily\'', 41, 1000.2, true),(4, '\'\'Tom\'\'', 55, 3000.55, 0),(null, null, null, null, null)
 
-query IITI?T
+query IITIRB
 select id, dict_get(mysql_dic_id, 'id', id), dict_get(mysql_dic_id, 'name', id), dict_get(mysql_dic_id, 'age', id), dict_get(mysql_dic_id, 'salary', id), dict_get(mysql_dic_id, 'active', id) from mysql_t
 ----
 1 1 Alice 24 100.0 1
@@ -238,7 +238,7 @@ select id, dict_get(mysql_dic_id, 'id', id), dict_get(mysql_dic_id, 'name', id),
 4 4 Tom 55 3000.55 0
 NULL NULL NULL NULL NULL NULL
 
-query ITI?T
+query IITIRB
 select id, dict_get(mysql_dic_id_not_null, 'id', id), dict_get(mysql_dic_id_not_null, 'name', id), dict_get(mysql_dic_id_not_null, 'age', id), dict_get(mysql_dic_id_not_null, 'salary', id), dict_get(mysql_dic_id_not_null, 'active', id) from mysql_t
 ----
 1 1 Alice 24 100.0 1
@@ -253,7 +253,7 @@ select id, name, dict_get(mysql_dic_id, 'age', id) as age from mysql_t where age
 3 'Lily' 41
 4 ''Tom'' 55
 
-query ITI?T
+query TIIRB
 select name, dict_get(mysql_dic_name, 'id', name), dict_get(mysql_dic_name, 'age', name), dict_get(mysql_dic_name, 'salary', name), dict_get(mysql_dic_name, 'active', name) from mysql_t
 ----
 Alice 1 24 100.0 1
@@ -262,7 +262,7 @@ Bob 2 35 200.1 0
 ''Tom'' NULL NULL NULL NULL
 NULL NULL NULL NULL NULL
 
-query IIT?T
+query IITRB
 select age, dict_get(mysql_dic_age, 'id', age), dict_get(mysql_dic_age, 'name', age), dict_get(mysql_dic_age, 'salary', age), dict_get(mysql_dic_age, 'active', age) from mysql_t
 ----
 24 1 Alice 100.0 1
@@ -271,7 +271,7 @@ select age, dict_get(mysql_dic_age, 'id', age), dict_get(mysql_dic_age, 'name', 
 55 4 Tom 3000.55 0
 NULL NULL NULL NULL NULL
 
-query ?ITIT
+query RITIB
 select salary, dict_get(mysql_dic_salary, 'id', salary), dict_get(mysql_dic_salary, 'name', salary), dict_get(mysql_dic_salary, 'age', salary), dict_get(mysql_dic_salary, 'active', salary) from mysql_t
 ----
 100.0 1 Alice 24 1

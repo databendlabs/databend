@@ -81,7 +81,7 @@ VALUES
 (3, 'add interest' ,0 , 0.15)
 ) AS t (id, action, amount, interest);
 
-query ITI??
+query ITIRR
 with recursive recur(id, action, amount, interest, total_bal) as
 (select id,
 action,
@@ -105,7 +105,7 @@ select * from recur;
 3 add interest 0 0.15 14374.999999999998
 
 # alias columns name
-query I
+query ITIRR
 with recursive recur(a, b, c, d, e) as
 (select id,
 action,

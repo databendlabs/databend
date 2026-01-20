@@ -40,6 +40,16 @@ impl TableRefHandler for RealTableRefHandler {
         ctx: Arc<dyn TableContext>,
         plan: &CreateTableRefPlan,
     ) -> Result<()> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_table_ref()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+            ));
+        }
+
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
 
@@ -47,6 +57,9 @@ impl TableRefHandler for RealTableRefHandler {
             .get_table(&tenant, &plan.database, &plan.table)
             .await?;
         let table_info = table.get_table_info();
+        // `seq` is allocated from a global metadata sequence.
+        // It is guaranteed to be globally unique across all tables and refs,
+        // not scoped to a single table.
         let seq = table_info.ident.seq;
         let table_id = table_info.ident.table_id;
 
@@ -123,13 +136,11 @@ impl TableRefHandler for RealTableRefHandler {
         };
 
         // write down new snapshot
-        let new_snapshot_location = fuse_table
-            .meta_location_generator()
-            .ref_snapshot_location_from_uuid(
-                seq,
-                &new_snapshot.snapshot_id,
-                new_snapshot.format_version,
-            )?;
+        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
+            Some(seq),
+            &new_snapshot.snapshot_id,
+            new_snapshot.format_version,
+        )?;
         let data = new_snapshot.to_bytes()?;
         fuse_table
             .get_operator_ref()

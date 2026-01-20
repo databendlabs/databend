@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_recursion::async_recursion;
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::catalog_kind::CATALOG_HIVE;
 use databend_common_catalog::partition_columns::get_pushdown_without_partition_columns;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -63,6 +62,7 @@ use log::info;
 use log::trace;
 use opendal::EntryMode;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_table_options::HiveTableOptions;
@@ -522,7 +522,7 @@ impl SyncSource for HiveSource {
         }
 
         self.finish = true;
-        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
+        Ok(Some(DataBlock::empty_with_schema(&self.schema)))
     }
 }
 

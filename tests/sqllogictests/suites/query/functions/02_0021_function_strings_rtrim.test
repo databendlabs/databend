@@ -11,7 +11,7 @@ select rtrim('abc')
 ----
 abc
 
-query T
+query ?
 select rtrim(null)
 ----
 NULL

@@ -179,10 +179,7 @@ impl TableRefVisitor {
             return;
         }
         if let TableReference::Table {
-            catalog,
-            database,
             table,
-            ref_name,
             temporal,
             with_options,
             ..
@@ -193,13 +190,13 @@ impl TableRefVisitor {
                 return;
             }
 
-            let catalog = catalog.to_owned().unwrap_or(Identifier {
+            let catalog = table.catalog.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_catalog(),
                 quote: None,
                 ident_type: IdentifierType::None,
             });
-            let database = database.to_owned().unwrap_or(Identifier {
+            let database = table.database.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_database(),
                 quote: None,
@@ -208,8 +205,9 @@ impl TableRefVisitor {
 
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
-            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-            let ref_name = ref_name
+            let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
+            let branch = table
+                .branch
                 .as_ref()
                 .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
 
@@ -220,7 +218,7 @@ impl TableRefVisitor {
                         &catalog_name,
                         &database_name,
                         &table_name,
-                        ref_name.as_deref(),
+                        branch.as_deref(),
                         None,
                     )
                     .await
@@ -229,12 +227,12 @@ impl TableRefVisitor {
                         && !table_meta.is_stage_table()
                         && !table_meta.is_stream()
                     {
-                        let snapshot = if let Some(ref_name) = &ref_name {
+                        let snapshot = if let Some(branch) = &branch {
                             table_meta
                                 .get_table_info()
                                 .meta
                                 .refs
-                                .get(ref_name)
+                                .get(branch)
                                 .map(|v| v.loc.clone())
                         } else {
                             table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()

@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_base::base::BuildInfoRef;
+use semver::Version;
 
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientTlsConfig {
@@ -32,7 +32,7 @@ impl RpcClientTlsConfig {
 pub struct RpcClientConf {
     pub embedded_dir: Option<String>,
     pub endpoints: Vec<String>,
-    pub version: BuildInfoRef,
+    pub version: Version,
     pub username: String,
     pub password: String,
     pub tls_conf: Option<RpcClientTlsConfig>,
@@ -61,7 +61,7 @@ impl RpcClientConf {
         self.endpoints.clone()
     }
 
-    pub fn empty(version: BuildInfoRef) -> Self {
+    pub fn empty(version: Version) -> Self {
         Self {
             embedded_dir: None,
             endpoints: vec![],

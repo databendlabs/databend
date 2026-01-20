@@ -21,8 +21,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::TimeDelta;
 use chrono::Utc;
-use databend_common_base::base::uuid::Uuid;
-use databend_common_base::base::uuid::Version;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -48,6 +46,8 @@ use log::info;
 use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
+use uuid::Uuid;
+use uuid::Version;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum2(
@@ -523,9 +523,11 @@ async fn select_gc_root(
             info!("anchor has no prev_snapshot_id, stop vacuuming");
             return Ok(None);
         };
-        let gc_root_path = fuse_table
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&gc_root_id, gc_root_ver)?;
+        let gc_root_path = fuse_table.meta_location_generator().gen_snapshot_location(
+            None,
+            &gc_root_id,
+            gc_root_ver,
+        )?;
         if !is_uuid_v7(&gc_root_id) {
             info!("gc_root {} is not v7", gc_root_path);
             return Ok(None);
@@ -716,13 +718,11 @@ async fn process_new_refs(
                 let gc_root_snap = fuse_table
                     .find_earliest_snapshot_via_history(ref_name, snapshot_ref)
                     .await?;
-                let gc_root_location = fuse_table
-                    .meta_location_generator()
-                    .ref_snapshot_location_from_uuid(
-                        branch_id,
-                        &gc_root_snap.snapshot_id,
-                        gc_root_snap.format_version,
-                    )?;
+                let gc_root_location = fuse_table.meta_location_generator().gen_snapshot_location(
+                    Some(branch_id),
+                    &gc_root_snap.snapshot_id,
+                    gc_root_snap.format_version,
+                )?;
                 if snapshot_ref.loc != gc_root_location {
                     // Only collect snapshot timestamps when the GC root is NOT the head location.
                     update_gc_root_times(
@@ -820,13 +820,11 @@ async fn process_snapshot_refs(
                         let earliest_snap = fuse_table
                             .find_earliest_snapshot_via_history(ref_name, snapshot_ref)
                             .await?;
-                        let location = fuse_table
-                            .meta_location_generator()
-                            .ref_snapshot_location_from_uuid(
-                                branch_id,
-                                &earliest_snap.snapshot_id,
-                                earliest_snap.format_version,
-                            )?;
+                        let location = fuse_table.meta_location_generator().gen_snapshot_location(
+                            Some(branch_id),
+                            &earliest_snap.snapshot_id,
+                            earliest_snap.format_version,
+                        )?;
                         (location, earliest_snap)
                     }
                 };
@@ -918,9 +916,11 @@ async fn process_branch_gc_root(
     let Some((gc_root_id, gc_root_ver)) = last_snapshot.prev_snapshot_id else {
         return Ok(None);
     };
-    let gc_root_path = fuse_table
-        .meta_location_generator()
-        .ref_snapshot_location_from_uuid(branch_id, &gc_root_id, gc_root_ver)?;
+    let gc_root_path = fuse_table.meta_location_generator().gen_snapshot_location(
+        Some(branch_id),
+        &gc_root_id,
+        gc_root_ver,
+    )?;
 
     // Try to read gc_root snapshot
     match SnapshotsIO::read_snapshot(gc_root_path.clone(), op, false).await {

@@ -22,8 +22,8 @@ use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 
 use bytesize::ByteSize;
+use databend_base::uniq_id::GlobalSeq;
 
-use crate::base::GlobalSequence;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::memory::memory_manager::GLOBAL_QUERIES_MANAGER;
 use crate::runtime::memory::memory_manager::QueriesMemoryManager;
@@ -110,8 +110,8 @@ impl MemStat {
         priority: usize,
         parent_memory_stat: ParentMemStat,
     ) -> Arc<MemStat> {
-        let id = match GlobalSequence::next() {
-            0 => GlobalSequence::next(),
+        let id = match GlobalSeq::next() {
+            0 => GlobalSeq::next(),
             id => id,
         };
 

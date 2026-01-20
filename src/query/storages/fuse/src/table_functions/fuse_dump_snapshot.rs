@@ -132,9 +132,7 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
 
             return Ok(Some(block));
         }
-        Ok(Some(DataBlock::empty_with_schema(Arc::new(
-            self.schema().into(),
-        ))))
+        Ok(Some(DataBlock::empty_with_schema(&self.schema().into())))
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>

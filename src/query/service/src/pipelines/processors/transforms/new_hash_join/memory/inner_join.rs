@@ -18,20 +18,18 @@ use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
@@ -90,7 +88,7 @@ impl Join for InnerHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build()
+        self.basic_hash_join.final_build::<false>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
@@ -202,7 +200,7 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -214,54 +212,21 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
 
-            let mut result_block = match (probe_block, build_block) {
-                (Some(mut probe_block), Some(build_block)) => {
-                    probe_block.merge_block(build_block);
-                    probe_block
-                }
-                (Some(probe_block), None) => probe_block,
-                (None, Some(build_block)) => build_block,
-                (None, None) => DataBlock::new(vec![], self.probed_rows.matched_build.len()),
-            };
-
-            if !self.desc.probe_to_build.is_empty() {
-                for (index, (is_probe_nullable, is_build_nullable)) in
-                    self.desc.probe_to_build.iter()
-                {
-                    let entry = match (is_probe_nullable, is_build_nullable) {
-                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                        (true, false) => {
-                            result_block.get_by_offset(*index).clone().remove_nullable()
-                        }
-                        (false, true) => {
-                            let entry = result_block.get_by_offset(*index);
-                            let col = entry.to_column();
-
-                            match col.is_null() || col.is_nullable() {
-                                true => entry.clone(),
-                                false => BlockEntry::from(NullableColumn::new_column(
-                                    col,
-                                    Bitmap::new_constant(true, result_block.num_rows()),
-                                )),
-                            }
-                        }
-                    };
-
-                    result_block.add_entry(entry);
-                }
-            }
-
-            return Ok(Some(result_block));
+            return Ok(Some(final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            )));
         }
     }
 }
 
-struct InnerHashJoinFilterStream<'a> {
+pub struct InnerHashJoinFilterStream<'a> {
     inner: Box<dyn JoinStream + 'a>,
     filter_executor: &'a mut FilterExecutor,
 }

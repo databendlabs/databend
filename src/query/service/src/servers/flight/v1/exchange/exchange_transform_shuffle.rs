@@ -117,7 +117,7 @@ struct PortWithStatus<Port> {
     pub port: Arc<Port>,
 }
 
-struct ExchangeShuffleTransform {
+pub struct ExchangeShuffleTransform {
     initialized: bool,
 
     finished_inputs: usize,

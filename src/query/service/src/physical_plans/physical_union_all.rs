@@ -31,12 +31,15 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
 
+use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::UnionAllFormatter;
+use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
@@ -253,8 +256,13 @@ impl PhysicalPlanBuilder {
             };
 
         // 2. Build physical plan.
-        let left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
-        let right_plan = self.build(s_expr.child(1)?, right_required.clone()).await?;
+        let mut left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
+        let mut right_plan = self.build(s_expr.child(1)?, right_required.clone()).await?;
+
+        if !union_all.cte_scan_names.is_empty() {
+            left_plan = remove_exchange_for_recursive_cte(&left_plan);
+            right_plan = remove_exchange_for_recursive_cte(&right_plan);
+        }
 
         let left_schema = left_plan.output_schema()?;
         let right_schema = right_plan.output_schema()?;
@@ -314,4 +322,32 @@ fn process_outputs(
         }
     }
     Ok(results)
+}
+
+// TODO(https://github.com/databendlabs/databend/issues/19247): recursive CTEs do
+// not support distributed execution yet, so strip exchanges to force local runs.
+fn remove_exchange_for_recursive_cte(plan: &PhysicalPlan) -> PhysicalPlan {
+    struct StripExchangeHandle;
+
+    impl DeriveHandle for StripExchangeHandle {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn derive(
+            &mut self,
+            plan: &PhysicalPlan,
+            mut children: Vec<PhysicalPlan>,
+        ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+            if Exchange::check_physical_plan(plan) {
+                debug_assert_eq!(children.len(), 1);
+                Ok(children.pop().unwrap())
+            } else {
+                Err(children)
+            }
+        }
+    }
+
+    let mut handle: Box<dyn DeriveHandle> = Box::new(StripExchangeHandle);
+    plan.derive_with(&mut handle)
 }

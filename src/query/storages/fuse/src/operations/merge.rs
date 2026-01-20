@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -24,6 +23,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use tokio::sync::Semaphore;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;

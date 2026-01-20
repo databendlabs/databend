@@ -31,7 +31,7 @@ insert into t2_separate values(1,'a5','b5'),(3,'a6','b6');
 statement ok
 insert into t2_separate values(8,'a8','b8'),(9,'a9','b9');
 
-query TTT
+query ITT
 select * from t1_separate order by a,b,c;
 ----
 1 a1 b1
@@ -39,7 +39,7 @@ select * from t1_separate order by a,b,c;
 3 a3 b3
 4 a4 b4
 
-query TTT
+query ITT
 select * from t2_separate order by a,b,c;
 ----
 1 a5 b5
@@ -48,12 +48,12 @@ select * from t2_separate order by a,b,c;
 9 a9 b9
 
 ## 1.test matched only
-query T
+query I
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched and t2.b = 'a5' then update * when matched then update *;
 ----
 2
 
-query TTT
+query ITT
 select * from t1_separate order by a,b,c;
 ----
 1 a5 b5
@@ -62,12 +62,12 @@ select * from t1_separate order by a,b,c;
 4 a4 b4
 
 ## 2.test insert only
-query T
+query I
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
 ----
 2
 
-query TTT
+query ITT
 select * from t1_separate order by a,b,c;
 ----
 1 a5 b5
@@ -85,12 +85,12 @@ statement ok
 truncate table t1_separate;
 
 ## test merge into empty table for insert-only
-query T
+query I
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
 ----
 4
 
-query TTT
+query ITT
 select * from t1_separate order by a,b,c;
 ----
 1 a5 b5
@@ -108,13 +108,13 @@ truncate table t2_separate;
 statement ok
 insert into t2_separate values(8,'a8','b8'),(9,'a9','b9'),(1,'a5','b5'),(3,'a6','b6');
 
-query T
+query I
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched then insert *;
 ----
 4
 
 ## without order by
-query TTT
+query ITT
 select * from t1_separate order by a;
 ----
 1 a5 b5
@@ -123,12 +123,12 @@ select * from t1_separate order by a;
 9 a9 b9
 
 ## test matched-only cluster by
-query T
+query I
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched then update *;
 ----
 4
 
-query TTT
+query ITT
 select * from t1_separate order by a;
 ----
 1 a5 b5
@@ -140,12 +140,12 @@ select * from t1_separate order by a;
 statement ok
 insert into t2_separate values(5,'a5','b5'),(7,'a7','b7');
 
-query TT
+query II
 merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----
 2 4
 
-query TTT
+query ITT
 select * from t1_separate order by a;
 ----
 1 a5 b5

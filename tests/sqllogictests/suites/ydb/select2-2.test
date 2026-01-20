@@ -117,7 +117,7 @@ order by col2,col4,col5,col1,col3
 3 1 468 555 234
 2 3 426 222 213
 
-query IIIFI
+query IIIRI
 select b as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2,
@@ -151,7 +151,7 @@ where (e>c or e<d)
     or a is null
 order by col5,col2,col1,col3,col4
 
-query TIT
+query III
 select a+b*2+c*3+d*4 as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        a+b*2+c*3+d*4+e*5 as col3
@@ -308,7 +308,7 @@ from t1
 where b is not null
 order by col5,col2,col1,col6,col3,col7,col4
 
-query IIIIF
+query IIIIR
 select a as col1,
        a-b as col2,
        a+b*2 as col3,
@@ -700,7 +700,7 @@ select (select count(*) from t1 as x where x.b<t1.b) as col1,
 from t1
 where c>d
 
-query TTTIITT
+query IIIIIIR
 select a+b*2+c*3+d*4+e*5 as col1,
        b-c as col2,
        b as col3,
@@ -766,7 +766,7 @@ from t1
 where c>d
 or c between b-2 and d+2
 
-query IIIFI
+query IIIRI
 select b-c as col1,
        c-d as col2,
        d-e as col3,
@@ -1155,7 +1155,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and c between b-2 and d+2
 and (c<=d-2 or c>=d+2)
 
-query IIIT
+query IIII
 select a as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        abs(b-c) as col3,
@@ -1240,7 +1240,7 @@ NULL 179 1057 4
 -1 NULL NULL NULL
 1 NULL NULL NULL
 
-query ITIII
+query IIIII
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -1309,7 +1309,7 @@ select d-e as col1,
 from t1
 where (a>b-2 and a<b+2)
 
-query IIIT
+query IIII
 select abs(a) as col1,
        d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1475,7 +1475,7 @@ where c>d
     or e+d between a+b-10 and c+130
 or d>e
 
-query IIFII
+query IIRII
 select c-d as col1,
        a-b as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2457,7 +2457,7 @@ select a-b as col1,
 from t1
 where (a>b-2 and a<b+2)
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -2791,7 +2791,7 @@ select b-c as col1,
 from t1
 where d not between 110 and 150
 
-query IIIFIII
+query IIIRIII
 select e as col1,
        a+b*2 as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -3111,7 +3111,7 @@ from t1
 where (e>c or e<d)
 and d>e
 
-query IT
+query II
 select case when c>avg_c then a*2 else b*10 end as col1,
        a+b*2+c*3+d*4 as col2
 from (
@@ -3784,7 +3784,7 @@ where a>b
    and b>c
 order by col4,col3,col2,col1
 
-query IIIFIII
+query IIIRIII
 select case when c>avg_c then a*2 else b*10 end as col1,
        a+b*2 as col2,
        case a+1 when b then 111 when c then 222
@@ -3848,7 +3848,7 @@ order by col1
 ----
 105
 
-query ITII
+query IIII
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        d as col2,
@@ -3920,7 +3920,7 @@ select a as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col3
 from t1
 
-query TI
+query II
 select a+b*2+c*3+d*4+e*5 as col1,
        a as col2
 from t1
@@ -3978,7 +3978,7 @@ from t1
 where a is null
 order by col1,col3,col2
 
-query IITI
+query IIII
 select a as col1,
        c as col2,
        d-e as col3,
@@ -4113,7 +4113,7 @@ where d>e
    and a>b
 order by col1,col5,col3,col2,col4
 
-query IITT
+query IIII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c as col2,
@@ -4288,7 +4288,7 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-query FI
+query RI
 select (a+b+c+d+e)/5 as col1,
        case when c>avg_c then a*2 else b*10 end as col2
 from (
@@ -4453,7 +4453,7 @@ where b is not null
    and c between b-2 and d+2
 order by col1,col2
 
-query IIIIFI
+query IIIIRI
 select c as col1,
        a+b*2+c*3+d*4 as col2,
        b as col3,

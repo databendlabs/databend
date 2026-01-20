@@ -1,9 +1,9 @@
-query ?
+query TTT
 select list(a), list(b), list(c) from (values(null,[],{})) t(a,b,c), numbers(5);
 ----
 [] [[],[],[],[],[]] [{},{},{},{},{}]
 
-query ?
+query TTT
 select list(a), list(b), list(c) from (values(1::decimal(10,0),1::decimal(20,0),1::decimal(40,0))) t(a,b,c), numbers(5);
 ----
 [1,1,1,1,1] [1,1,1,1,1] [1,1,1,1,1]

@@ -14,17 +14,20 @@
 
 use std::future;
 use std::io;
+use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
+use databend_common_meta_kvapi::kvapi::ListOptions;
+use databend_common_meta_kvapi::kvapi::limit_stream;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::StreamItem;
-use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use futures_util::stream::BoxStream;
 use map_api::mvcc::ScopedGet;
 use map_api::mvcc::ScopedRange;
 use seq_marked::SeqValue;
@@ -50,18 +53,12 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
         unreachable!("write operation SM2KVApi::upsert_kv is disabled")
     }
 
-    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        let local_now_ms = since_epoch_millis();
-        let strm = state_machine_snapshot_get_kv_stream(
-            self.sm.to_state_machine_snapshot(),
-            keys.to_vec(),
-            local_now_ms,
-        );
-
-        Ok(strm)
-    }
-
-    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+    async fn list_kv(
+        &self,
+        opts: ListOptions<'_, str>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        let prefix = opts.prefix;
+        let limit = opts.limit;
         let local_now_ms = since_epoch_millis();
 
         // get an unchanging readonly view
@@ -84,7 +81,19 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
             .try_filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
             .map_ok(StreamItem::from);
 
-        Ok(strm.boxed())
+        Ok(limit_stream(strm, limit))
+    }
+
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, Self::Error>>,
+    ) -> Result<KVStream<Self::Error>, Self::Error> {
+        let local_now_ms = since_epoch_millis();
+        Ok(state_machine_snapshot_get_many_kv(
+            self.sm.to_state_machine_snapshot(),
+            keys,
+            local_now_ms,
+        ))
     }
 
     async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
@@ -102,22 +111,30 @@ impl SMV003KVApi<'_> {
     }
 }
 
-/// A helper function that get many keys in stream.
-#[futures_async_stream::try_stream(boxed, ok = StreamItem, error = io::Error)]
-async fn state_machine_snapshot_get_kv_stream(
-    state_machine_snapshot: StateMachineSnapshot,
-    keys: Vec<String>,
+/// A helper function that get many keys from a stream of keys.
+///
+/// The input stream may contain errors; errors are propagated to the output stream.
+/// The stream terminates immediately after the first error (fail-fast).
+fn state_machine_snapshot_get_many_kv(
+    snapshot: StateMachineSnapshot,
+    keys: BoxStream<'static, Result<String, io::Error>>,
     local_now_ms: u64,
-) {
-    for key in keys {
-        let got = state_machine_snapshot
-            .get(UserKey::new(key.clone()))
-            .await?;
+) -> KVStream<io::Error> {
+    use databend_common_meta_kvapi::kvapi::fail_fast;
+    use futures_util::StreamExt;
+    use futures_util::TryStreamExt;
 
-        let seqv = Into::<Option<SeqV>>::into(got);
+    let snapshot = Arc::new(snapshot);
 
-        let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
-
-        yield StreamItem::from((key, non_expired));
-    }
+    fail_fast(keys)
+        .and_then(move |key| {
+            let snapshot = snapshot.clone();
+            async move {
+                let got = snapshot.get(UserKey::new(key.clone())).await?;
+                let seqv: Option<SeqV> = got.into();
+                let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
+                Ok(StreamItem::from((key, non_expired)))
+            }
+        })
+        .boxed()
 }

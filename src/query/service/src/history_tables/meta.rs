@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,6 +41,8 @@ use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::oneshot;
+
+use crate::meta_service_error;
 
 pub struct HeartbeatTaskGuard {
     _cancel: oneshot::Sender<()>,
@@ -86,7 +89,10 @@ impl HeartbeatTask {
             TxnRequest::new(condition, if_then)
         };
 
-        let resp = meta_client.transaction(txn_req).await?;
+        let resp = meta_client
+            .transaction(txn_req)
+            .await
+            .map_err(meta_service_error)?;
 
         // key already exits
         if !resp.success {
@@ -159,7 +165,10 @@ impl HeartbeatTask {
                         TxnRequest::new(condition, if_then)
                     };
 
-                    let resp = meta_client.transaction(txn_req).await?;
+                    let resp = meta_client
+                        .transaction(txn_req)
+                        .await
+                        .map_err(meta_service_error)?;
                     if !resp.success {
                         return Err(ErrorCode::Internal("Heartbeat is from other node, stopping"))
                     }
@@ -178,7 +187,10 @@ impl HeartbeatTask {
 
                         TxnRequest::new(condition, if_then)
                     };
-                    let _resp = meta_client.transaction(txn_req).await?;
+                    let _resp = meta_client
+                        .transaction(txn_req)
+                        .await
+                        .map_err(meta_service_error)?;
 
                     debug!("Heartbeat key delete: {}", &heartbeat_key);
 
@@ -213,24 +225,28 @@ impl HistoryMetaHandle {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            self.meta_client.clone(),
-            meta_key,
-            1,
-            self.node_id.clone(),
-            Duration::from_secs(3),
-        ))
-        .await
-        .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
+
+        let acquired_guard = tracking_payload
+            .clone()
+            .tracking(Semaphore::new_acquired(
+                self.meta_client.clone(),
+                meta_key,
+                1,
+                self.node_id.clone(),
+                Duration::from_secs(3),
+            ))
+            .await
+            .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await?
+        if match tracking_payload
+            .tracking(
+                self.meta_client
+                    .get_kv(&format!("{}/last_timestamp", meta_key)),
+            )
+            .await
+            .map_err(meta_service_error)?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
@@ -261,7 +277,11 @@ impl HistoryMetaHandle {
         let now_ms = chrono::Utc::now().timestamp_millis() as u64;
         let last_ts_key = format!("{}/last_timestamp", meta_key);
 
-        let current = self.meta_client.get_kv(&last_ts_key).await?;
+        let current = self
+            .meta_client
+            .get_kv(&last_ts_key)
+            .await
+            .map_err(meta_service_error)?;
 
         if let Some(v) = &current {
             let last_ts: u64 = serde_json::from_slice(&v.data)?;
@@ -278,7 +298,11 @@ impl HistoryMetaHandle {
         let condition = TxnCondition::eq_seq(last_ts_key.clone(), last_seq);
         let operation = TxnOp::put(last_ts_key, serde_json::to_vec(&now_ms)?);
         let txn_req = TxnRequest::new(vec![condition], vec![operation]);
-        let resp = self.meta_client.transaction(txn_req).await?;
+        let resp = self
+            .meta_client
+            .transaction(txn_req)
+            .await
+            .map_err(meta_service_error)?;
 
         // we don't retry on failure
         // some other node has updated the timestamp and do the clean work
@@ -286,7 +310,12 @@ impl HistoryMetaHandle {
     }
 
     pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
-        match self.meta_client.get_kv(meta_key).await? {
+        match self
+            .meta_client
+            .get_kv(meta_key)
+            .await
+            .map_err(meta_service_error)?
+        {
             Some(v) => {
                 let num: u64 = serde_json::from_slice(&v.data)?;
                 Ok(Some(num))
@@ -303,7 +332,8 @@ impl HistoryMetaHandle {
                 Operation::Update(serde_json::to_vec(&value)?),
                 None,
             ))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         Ok(())
     }
 
@@ -325,7 +355,12 @@ impl HistoryMetaHandle {
     pub async fn is_heartbeat_valid(&self, meta_key: &str) -> Result<bool> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
-        match self.meta_client.get_kv(&heartbeat_key).await? {
+        match self
+            .meta_client
+            .get_kv(&heartbeat_key)
+            .await
+            .map_err(meta_service_error)?
+        {
             Some(v) => {
                 let msg: HeartbeatMessage = serde_json::from_slice(&v.data)?;
                 Ok(msg.from_node_id == self.node_id)
@@ -351,9 +386,10 @@ mod tests {
     use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
     use crate::history_tables::meta::HistoryMetaHandle;
+    use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await
+        MetaStore::new_local_testing(databend_common_version::BUILD_INFO.semver()).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -440,7 +476,10 @@ mod tests {
         let upsert = UpsertKV::update("test_heartbeat_key/heartbeat", &heartbeat_message)
             .with_ttl(Duration::from_secs(2));
 
-        meta_client.upsert_kv(upsert).await?;
+        meta_client
+            .upsert_kv(upsert)
+            .await
+            .map_err(meta_service_error)?;
 
         tokio::time::sleep(Duration::from_secs(3)).await;
 

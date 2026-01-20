@@ -29,7 +29,6 @@
 
 pub mod base;
 pub mod containers;
-pub mod future;
 pub mod headers;
 pub mod hints;
 pub mod http_client;

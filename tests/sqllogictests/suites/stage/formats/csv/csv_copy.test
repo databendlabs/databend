@@ -64,10 +64,10 @@ copy into t2 from @data/csv/float.csv file_format = (type = CSV)
 ----
 csv/float.csv 4 0 NULL NULL
 
-query T
+query R
 select * from t2
 ----
 100.2345
 200.789
 300.0
-3.698114021686886e16
+3.698114021686886e+16

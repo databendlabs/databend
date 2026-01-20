@@ -22,13 +22,15 @@ pub trait StageApi: Sync + Send {
     // Add a stage info to /tenant/stage-name.
     async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
 
-    async fn get_stage(&self, name: &str) -> Result<StageInfo>;
+    async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)>;
 
     // Get all the stages for a tenant.
     async fn get_stages(&self) -> Result<Vec<StageInfo>>;
 
     // Drop the tenant's stage by name.
     async fn drop_stage(&self, name: &str) -> Result<()>;
+
+    async fn update_stage(&self, stage: StageInfo, seq: u64) -> Result<()>;
 
     async fn add_file(&self, name: &str, file: StageFile) -> Result<u64>;
 

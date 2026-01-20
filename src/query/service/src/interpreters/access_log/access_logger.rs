@@ -385,6 +385,16 @@ impl AccessLogger {
                     )]),
                 });
             }
+            Plan::AlterStage(plan) => {
+                let object_name = plan.stage_name.clone();
+                let operation_type = DDLOperationType::Alter;
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Stage,
+                    object_name,
+                    operation_type,
+                    ..Default::default()
+                });
+            }
             Plan::DropStage(plan) => {
                 let object_name = plan.name.clone();
                 let operation_type = DDLOperationType::Drop;
@@ -441,10 +451,17 @@ impl AccessLogger {
                 column_name: field.name.clone(),
             })
             .collect::<Vec<_>>();
-
+        let object_name = if let Some(branch) = &plan.branch {
+            format!(
+                "{}.{}.{}/{}",
+                plan.catalog, plan.database, plan.table, branch
+            )
+        } else {
+            format!("{}.{}.{}", plan.catalog, plan.database, plan.table)
+        };
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Table,
-            object_name: format!("{}.{}.{}", plan.catalog, plan.database, plan.table),
+            object_name,
             columns: Some(columns),
             stage_type: None,
         };

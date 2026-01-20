@@ -17,9 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
+use databend_base::shutdown::ShutdownGroup;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::StopHandle;
-use databend_common_base::base::Stoppable;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -155,15 +154,15 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
     let meta_handle = Arc::new(meta_handle);
 
-    let mut stop_handler = StopHandle::<AnyError>::create();
-    let stop_tx = StopHandle::<AnyError>::install_termination_handle();
+    let mut stop_handler = ShutdownGroup::<AnyError>::new();
+    let stop_tx = ShutdownGroup::<AnyError>::install_termination_handle();
 
     // HTTP API service.
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let mut srv = HttpService::create(conf.clone(), meta_handle.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
-        srv.start().await.expect("Failed to start http server");
+        srv.do_start().await.expect("Failed to start http server");
         stop_handler.push(srv);
     }
 
@@ -174,7 +173,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
             "Databend meta server listening on {}",
             conf.grpc_api_address.clone()
         );
-        srv.start().await.expect("Databend meta service error");
+        srv.do_start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));
     }
 
@@ -232,7 +231,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
-                ..RpcClientConf::empty(&BUILD_INFO)
+                ..RpcClientConf::empty(BUILD_INFO.semver())
             };
             let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),

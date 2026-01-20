@@ -13,7 +13,6 @@ io-uring = ["sled/io_uring"]
 [dependencies]
 anyerror = { workspace = true }
 byteorder = { workspace = true }
-databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }

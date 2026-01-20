@@ -29,7 +29,7 @@ SELECT b FROM nullable_test WHERE a is Null ORDER BY c
 statement error 1065
 SELECT assume_not_null(null)
 
-query IT
+query II
 SELECT to_nullable(3), to_nullable(4)
 ----
 3 4

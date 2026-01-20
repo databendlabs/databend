@@ -51,19 +51,19 @@ insert into test_view.t0 values(2)
 statement ok
 create view default.v0 as select * from test_view.t0 union select * from test_view.t1
 
-query T
+query I
 select * from default.v0 order by v0.id
 ----
 1
 2
 
-query T
+query I
 select v0.id from default.v0 order by v0.id
 ----
 1
 2
 
-query T
+query I
 select v1.id from default.v0 as v1 order by v1.id
 ----
 1
@@ -99,7 +99,7 @@ drop table c
 statement ok
 create view tmp_view(c1, c2) as select number % 3 as a, avg(number) from numbers(1000) group by a order by a
 
-query T
+query TTTTT
 describe tmp_view
 ----
 c1 TINYINT UNSIGNED NO 0 (empty)
