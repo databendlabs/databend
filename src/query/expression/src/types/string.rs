@@ -32,8 +32,15 @@ use super::binary::BinaryColumn;
 use super::column_type_error;
 use super::domain_type_error;
 use super::scalar_type_error;
+use crate::BlockEntry;
+use crate::Chunk;
+use crate::ChunkIndex;
+use crate::ColumnView;
 use crate::ScalarRef;
+use crate::TakeIndex;
 use crate::property::Domain;
+use crate::types::NullableType;
+use crate::types::nullable::NullableColumnBuilder;
 use crate::values::Column;
 use crate::values::Scalar;
 
@@ -358,6 +365,77 @@ impl StringColumnBuilder {
 
     pub fn pop(&mut self) -> Option<String> {
         self.data.pop()
+    }
+
+    pub fn take_from_views(views: &[ColumnView<StringType>], indices: &ChunkIndex) -> BlockEntry {
+        let mut builder = Self::with_capacity(indices.num_rows());
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    let view = &views[block as usize];
+                    for row in TakeIndex::iter(rows) {
+                        let scalar = unsafe { view.index_unchecked(row) };
+                        builder.put_and_commit(scalar);
+                    }
+                }
+                Chunk::Repeat { block, rows } => {
+                    let view = &views[block as usize];
+                    let scalar = unsafe { view.index_unchecked(rows.row as usize) };
+                    builder.push_repeat(scalar, rows.count as _);
+                }
+                Chunk::Range { block, row, len } => {
+                    let view = &views[block as usize];
+                    for r in row..(row + len) {
+                        let scalar = unsafe { view.index_unchecked(r as usize) };
+                        builder.put_and_commit(scalar);
+                    }
+                }
+            }
+        }
+        let column = StringType::build_column(builder);
+        StringType::upcast_column(column).into()
+    }
+}
+
+impl NullableColumnBuilder<StringType> {
+    pub fn take_from_views(
+        views: &[ColumnView<NullableType<StringType>>],
+        indices: &ChunkIndex,
+    ) -> BlockEntry {
+        let mut builder = Self::with_capacity(indices.num_rows(), &[]);
+
+        for chunk in indices.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    let view = &views[block as usize];
+                    for row in TakeIndex::iter(rows) {
+                        match unsafe { view.index_unchecked(row) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+                Chunk::Repeat { block, rows } => {
+                    let view = &views[block as usize];
+                    match unsafe { view.index_unchecked(rows.row as usize) } {
+                        Some(value) => builder.push_repeat(value, rows.count as usize),
+                        None => builder.push_repeat_null(rows.count as usize),
+                    }
+                }
+                Chunk::Range { block, row, len } => {
+                    let view = &views[block as usize];
+                    for r in row..(row + len) {
+                        match unsafe { view.index_unchecked(r as usize) } {
+                            Some(value) => builder.push(value),
+                            None => builder.push_null(),
+                        }
+                    }
+                }
+            }
+        }
+
+        let nullable = builder.build();
+        NullableType::<StringType>::upcast_column(nullable).into()
     }
 }
 

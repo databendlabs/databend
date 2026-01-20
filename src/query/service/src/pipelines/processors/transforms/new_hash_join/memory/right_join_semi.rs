@@ -222,7 +222,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -234,7 +234,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
@@ -306,8 +305,10 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 1 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as _,
+                        row_index: idx as _,
+                    });
                 }
             }
 
@@ -334,7 +335,6 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };

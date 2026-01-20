@@ -209,7 +209,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                 0 => None,
                 _ => Some(wrap_nullable_block(&DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?)),
             };
 
@@ -221,7 +221,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
@@ -318,8 +317,10 @@ impl<'a> JoinStream for OuterRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 0 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as u32,
+                        row_index: idx as u32,
+                    });
                 }
             }
 
@@ -352,7 +353,6 @@ impl<'a> JoinStream for OuterRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };

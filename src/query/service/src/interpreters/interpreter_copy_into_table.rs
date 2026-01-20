@@ -589,7 +589,7 @@ impl Interpreter for CopyIntoTableInterpreter {
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let blocks = if self.plan.no_file_to_copy {
-            vec![DataBlock::empty_with_schema(self.plan.schema())]
+            vec![DataBlock::empty_with_schema(&self.plan.schema())]
         } else {
             self.get_copy_into_table_result()?
         };
