@@ -36,8 +36,8 @@ impl BinaryDisplayFormat {
         match s.to_ascii_lowercase().as_str() {
             "hex" => Ok(BinaryDisplayFormat::Hex),
             "base64" => Ok(BinaryDisplayFormat::Base64),
-            "utf-8" => Ok(BinaryDisplayFormat::Utf8),
-            "utf-8-lossy" => Ok(BinaryDisplayFormat::Utf8Lossy),
+            "utf-8" | "utf8" => Ok(BinaryDisplayFormat::Utf8),
+            "utf-8-lossy" | "utf8-lossy" => Ok(BinaryDisplayFormat::Utf8Lossy),
             other => Err(ErrorCode::InvalidArgument(format!(
                 "Invalid binary format '{other}', valid values: HEX | BASE64 | UTF-8 | UTF-8-LOSSY"
             ))),

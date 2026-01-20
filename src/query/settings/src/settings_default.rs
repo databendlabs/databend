@@ -1253,7 +1253,9 @@ impl DefaultSettings {
                         "hex".into(),
                         "base64".into(),
                         "utf-8".into(),
+                        "utf8".into(),
                         "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
                     ])),
                 }),
                 ("binary_input_format", DefaultSettingValue {
@@ -1265,7 +1267,9 @@ impl DefaultSettings {
                         "hex".into(),
                         "base64".into(),
                         "utf-8".into(),
+                        "utf8".into(),
                         "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
                     ])),
                 }),
                 ("random_function_seed", DefaultSettingValue {
