@@ -96,5 +96,11 @@ pub trait RoleApi: Sync + Send {
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
     async fn get_ownership(&self, object: &OwnershipObject) -> Result<Option<OwnershipInfo>>;
 
+    /// Get multiple ownership info by objects in batch.
+    async fn mget_ownerships(
+        &self,
+        objects: &[OwnershipObject],
+    ) -> Result<Vec<Option<OwnershipInfo>>>;
+
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

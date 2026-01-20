@@ -296,6 +296,25 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    /// Get multiple tables by db and table names in batch.
+    /// Returns tables in the same order as the input table_names.
+    /// If a table is not found, it will not be included in the result.
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        // Default implementation: fall back to sequential get_table calls
+        let mut tables = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Ok(table) = self.get_table(tenant, db_name, table_name).await {
+                tables.push(table);
+            }
+        }
+        Ok(tables)
+    }
+
     // Get one table identified as dropped by db and table name.
     async fn get_table_history(
         &self,
