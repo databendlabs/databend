@@ -28,6 +28,7 @@ pub trait KvApiExt: KVApi {
     async fn get_kv(&self, key: &str) -> Result<Option<SeqV>, Self::Error> {
         let mut strm = self.get_kv_stream(&[key.to_string()]).await?;
 
+        // not drain
         let strm_item = strm
             .next()
             .await
