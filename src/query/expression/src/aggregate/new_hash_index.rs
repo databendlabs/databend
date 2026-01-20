@@ -127,12 +127,33 @@ impl Group {
     }
 
     #[inline]
-    pub(crate) fn match_empty_or_deleted(self) -> BitMask {
+    pub(crate) fn match_empty(self) -> BitMask {
         BitMask((self.0 & repeat(Tag(0x80))).to_le())
     }
 
     unsafe fn load(ctrls: &Vec<Tag>, index: usize) -> Self {
         unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
+    }
+}
+
+#[derive(Clone)]
+struct ProbeSeq {
+    pos: usize,
+    stride: usize,
+}
+
+impl ProbeSeq {
+    #[inline]
+    fn move_next(&mut self, bucket_mask: usize) {
+        // We should have found an empty bucket by now and ended the probe.
+        debug_assert!(
+            self.stride <= bucket_mask,
+            "Went past end of probe sequence"
+        );
+
+        self.stride += Group::WIDTH;
+        self.pos += self.stride;
+        self.pos &= bucket_mask;
     }
 }
 
@@ -154,28 +175,43 @@ impl NewHashIndex {
 
 impl NewHashIndex {
     #[inline]
-    fn find_insert_index_in_group(&self, group: &Group, pos: &usize) -> usize {
-        let bit = group.match_empty_or_deleted().lowest_set_bit();
-        // SAFETY: This can happen for small (n < WIDTH) tables, because there are
-        // fake EMPTY bytes between us and the mirror bytes. The smallest table we
-        // are using is size 8192*4, which works fine.
-        (pos + bit.unwrap()) & self.bucket_mask
+    fn probe_seq(&self, hash: u64) -> ProbeSeq {
+        ProbeSeq {
+            pos: hash as usize & self.bucket_mask,
+            stride: 0,
+        }
+    }
+
+    #[inline]
+    fn find_insert_index_in_group(&self, group: &Group, pos: &usize) -> Option<usize> {
+        let bit = group.match_empty().lowest_set_bit();
+
+        if likely(bit.is_some()) {
+            Some((pos + bit.unwrap()) & self.bucket_mask)
+        } else {
+            None
+        }
     }
 
     pub fn find_or_insert(&mut self, hash: u64) -> (usize, bool) {
+        let mut insert_index = None;
         let tag_hash = Tag::full(hash);
-        let pos = hash as usize & self.bucket_mask;
+        let mut probe_seq = self.probe_seq(hash);
         loop {
-            let group = unsafe { Group::load(&self.ctrls, pos) };
+            let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
             for bit in group.match_tag(tag_hash) {
-                let index = (pos + bit) & self.bucket_mask;
-                if likely(self.ctrls[index] == tag_hash) {
-                    return (index, false);
-                }
+                let index = (probe_seq.pos + bit) & self.bucket_mask;
+                return (index, false);
             }
-            let index = self.find_insert_index_in_group(&group, &pos);
+            insert_index = self.find_insert_index_in_group(&group, &probe_seq.pos);
+            if insert_index.is_some() {
+                return (insert_index.unwrap(), true);
+            }
+            probe_seq.move_next(self.bucket_mask);
         }
+    }
 
+    pub fn probe_slot(&mut self, hash: u64) -> usize {
         todo!()
     }
 
