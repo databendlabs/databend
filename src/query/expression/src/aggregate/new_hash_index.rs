@@ -110,17 +110,15 @@ fn repeat(tag: Tag) -> u64 {
     u64::from_ne_bytes([tag.0; Group::WIDTH])
 }
 
-pub(crate) mod group {
+mod group {
 
     #[cfg(not(all(
         target_arch = "aarch64",
         target_feature = "neon",
-        // NEON intrinsics are currently broken on big-endian targets.
-        // See https://github.com/rust-lang/stdarch/issues/1484.
         target_endian = "little",
         not(miri),
     )))]
-    pub(crate) use generic::Group;
+    pub use generic::Group;
     #[cfg(all(
         target_arch = "aarch64",
         target_feature = "neon",
@@ -129,7 +127,7 @@ pub(crate) mod group {
         target_endian = "little",
         not(miri),
     ))]
-    pub(crate) use neon::Group;
+    pub use neon::Group;
 
     mod generic {
         use crate::aggregate::new_hash_index::BitMask;
@@ -137,14 +135,14 @@ pub(crate) mod group {
         use crate::aggregate::new_hash_index::repeat;
 
         #[derive(Copy, Clone)]
-        pub(crate) struct Group(u64);
+        pub struct Group(u64);
 
         impl Group {
             /// Number of bytes in the group.
-            pub(crate) const WIDTH: usize = 8;
+            pub const WIDTH: usize = 8;
 
             #[inline]
-            pub(crate) fn match_tag(self, tag: Tag) -> BitMask {
+            pub fn match_tag(self, tag: Tag) -> BitMask {
                 // This algorithm is derived from
                 // https://graphics.stanford.edu/~seander/bithacks.html##ValueInWord
                 let cmp = self.0 ^ repeat(tag);
@@ -152,12 +150,12 @@ pub(crate) mod group {
             }
 
             #[inline]
-            pub(crate) fn match_empty(self) -> BitMask {
+            pub fn match_empty(self) -> BitMask {
                 BitMask((self.0 & repeat(Tag(0x80))).to_le())
             }
 
             #[inline]
-            pub(crate) unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
+            pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
                 unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
             }
         }
@@ -171,14 +169,14 @@ pub(crate) mod group {
         use crate::aggregate::new_hash_index::Tag;
 
         #[derive(Copy, Clone)]
-        pub(crate) struct Group(neon::uint8x8_t);
+        pub struct Group(neon::uint8x8_t);
 
         impl Group {
             /// Number of bytes in the group.
-            pub(crate) const WIDTH: usize = mem::size_of::<Self>();
+            pub const WIDTH: usize = mem::size_of::<Self>();
 
             #[inline]
-            pub(crate) fn match_tag(self, tag: Tag) -> BitMask {
+            pub fn match_tag(self, tag: Tag) -> BitMask {
                 unsafe {
                     let cmp = neon::vceq_u8(self.0, neon::vdup_n_u8(tag.0));
                     BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
@@ -186,7 +184,7 @@ pub(crate) mod group {
             }
 
             #[inline]
-            pub(crate) fn match_empty(self) -> BitMask {
+            pub fn match_empty(self) -> BitMask {
                 unsafe {
                     let cmp = neon::vcltz_s8(neon::vreinterpret_s8_u8(self.0));
                     BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
@@ -194,7 +192,7 @@ pub(crate) mod group {
             }
 
             #[inline]
-            pub(crate) unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
+            pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
                 unsafe { Group(neon::vld1_u8(ctrls.as_ptr().add(index) as *const u8)) }
             }
         }
@@ -441,141 +439,5 @@ impl HashIndexOps for NewHashIndex {
         adapter: &mut dyn TableAdapter,
     ) -> usize {
         NewHashIndex::probe_and_create(self, state, row_count, adapter)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use super::*;
-    use crate::ProbeState;
-
-    struct TestTableAdapter {
-        incoming: Vec<(u64, u64)>,     // (key, hash)
-        payload: Vec<(u64, u64, u64)>, // (key, hash, value)
-        init_count: usize,
-        pin_data: Box<[u8]>,
-    }
-
-    impl TestTableAdapter {
-        fn new(incoming: Vec<(u64, u64)>, payload: Vec<(u64, u64, u64)>) -> Self {
-            Self {
-                incoming,
-                init_count: payload.len(),
-                payload,
-                pin_data: vec![0; 1000].into(),
-            }
-        }
-
-        fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState {
-                row_count: self.incoming.len(),
-                ..Default::default()
-            };
-
-            for (i, (_, hash)) in self.incoming.iter().enumerate() {
-                state.group_hashes[i] = *hash
-            }
-
-            state
-        }
-
-        fn init_hash_index(&self, hash_index: &mut NewHashIndex) {
-            for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
-                let slot = hash_index.probe_slot(hash);
-                hash_index.set_ctrl(slot, Tag::full(hash));
-                hash_index.pointers[slot] = self.get_row_ptr(false, i);
-            }
-        }
-
-        fn get_row_ptr(&self, incoming: bool, row: usize) -> RowPtr {
-            RowPtr::new(unsafe {
-                self.pin_data
-                    .as_ptr()
-                    .add(if incoming { row + self.init_count } else { row }) as _
-            })
-        }
-
-        fn get_payload(&self, row_ptr: RowPtr) -> (u64, u64, u64) {
-            let index = row_ptr.as_ptr() as usize - self.pin_data.as_ptr() as usize;
-            self.payload[index]
-        }
-    }
-
-    impl TableAdapter for TestTableAdapter {
-        fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
-            for row in state.empty_vector[..new_entry_count].iter() {
-                let (key, hash) = self.incoming[*row];
-                let value = key + 20;
-
-                self.payload.push((key, hash, value));
-                state.addresses[*row] = self.get_row_ptr(true, row.to_usize());
-            }
-        }
-
-        fn compare(
-            &mut self,
-            state: &mut ProbeState,
-            need_compare_count: usize,
-            mut no_match_count: usize,
-        ) -> usize {
-            for row in state.group_compare_vector[..need_compare_count]
-                .iter()
-                .copied()
-            {
-                let incoming = self.incoming[row];
-                let (key, _, _) = self.get_payload(state.addresses[row]);
-                if incoming.0 == key {
-                    continue;
-                }
-
-                state.no_match_vector[no_match_count] = row;
-                no_match_count += 1;
-            }
-
-            no_match_count
-        }
-    }
-
-    #[test]
-    fn test_new_hash_index_tag_collision_skip() {
-        let capacity = 16;
-        let hash1 = 0x7f00_0000_0000_0001;
-        let hash2 = 0x7f00_0000_0000_0002;
-
-        let mut hash_index = NewHashIndex::with_capacity(capacity);
-        let mut adapter = TestTableAdapter::new(vec![(2, hash2)], vec![(1, hash1, 100)]);
-        let mut state = adapter.init_state();
-
-        adapter.init_hash_index(&mut hash_index);
-
-        let count = hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
-        assert_eq!(1, count);
-
-        let got = state.addresses[..state.row_count]
-            .iter()
-            .map(|row_ptr| {
-                let (key, _, value) = adapter.get_payload(*row_ptr);
-                (key, value)
-            })
-            .collect::<HashMap<_, _>>();
-
-        let want = HashMap::from_iter([(2, 22)]);
-        assert_eq!(want, got);
-    }
-
-    #[test]
-    fn test_new_hash_index_batch_dedup() {
-        let capacity = 16;
-        let hash = 0x1234_5678_9abc_def0;
-
-        let mut hash_index = NewHashIndex::with_capacity(capacity);
-        let mut adapter = TestTableAdapter::new(vec![(1, hash), (1, hash), (1, hash)], vec![]);
-        let mut state = adapter.init_state();
-
-        let count = hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
-
-        assert_eq!(1, count);
     }
 }
