@@ -179,8 +179,7 @@ impl IPhysicalPlan for AggregatePartial {
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
-        let enable_experiment_hash_index =
-            builder.settings.get_enable_experiment_hash_index()?;
+        let enable_experiment_hash_index = builder.settings.get_enable_experiment_hash_index()?;
         let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(

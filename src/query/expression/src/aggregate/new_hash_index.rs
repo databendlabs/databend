@@ -25,8 +25,7 @@ use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
 use crate::aggregate::row_ptr::RowPtr;
 
-/// Portions of this file are derived from excellent `hashbrown` crate:
-/// https://github.com/rust-lang/hashbrown/
+// Portions of this file are derived from excellent `hashbrown` crate
 
 /// Single tag in a control group.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -72,11 +71,7 @@ impl BitMask {
     }
 
     fn lowest_set_bit(self) -> Option<usize> {
-        if let Some(nonzero) = NonZeroBitMaskWord::new(self.0) {
-            Some(Self::nonzero_trailing_zeros(nonzero))
-        } else {
-            None
-        }
+        NonZeroBitMaskWord::new(self.0).map(Self::nonzero_trailing_zeros)
     }
 }
 
@@ -133,7 +128,7 @@ impl Group {
         BitMask((self.0 & repeat(Tag(0x80))).to_le())
     }
 
-    unsafe fn load(ctrls: &Vec<Tag>, index: usize) -> Self {
+    unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
         unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
     }
 }
@@ -300,10 +295,12 @@ impl NewHashIndex {
 
             for row in state.no_match_vector[..remaining_entries].iter().copied() {
                 let skip = state.probe_skip[row];
-                let (slot, is_new) = self.find_or_insert(state.group_hashes[row], skip);
+                let hash = state.group_hashes[row];
+                let (slot, is_new) = self.find_or_insert(hash, skip);
                 state.slots[row] = slot;
 
                 if is_new {
+                    self.set_ctrl(slot, Tag::full(hash));
                     state.empty_vector[new_entry_count] = row;
                     new_entry_count += 1;
                 } else {
@@ -444,7 +441,7 @@ mod tests {
         }
     }
 
-    impl TableAdapter for &mut TestTableAdapter {
+    impl TableAdapter for TestTableAdapter {
         fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
             for row in state.empty_vector[..new_entry_count].iter() {
                 let (key, hash) = self.incoming[*row];
@@ -491,8 +488,7 @@ mod tests {
 
         adapter.init_hash_index(&mut hash_index);
 
-        let count =
-            hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
+        let count = hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
         assert_eq!(1, count);
 
         let got = state.addresses[..state.row_count]
@@ -505,5 +501,19 @@ mod tests {
 
         let want = HashMap::from_iter([(2, 22)]);
         assert_eq!(want, got);
+    }
+
+    #[test]
+    fn test_new_hash_index_batch_dedup() {
+        let capacity = 16;
+        let hash = 0x1234_5678_9abc_def0;
+
+        let mut hash_index = NewHashIndex::with_capacity(capacity);
+        let mut adapter = TestTableAdapter::new(vec![(1, hash), (1, hash), (1, hash)], vec![]);
+        let mut state = adapter.init_state();
+
+        let count = hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
+
+        assert_eq!(1, count);
     }
 }

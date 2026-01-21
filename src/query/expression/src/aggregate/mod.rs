@@ -28,9 +28,9 @@ mod payload_row;
 mod probe_state;
 mod row_ptr;
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 pub use aggregate_function::*;
 pub use aggregate_function_state::*;
@@ -185,14 +185,12 @@ impl HashTableConfig {
         }
     }
 
-    fn rebuild_hash_index<I>(
-        &self,
-        capacity: usize,
-        iter: I,
-    ) -> Box<dyn HashIndexOps>
+    fn rebuild_hash_index<I>(&self, capacity: usize, iter: I) -> Box<dyn HashIndexOps>
     where I: IntoIterator<Item = (u64, RowPtr)> {
         if self.enable_experiment_hash_index {
-            Box::new(new_hash_index::NewHashIndex::rebuild_from_iter(capacity, iter))
+            Box::new(new_hash_index::NewHashIndex::rebuild_from_iter(
+                capacity, iter,
+            ))
         } else {
             Box::new(hash_index::HashIndex::rebuild_from_iter(capacity, iter))
         }

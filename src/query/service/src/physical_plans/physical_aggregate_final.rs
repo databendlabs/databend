@@ -153,8 +153,7 @@ impl IPhysicalPlan for AggregateFinal {
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
         let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
-        let enable_experiment_hash_index =
-            builder.settings.get_enable_experiment_hash_index()?;
+        let enable_experiment_hash_index = builder.settings.get_enable_experiment_hash_index()?;
 
         let mut is_cluster_aggregate = false;
         if ExchangeSource::check_physical_plan(&self.input) {

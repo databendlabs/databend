@@ -430,7 +430,7 @@ mod tests {
         }
     }
 
-    impl TableAdapter for &mut TestTableAdapter {
+    impl TableAdapter for TestTableAdapter {
         fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
             for row in state.empty_vector[..new_entry_count].iter() {
                 let (key, hash) = self.incoming[*row];
