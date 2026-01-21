@@ -23,6 +23,7 @@ use crate::ProbeState;
 use crate::aggregate::BATCH_SIZE;
 use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
+use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
 
 // Portions of this file are derived from excellent `hashbrown` crate
@@ -109,27 +110,94 @@ fn repeat(tag: Tag) -> u64 {
     u64::from_ne_bytes([tag.0; Group::WIDTH])
 }
 
-#[derive(Copy, Clone)]
-struct Group(u64);
+pub(crate) mod group {
 
-impl Group {
-    /// Number of bytes in the group.
-    const WIDTH: usize = 8;
+    #[cfg(not(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        // NEON intrinsics are currently broken on big-endian targets.
+        // See https://github.com/rust-lang/stdarch/issues/1484.
+        target_endian = "little",
+        not(miri),
+    )))]
+    pub(crate) use generic::Group;
+    #[cfg(all(
+        target_arch = "aarch64",
+        target_feature = "neon",
+        // NEON intrinsics are currently broken on big-endian targets.
+        // See https://github.com/rust-lang/stdarch/issues/1484.
+        target_endian = "little",
+        not(miri),
+    ))]
+    pub(crate) use neon::Group;
 
-    fn match_tag(self, tag: Tag) -> BitMask {
-        // This algorithm is derived from
-        // https://graphics.stanford.edu/~seander/bithacks.html##ValueInWord
-        let cmp = self.0 ^ repeat(tag);
-        BitMask((cmp.wrapping_sub(repeat(Tag(0x01))) & !cmp & repeat(Tag(0x80))).to_le())
+    mod generic {
+        use crate::aggregate::new_hash_index::BitMask;
+        use crate::aggregate::new_hash_index::Tag;
+        use crate::aggregate::new_hash_index::repeat;
+
+        #[derive(Copy, Clone)]
+        pub(crate) struct Group(u64);
+
+        impl Group {
+            /// Number of bytes in the group.
+            pub(crate) const WIDTH: usize = 8;
+
+            #[inline]
+            pub(crate) fn match_tag(self, tag: Tag) -> BitMask {
+                // This algorithm is derived from
+                // https://graphics.stanford.edu/~seander/bithacks.html##ValueInWord
+                let cmp = self.0 ^ repeat(tag);
+                BitMask((cmp.wrapping_sub(repeat(Tag(0x01))) & !cmp & repeat(Tag(0x80))).to_le())
+            }
+
+            #[inline]
+            pub(crate) fn match_empty(self) -> BitMask {
+                BitMask((self.0 & repeat(Tag(0x80))).to_le())
+            }
+
+            #[inline]
+            pub(crate) unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
+                unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
+            }
+        }
     }
 
-    #[inline]
-    pub(crate) fn match_empty(self) -> BitMask {
-        BitMask((self.0 & repeat(Tag(0x80))).to_le())
-    }
+    mod neon {
+        use core::arch::aarch64 as neon;
+        use std::mem;
 
-    unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
-        unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
+        use crate::aggregate::new_hash_index::BitMask;
+        use crate::aggregate::new_hash_index::Tag;
+
+        #[derive(Copy, Clone)]
+        pub(crate) struct Group(neon::uint8x8_t);
+
+        impl Group {
+            /// Number of bytes in the group.
+            pub(crate) const WIDTH: usize = mem::size_of::<Self>();
+
+            #[inline]
+            pub(crate) fn match_tag(self, tag: Tag) -> BitMask {
+                unsafe {
+                    let cmp = neon::vceq_u8(self.0, neon::vdup_n_u8(tag.0));
+                    BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
+                }
+            }
+
+            #[inline]
+            pub(crate) fn match_empty(self) -> BitMask {
+                unsafe {
+                    let cmp = neon::vcltz_s8(neon::vreinterpret_s8_u8(self.0));
+                    BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
+                }
+            }
+
+            #[inline]
+            pub(crate) unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
+                unsafe { Group(neon::vld1_u8(ctrls.as_ptr().add(index) as *const u8)) }
+            }
+        }
     }
 }
 
@@ -194,8 +262,7 @@ impl NewHashIndex {
     where I: IntoIterator<Item = (u64, RowPtr)> {
         let mut hash_index = NewHashIndex::with_capacity(capacity);
         for (hash, row_ptr) in iter {
-            let slot = hash_index.probe_slot(hash);
-            hash_index.set_ctrl(slot, Tag::full(hash));
+            let slot = hash_index.probe_empty_and_set_ctrl(hash);
             hash_index.pointers[slot] = row_ptr;
             hash_index.count += 1;
         }
@@ -262,11 +329,12 @@ impl NewHashIndex {
         }
     }
 
-    pub fn probe_slot(&mut self, hash: u64) -> usize {
+    pub fn probe_empty_and_set_ctrl(&mut self, hash: u64) -> usize {
         let mut probe_seq = self.probe_seq(hash);
         loop {
             let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
             if let Some(index) = self.find_insert_index_in_group(&group, &probe_seq.pos) {
+                self.set_ctrl(index, Tag::full(hash));
                 return index;
             }
             probe_seq.move_next(self.bucket_mask);
