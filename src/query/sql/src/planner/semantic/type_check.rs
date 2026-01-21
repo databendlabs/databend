@@ -234,172 +234,28 @@ fn udf_type_string(data_type: &DataType) -> String {
     }
 }
 
-fn build_udf_cloud_dockerfile(
+fn build_udf_cloud_spec(
     code: &str,
     handler: &str,
     imports: &[String],
     packages: &[String],
     input_types: &[String],
     result_type: &str,
-) -> String {
-    let server_stub = build_udf_cloud_server_stub(handler, input_types, result_type);
-    let code_marker = unique_heredoc_marker("UDF_CODE", &[code, &server_stub]);
-    let server_marker = unique_heredoc_marker("UDF_SERVER", &[code, &server_stub]);
-    let pyproject = build_udf_cloud_pyproject(packages);
-    let pyproject_marker =
-        unique_heredoc_marker("UDF_PYPROJECT", &[code, &server_stub, &pyproject]);
-
-    let mut dockerfile = String::new();
-    dockerfile.push_str("FROM python:3.12-slim\n");
-    dockerfile.push_str("WORKDIR /app\n");
-    dockerfile.push_str("RUN python -m pip install --no-cache-dir uv\n");
-    dockerfile.push_str("RUN cat <<'");
-    dockerfile.push_str(&pyproject_marker);
-    dockerfile.push_str("' > /app/pyproject.toml\n");
-    dockerfile.push_str(&pyproject);
-    if !pyproject.ends_with('\n') {
-        dockerfile.push('\n');
-    }
-    dockerfile.push_str(&pyproject_marker);
-    dockerfile.push('\n');
-    dockerfile.push_str("RUN uv sync\n");
-    if !imports.is_empty() {
-        dockerfile.push_str("RUN mkdir -p /app/imports\n");
-        dockerfile.push_str("COPY imports/ /app/imports/\n");
-    }
-    dockerfile.push_str("RUN cat <<'");
-    dockerfile.push_str(&code_marker);
-    dockerfile.push_str("' > /app/udf.py\n");
-    dockerfile.push_str(code);
-    if !code.ends_with('\n') {
-        dockerfile.push('\n');
-    }
-    dockerfile.push_str(&code_marker);
-    dockerfile.push('\n');
-    dockerfile.push_str("RUN cat <<'");
-    dockerfile.push_str(&server_marker);
-    dockerfile.push_str("' > /app/server.py\n");
-    dockerfile.push_str(&server_stub);
-    if !server_stub.ends_with('\n') {
-        dockerfile.push('\n');
-    }
-    dockerfile.push_str(&server_marker);
-    dockerfile.push('\n');
-    dockerfile.push_str("EXPOSE 8815\n");
-    dockerfile
-        .push_str("CMD [\"uv\",\"run\",\"--project\",\"/app\",\"python\",\"/app/server.py\"]\n");
-    dockerfile
-}
-
-fn build_udf_cloud_server_stub(handler: &str, input_types: &[String], result_type: &str) -> String {
-    let handler = escape_python_double_quoted(handler);
-    let input_types_literal = python_string_list(input_types);
-    let result_type_literal = escape_python_double_quoted(result_type);
-    let lines = [
-        "import importlib",
-        "import os",
-        "import sys",
-        "from databend_udf import UDFServer, udf as udf_decorator",
-        "",
-        "IMPORTS_DIR = \"/app/imports\"",
-        "",
-        "def _add_imports():",
-        "    if not os.path.isdir(IMPORTS_DIR):",
-        "        return",
-        "    sys.path.insert(0, IMPORTS_DIR)",
-        "    for name in os.listdir(IMPORTS_DIR):",
-        "        path = os.path.join(IMPORTS_DIR, name)",
-        "        if os.path.isfile(path):",
-        "            ext = os.path.splitext(name)[1].lower()",
-        "            if ext in (\".zip\", \".whl\", \".egg\"):",
-        "                sys.path.insert(0, path)",
-        "",
-        "def _load_udf():",
-        "    return importlib.import_module(\"udf\")",
-        "",
-        "def _wrap_udf(func):",
-        &format!(
-            "    return udf_decorator(name=\"{handler}\", input_types={input_types_literal}, result_type=\"{result_type_literal}\")(func)"
-        ),
-        "",
-        "def main():",
-        "    _add_imports()",
-        "    udf = _load_udf()",
-        "    address = os.getenv(\"UDF_SERVER_ADDR\", \"0.0.0.0:8815\")",
-        "    server = UDFServer(location=address)",
-        &format!("    func = getattr(udf, \"{handler}\")"),
-        "    if not hasattr(func, \"_name\"):",
-        "        func = _wrap_udf(func)",
-        "    server.add_function(func)",
-        "    server.serve()",
-        "",
-        "if __name__ == \"__main__\":",
-        "    main()",
-        "",
-    ];
-    lines.join("\n")
-}
-
-fn build_udf_cloud_pyproject(packages: &[String]) -> String {
-    let mut dependencies = Vec::new();
-    dependencies.push("databend-udf".to_string());
-    for pkg in packages {
-        let trimmed = pkg.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        dependencies.push(trimmed.to_string());
-    }
-
-    let mut deps_line = String::from("dependencies = [");
-    for (idx, dep) in dependencies.iter().enumerate() {
-        if idx > 0 {
-            deps_line.push_str(", ");
-        }
-        deps_line.push('"');
-        deps_line.push_str(&escape_toml_double_quoted(dep));
-        deps_line.push('"');
-    }
-    deps_line.push_str("]\n");
-
-    let mut pyproject = String::new();
-    pyproject.push_str("[project]\n");
-    pyproject.push_str("name = \"databend-udf-app\"\n");
-    pyproject.push_str("version = \"0.1.0\"\n");
-    pyproject.push_str(&deps_line);
-    pyproject
-}
-
-fn python_string_list(values: &[String]) -> String {
-    let mut list = String::from("[");
-    for (idx, value) in values.iter().enumerate() {
-        if idx > 0 {
-            list.push_str(", ");
-        }
-        list.push('"');
-        list.push_str(&escape_python_double_quoted(value));
-        list.push('"');
-    }
-    list.push(']');
-    list
-}
-
-fn escape_python_double_quoted(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn escape_toml_double_quoted(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
-    let mut suffix = 0;
-    let mut marker = base.to_string();
-    while contents.iter().any(|content| content.contains(&marker)) {
-        suffix += 1;
-        marker = format!("{base}_{suffix}");
-    }
-    marker
+    runtime_version: &str,
+) -> Result<String> {
+    let spec = json!({
+        "version": 1,
+        "kind": "udf",
+        "language": "python",
+        "handler": handler,
+        "input_types": input_types,
+        "result_type": result_type,
+        "imports": imports,
+        "packages": packages,
+        "runtime_version": runtime_version,
+        "code": code,
+    });
+    to_string(&spec).map_err(|err| ErrorCode::Internal(format!("Failed to build UDF spec: {err}")))
 }
 
 /// A helper for type checking.
@@ -5668,7 +5524,7 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
-        dockerfile: &str,
+        spec: &str,
         imports: &[String],
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
@@ -5703,7 +5559,7 @@ impl<'a> TypeChecker<'a> {
             Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
         )?;
         let req = ApplyUdfResourceRequest {
-            dockerfile: dockerfile.to_string(),
+            spec: spec.to_string(),
             imports,
         };
 
@@ -5784,7 +5640,7 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    fn build_udf_cloud_dockerfile(
+    fn build_udf_cloud_spec(
         &self,
         code: &str,
         handler: &str,
@@ -5792,17 +5648,19 @@ impl<'a> TypeChecker<'a> {
         packages: &[String],
         arg_types: &[DataType],
         return_type: &DataType,
+        runtime_version: &str,
     ) -> Result<String> {
         let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
         let result_type = udf_type_string(return_type);
-        Ok(build_udf_cloud_dockerfile(
+        build_udf_cloud_spec(
             code,
             handler,
             imports,
             packages,
             &input_types,
             &result_type,
-        ))
+            runtime_version,
+        )
     }
 
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
@@ -5912,15 +5770,16 @@ impl<'a> TypeChecker<'a> {
         }
 
         if use_cloud {
-            let dockerfile = self.build_udf_cloud_dockerfile(
+            let spec = self.build_udf_cloud_spec(
                 &code,
                 &handler,
                 &imports,
                 &packages,
                 &arg_types,
                 &return_type,
+                &runtime_version,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource(&dockerfile, &imports)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource(&spec, &imports)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,

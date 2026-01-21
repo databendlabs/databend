@@ -11,7 +11,8 @@ message UdfImport {
 }
 
 message ApplyUdfResourceRequest {
-  string dockerfile = 1;
+  // JSON runtime spec (code/handler/types/packages). Control plane builds Dockerfile.
+  string spec = 1;
   repeated UdfImport imports = 2;
 }
 
