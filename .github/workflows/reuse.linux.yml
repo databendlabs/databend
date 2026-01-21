@@ -219,7 +219,7 @@ jobs:
       - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
 
-  test_cloud_udf:
+  test_sandbox_udf:
     needs: [build, check]
     runs-on:
       - self-hosted
@@ -233,7 +233,7 @@ jobs:
         with:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
-      - uses: ./.github/actions/test_cloud_udf
+      - uses: ./.github/actions/test_sandbox_udf
         timeout-minutes: 20
 
   test_meta_cluster:

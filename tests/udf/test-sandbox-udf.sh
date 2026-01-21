@@ -12,18 +12,19 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required for UDF cloud test" >&2
+  echo "docker is required for Sandbox UDF test" >&2
   exit 1
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required for UDF cloud test" >&2
+  echo "jq is required for Sandbox UDF test" >&2
   exit 1
 fi
 
 S3_ENDPOINT_URL="${S3_ENDPOINT_URL:-http://127.0.0.1:9900}"
 S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-minioadmin}"
 S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
+UDF_IMPORT_PRESIGN_EXPIRE_SECS="${UDF_IMPORT_PRESIGN_EXPIRE_SECS:-21600}"
 
 echo "Cleaning up previous runs"
 
@@ -89,7 +90,7 @@ for node in 1 2 3; do
 done
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
 
-echo "Starting cloud control mock server"
+echo "Starting sandbox control mock server"
 nohup env PYTHONUNBUFFERED=1 uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 50051
 
@@ -161,9 +162,13 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
 check_response_error "$response"
 
 echo "Executing python UDF"
+select_udf_sql="SELECT add_one(1) AS result"
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
   -H 'Content-Type: application/json' \
-  -d "{\"sql\": \"SELECT add_one(1) AS result\"}")
+  -d "$(jq -n \
+    --arg sql "$select_udf_sql" \
+    --arg presign_secs "$UDF_IMPORT_PRESIGN_EXPIRE_SECS" \
+    '{sql: $sql, settings: {udf_cloud_import_presign_expire_secs: $presign_secs}}')" )
 check_response_error "$response"
 
 actual=$(echo "$response" | jq -c '.data')

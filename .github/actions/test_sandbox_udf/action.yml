@@ -1,5 +1,5 @@
-name: "Test cloud UDF for databend query"
-description: "Test cloud Python UDF flow with mock control plane"
+name: "Test sandbox UDF for databend query"
+description: "Test sandbox Python UDF flow with mock control plane"
 runs:
   using: "composite"
   steps:
@@ -15,13 +15,13 @@ runs:
 
     - uses: ./.github/actions/setup_minio
 
-    - name: Run Cloud UDF Test
+    - name: Run Sandbox UDF Test
       shell: bash
       run: |
-        bash ./tests/udf/test-cloud-udf.sh
+        bash ./tests/udf/test-sandbox-udf.sh
 
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
       with:
-        name: test-cloud-udf
+        name: test-sandbox-udf
