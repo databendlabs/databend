@@ -40,19 +40,19 @@ apply_query_settings() {
     /^\[query\]$/ {
       print
       if (!added) {
-        print "enable_udf_cloud_script = true"
+        print "enable_udf_sandbox = true"
         print "cloud_control_grpc_server_address = \"http://0.0.0.0:50051\""
         added=1
       }
       next
     }
-    /^enable_udf_cloud_script[[:space:]]*=/ { next }
+    /^enable_udf_sandbox[[:space:]]*=/ { next }
     /^cloud_control_grpc_server_address[[:space:]]*=/ { next }
     { print }
     END {
       if (!added) {
         print "[query]"
-        print "enable_udf_cloud_script = true"
+        print "enable_udf_sandbox = true"
         print "cloud_control_grpc_server_address = \"http://0.0.0.0:50051\""
       }
     }

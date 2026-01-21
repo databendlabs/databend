@@ -248,7 +248,7 @@ pub struct QueryConfig {
     pub enable_udf_python_script: bool,
     pub enable_udf_js_script: bool,
     pub enable_udf_wasm_script: bool,
-    pub enable_udf_cloud_script: bool,
+    pub enable_udf_sandbox: bool,
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
@@ -337,7 +337,7 @@ impl Default for QueryConfig {
             enable_udf_js_script: true,
             enable_udf_python_script: true,
             enable_udf_wasm_script: true,
-            enable_udf_cloud_script: false,
+            enable_udf_sandbox: false,
 
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),

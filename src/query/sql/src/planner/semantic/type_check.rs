@@ -5532,7 +5532,7 @@ impl<'a> TypeChecker<'a> {
             .cloud_control_grpc_server_address
         else {
             return Err(ErrorCode::Unimplemented(
-                "UDF cloud script requires cloud control enabled, please set cloud_control_grpc_server_address in config",
+                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         };
 
@@ -5753,7 +5753,7 @@ impl<'a> TypeChecker<'a> {
 
         let language = language.parse()?;
         let use_cloud = matches!(language, UDFLanguage::Python)
-            && GlobalConfig::instance().query.enable_udf_cloud_script;
+            && GlobalConfig::instance().query.enable_udf_sandbox;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {
