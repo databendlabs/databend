@@ -28,7 +28,6 @@ pub struct ProbeState {
     pub(super) group_hashes: [u64; BATCH_SIZE],
     pub(super) addresses: [RowPtr; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
-    pub(super) probe_skip: [usize; BATCH_SIZE],
     pub(super) state_places: [StateAddr; BATCH_SIZE],
 
     pub(super) empty_vector: SelectVector,
@@ -47,7 +46,6 @@ impl Default for ProbeState {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
-            probe_skip: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [RowID::default(); BATCH_SIZE],
             no_match_vector: [RowID::default(); BATCH_SIZE],

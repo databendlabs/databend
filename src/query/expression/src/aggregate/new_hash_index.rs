@@ -290,11 +290,8 @@ impl NewHashIndex {
     }
 
     #[inline]
-    fn probe_seq(&self, hash: u64) -> ProbeSeq {
-        ProbeSeq {
-            pos: hash as usize & self.bucket_mask,
-            stride: 0,
-        }
+    fn h1(&self, hash: u64) -> usize {
+        hash as usize & self.bucket_mask
     }
 
     #[inline]
@@ -308,36 +305,34 @@ impl NewHashIndex {
         }
     }
 
-    pub fn find_or_insert(&mut self, hash: u64, mut skip: usize) -> (usize, bool) {
+    pub fn find_or_insert(&mut self, mut pos: usize, hash: u64) -> (usize, bool) {
         let mut insert_index = None;
         let tag_hash = Tag::full(hash);
-        let mut probe_seq = self.probe_seq(hash);
         loop {
-            let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
+            let group = unsafe { Group::load(&self.ctrls, pos) };
             for bit in group.match_tag(tag_hash) {
-                let index = (probe_seq.pos + bit) & self.bucket_mask;
-                if likely(skip == 0) {
-                    return (index, false);
-                }
-                skip -= 1;
+                let index = (pos + bit) & self.bucket_mask;
+                return (index, false);
             }
-            insert_index = self.find_insert_index_in_group(&group, &probe_seq.pos);
+            insert_index = self.find_insert_index_in_group(&group, &pos);
             if let Some(index) = insert_index {
+                self.set_ctrl(index, tag_hash);
                 return (index, true);
             }
-            probe_seq.move_next(self.bucket_mask);
+
+            pos = (pos + Group::WIDTH) & self.bucket_mask;
         }
     }
 
     pub fn probe_empty_and_set_ctrl(&mut self, hash: u64) -> usize {
-        let mut probe_seq = self.probe_seq(hash);
+        let mut pos = self.h1(hash);
         loop {
-            let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
-            if let Some(index) = self.find_insert_index_in_group(&group, &probe_seq.pos) {
+            let group = unsafe { Group::load(&self.ctrls, pos) };
+            if let Some(index) = self.find_insert_index_in_group(&group, &pos) {
                 self.set_ctrl(index, Tag::full(hash));
                 return index;
             }
-            probe_seq.move_next(self.bucket_mask);
+            pos = (pos + Group::WIDTH) & self.bucket_mask;
         }
     }
 
@@ -350,7 +345,7 @@ impl NewHashIndex {
         debug_assert!(self.capacity > 0);
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
             *row = i.into();
-            state.probe_skip[i] = 0;
+            state.slots[i] = self.h1(state.group_hashes[i]);
         }
 
         let mut new_group_count = 0;
@@ -362,13 +357,11 @@ impl NewHashIndex {
             let mut no_match_count = 0;
 
             for row in state.no_match_vector[..remaining_entries].iter().copied() {
-                let skip = state.probe_skip[row];
-                let hash = state.group_hashes[row];
-                let (slot, is_new) = self.find_or_insert(hash, skip);
+                let slot = &mut state.slots[row];
+                let (slot, is_new) = self.find_or_insert(*slot, state.group_hashes[row]);
                 state.slots[row] = slot;
 
                 if is_new {
-                    self.set_ctrl(slot, Tag::full(hash));
                     state.empty_vector[new_entry_count] = row;
                     new_entry_count += 1;
                 } else {
@@ -402,7 +395,8 @@ impl NewHashIndex {
             }
 
             for row in state.no_match_vector[..no_match_count].iter().copied() {
-                state.probe_skip[row] += 1;
+                let slot = state.slots[row];
+                state.slots[row] = (slot + 1) & self.bucket_mask;
             }
 
             remaining_entries = no_match_count;
