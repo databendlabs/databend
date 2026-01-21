@@ -13,7 +13,8 @@ The current Python UDF implementation has the following issues:
 This RFC proposes addressing these issues by moving the execution and resource management of Python UDFs to a cloud-based environment.
 
 # Guide-level explanation
-From the user’s perspective, the UDF syntax remains unchanged. When CloudScriptUDF is not enabled, the existing ScriptUDF behavior is unaffected. Once CloudScriptUDF is enabled, users no longer need to deploy and manage their own Python UDF servers, as execution and resource management are handled by the cloud.
+From the user’s perspective, the UDF syntax remains unchanged. When CloudScriptUDF is not enabled, the existing ScriptUDF behavior is unaffected. 
+Once CloudScriptUDF is enabled, users no longer need to deploy and manage their own Python UDF servers, as execution and resource management are handled by the cloud.
 
 # Reference-level explanation
 The architecture is divided into three layers:
@@ -137,7 +138,8 @@ installation via `uv sync` are slow, resulting in high latency on first
 execution or when the cache is invalidated.
 
 # Rationale and alternatives
-Currently, there are no existing engineering solutions that use an RPC-based approach for dynamic resource allocation; however, a related research paper explores this direction.
+Currently, there are no existing engineering solutions that use an RPC-based approach for dynamic resource allocation; 
+however, a related research paper explores this direction.
 - https://dl.acm.org/doi/10.14778/3551793.3551860
 
 
