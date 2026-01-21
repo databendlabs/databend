@@ -33,7 +33,7 @@ impl DataBlock {
 
         let mut results = Vec::with_capacity(scatter_size);
         for indices in scatter_indices.iter().take(scatter_size) {
-            let block = self.take_with_optimize_size(indices)?;
+            let block = self.take_with_optimize_size(indices.as_slice())?;
             results.push(block);
         }
 

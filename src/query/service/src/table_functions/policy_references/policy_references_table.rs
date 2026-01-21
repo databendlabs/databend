@@ -227,7 +227,7 @@ impl AsyncSource for PolicyReferencesSource {
 
         let rows = collect_policy_reference_rows(self.ctx.clone(), self.args.clone()).await?;
         let block = if rows.is_empty() {
-            DataBlock::empty_with_schema(self.schema.clone())
+            DataBlock::empty_with_schema(&self.schema)
         } else {
             let mut policy_names = Vec::with_capacity(rows.len());
             let mut policy_kinds = Vec::with_capacity(rows.len());

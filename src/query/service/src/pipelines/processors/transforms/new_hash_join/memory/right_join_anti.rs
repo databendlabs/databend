@@ -192,8 +192,10 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 0 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as _,
+                        row_index: idx as _,
+                    });
                 }
             }
 
@@ -220,7 +222,6 @@ impl<'a> JoinStream for AntiRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };

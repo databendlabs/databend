@@ -21,6 +21,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TableEntry;
 use crate::binder::ColumnBindingBuilder;
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
@@ -29,8 +30,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
-use crate::plans::RelOp;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 
@@ -44,16 +45,12 @@ impl RulePushDownFilterScan {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::PushDownFilterScan,
-            // Filter
-            //  \
-            //   Scan
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Filter,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            }],
+            // Input:  Filter -> Scan  or  Filter -> SecureFilter -> Scan
+            // Output: Preserve the original plan structure, but write Filter.predicates into Scan.push_down_predicates.
+            matchers: vec![
+                match_op!(Filter -> Scan),
+                match_op!(Filter -> SecureFilter -> Scan),
+            ],
             metadata,
         }
     }
@@ -181,27 +178,52 @@ impl Rule for RulePushDownFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        let i = self
+            .matchers
+            .iter()
+            .position(|matcher| matcher.matches(s_expr))
+            .unwrap();
+        self.apply_matcher(i, s_expr, state)
+    }
+
+    fn apply_matcher(&self, idx: usize, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut scan: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let child = s_expr.child(0)?;
+
+        let (mut scan, secure_filter): (Scan, Option<SecureFilter>) = match idx {
+            // Filter -> Scan
+            0 => (child.plan().clone().try_into()?, None),
+            // Filter -> SecureFilter -> Scan
+            1 => {
+                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
+                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
+                (scan, Some(secure_filter))
+            }
+            _ => unreachable!(),
+        };
 
         let add_filters = self.find_push_down_predicates(&filter.predicates, &scan)?;
         match scan.push_down_predicates.as_mut() {
-            Some(vs) => {
-                // Add `add_filters` to vs if there's not already there.
-                // Keep the order of `vs` to ensure the tests are stable.
-                for filter in add_filters {
-                    if !vs.contains(&filter) {
-                        vs.push(filter);
+            Some(existing_filters) => {
+                // Add `add_filters` to existing_filters if it's not already there.
+                // Keep the order of `existing_filters` to ensure the tests are stable.
+                for predicate in add_filters {
+                    if !existing_filters.contains(&predicate) {
+                        existing_filters.push(predicate);
                     }
                 }
             }
             None => scan.push_down_predicates = Some(add_filters),
         }
 
-        let mut result = SExpr::create_unary(
-            Arc::new(filter.into()),
-            Arc::new(SExpr::create_leaf(Arc::new(scan.into()))),
-        );
+        let scan_expr = SExpr::create_leaf(Arc::new(scan.into()));
+        let child_expr = if let Some(secure_filter) = secure_filter {
+            SExpr::create_unary(Arc::new(secure_filter.into()), Arc::new(scan_expr))
+        } else {
+            scan_expr
+        };
+
+        let mut result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(child_expr));
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

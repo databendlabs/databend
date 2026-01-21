@@ -60,7 +60,7 @@ impl Exchange for HilbertPartitionExchange {
             if indices.is_empty() {
                 continue;
             }
-            let block = data_block.take_with_optimize_size(indices)?;
+            let block = data_block.take_with_optimize_size(indices.as_slice())?;
             output_data_blocks[partition_id % n].push((partition_id, block));
         }
 

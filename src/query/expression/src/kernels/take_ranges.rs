@@ -22,14 +22,17 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
 use crate::BlockEntry;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::TakeIndex;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
+use crate::with_opaque_mapped_type;
 
 impl DataBlock {
     // Generate a new `DataBlock` by the specified indices ranges.
@@ -99,6 +102,10 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         Ok(())
     }
 
+    fn visit_column(&mut self, column: Column) -> Result<()> {
+        Self::visit_column_use_simple_type(column, self)
+    }
+
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
         self.visit_boolean(column.validity.clone())?;
         let validity =
@@ -124,7 +131,7 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         let mut inner_builder = T::downcast_builder(&mut builder);
 
         for range in self.ranges {
-            for index in range.start as usize..range.end as usize {
+            for index in range.iter() {
                 inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
             }
         }
@@ -133,38 +140,14 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         Ok(())
     }
 
-    fn visit_number<T: Number>(
+    fn visit_simple_type<T: simple_type::SimpleType>(
         &mut self,
-        buffer: <NumberType<T> as AccessType>::Column,
-    ) -> Result<()> {
-        self.result = Some(Value::Column(NumberType::<T>::upcast_column(
-            self.take_primitive_types(buffer),
-        )));
-        Ok(())
-    }
-
-    fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
-        self.result = Some(Value::Column(TimestampType::upcast_column(
-            self.take_primitive_types(buffer),
-        )));
-        Ok(())
-    }
-
-    fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
-        self.result = Some(Value::Column(DateType::upcast_column(
-            self.take_primitive_types(buffer),
-        )));
-        Ok(())
-    }
-
-    fn visit_decimal<T: crate::types::Decimal>(
-        &mut self,
-        buffer: Buffer<T>,
-        size: DecimalSize,
+        buffer: Buffer<T::Scalar>,
+        data_type: &DataType,
     ) -> Result<()> {
         self.result = Some(Value::Column(T::upcast_column(
             self.take_primitive_types(buffer),
-            size,
+            data_type,
         )));
         Ok(())
     }
@@ -215,6 +198,17 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         )));
         Ok(())
     }
+
+    fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
+        self.result = Some(Value::Column(
+            (with_opaque_mapped_type!(|T| match column {
+                OpaqueColumn::T(buffer) => {
+                    OpaqueType::<T>::upcast_column(self.take_primitive_types(buffer))
+                }
+            })),
+        ));
+        Ok(())
+    }
 }
 
 impl TakeRangeVisitor<'_> {
@@ -222,10 +216,7 @@ impl TakeRangeVisitor<'_> {
         let mut builder: Vec<T> = Vec::with_capacity(self.num_rows);
         let values = buffer.as_slice();
         for range in self.ranges {
-            unsafe {
-                builder
-                    .extend_from_slice_unchecked(&values[range.start as usize..range.end as usize])
-            };
+            range.take_primitive_types(values, &mut builder);
         }
         builder.into()
     }

@@ -65,6 +65,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 use databend_storages_common_table_meta::table::ChangeType;
+use log::debug;
 use log::info;
 
 use crate::BaseTableColumn;
@@ -166,7 +167,7 @@ impl Binder {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
 
-        info!("bind_stage_table cost: {:?}", start.elapsed());
+        debug!("bind_stage_table cost: {:?}", start.elapsed());
         Ok((s_expr, bind_context))
     }
 
@@ -513,11 +514,18 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
+        let start = std::time::Instant::now();
         let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
             meta_api,
             &self.ctx.get_tenant(),
             policy,
         ))?;
+        let fetch_elapsed = start.elapsed();
+        info!(
+            "row_access_policy: policy_id={}, fetch_ms={:.3}",
+            policy,
+            fetch_elapsed.as_secs_f64() * 1000.0,
+        );
         let body = res.data.body;
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -548,6 +556,7 @@ impl Binder {
             }
             Ok(None)
         })?;
+
         let res = self.bind_secure_filter(bind_context, &[], &expr, table_index, scan_s_expr)?;
 
         Ok(res.0)

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -62,9 +63,10 @@ pub async fn get_alter_table_sql(
 ) -> Result<Vec<String>> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-    let _guard = ThreadTracker::tracking(tracking_payload);
-    let (old_table_schema, new_table_schema) =
-        ThreadTracker::tracking_future(get_schemas(ctx, new_create_sql, table_name)).await?;
+
+    let (old_table_schema, new_table_schema) = tracking_payload
+        .tracking(get_schemas(ctx, new_create_sql, table_name))
+        .await?;
     // The table schema change follow "open-closed principle", only accept adding new fields.
     // If the new table schema has less or equal fields than the old one, means older version
     // node restarted, we should not alter the table.
@@ -146,12 +148,13 @@ pub async fn should_reset(
         let mut uri_location = UriLocation::from_uri(uri, c.params.clone())?;
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(payload);
-        let (new_storage_params, _) = ThreadTracker::tracking_future(parse_uri_location(
-            &mut uri_location,
-            Some(context.as_ref()),
-        ))
-        .await?;
+
+        let (new_storage_params, _) = payload
+            .tracking(parse_uri_location(
+                &mut uri_location,
+                Some(context.as_ref()),
+            ))
+            .await?;
 
         // External1 -> External2
         // return error to prevent cyclic conversion
@@ -174,13 +177,10 @@ pub async fn should_reset(
 pub async fn get_log_table(context: Arc<QueryContext>) -> Result<Option<Arc<dyn Table>>> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-    let _guard = ThreadTracker::tracking(tracking_payload);
-    let table = ThreadTracker::tracking_future(context.get_table(
-        CATALOG_DEFAULT,
-        "system_history",
-        "log_history",
-    ))
-    .await;
+
+    let table = tracking_payload
+        .tracking(context.get_table(CATALOG_DEFAULT, "system_history", "log_history"))
+        .await;
 
     // table is not exist
     if table.is_err() {

@@ -506,7 +506,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
+    pub fn empty_with_schema(schema: &DataSchema) -> Self {
         let columns = schema
             .fields()
             .iter()

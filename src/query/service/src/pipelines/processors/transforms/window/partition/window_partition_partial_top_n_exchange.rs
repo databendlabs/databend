@@ -75,7 +75,8 @@ impl Exchange for WindowPartitionTopNExchange {
         // Partition the data blocks to different processors.
         let mut output_data_blocks = vec![vec![]; n];
         for (partition_id, indices) in partition_permutation.into_iter().enumerate() {
-            output_data_blocks[partition_id % n].push((partition_id, block.take(&indices)?));
+            output_data_blocks[partition_id % n]
+                .push((partition_id, block.take(indices.as_slice())?));
         }
 
         // Union data blocks for each processor.
