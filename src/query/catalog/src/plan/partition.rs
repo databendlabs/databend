@@ -136,14 +136,27 @@ impl Partitions {
         let partitions = match self.kind {
             PartitionsShuffleKind::Seq => self.partitions.clone(),
             PartitionsShuffleKind::Mod => {
-                // Sort by hash%executor_nums.
-                let mut parts = self
-                    .partitions
-                    .iter()
-                    .map(|p| (p.hash() % num_executors as u64, p.clone()))
-                    .collect::<Vec<_>>();
-                parts.sort_by(|a, b| a.0.cmp(&b.0));
-                parts.into_iter().map(|x| x.1).collect()
+                // Assign partitions to executors by hash % num_executors.
+                // This ensures cache affinity: the same partition always goes to the same executor,
+                // as long as the cluster membership remains unchanged.
+                let mut executor_part: HashMap<String, Partitions> = HashMap::new();
+
+                for p in self.partitions.iter() {
+                    let idx = (p.hash() % num_executors as u64) as usize;
+                    let executor_id = &executors_sorted[idx].id;
+                    executor_part
+                        .entry(executor_id.clone())
+                        .or_default()
+                        .partitions
+                        .push(p.clone());
+                }
+
+                // Ensure all executors have an entry (even if empty).
+                for e in &executors_sorted {
+                    executor_part.entry(e.id.clone()).or_default();
+                }
+
+                return Ok(executor_part);
             }
             PartitionsShuffleKind::ConsistentHash => {
                 let mut scale = 0;
