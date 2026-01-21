@@ -672,19 +672,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             match decode_bbox(geohash) {
                 Ok(rect) => {
-                    let min = rect.min();
-                    let max = rect.max();
-                    let polygon = Polygon::new(
-                        LineString::from(vec![
-                            (min.x, min.y),
-                            (min.x, max.y),
-                            (max.x, max.y),
-                            (max.x, min.y),
-                            (min.x, min.y),
-                        ]),
-                        vec![],
-                    );
-                    let geo: Geometry = polygon.into();
+                    let geo: Geometry = rect.into();
                     match geo_to_ewkb(geo, None) {
                         Ok(binary) => builder.put_slice(binary.as_slice()),
                         Err(e) => ctx.set_error(builder.len(), e.to_string()),
