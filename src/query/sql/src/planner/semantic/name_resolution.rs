@@ -18,6 +18,8 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::ident_opt_quote;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -191,5 +193,30 @@ impl<'a> VariableNormalizer<'a> {
                 ident.name, ident.name,
             )));
         }
+    }
+}
+
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
+pub struct ClusterKeyNormalizer {
+    pub force_quoted_ident: bool,
+    pub unquoted_ident_case_sensitive: bool,
+    pub quoted_ident_case_sensitive: bool,
+    pub sql_dialect: Dialect,
+}
+
+impl ClusterKeyNormalizer {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
+        let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
+        if !case_sensitive {
+            ident.name = ident.name.to_lowercase();
+        }
+        ident.quote = ident_opt_quote(
+            &ident.name,
+            self.force_quoted_ident,
+            self.quoted_ident_case_sensitive,
+            self.sql_dialect,
+        );
     }
 }

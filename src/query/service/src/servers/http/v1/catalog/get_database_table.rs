@@ -98,6 +98,7 @@ async fn handle(
     let settings = ShowCreateQuerySettings {
         sql_dialect: Dialect::PostgreSQL,
         force_quoted_ident: false,
+        unquoted_ident_case_sensitive: false,
         quoted_ident_case_sensitive: true,
         hide_options_in_show_create_table: false,
     };
