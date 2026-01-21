@@ -171,6 +171,15 @@ impl NewHashIndex {
         // avoid handling: SMALL TABLE NASTY CORNER CASE
         // This can happen for small (n < WIDTH) tables
         debug_assert!(capacity >= Group::WIDTH);
+        let bucket_mask = capacity - 1;
+        let ctrls = vec![Tag::EMPTY; capacity + Group::WIDTH];
+        let pointers = vec![RowPtr::null(); capacity];
+        Self {
+            ctrls,
+            pointers,
+            capacity,
+            bucket_mask,
+        }
     }
 }
 
@@ -212,7 +221,7 @@ impl NewHashIndex {
         }
     }
 
-    pub fn find_or_insert(&mut self, hash: u64) -> (usize, bool) {
+    pub fn find_or_insert(&mut self, hash: u64, mut skip: usize) -> (usize, bool) {
         let mut insert_index = None;
         let tag_hash = Tag::full(hash);
         let mut probe_seq = self.probe_seq(hash);
@@ -220,7 +229,10 @@ impl NewHashIndex {
             let group = unsafe { Group::load(&self.ctrls, probe_seq.pos) };
             for bit in group.match_tag(tag_hash) {
                 let index = (probe_seq.pos + bit) & self.bucket_mask;
-                return (index, false);
+                if likely(skip == 0) {
+                    return (index, false);
+                }
+                skip -= 1;
             }
             insert_index = self.find_insert_index_in_group(&group, &probe_seq.pos);
             if let Some(index) = insert_index {
@@ -247,5 +259,187 @@ impl NewHashIndex {
         row_count: usize,
         mut adapter: impl TableAdapter,
     ) -> usize {
+        for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
+            *row = i.into();
+            state.probe_skip[i] = 0;
+        }
+
+        let mut new_group_count = 0;
+        let mut remaining_entries = row_count;
+
+        while remaining_entries > 0 {
+            let mut new_entry_count = 0;
+            let mut need_compare_count = 0;
+            let mut no_match_count = 0;
+
+            for row in state.no_match_vector[..remaining_entries].iter().copied() {
+                let skip = state.probe_skip[row];
+                let (slot, is_new) = self.find_or_insert(state.group_hashes[row], skip);
+                state.slots[row] = slot;
+
+                if is_new {
+                    state.empty_vector[new_entry_count] = row;
+                    new_entry_count += 1;
+                } else {
+                    state.group_compare_vector[need_compare_count] = row;
+                    need_compare_count += 1;
+                }
+            }
+
+            if new_entry_count != 0 {
+                new_group_count += new_entry_count;
+
+                adapter.append_rows(state, new_entry_count);
+
+                for row in state.empty_vector[..new_entry_count].iter().copied() {
+                    let slot = state.slots[row];
+                    self.set_ctrl(slot, Tag::full(state.group_hashes[row]));
+                    self.pointers[slot] = state.addresses[row];
+                }
+            }
+
+            if need_compare_count > 0 {
+                for row in state.group_compare_vector[..need_compare_count]
+                    .iter()
+                    .copied()
+                {
+                    let slot = state.slots[row];
+                    state.addresses[row] = self.pointers[slot];
+                }
+
+                no_match_count = adapter.compare(state, need_compare_count, no_match_count);
+            }
+
+            for row in state.no_match_vector[..no_match_count].iter().copied() {
+                state.probe_skip[row] += 1;
+            }
+
+            remaining_entries = no_match_count;
+        }
+
+        new_group_count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::ProbeState;
+
+    struct TestTableAdapter {
+        incoming: Vec<(u64, u64)>,     // (key, hash)
+        payload: Vec<(u64, u64, u64)>, // (key, hash, value)
+        init_count: usize,
+        pin_data: Box<[u8]>,
+    }
+
+    impl TestTableAdapter {
+        fn new(incoming: Vec<(u64, u64)>, payload: Vec<(u64, u64, u64)>) -> Self {
+            Self {
+                incoming,
+                init_count: payload.len(),
+                payload,
+                pin_data: vec![0; 1000].into(),
+            }
+        }
+
+        fn init_state(&self) -> ProbeState {
+            let mut state = ProbeState {
+                row_count: self.incoming.len(),
+                ..Default::default()
+            };
+
+            for (i, (_, hash)) in self.incoming.iter().enumerate() {
+                state.group_hashes[i] = *hash
+            }
+
+            state
+        }
+
+        fn init_hash_index(&self, hash_index: &mut NewHashIndex) {
+            for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
+                let slot = hash_index.probe_slot(hash);
+                hash_index.set_ctrl(slot, Tag::full(hash));
+                hash_index.pointers[slot] = self.get_row_ptr(false, i);
+            }
+        }
+
+        fn get_row_ptr(&self, incoming: bool, row: usize) -> RowPtr {
+            RowPtr::new(unsafe {
+                self.pin_data
+                    .as_ptr()
+                    .add(if incoming { row + self.init_count } else { row }) as _
+            })
+        }
+
+        fn get_payload(&self, row_ptr: RowPtr) -> (u64, u64, u64) {
+            let index = row_ptr.as_ptr() as usize - self.pin_data.as_ptr() as usize;
+            self.payload[index]
+        }
+    }
+
+    impl TableAdapter for &mut TestTableAdapter {
+        fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
+            for row in state.empty_vector[..new_entry_count].iter() {
+                let (key, hash) = self.incoming[*row];
+                let value = key + 20;
+
+                self.payload.push((key, hash, value));
+                state.addresses[*row] = self.get_row_ptr(true, row.to_usize());
+            }
+        }
+
+        fn compare(
+            &mut self,
+            state: &mut ProbeState,
+            need_compare_count: usize,
+            mut no_match_count: usize,
+        ) -> usize {
+            for row in state.group_compare_vector[..need_compare_count]
+                .iter()
+                .copied()
+            {
+                let incoming = self.incoming[row];
+                let (key, _, _) = self.get_payload(state.addresses[row]);
+                if incoming.0 == key {
+                    continue;
+                }
+
+                state.no_match_vector[no_match_count] = row;
+                no_match_count += 1;
+            }
+
+            no_match_count
+        }
+    }
+
+    #[test]
+    fn test_new_hash_index_tag_collision_skip() {
+        let capacity = 16;
+        let hash1 = 0x7f00_0000_0000_0001;
+        let hash2 = 0x7f00_0000_0000_0002;
+
+        let mut hash_index = NewHashIndex::with_capacity(capacity);
+        let mut adapter = TestTableAdapter::new(vec![(2, hash2)], vec![(1, hash1, 100)]);
+        let mut state = adapter.init_state();
+
+        adapter.init_hash_index(&mut hash_index);
+
+        let count =
+            hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
+        assert_eq!(1, count);
+
+        let got = state.addresses[..state.row_count]
+            .iter()
+            .map(|row_ptr| {
+                let (key, _, value) = adapter.get_payload(*row_ptr);
+                (key, value)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let want = HashMap::from_iter([(2, 22)]);
+        assert_eq!(want, got);
     }
 }
