@@ -308,7 +308,7 @@ impl NewHashIndex {
         let tag_hash = Tag::full(hash);
         loop {
             let group = unsafe { Group::load(&self.ctrls, pos) };
-            for bit in group.match_tag(tag_hash) {
+            if let Some(bit) = group.match_tag(tag_hash).into_iter().next() {
                 let index = (pos + bit) & self.bucket_mask;
                 return (index, false);
             }
