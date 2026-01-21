@@ -24,8 +24,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceHashJoin;
@@ -39,6 +41,9 @@ use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use crate::pipelines::processors::transforms::new_hash_join::grace::GraceMemoryJoin;
+use crate::pipelines::processors::transforms::new_hash_join::hybrid::HybridHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::hybrid::HybridHashJoinState;
 use crate::sessions::QueryContext;
 
 pub struct HashJoinFactory {
@@ -130,58 +135,9 @@ impl HashJoinFactory {
             return self.create_grace_join(typ, id);
         }
 
-        match typ {
-            JoinType::Inner => Ok(Box::new(InnerHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::LeftAnti => Ok(Box::new(AntiLeftHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::LeftSemi => Ok(Box::new(SemiLeftHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::Right => Ok(Box::new(OuterRightHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::RightSemi => Ok(Box::new(SemiRightHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            JoinType::RightAnti => Ok(Box::new(AntiRightHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
-            _ => unreachable!(),
-        }
+        // Use hybrid join by default with configurable max spill level
+        let max_level = settings.get_max_hash_join_spill_level()? as usize;
+        Ok(Box::new(self.create_hybrid_join(typ, id, max_level)?))
     }
 
     pub fn create_grace_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
@@ -321,5 +277,93 @@ impl HashJoinFactory {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// Create a basic memory join (used internally by HybridHashJoin)
+    pub fn create_memory_join(
+        self: &Arc<Self>,
+        typ: JoinType,
+        level: usize,
+    ) -> Result<Box<dyn GraceMemoryJoin>> {
+        let basic_state = self.create_basic_state(level)?;
+        match typ {
+            JoinType::Inner => Ok(Box::new(InnerHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::LeftAnti => Ok(Box::new(AntiLeftHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::LeftSemi => Ok(Box::new(SemiLeftHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::Right => Ok(Box::new(OuterRightHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::RightSemi => Ok(Box::new(SemiRightHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            JoinType::RightAnti => Ok(Box::new(AntiRightHashJoin::create(
+                &self.ctx,
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Create a HybridHashJoin at the specified level
+    pub fn create_hybrid_join(
+        self: &Arc<Self>,
+        typ: JoinType,
+        level: usize,
+        max_level: usize,
+    ) -> Result<HybridHashJoin> {
+        let basic_state = self.create_basic_state(level)?;
+        let memory_join = self.create_memory_join(typ, level)?;
+        let memory_settings = MemorySettings::from_join_settings(&self.ctx)?;
+
+        let hybrid_state =
+            HybridHashJoinState::create(self.ctx.clone(), level, max_level, self.clone());
+
+        Ok(HybridHashJoin::create(
+            self.ctx.clone(),
+            self.function_ctx.clone(),
+            self.hash_method.clone(),
+            self.desc.clone(),
+            memory_settings,
+            hybrid_state,
+            basic_state,
+            memory_join,
+            typ,
+        ))
     }
 }

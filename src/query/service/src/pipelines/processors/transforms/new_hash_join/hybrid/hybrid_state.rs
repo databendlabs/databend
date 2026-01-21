@@ -12,9 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 
-#[allow(dead_code)]
-pub struct HybridState {
-    grace_state: GraceHashJoinState,
+use databend_common_expression::DataBlock;
+
+use crate::pipelines::processors::transforms::HashJoinFactory;
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
+use crate::sessions::QueryContext;
+
+pub struct HybridHashJoinState {
+    pub mutex: Mutex<()>,
+    pub ctx: Arc<QueryContext>,
+
+    // Current recursion level (0 = initial)
+    pub level: usize,
+    // Maximum allowed spill level
+    pub max_level: usize,
+
+    // Factory for creating new join states
+    pub factory: Arc<HashJoinFactory>,
+
+    // Flag indicating whether spill has been triggered (for multi-thread sync)
+    pub spilled: CStyleCell<bool>,
+
+    // Queue of data blocks to be transitioned to grace mode
+    // Multiple processors can pop from this queue to help with the transition
+    pub transition_queue: CStyleCell<VecDeque<DataBlock>>,
+
+    // Flag indicating whether transition has been initialized
+    pub transition_initialized: CStyleCell<bool>,
+}
+
+impl HybridHashJoinState {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        level: usize,
+        max_level: usize,
+        factory: Arc<HashJoinFactory>,
+    ) -> Arc<HybridHashJoinState> {
+        Arc::new(HybridHashJoinState {
+            ctx,
+            level,
+            max_level,
+            factory,
+            mutex: Mutex::new(()),
+            spilled: CStyleCell::new(false),
+            transition_queue: CStyleCell::new(VecDeque::new()),
+            transition_initialized: CStyleCell::new(false),
+        })
+    }
+
+    pub fn can_spill(&self) -> bool {
+        self.level < self.max_level
+    }
 }
