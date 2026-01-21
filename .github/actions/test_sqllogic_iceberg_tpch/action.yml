@@ -35,9 +35,9 @@ runs:
         script_dir="tests/sqllogictests/scripts"
         (cd "$script_dir" && uv sync)
         echo "Running prepare_iceberg_tpch_data.py..."
-        (cd "$script_dir" && uv run python prepare_iceberg_tpch_data.py)
+        uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
-        (cd "$script_dir" && uv run python prepare_iceberg_test_data.py)
+        uv run tests/sqllogictests/scripts/prepare_iceberg_test_data.py
 
 
     - name: Run sqllogic Tests with Standalone lib
