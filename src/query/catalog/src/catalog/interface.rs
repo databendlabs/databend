@@ -305,7 +305,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_name: &str,
         table_names: &[String],
     ) -> Result<Vec<Arc<dyn Table>>> {
-        // Default implementation: fall back to sequential get_table calls
+        // Default implementation: best-effort fallback to sequential get_table calls,
+        // because not every catalog/database supports real batch fetching.
+        // This is a degraded path; override to implement real batch fetching.
         let mut tables = Vec::with_capacity(table_names.len());
         for table_name in table_names {
             if let Ok(table) = self.get_table(tenant, db_name, table_name).await {

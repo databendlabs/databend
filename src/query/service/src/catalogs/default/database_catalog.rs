@@ -414,15 +414,13 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         table_names: &[String],
     ) -> Result<Vec<Arc<dyn Table>>> {
-        if table_names.is_empty() {
-            return Ok(vec![]);
-        }
         let res = self
             .immutable_catalog
             .mget_tables(tenant, db_name, table_names)
             .await
             .or_unknown_database()?;
         if let Some(tables) = res {
+            // Fast path: immutable hits mean no extra db check or mutable lookup.
             if !tables.is_empty() {
                 return Ok(tables);
             }

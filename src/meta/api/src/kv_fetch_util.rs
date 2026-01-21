@@ -26,7 +26,9 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::errors;
 use databend_common_proto_conv::FromToProto;
+use futures::TryStreamExt;
 
 use crate::deserialize_struct;
 use crate::deserialize_u64;
@@ -168,16 +170,24 @@ pub async fn mget_u64_values<K: kvapi::Key>(
     }
 
     let str_keys: Vec<String> = keys.iter().map(|k| k.to_string_key()).collect();
-    let seq_values = kv_api.mget_kv(&str_keys).await?;
+    let mut strm = kv_api.get_kv_stream(&str_keys).await?;
 
     let mut results = Vec::with_capacity(keys.len());
-    for seq_v in seq_values {
-        if let Some(seq_v) = seq_v {
+    while let Some(item) = strm.try_next().await? {
+        if let Some(seq_v) = item.value {
             let id = *deserialize_u64(&seq_v.data)?;
             results.push(Some(id));
         } else {
             results.push(None);
         }
+    }
+
+    if results.len() != keys.len() {
+        return Err(
+            errors::IncompleteStream::new(keys.len() as u64, results.len() as u64)
+                .context(" while mget_u64_values")
+                .into(),
+        );
     }
 
     Ok(results)

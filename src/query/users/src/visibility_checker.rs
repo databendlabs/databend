@@ -211,9 +211,10 @@ pub fn check_table_visibility_with_roles(
                     return true;
                 }
                 GrantObject::Table(cat, db, _table) if cat == catalog && db == db_name => {
-                    // Note: We don't have table name here, so we can't do exact match
-                    // This is a limitation - for name-based grants, we need the table name
-                    // But for the optimization path, we typically have table_id
+                    // Name-based table grants are intentionally ignored here because this
+                    // fast path does not know the target table name. Callers must ensure
+                    // no name-based grants exist (see `has_table_name_grants`) or use a
+                    // slower path that matches by table name.
                 }
                 _ => {}
             }

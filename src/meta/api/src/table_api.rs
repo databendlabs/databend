@@ -1542,7 +1542,6 @@ where
         table_names: &[String],
     ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
         debug!(db_id = db_id, table_names :? = table_names; "TableApi: {}", func_name!());
-
         if table_names.is_empty() {
             return Ok(vec![]);
         }

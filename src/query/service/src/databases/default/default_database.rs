@@ -205,10 +205,6 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
-        if table_names.is_empty() {
-            return Ok(vec![]);
-        }
-
         let db_id = self.db_info.database_id.db_id;
         let db_name = self.get_db_name();
 

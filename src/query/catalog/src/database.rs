@@ -124,7 +124,9 @@ pub trait Database: DynClone + Sync + Send {
     /// Returns tables in the same order as input, skipping tables that are not found.
     #[async_backtrace::framed]
     async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
-        // Default implementation: fall back to sequential get_table calls
+        // Default implementation: best-effort fallback to sequential get_table calls,
+        // because not every database supports real batch fetching.
+        // This is a degraded path; override to implement real batch fetching.
         let mut tables = Vec::with_capacity(table_names.len());
         for table_name in table_names {
             if let Ok(table) = self.get_table(table_name).await {
