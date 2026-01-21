@@ -72,10 +72,17 @@ impl ReadState {
         let original_schema = block_reader.original_schema.as_ref();
 
         let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
-        let runtime_filter_column_names = runtime_filter_entries
+        let runtime_filter_column_names: Vec<_> = runtime_filter_entries
             .iter()
-            .filter_map(|entry| entry.bloom.as_ref().map(|bloom| &bloom.column_name))
-            .collect::<Vec<_>>();
+            .filter_map(|entry| {
+                let column_name = entry.bloom.as_ref().map(|bloom| &bloom.column_name)?;
+                if original_schema.index_of(column_name).is_ok() {
+                    Some(column_name)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let mut preread_projection =
             Projection::from_column_names(original_schema, &runtime_filter_column_names)?;
