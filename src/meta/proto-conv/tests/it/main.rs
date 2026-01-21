@@ -156,4 +156,3 @@ mod v161_grant_object_row_access_policy;
 mod v162_tag;
 mod v163_snapshot_ref;
 mod v164_csv_format_params;
-mod v165_udf_cloud_script;

@@ -5,9 +5,9 @@ package udfproto;
 
 message UdfImport {
   string location = 1;
-  string method = 2;
-  string url = 3;
-  map<string, string> headers = 4;
+  string url = 2;
+  // Content tag for caching (e.g. etag or content length), independent of presigned URL.
+  string tag = 3;
 }
 
 message ApplyUdfResourceRequest {

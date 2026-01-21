@@ -52,19 +52,6 @@ pub struct UDFScript {
     pub immutable: Option<bool>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UDFCloudScript {
-    pub code: String,
-    pub imports: Vec<String>,
-    pub packages: Vec<String>,
-    pub handler: String,
-    pub language: String,
-    pub arg_types: Vec<DataType>,
-    pub return_type: DataType,
-    pub dockerfile: String,
-    pub immutable: Option<bool>,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct UDTFServer {
     pub address: String,
@@ -122,7 +109,6 @@ pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
     UDFScript(UDFScript),
-    UDFCloudScript(UDFCloudScript),
     UDAFScript(UDAFScript),
     UDTFServer(UDTFServer),
     UDTF(UDTF),
@@ -135,7 +121,6 @@ impl UDFDefinition {
             Self::LambdaUDF(_) => "LambdaUDF",
             Self::UDFServer(_) => "UDFServer",
             Self::UDFScript(_) => "UDFScript",
-            Self::UDFCloudScript(_) => "UDFCloudScript",
             Self::UDAFScript(_) => "UDAFScript",
             Self::UDTF(_) => "UDTF",
             Self::UDTFServer(_) => "UDTFServer",
@@ -148,7 +133,6 @@ impl UDFDefinition {
             Self::LambdaUDF(_) => false,
             Self::UDFServer(_) => false,
             Self::UDFScript(_) => false,
-            Self::UDFCloudScript(_) => false,
             Self::UDTF(_) => false,
             Self::UDTFServer(_) => false,
             Self::ScalarUDF(_) => false,
@@ -164,7 +148,6 @@ impl UDFDefinition {
             Self::UDTFServer(x) => x.language.as_str(),
             Self::UDFServer(x) => x.language.as_str(),
             Self::UDFScript(x) => x.language.as_str(),
-            Self::UDFCloudScript(x) => x.language.as_str(),
             Self::UDAFScript(x) => x.language.as_str(),
         }
     }
@@ -353,36 +336,6 @@ impl Display for UDFDefinition {
                 write!(
                     f,
                     " IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
-                )?;
-            }
-            UDFDefinition::UDFCloudScript(UDFCloudScript {
-                code,
-                arg_types,
-                return_type,
-                handler,
-                language,
-                imports,
-                packages,
-                immutable,
-                dockerfile: _,
-            }) => {
-                for (i, item) in arg_types.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{item}")?;
-                }
-                write!(f, ") RETURNS {return_type} LANGUAGE {language}")?;
-                if let Some(immutable) = immutable {
-                    if *immutable {
-                        write!(f, " IMMUTABLE")?;
-                    } else {
-                        write!(f, " VOLATILE")?;
-                    }
-                }
-                write!(
-                    f,
-                    " IMPORTS = {imports:?} PACKAGES = {packages:?} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
             UDFDefinition::UDAFScript(UDAFScript {

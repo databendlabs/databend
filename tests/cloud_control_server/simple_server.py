@@ -125,13 +125,8 @@ def _download_udf_imports(imports, target_dir):
         dest = os.path.join(target_dir, name)
         if UDF_DOCKER_LOG_COMMANDS:
             _log("UDF import download:", item.location, "->", dest)
-        req = urllib.request.Request(
-            item.url,
-            headers=dict(item.headers),
-            method=item.method or "GET",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as f:
+            with urllib.request.urlopen(item.url, timeout=30) as resp, open(dest, "wb") as f:
                 shutil.copyfileobj(resp, f)
         except Exception as exc:
             raise RuntimeError(f"failed to download UDF import '{item.location}': {exc}") from exc
@@ -184,8 +179,7 @@ def _ensure_udf_endpoint(dockerfile, imports):
         [
             {
                 "location": item.location,
-                "method": item.method,
-                "url": item.url,
+                "tag": item.tag,
             }
             for item in imports
         ],
