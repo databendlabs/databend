@@ -183,8 +183,7 @@ impl RelOperator {
     pub fn support_lazy_materialize(&self) -> bool {
         !matches!(
             self,
-            RelOperator::Join(_)
-                | RelOperator::CacheScan(_)
+            RelOperator::CacheScan(_)
                 | RelOperator::UnionAll(_)
                 | RelOperator::DummyTableScan(_)
                 | RelOperator::ExpressionScan(_)

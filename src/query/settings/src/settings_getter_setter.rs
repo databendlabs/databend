@@ -583,6 +583,10 @@ impl Settings {
         self.try_get_u64("lazy_read_threshold")
     }
 
+    pub fn get_enable_lazy_read_across_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_lazy_read_across_join")? == 1)
+    }
+
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
