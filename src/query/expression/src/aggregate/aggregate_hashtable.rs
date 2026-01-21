@@ -21,7 +21,6 @@ use bumpalo::Bump;
 use databend_common_exception::Result;
 
 use super::BATCH_SIZE;
-use super::Entry;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
@@ -94,10 +93,12 @@ impl AggregateHashTable {
         need_init_entry: bool,
     ) -> Self {
         debug_assert!(capacity.is_power_of_two());
-        let entries = if need_init_entry {
-            vec![Entry::default(); capacity]
+        // if need_init_entry is false, we will directly append rows without probing hash index
+        // so we can use a dummy hash index, which is not allowed to insert any entry
+        let hash_index = if need_init_entry {
+            HashIndex::with_capacity(capacity)
         } else {
-            vec![]
+            HashIndex::dummy()
         };
         Self {
             direct_append: !need_init_entry,
@@ -108,12 +109,7 @@ impl AggregateHashTable {
                 1 << config.initial_radix_bits,
                 vec![arena],
             ),
-            hash_index: HashIndex {
-                entries,
-                count: 0,
-                capacity,
-                capacity_mask: capacity - 1,
-            },
+            hash_index,
             config,
             hash_index_resize_count: 0,
         }
@@ -407,33 +403,19 @@ impl AggregateHashTable {
         }
 
         self.hash_index_resize_count += 1;
-        let mut hash_index = HashIndex::with_capacity(new_capacity);
+        let iter = self.payload.payloads.iter().flat_map(|payload| {
+            let row_layout = &payload.row_layout;
+            let tuple_size = payload.tuple_size;
+            payload.pages.iter().flat_map(move |page| {
+                (0..page.rows).map(move |idx| {
+                    let row_ptr = page.data_ptr(idx, tuple_size);
+                    let hash = row_ptr.hash(row_layout);
+                    (hash, row_ptr)
+                })
+            })
+        });
 
-        // iterate over payloads and copy to new entries
-        for payload in self.payload.payloads.iter() {
-            for page in payload.pages.iter() {
-                for idx in 0..page.rows {
-                    let row_ptr = page.data_ptr(idx, payload.tuple_size);
-                    let hash = row_ptr.hash(&payload.row_layout);
-
-                    let slot = hash_index.probe_slot(hash);
-
-                    // set value
-                    let entry = hash_index.mut_entry(slot);
-                    debug_assert!(!entry.is_occupied());
-                    entry.set_hash(hash);
-                    entry.set_pointer(row_ptr);
-
-                    debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(entry.get_pointer(), row_ptr);
-                    debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash));
-
-                    hash_index.count += 1;
-                }
-            }
-        }
-
-        self.hash_index = hash_index
+        self.hash_index = HashIndex::rebuild_from_iter(new_capacity, iter);
     }
 
     fn initial_capacity() -> usize {

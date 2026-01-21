@@ -52,6 +52,18 @@ fn init_slot(hash: u64, capacity_mask: usize) -> usize {
 }
 
 impl HashIndex {
+    /// Create a dummy HashIndex with zero capacity.
+    /// Any operation on this HashIndex is not allowed.
+    pub fn dummy() -> Self {
+        Self {
+            entries: vec![],
+            count: 0,
+            capacity: 0,
+            capacity_mask: 0,
+        }
+    }
+
+    /// Create a HashIndex with the given capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         debug_assert!(capacity.is_power_of_two());
         let capacity_mask = capacity - 1;
@@ -61,6 +73,28 @@ impl HashIndex {
             capacity,
             capacity_mask,
         }
+    }
+
+    pub(super) fn rebuild_from_iter<I>(capacity: usize, iter: I) -> Self
+    where I: IntoIterator<Item = (u64, RowPtr)> {
+        let mut hash_index = HashIndex::with_capacity(capacity);
+
+        for (hash, row_ptr) in iter {
+            let slot = hash_index.probe_slot(hash);
+
+            let entry = hash_index.mut_entry(slot);
+            debug_assert!(!entry.is_occupied());
+            entry.set_hash(hash);
+            entry.set_pointer(row_ptr);
+
+            debug_assert!(entry.is_occupied());
+            debug_assert_eq!(entry.get_pointer(), row_ptr);
+            debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash));
+
+            hash_index.count += 1;
+        }
+
+        hash_index
     }
 
     fn find_or_insert(&mut self, mut slot: usize, hash: u64) -> (usize, bool) {
