@@ -207,16 +207,16 @@ pub struct ClusterKeyNormalizer {
 
 impl ClusterKeyNormalizer {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
+        let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
+        if !case_sensitive {
+            ident.name = ident.name.to_lowercase();
+        }
         ident.quote = ident_opt_quote(
             &ident.name,
             self.force_quoted_ident,
             self.quoted_ident_case_sensitive,
             self.sql_dialect,
         );
-        let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
-            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
-        if !case_sensitive {
-            ident.name = ident.name.to_lowercase();
-        }
     }
 }
