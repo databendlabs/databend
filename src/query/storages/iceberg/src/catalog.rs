@@ -430,11 +430,17 @@ impl Catalog for IcebergMutableCatalog {
     async fn mget_databases(
         &self,
         _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in ICEBERG catalog",
-        ))
+        Ok(db_names
+            .iter()
+            .map(|db_name| {
+                Arc::new(IcebergDatabase::create(
+                    self.clone(),
+                    &db_name.to_url_string(),
+                )) as Arc<dyn Database>
+            })
+            .collect())
     }
 
     async fn mget_database_names_by_ids(

@@ -398,12 +398,14 @@ impl Catalog for HiveCatalog {
 
     async fn mget_databases(
         &self,
-        _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in HIVE catalog",
-        ))
+        let mut dbs = Vec::with_capacity(db_names.len());
+        for name in db_names {
+            dbs.push(self.get_database(tenant, name.database_name()).await?);
+        }
+        Ok(dbs)
     }
 
     async fn mget_database_names_by_ids(
