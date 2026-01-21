@@ -89,7 +89,8 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                 if col_index != 0 {
                     buf.push(fd);
                 }
-                self.field_encoder.write_field(column, row_index, &mut buf);
+                self.field_encoder
+                    .write_field(column, row_index, &mut buf)?;
             }
             buf.extend_from_slice(rd)
         }

@@ -21,6 +21,7 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
@@ -875,6 +876,16 @@ impl Settings {
         v.parse()
     }
 
+    pub fn get_binary_output_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_output_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
+    pub fn get_binary_input_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_input_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
     pub fn get_script_max_steps(&self) -> Result<u64> {
         self.try_get_u64("script_max_steps")
     }
@@ -1100,10 +1111,6 @@ impl Settings {
 
     pub fn get_enforce_local(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_local")? == 1)
-    }
-
-    pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
     }
 
     pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {

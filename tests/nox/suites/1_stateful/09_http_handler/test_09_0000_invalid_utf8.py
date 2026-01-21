@@ -20,7 +20,7 @@ def test_invalid_utf8():
     assert execute_sql("create table t1(a varchar)")["error"] == None
     assert execute_sql("insert INTO t1 VALUES(FROM_BASE64('0Aw='))")["error"] == {
         "code": 1006,
-        "message": "invalid utf8 sequence while evaluating function `to_string(D00C)` in expr `CAST(from_hex('D00C')::string AS String NULL)`",
+        "message": "invalid utf8 sequence; consider setting binary_output_format to 'utf-8-lossy' while evaluating function `to_string(D00C)` in expr `CAST(from_hex('D00C')::string AS String NULL)`",
     }
 
     # Query the table

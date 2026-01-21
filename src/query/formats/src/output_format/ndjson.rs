@@ -97,7 +97,8 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 
                 if STRINGS {
                     let mut tmp = vec![];
-                    self.field_encoder.write_field(column, row_index, &mut tmp);
+                    self.field_encoder
+                        .write_field(column, row_index, &mut tmp)?;
                     if !tmp.is_empty() && tmp[0] == b'\"' {
                         buf.extend_from_slice(&tmp);
                     } else {
@@ -106,7 +107,8 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                         buf.push(b'"');
                     }
                 } else {
-                    self.field_encoder.write_field(column, row_index, &mut buf)
+                    self.field_encoder
+                        .write_field(column, row_index, &mut buf)?;
                 }
             }
             if COMPACT {
