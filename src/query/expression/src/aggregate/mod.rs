@@ -37,6 +37,7 @@ pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use group_hash::*;
 use hash_index::Entry;
+use hash_index::HashIndexOps;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
@@ -69,6 +70,7 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     pub max_partial_capacity: usize,
+    pub enable_experiment_hash_index: bool,
 }
 
 impl Default for HashTableConfig {
@@ -81,6 +83,7 @@ impl Default for HashTableConfig {
             block_fill_factor: 1.8,
             partial_agg: false,
             max_partial_capacity: 131072,
+            enable_experiment_hash_index: false,
         }
     }
 }
@@ -116,6 +119,11 @@ impl HashTableConfig {
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
         self.current_max_radix_bits = Arc::new(AtomicU64::new(initial_radix_bits));
+        self
+    }
+
+    pub fn with_experiment_hash_index(mut self, enable: bool) -> Self {
+        self.enable_experiment_hash_index = enable;
         self
     }
 
@@ -158,6 +166,35 @@ impl HashTableConfig {
                 continue;
             }
             break;
+        }
+    }
+
+    fn new_hash_index(&self, capacity: usize) -> Box<dyn HashIndexOps> {
+        if self.enable_experiment_hash_index {
+            Box::new(new_hash_index::NewHashIndex::with_capacity(capacity))
+        } else {
+            Box::new(hash_index::HashIndex::with_capacity(capacity))
+        }
+    }
+
+    fn new_dummy_hash_index(&self) -> Box<dyn HashIndexOps> {
+        if self.enable_experiment_hash_index {
+            Box::new(new_hash_index::NewHashIndex::dummy())
+        } else {
+            Box::new(hash_index::HashIndex::dummy())
+        }
+    }
+
+    fn rebuild_hash_index<I>(
+        &self,
+        capacity: usize,
+        iter: I,
+    ) -> Box<dyn HashIndexOps>
+    where I: IntoIterator<Item = (u64, RowPtr)> {
+        if self.enable_experiment_hash_index {
+            Box::new(new_hash_index::NewHashIndex::rebuild_from_iter(capacity, iter))
+        } else {
+            Box::new(hash_index::HashIndex::rebuild_from_iter(capacity, iter))
         }
     }
 }

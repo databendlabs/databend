@@ -27,7 +27,7 @@ use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
 use super::hash_index::AdapterImpl;
-use super::hash_index::HashIndex;
+use super::hash_index::HashIndexOps;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
@@ -44,7 +44,7 @@ pub struct AggregateHashTable {
     pub config: HashTableConfig,
 
     current_radix_bits: u64,
-    hash_index: HashIndex,
+    hash_index: Box<dyn HashIndexOps>,
     hash_index_resize_count: usize,
 }
 
@@ -78,7 +78,7 @@ impl AggregateHashTable {
                 1 << config.initial_radix_bits,
                 vec![arena],
             ),
-            hash_index: HashIndex::with_capacity(capacity),
+            hash_index: config.new_hash_index(capacity),
             config,
             hash_index_resize_count: 0,
         }
@@ -96,9 +96,9 @@ impl AggregateHashTable {
         // if need_init_entry is false, we will directly append rows without probing hash index
         // so we can use a dummy hash index, which is not allowed to insert any entry
         let hash_index = if need_init_entry {
-            HashIndex::with_capacity(capacity)
+            config.new_hash_index(capacity)
         } else {
-            HashIndex::dummy()
+            config.new_dummy_hash_index()
         };
         Self {
             direct_append: !need_init_entry,
@@ -230,8 +230,8 @@ impl AggregateHashTable {
 
         if self.config.partial_agg {
             // check size
-            if self.hash_index.count + BATCH_SIZE > self.hash_index.resize_threshold()
-                && self.hash_index.capacity >= self.config.max_partial_capacity
+            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
+                && self.hash_index.capacity() >= self.config.max_partial_capacity
             {
                 self.clear_ht();
             }
@@ -252,15 +252,16 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
-        if row_count + self.hash_index.count > self.hash_index.resize_threshold() {
-            self.resize(self.hash_index.capacity * 2);
+        if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
+            self.resize(self.hash_index.capacity() * 2);
         }
 
+        let mut adapter = AdapterImpl {
+            payload: &mut self.payload,
+            group_columns,
+        };
         self.hash_index
-            .probe_and_create(state, row_count, AdapterImpl {
-                payload: &mut self.payload,
-                group_columns,
-            })
+            .probe_and_create(state, row_count, &mut adapter)
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
@@ -394,11 +395,11 @@ impl AggregateHashTable {
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
         if self.config.partial_agg {
-            if self.hash_index.capacity == self.config.max_partial_capacity {
+            if self.hash_index.capacity() == self.config.max_partial_capacity {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::with_capacity(new_capacity);
+            self.hash_index = self.config.new_hash_index(new_capacity);
             return;
         }
 
@@ -415,7 +416,7 @@ impl AggregateHashTable {
             })
         });
 
-        self.hash_index = HashIndex::rebuild_from_iter(new_capacity, iter);
+        self.hash_index = self.config.rebuild_hash_index(new_capacity, iter);
     }
 
     fn initial_capacity() -> usize {

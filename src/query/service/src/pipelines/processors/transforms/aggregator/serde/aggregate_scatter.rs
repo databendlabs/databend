@@ -177,6 +177,7 @@ impl AggregateRowScatter {
                             self.aggregate_params.aggregate_functions.clone(),
                             self.aggregate_params.num_states(),
                             0,
+                            self.aggregate_params.enable_experiment_hash_index,
                             Arc::new(Bump::new()),
                         )?;
                         let payload = partition.payloads.pop();
@@ -220,6 +221,7 @@ impl AggregateRowScatter {
                                         self.aggregate_params.aggregate_functions.clone(),
                                         self.aggregate_params.num_states(),
                                         0,
+                                        self.aggregate_params.enable_experiment_hash_index,
                                         Arc::new(Bump::new()),
                                     )?;
                                     let payload = partition.payloads.pop();

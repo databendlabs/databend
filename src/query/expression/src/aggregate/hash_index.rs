@@ -210,12 +210,26 @@ pub(super) trait TableAdapter {
     ) -> usize;
 }
 
+pub(super) trait HashIndexOps: Send + Sync {
+    fn capacity(&self) -> usize;
+    fn count(&self) -> usize;
+    fn resize_threshold(&self) -> usize;
+    fn allocated_bytes(&self) -> usize;
+    fn reset(&mut self);
+    fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        adapter: &mut dyn TableAdapter,
+    ) -> usize;
+}
+
 impl HashIndex {
     pub fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
         row_count: usize,
-        mut adapter: impl TableAdapter,
+        adapter: &mut dyn TableAdapter,
     ) -> usize {
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
             *row = i.into();
@@ -287,6 +301,37 @@ impl HashIndex {
         self.count += new_group_count;
 
         new_group_count
+    }
+}
+
+impl HashIndexOps for HashIndex {
+    fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    fn resize_threshold(&self) -> usize {
+        HashIndex::resize_threshold(self)
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        HashIndex::allocated_bytes(self)
+    }
+
+    fn reset(&mut self) {
+        HashIndex::reset(self)
+    }
+
+    fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        adapter: &mut dyn TableAdapter,
+    ) -> usize {
+        HashIndex::probe_and_create(self, state, row_count, adapter)
     }
 }
 

@@ -21,6 +21,7 @@ use databend_common_ast::parser::token::GROUP;
 
 use crate::ProbeState;
 use crate::aggregate::BATCH_SIZE;
+use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
 use crate::aggregate::row_ptr::RowPtr;
 
@@ -163,6 +164,7 @@ pub struct NewHashIndex {
     pointers: Vec<RowPtr>,
     capacity: usize,
     bucket_mask: usize,
+    count: usize,
 }
 
 impl NewHashIndex {
@@ -179,7 +181,30 @@ impl NewHashIndex {
             pointers,
             capacity,
             bucket_mask,
+            count: 0,
         }
+    }
+
+    pub fn dummy() -> Self {
+        Self {
+            ctrls: vec![],
+            pointers: vec![],
+            capacity: 0,
+            bucket_mask: 0,
+            count: 0,
+        }
+    }
+
+    pub fn rebuild_from_iter<I>(capacity: usize, iter: I) -> Self
+    where I: IntoIterator<Item = (u64, RowPtr)> {
+        let mut hash_index = NewHashIndex::with_capacity(capacity);
+        for (hash, row_ptr) in iter {
+            let slot = hash_index.probe_slot(hash);
+            hash_index.set_ctrl(slot, Tag::full(hash));
+            hash_index.pointers[slot] = row_ptr;
+            hash_index.count += 1;
+        }
+        hash_index
     }
 }
 
@@ -257,8 +282,9 @@ impl NewHashIndex {
         &mut self,
         state: &mut ProbeState,
         row_count: usize,
-        mut adapter: impl TableAdapter,
+        adapter: &mut dyn TableAdapter,
     ) -> usize {
+        debug_assert!(self.capacity > 0);
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
             *row = i.into();
             state.probe_skip[i] = 0;
@@ -317,7 +343,45 @@ impl NewHashIndex {
             remaining_entries = no_match_count;
         }
 
+        self.count += new_group_count;
         new_group_count
+    }
+}
+
+impl HashIndexOps for NewHashIndex {
+    fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    fn resize_threshold(&self) -> usize {
+        (self.capacity as f64 / super::LOAD_FACTOR) as usize
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        self.ctrls.len() * std::mem::size_of::<Tag>()
+            + self.pointers.len() * std::mem::size_of::<RowPtr>()
+    }
+
+    fn reset(&mut self) {
+        if self.capacity == 0 {
+            return;
+        }
+        self.count = 0;
+        self.ctrls.fill(Tag::EMPTY);
+        self.pointers.fill(RowPtr::null());
+    }
+
+    fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        adapter: &mut dyn TableAdapter,
+    ) -> usize {
+        NewHashIndex::probe_and_create(self, state, row_count, adapter)
     }
 }
 
