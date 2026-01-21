@@ -210,7 +210,7 @@ pub(super) trait TableAdapter {
     ) -> usize;
 }
 
-pub(super) trait HashIndexOps: Send + Sync {
+pub(super) trait HashIndexOps {
     fn capacity(&self) -> usize;
     fn count(&self) -> usize;
     fn resize_threshold(&self) -> usize;
