@@ -157,4 +157,3 @@ mod v162_tag;
 mod v163_snapshot_ref;
 mod v164_csv_format_params;
 mod v165_table_meta;
-mod v166_udf_cloud_script;

@@ -205,14 +205,6 @@ impl UserFunctionsTable {
                         states: BTreeMap::new(),
                         immutable: x.immutable,
                     },
-                    UDFDefinition::UDFCloudScript(x) => UserFunctionArguments {
-                        arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
-                        return_type: Some(x.return_type.to_string()),
-                        server: None,
-                        parameters: vec![],
-                        states: BTreeMap::new(),
-                        immutable: x.immutable,
-                    },
                     UDFDefinition::UDAFScript(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
                         return_type: Some(x.return_type.to_string()),

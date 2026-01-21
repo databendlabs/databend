@@ -99,7 +99,10 @@ impl UDFValidator {
             UDFLanguage::JavaScript if GlobalConfig::instance().query.enable_udf_js_script => {
                 Ok(())
             }
-            UDFLanguage::Python if GlobalConfig::instance().query.enable_udf_python_script => {
+            UDFLanguage::Python
+                if GlobalConfig::instance().query.enable_udf_python_script
+                    || GlobalConfig::instance().query.enable_udf_cloud_script =>
+            {
                 Ok(())
             }
             UDFLanguage::WebAssembly if GlobalConfig::instance().query.enable_udf_wasm_script => {

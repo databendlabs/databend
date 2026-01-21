@@ -65,16 +65,6 @@ pub enum UDFDefinition {
         runtime_version: String,
         immutable: Option<bool>,
     },
-    UDFCloudScript {
-        arg_types: UDFArgs,
-        return_type: TypeName,
-        code: String,
-        imports: Vec<String>,
-        packages: Vec<String>,
-        handler: String,
-        language: String,
-        immutable: Option<bool>,
-    },
     UDAFServer {
         arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
@@ -233,39 +223,6 @@ impl Display for UDFDefinition {
                 handler,
                 language,
                 runtime_version: _,
-                imports,
-                packages,
-                immutable,
-            } => {
-                write!(f, "( {arg_types}")?;
-                let imports = imports
-                    .iter()
-                    .map(|s| QuotedString(s, '\'').to_string())
-                    .join(",");
-                let packages = packages
-                    .iter()
-                    .map(|s| QuotedString(s, '\'').to_string())
-                    .join(",");
-                write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
-                if let Some(immutable) = immutable {
-                    if *immutable {
-                        write!(f, " IMMUTABLE")?;
-                    } else {
-                        write!(f, " VOLATILE")?;
-                    }
-                }
-                write!(
-                    f,
-                    " IMPORTS = ({}) PACKAGES = ({}) HANDLER = '{handler}' AS $$\n{code}\n$$",
-                    imports, packages
-                )?;
-            }
-            UDFDefinition::UDFCloudScript {
-                arg_types,
-                return_type,
-                code,
-                handler,
-                language,
                 imports,
                 packages,
                 immutable,
