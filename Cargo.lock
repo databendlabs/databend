@@ -3341,7 +3341,6 @@ name = "databend-codegen"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "itertools 0.13.0",
 ]
 
 [[package]]
