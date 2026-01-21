@@ -110,16 +110,12 @@ use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
 use educe::Educe;
+use iceberg::CatalogBuilder;
 use iceberg::NamespaceIdent;
-use iceberg_catalog_glue::GlueCatalog;
-use iceberg_catalog_glue::GlueCatalogConfig;
-use iceberg_catalog_hms::HmsCatalog;
-use iceberg_catalog_hms::HmsCatalogConfig;
-use iceberg_catalog_hms::HmsThriftTransport;
-use iceberg_catalog_rest::RestCatalog;
-use iceberg_catalog_rest::RestCatalogConfig;
-use iceberg_catalog_s3tables::S3TablesCatalog;
-use iceberg_catalog_s3tables::S3TablesCatalogConfig;
+use iceberg_catalog_glue::GlueCatalogBuilder;
+use iceberg_catalog_hms::HmsCatalogBuilder;
+use iceberg_catalog_rest::RestCatalogBuilder;
+use iceberg_catalog_s3tables::S3TablesCatalogBuilder;
 
 use crate::IcebergTable;
 use crate::database::IcebergDatabase;
@@ -171,82 +167,78 @@ impl IcebergMutableCatalog {
         // We only do this while building catalog so this won't affect existing catalogs.
         let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
-                let cfg = HmsCatalogConfig::builder()
-                    .address(hms.address.clone())
-                    .thrift_transport(HmsThriftTransport::Buffered)
-                    .warehouse(hms.warehouse.clone())
-                    .props(
-                        hms.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
-                let ctl = HmsCatalog::new(cfg).map_err(|err| {
+                let mut props: std::collections::HashMap<String, String> = hms
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+                    .collect();
+                props.insert("uri".to_string(), hms.address.clone());
+                props.insert("warehouse".to_string(), hms.warehouse.clone());
+
+                let ctl = databend_common_base::runtime::block_on(
+                    HmsCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
                     ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
                 })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Rest(rest) => {
                 let client = HttpClient::default();
-                let cfg = RestCatalogConfig::builder()
-                    .uri(rest.uri.clone())
-                    .warehouse(rest.warehouse.clone())
-                    .props(
-                        rest.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .client(Some(client.inner()))
-                    .build();
-                let ctl = RestCatalog::new(cfg);
+                let mut props: std::collections::HashMap<String, String> = rest
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+                    .collect();
+                props.insert("uri".to_string(), rest.uri.clone());
+                props.insert("warehouse".to_string(), rest.warehouse.clone());
+
+                let ctl = databend_common_base::runtime::block_on(
+                    RestCatalogBuilder::default()
+                        .with_client(client.inner())
+                        .load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!("Iceberg build rest catalog failed: {err:?}"))
+                })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Glue(glue) => {
-                let cfg = GlueCatalogConfig::builder()
-                    .uri(glue.address.clone())
-                    .warehouse(glue.warehouse.clone())
-                    .props(
-                        glue.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
+                let mut props: std::collections::HashMap<String, String> = glue
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+                    .collect();
+                props.insert("uri".to_string(), glue.address.clone());
+                props.insert("warehouse".to_string(), glue.warehouse.clone());
 
-                // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
-                let ctl = databend_common_base::runtime::block_on(GlueCatalog::new(cfg)).map_err(
-                    |err| {
-                        ErrorCode::BadArguments(format!(
-                            "There was an error building the AWS Glue catalog: {err:?}"
-                        ))
-                    },
-                )?;
+                let ctl = databend_common_base::runtime::block_on(
+                    GlueCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!(
+                        "There was an error building the AWS Glue catalog: {err:?}"
+                    ))
+                })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Storage(s) => {
-                let cfg = S3TablesCatalogConfig::builder()
-                    .endpoint_url(s.address.clone())
-                    .table_bucket_arn(s.table_bucket_arn.clone())
-                    .properties(
-                        s.props
-                            .clone()
-                            .into_iter()
-                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
-                            .collect(),
-                    )
-                    .build();
+                let mut props: std::collections::HashMap<String, String> = s
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+                    .collect();
+                props.insert("endpoint_url".to_string(), s.address.clone());
+                props.insert("table_bucket_arn".to_string(), s.table_bucket_arn.clone());
 
-                let ctl = databend_common_base::runtime::block_on(S3TablesCatalog::new(cfg))
-                    .map_err(|err| {
-                        ErrorCode::BadArguments(format!(
-                            "There was an error building the s3 tables catalog: {err:?}"
-                        ))
-                    })?;
+                let ctl = databend_common_base::runtime::block_on(
+                    S3TablesCatalogBuilder::default().load(&info.name_ident.catalog_name, props),
+                )
+                .map_err(|err| {
+                    ErrorCode::BadArguments(format!(
+                        "There was an error building the s3 tables catalog: {err:?}"
+                    ))
+                })?;
                 Arc::new(ctl)
             }
         };
@@ -402,9 +394,8 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
-
-        Ok(table)
+        let table = IcebergTable::try_create(table_info.clone())?;
+        Ok(table.into())
     }
 
     #[async_backtrace::framed]

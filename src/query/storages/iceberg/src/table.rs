@@ -49,18 +49,26 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
 use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use iceberg::arrow::schema_to_arrow_schema;
 use iceberg::io::FileIOBuilder;
 
+use crate::IcebergMutableCatalog;
+use crate::append::IcebergCommitSink;
+use crate::append::IcebergDataFileWriter;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -81,18 +89,30 @@ pub struct IcebergTable {
     // None means current_snapshot_id
     pub snapshot_id: Option<i64>,
     statistics: IcebergStatistics,
+    catalog: Arc<dyn iceberg::Catalog>,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
+        let catalog = IcebergMutableCatalog::try_create(info.catalog_info.clone())?;
+
         Ok(Box::new(Self {
             info,
             table,
             snapshot_id: None,
             statistics,
+            catalog: catalog.iceberg_catalog(),
         }))
+    }
+
+    pub fn iceberg_table(&self) -> &iceberg::table::Table {
+        &self.table
+    }
+
+    pub fn catalog(&self) -> &Arc<dyn iceberg::Catalog> {
+        &self.catalog
     }
 
     pub fn description() -> StorageDescription {
@@ -109,11 +129,23 @@ impl IcebergTable {
         table_name: &str,
     ) -> Result<iceberg::table::Table> {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
+        // here we don't call table_exists to avoid extra network call
         let table = ctl
             .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
             .await
             .map_err(|err| {
-                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+                let err_str = format!("{err:?}");
+                if err_str.contains("does not exist")
+                    || err_str.contains("NoSuchTableError")
+                    || err_str.contains("TableNotFound")
+                    || err_str.contains("not found")
+                {
+                    ErrorCode::UnknownTable(format!(
+                        "Iceberg table '{database}.{table_name}' not found: {err_str}"
+                    ))
+                } else {
+                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err_str}"))
+                }
             })?;
         Ok(table)
     }
@@ -154,7 +186,8 @@ impl IcebergTable {
         table: &iceberg::table::Table,
         statistics: &statistics::IcebergStatistics,
     ) -> Result<BTreeMap<String, String>> {
-        let (file_io_scheme, file_io_props) = table.file_io().clone().into_builder().into_parts();
+        let (file_io_scheme, file_io_props, _) =
+            table.file_io().clone().into_builder().into_parts();
         let file_io_props = serde_json::to_string(&file_io_props)?;
         let metadata_location = table
             .metadata_location()
@@ -250,7 +283,6 @@ impl IcebergTable {
         })
     }
 
-    /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
         ctl: Arc<dyn iceberg::Catalog>,
@@ -258,14 +290,12 @@ impl IcebergTable {
         database_name: &str,
         table_name: &str,
     ) -> Result<IcebergTable> {
-        let table = Self::load_iceberg_table(ctl, database_name, table_name).await?;
+        let table = Self::load_iceberg_table(ctl.clone(), database_name, table_name).await?;
         let table_schema = Self::get_schema(&table)?;
         let statistics = statistics::IcebergStatistics::parse(&table).await?;
 
         let engine_options = Self::build_engine_options(&table, &statistics)?;
-        // Let's prepare the parquet schema for the table
 
-        // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
             desc: format!("{database_name}.{table_name}"),
@@ -286,6 +316,7 @@ impl IcebergTable {
             table,
             snapshot_id: None,
             statistics,
+            catalog: ctl,
         })
     }
 
@@ -307,7 +338,7 @@ impl IcebergTable {
         let table_schema = self.info.schema();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let op = self.table.file_io();
+        let op: Arc<IcebergFileIO> = Arc::new(IcebergFileIO::new(self.table.file_io().clone()));
         if let Some(true) = self
             .table
             .metadata()
@@ -325,7 +356,7 @@ impl IcebergTable {
                     ORCSource::try_create_with_schema(
                         output,
                         ctx.clone(),
-                        Arc::new(op.clone()),
+                        op.clone(),
                         arrow_schema.clone(),
                         None,
                         projection.clone(),
@@ -352,7 +383,6 @@ impl IcebergTable {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
-            let op = Arc::new(op.clone());
             let mut builder = ParquetReaderBuilder::create(
                 ctx.clone(),
                 op.clone(),
@@ -420,8 +450,7 @@ impl IcebergTable {
             }
         }
 
-        let tasks: Vec<_> = scan
-            .with_delete_file_processing_enabled(true)
+        let tasks: Vec<iceberg::scan::FileScanTask> = scan
             .build()
             .map_err(|err| ErrorCode::Internal(format!("iceberg table scan build: {err:?}")))?
             .plan_files()
@@ -655,6 +684,35 @@ impl Table for IcebergTable {
         self.do_read_data(ctx, plan, pipeline)
     }
 
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
+        let table = self.clone();
+        pipeline.add_async_accumulating_transformer(move || {
+            IcebergDataFileWriter::create(ctx.clone(), &table)
+        });
+        Ok(())
+    }
+
+    fn commit_insertion(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
+        _update_stream_meta: Vec<UpdateStreamMetaReq>,
+        _overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
+        pipeline.try_resize(1)?;
+        pipeline.add_sink(|input| IcebergCommitSink::try_create(input, ctx.clone(), self))?;
+        Ok(())
+    }
+
     fn table_args(&self) -> Option<TableArgs> {
         None
     }
@@ -725,6 +783,7 @@ impl Table for IcebergTable {
             table,
             snapshot_id,
             statistics,
+            catalog: self.catalog.clone(),
         }))
     }
 }

@@ -45,7 +45,7 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
 use log::warn;
 
-use crate::generate_catalog_meta;
+use crate::generate_default_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
@@ -164,7 +164,7 @@ impl ColumnsTable {
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()
