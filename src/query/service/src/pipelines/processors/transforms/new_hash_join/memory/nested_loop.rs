@@ -207,7 +207,7 @@ impl<'a> NestedLoopJoinStream<'a> {
                 let ranges = DataBlock::merge_indices_to_ranges(&probe_indices);
                 probe.take_ranges(&ranges, count)?
             } else {
-                probe.take_with_optimize_size(&probe_indices)?
+                probe.take_with_optimize_size(probe_indices.as_slice())?
             };
 
             let build_entries = self
@@ -221,13 +221,8 @@ impl<'a> NestedLoopJoinStream<'a> {
                     self.desc.projections.contains(&i).then_some(x)
                 })
                 .map(|(columns, data_type)| {
-                    Column::take_column_vec_indices(
-                        columns,
-                        data_type.clone(),
-                        &build_indices,
-                        count,
-                    )
-                    .into()
+                    Column::take_column_vec_indices(columns, data_type.clone(), &build_indices)
+                        .into()
                 });
 
             DataBlock::from_iter(probe.take_columns().into_iter().chain(build_entries), count)
