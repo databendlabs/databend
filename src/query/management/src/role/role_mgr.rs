@@ -662,9 +662,8 @@ impl RoleApi for RoleMgr {
                     {
                         Ok(seq_val) => results.push(Some(seq_val.data)),
                         Err(err) => {
-                            // If deserialization fails, treat as not found
-                            warn!("Failed to deserialize ownership for key {}: {}", key, err);
-                            results.push(None);
+                            // Deserialization failure indicates corrupted data; surface it.
+                            return Err(meta_service_error(err));
                         }
                     }
                 }
