@@ -486,19 +486,19 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
         };
 
         let calc_domain = DecimalBinaryCalcDomain {
-            left_size: left_size,
-            right_size: right_size,
-            return_size: return_size,
-            arithmetic_op: arithmetic_op,
+            left_size,
+            right_size,
+            return_size,
+            arithmetic_op,
         };
         let eval = {
             let args_type = args_type.clone();
             DecimalBinaryFunctionEvaluator {
                 args_type,
-                left_size: left_size,
-                right_size: right_size,
-                return_size: return_size,
-                arithmetic_op: arithmetic_op,
+                left_size,
+                right_size,
+                return_size,
+                arithmetic_op,
             }
         };
 

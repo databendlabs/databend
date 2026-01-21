@@ -379,12 +379,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             for current_char_idx in
                 start_char_idx_0_indexed..=s_len_chars.saturating_sub(sub_len_chars)
             {
-                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars) {
-                    if slice == sub {
-                        found_count += 1;
-                        if found_count == occurrence {
-                            return (current_char_idx + 1) as u64;
-                        }
+                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars)
+                    && slice == sub
+                {
+                    found_count += 1;
+                    if found_count == occurrence {
+                        return (current_char_idx + 1) as u64;
                     }
                 }
             }
@@ -396,12 +396,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 search_start_char_0_indexed.min(s_len_chars.saturating_sub(sub_len_chars));
 
             for current_char_idx in (0..=max_possible_match_start_idx).rev() {
-                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars) {
-                    if slice == sub {
-                        found_count += 1;
-                        if found_count == occurrence {
-                            return (current_char_idx + 1) as u64;
-                        }
+                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars)
+                    && slice == sub
+                {
+                    found_count += 1;
+                    if found_count == occurrence {
+                        return (current_char_idx + 1) as u64;
                     }
                 }
             }

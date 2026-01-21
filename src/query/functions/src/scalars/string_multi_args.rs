@@ -383,13 +383,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .as_ref()
                     .unwrap_or_else(|| local_re.as_ref().unwrap());
                 let captures = re.captures_iter(source).last();
-                if let Some(captures) = &captures {
-                    if name_list.len() + 1 > captures.len() {
+                if let Some(captures) = &captures
+                    && name_list.len() + 1 > captures.len() {
                         ctx.set_error(builder.len(), "Not enough group names in regexp_extract");
                         builder.push_default();
                         continue;
                     }
-                }
                 for (i, name) in name_list.iter().enumerate() {
                     let value = captures
                         .as_ref()
@@ -911,15 +910,15 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
             .as_ref()
             .map(|mt_arg| unsafe { mt_arg.index_unchecked(idx) });
 
-        if let Some(occur) = occur {
-            if occur < 0 {
-                ctx.set_error(builder.len(), format!(
+        if let Some(occur) = occur
+            && occur < 0
+        {
+            ctx.set_error(builder.len(), format!(
                     "Incorrect arguments to regexp_replace: occurrence must not be negative, but got {}",
                     occur
                 ));
-                StringType::push_default(&mut builder);
-                continue;
-            }
+            StringType::push_default(&mut builder);
+            continue;
         }
 
         if let Err(err) = regexp::validate_regexp_arguments("regexp_replace", pos, None, None) {
@@ -1186,29 +1185,30 @@ pub mod regexp {
         occur: Option<i64>,
         ro: Option<i64>,
     ) -> Result<(), String> {
-        if let Some(pos) = pos {
-            if pos < 1 {
-                return Err(format!(
-                    "Incorrect arguments to {}: position must be positive, but got {}",
-                    fn_name, pos
-                ));
-            }
+        if let Some(pos) = pos
+            && pos < 1
+        {
+            return Err(format!(
+                "Incorrect arguments to {}: position must be positive, but got {}",
+                fn_name, pos
+            ));
         }
-        if let Some(occur) = occur {
-            if occur < 1 {
-                return Err(format!(
-                    "Incorrect arguments to {}: occurrence must be positive, but got {}",
-                    fn_name, occur
-                ));
-            }
+        if let Some(occur) = occur
+            && occur < 1
+        {
+            return Err(format!(
+                "Incorrect arguments to {}: occurrence must be positive, but got {}",
+                fn_name, occur
+            ));
         }
-        if let Some(ro) = ro {
-            if ro != 0 && ro != 1 {
-                return Err(format!(
-                    "Incorrect arguments to {}: return_option must be 1 or 0, but got {}",
-                    fn_name, ro
-                ));
-            }
+        if let Some(ro) = ro
+            && ro != 0
+            && ro != 1
+        {
+            return Err(format!(
+                "Incorrect arguments to {}: return_option must be 1 or 0, but got {}",
+                fn_name, ro
+            ));
         }
 
         Ok(())

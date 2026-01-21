@@ -918,10 +918,10 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         |_, lhs, rhs| {
-            if rhs.max.as_ref() == Some(&rhs.min) {
-                if let Some(value) = calc_like_domain(lhs, rhs.min.to_string()) {
-                    return value;
-                }
+            if rhs.max.as_ref() == Some(&rhs.min)
+                && let Some(value) = calc_like_domain(lhs, rhs.min.to_string())
+            {
+                return value;
             }
             FunctionDomain::Full
         },

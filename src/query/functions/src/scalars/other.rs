@@ -425,11 +425,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry
@@ -454,11 +454,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry
@@ -484,11 +484,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry

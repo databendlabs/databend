@@ -443,12 +443,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
             |lhs, rhs, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 output.builder.append_column(&lhs);
                 output.builder.append_column(&rhs);
                 output.commit_row()
@@ -477,11 +476,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<ArrayType<StringType>, StringType, StringType>(
                 |lhs, rhs, output, ctx| {
-                    if let Some(validity) = &ctx.validity {
-                        if !validity.get_bit(output.len()) {
-                            output.commit_row();
-                            return;
-                        }
+                    if let Some(validity) = &ctx.validity
+                        && !validity.get_bit(output.len())
+                    {
+                        output.commit_row();
+                        return;
                     }
                     for (i, d) in lhs.iter().enumerate() {
                         if i != 0 {
@@ -500,12 +499,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType>(
             |lhs, rhs, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 for (i, d) in lhs.iter().filter(|x| x.is_some()).enumerate() {
                     if i != 0  {
                         output.put_str(rhs);
@@ -1060,12 +1058,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let hash128 = hasher.finish128();
                     let key = hash128.into();
 
-                    if let Some(v) = map.get_mut(&key) {
-                        if *v > 0 {
+                    if let Some(v) = map.get_mut(&key)
+                        && *v > 0 {
                             *v -= 1;
                             builder.push(val);
                         }
-                    }
                 }
                 output.commit_row()
             },
@@ -1109,12 +1106,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let hash128 = hasher.finish128();
                     let key = hash128.into();
 
-                    if let Some(v) = map.get_mut(&key) {
-                        if *v > 0 {
+                    if let Some(v) = map.get_mut(&key)
+                        && *v > 0 {
                             *v -= 1;
                             continue;
                         }
-                    }
                     builder.push(val);
                 }
                 output.commit_row()
@@ -1418,11 +1414,11 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
             fn_name,
             |_, _| FunctionDomain::MayThrow,
             vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 match array_val.array_values() {

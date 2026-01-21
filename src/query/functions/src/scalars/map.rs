@@ -197,11 +197,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             MapType<GenericType<0>, GenericType<1>>,
             MapType<GenericType<0>, GenericType<1>>,
         >(|lhs, rhs, output_map, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output_map.len()) {
-                    output_map.push_default();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output_map.len())
+            {
+                output_map.push_default();
+                return;
             }
 
             let mut concatenated_map_builder =
@@ -561,10 +561,11 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
     }
     if let Some(map_key_type) = map_key_type {
         if is_array {
-            if let Some(array_key_type) = array_key_type {
-                if array_key_type != DataType::Null && array_key_type != map_key_type {
-                    return None;
-                }
+            if let Some(array_key_type) = array_key_type
+                && array_key_type != DataType::Null
+                && array_key_type != map_key_type
+            {
+                return None;
             }
         } else {
             for arg_type in args_type.iter().skip(1) {
@@ -575,10 +576,11 @@ fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
             }
         }
     } else if is_array {
-        if let Some(array_key_type) = array_key_type {
-            if array_key_type != DataType::Null && !check_valid_map_key_type(&array_key_type) {
-                return None;
-            }
+        if let Some(array_key_type) = array_key_type
+            && array_key_type != DataType::Null
+            && !check_valid_map_key_type(&array_key_type)
+        {
+            return None;
         }
     } else {
         for arg_type in args_type.iter().skip(1) {

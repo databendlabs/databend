@@ -35,7 +35,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
     let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 3 || args_type.len() % 2 == 0 {
+        if args_type.len() < 3 || args_type.len().is_multiple_of(2) {
             return None;
         }
         let sig_args_type = (0..(args_type.len() - 1) / 2)
