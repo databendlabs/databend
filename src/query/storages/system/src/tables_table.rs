@@ -66,9 +66,7 @@ use crate::table::AsyncSystemTable;
 use crate::util::MAX_OPTIMIZED_PATH_CHECKS;
 use crate::util::collect_visible_tables;
 use crate::util::extract_leveled_strings;
-
 use crate::util::generate_default_catalog_meta;
-use crate::util::should_use_table_optimized_path;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,

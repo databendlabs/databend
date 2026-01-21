@@ -15,11 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -30,9 +28,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
-
-use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -40,7 +35,6 @@ use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::is_role_owner;
 use log::warn;
-
 
 pub fn generate_default_catalog_meta() -> CatalogMeta {
     CatalogMeta {

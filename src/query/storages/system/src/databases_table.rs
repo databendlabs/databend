@@ -46,8 +46,6 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
 use crate::util::generate_default_catalog_meta;
-use crate::util::should_include_catalog;
-use crate::util::should_use_db_optimized_path;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
 pub type DatabasesTableWithoutHistory = DatabasesTable<false>;
