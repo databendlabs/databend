@@ -174,7 +174,7 @@ def _start_udf_container(image_tag, host_port, container_name):
             _log(f"UDF docker container_id={container_id}")
 
 
-def _ensure_udf_endpoint(dockerfile, imports):
+def _ensure_udf_endpoint(spec, imports):
     imports_key = json.dumps(
         [
             {
@@ -185,13 +185,11 @@ def _ensure_udf_endpoint(dockerfile, imports):
         ],
         sort_keys=True,
     )
-    dockerfile_hash = hashlib.sha256(
-        (dockerfile + imports_key).encode("utf-8")
-    ).hexdigest()[:12]
-    image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{dockerfile_hash}"
+    spec_hash = hashlib.sha256((spec + imports_key).encode("utf-8")).hexdigest()[:12]
+    image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{spec_hash}"
 
     with UDF_DOCKER_LOCK:
-        cached = UDF_DOCKER_CACHE.get(dockerfile_hash)
+        cached = UDF_DOCKER_CACHE.get(spec_hash)
         if cached and _docker_container_running(cached["container"]):
             if UDF_DOCKER_LOG_COMMANDS:
                 _log(
@@ -202,14 +200,15 @@ def _ensure_udf_endpoint(dockerfile, imports):
             return cached["endpoint"]
 
         if not _docker_image_exists(image_tag):
+            dockerfile = _spec_to_dockerfile(spec)
             _build_udf_image(dockerfile, image_tag, imports)
 
         host_port = _reserve_port()
-        container_name = f"{UDF_DOCKER_IMAGE_PREFIX}-{dockerfile_hash}-{host_port}"
+        container_name = f"{UDF_DOCKER_IMAGE_PREFIX}-{spec_hash}-{host_port}"
         _start_udf_container(image_tag, host_port, container_name)
 
         endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
-        UDF_DOCKER_CACHE[dockerfile_hash] = {
+        UDF_DOCKER_CACHE[spec_hash] = {
             "container": container_name,
             "endpoint": endpoint,
         }
@@ -222,6 +221,179 @@ def _ensure_udf_endpoint(dockerfile, imports):
         )
 
     return endpoint
+
+
+def _spec_to_dockerfile(spec):
+    try:
+        payload = json.loads(spec)
+    except Exception:
+        return spec
+    if isinstance(payload, dict):
+        dockerfile = payload.get("dockerfile")
+        if isinstance(dockerfile, str) and dockerfile.strip():
+            return dockerfile
+        return _build_udf_cloud_dockerfile(payload)
+    raise ValueError("spec must be a JSON object")
+
+
+def _build_udf_cloud_dockerfile(payload):
+    code = _spec_string(payload, "code")
+    handler = _spec_string(payload, "handler")
+    input_types = _spec_string_list(payload, "input_types")
+    result_type = _spec_string(payload, "result_type")
+    imports = _spec_string_list(payload, "imports")
+    packages = _spec_string_list(payload, "packages")
+
+    server_stub = _build_udf_cloud_server_stub(handler, input_types, result_type)
+    code_marker = _unique_heredoc_marker("UDF_CODE", [code, server_stub])
+    server_marker = _unique_heredoc_marker("UDF_SERVER", [code, server_stub])
+    pyproject = _build_udf_cloud_pyproject(packages)
+    pyproject_marker = _unique_heredoc_marker(
+        "UDF_PYPROJECT", [code, server_stub, pyproject]
+    )
+
+    lines = [
+        "FROM python:3.12-slim",
+        "WORKDIR /app",
+        "RUN python -m pip install --no-cache-dir uv",
+        f"RUN cat <<'{pyproject_marker}' > /app/pyproject.toml",
+        pyproject.rstrip("\n"),
+        pyproject_marker,
+        "RUN uv sync",
+    ]
+    if imports:
+        lines.extend(
+            [
+                "RUN mkdir -p /app/imports",
+                "COPY imports/ /app/imports/",
+            ]
+        )
+    lines.extend(
+        [
+            f"RUN cat <<'{code_marker}' > /app/udf.py",
+            code.rstrip("\n"),
+            code_marker,
+            f"RUN cat <<'{server_marker}' > /app/server.py",
+            server_stub.rstrip("\n"),
+            server_marker,
+            "EXPOSE 8815",
+            'CMD ["uv","run","--project","/app","python","/app/server.py"]',
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _build_udf_cloud_server_stub(handler, input_types, result_type):
+    handler_literal = _escape_python_double_quoted(handler)
+    input_types_literal = _python_string_list(input_types)
+    result_type_literal = _escape_python_double_quoted(result_type)
+    lines = [
+        "import importlib",
+        "import os",
+        "import sys",
+        "from databend_udf import UDFServer, udf as udf_decorator",
+        "",
+        'IMPORTS_DIR = "/app/imports"',
+        "",
+        "def _add_imports():",
+        "    if not os.path.isdir(IMPORTS_DIR):",
+        "        return",
+        "    sys.path.insert(0, IMPORTS_DIR)",
+        "    for name in os.listdir(IMPORTS_DIR):",
+        "        path = os.path.join(IMPORTS_DIR, name)",
+        "        if os.path.isfile(path):",
+        "            ext = os.path.splitext(name)[1].lower()",
+        '            if ext in (".zip", ".whl", ".egg"):',
+        "                sys.path.insert(0, path)",
+        "",
+        "def _load_udf():",
+        '    return importlib.import_module("udf")',
+        "",
+        "def _wrap_udf(func):",
+        (
+            f'    return udf_decorator(name="{handler_literal}", '
+            f"input_types={input_types_literal}, result_type=\"{result_type_literal}\")(func)"
+        ),
+        "",
+        "def main():",
+        "    _add_imports()",
+        "    udf = _load_udf()",
+        '    address = os.getenv("UDF_SERVER_ADDR", "0.0.0.0:8815")',
+        "    server = UDFServer(location=address)",
+        f'    func = getattr(udf, "{handler_literal}")',
+        '    if not hasattr(func, "_name"):',
+        "        func = _wrap_udf(func)",
+        "    server.add_function(func)",
+        "    server.serve()",
+        "",
+        'if __name__ == "__main__":',
+        "    main()",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _build_udf_cloud_pyproject(packages):
+    dependencies = ["databend-udf"]
+    for pkg in packages:
+        trimmed = pkg.strip()
+        if trimmed:
+            dependencies.append(trimmed)
+    deps_literal = ", ".join(
+        f'"{_escape_toml_double_quoted(dep)}"' for dep in dependencies
+    )
+    return "\n".join(
+        [
+            "[project]",
+            'name = "databend-udf-app"',
+            'version = "0.1.0"',
+            f"dependencies = [{deps_literal}]",
+            "",
+        ]
+    )
+
+
+def _python_string_list(values):
+    items = ", ".join(f'"{_escape_python_double_quoted(v)}"' for v in values)
+    return f"[{items}]"
+
+
+def _escape_python_double_quoted(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _escape_toml_double_quoted(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _unique_heredoc_marker(base, contents):
+    suffix = 0
+    marker = base
+    while any(marker in content for content in contents):
+        suffix += 1
+        marker = f"{base}_{suffix}"
+    return marker
+
+
+def _spec_string(payload, key):
+    value = payload.get(key)
+    if isinstance(value, str) and value:
+        return value
+    raise ValueError(f"spec missing {key}")
+
+
+def _spec_string_list(payload, key):
+    value = payload.get(key, [])
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"spec field {key} must be list")
+    result = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f"spec field {key} must be list of strings")
+        result.append(item)
+    return result
 
 
 def load_data_from_json():
@@ -665,13 +837,13 @@ class UdfService(udf_pb2_grpc.UdfServiceServicer):
                 "docker not found; a working docker CLI is required",
             )
 
-        dockerfile = request.dockerfile
+        spec = request.spec
         imports = list(request.imports)
-        if not dockerfile.strip():
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty dockerfile")
+        if not spec.strip():
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty spec")
 
         try:
-            endpoint = _ensure_udf_endpoint(dockerfile, imports)
+            endpoint = _ensure_udf_endpoint(spec, imports)
         except Exception as exc:
             context.abort(
                 grpc.StatusCode.INTERNAL,
