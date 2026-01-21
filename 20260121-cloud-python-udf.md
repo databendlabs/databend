@@ -86,13 +86,13 @@ service UdfService {
 On the Query side, when the `cloud_script_udf` configuration is enabled,
 executing a Script UDF follows the workflow below:
 
-1. The Python code is packaged into a minimal executable Dockerfile.
+1. The Python code and metadata are packaged into a JSON runtime spec.
 2. All imported modules are inspected. For each import located in a
    stage, a presigned URL and its corresponding content tag (e.g. etag)
-   are generated, enabling Dockerfile reuse across executions.
+   are generated, enabling spec reuse across executions.
 3. The Query module invokes the `ApplyUdfResource` RPC, submitting the
-   generated Dockerfile together with the resolved imports to the Cloud
-   Control Plane.
+   runtime spec together with the resolved imports to the Cloud Control
+   Plane.
 4. The Query module blocks until the Cloud Control Plane completes
    resource provisioning and returns an execution endpoint.
 5. The UDF is then invoked using the existing Server UDF execution path.
