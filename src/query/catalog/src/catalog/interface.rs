@@ -296,25 +296,19 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    /// Get multiple tables by db and table names in batch.
+    /// Get multiple tables by db and table names.
     /// Returns tables in the same order as the input table_names.
     /// If a table is not found, it will not be included in the result.
     async fn mget_tables(
         &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_names: &[String],
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_names: &[String],
     ) -> Result<Vec<Arc<dyn Table>>> {
-        // Default implementation: best-effort fallback to sequential get_table calls,
-        // because not every catalog/database supports real batch fetching.
-        // This is a degraded path; override to implement real batch fetching.
-        let mut tables = Vec::with_capacity(table_names.len());
-        for table_name in table_names {
-            if let Ok(table) = self.get_table(tenant, db_name, table_name).await {
-                tables.push(table);
-            }
-        }
-        Ok(tables)
+        Err(ErrorCode::Unimplemented(format!(
+            "'mget_tables' not implemented for catalog {}",
+            self.name()
+        )))
     }
 
     // Get one table identified as dropped by db and table name.

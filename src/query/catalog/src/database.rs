@@ -120,27 +120,21 @@ pub trait Database: DynClone + Sync + Send {
         )))
     }
 
-    /// Get multiple tables by names in batch.
+    /// Get multiple tables by names.
     /// Returns tables in the same order as input, skipping tables that are not found.
     #[async_backtrace::framed]
-    async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
-        // Default implementation: best-effort fallback to sequential get_table calls,
-        // because not every database supports real batch fetching.
-        // This is a degraded path; override to implement real batch fetching.
-        let mut tables = Vec::with_capacity(table_names.len());
-        for table_name in table_names {
-            if let Ok(table) = self.get_table(table_name).await {
-                tables.push(table);
-            }
-        }
-        Ok(tables)
+    async fn mget_tables(&self, _table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement mget_tables in {} Database",
+            self.name()
+        )))
     }
 
     // Get one table history by db and table name.
     #[async_backtrace::framed]
     async fn get_table_history(&self, _table_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement get_table in {} Database",
+            "UnImplement get_table_history in {} Database",
             self.name()
         )))
     }

@@ -460,6 +460,21 @@ impl Catalog for HiveCatalog {
         Ok(res)
     }
 
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let mut tables = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Ok(table) = self.get_table(tenant, db_name, table_name).await {
+                tables.push(table);
+            }
+        }
+        Ok(tables)
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
