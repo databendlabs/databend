@@ -25,6 +25,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
+use databend_common_storages_fuse::TableContext;
 
 use super::common::CStyleCell;
 use super::grace::GraceHashJoinState;

@@ -24,6 +24,7 @@ use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::BasicHashJoinState;
+use crate::pipelines::processors::transforms::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
@@ -118,6 +119,14 @@ impl<T: Join> Join for NestedLoopJoin<T> {
             build_row_index: 0,
             use_range: false,
         }))
+    }
+}
+
+impl<T> GraceMemoryJoin for NestedLoopJoin<T>
+where T: GraceMemoryJoin
+{
+    fn reset_memory(&mut self) {
+        self.inner.reset_memory()
     }
 }
 
