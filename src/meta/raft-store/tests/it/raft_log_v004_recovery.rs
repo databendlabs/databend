@@ -44,17 +44,13 @@ use raft_log::api::raft_log_writer::RaftLogWriter;
 /// - Multiple records (100, 104, 150, 200): truncating several records
 #[tokio::test]
 async fn test_raft_log_recovery_after_truncation() -> anyhow::Result<()> {
+    #[rustfmt::skip]
     let truncation_sizes = [
-        // Small truncations (within checksum)
-        1, 2, 3, 4, 5,
-        // Around checksum boundary (8-byte checksum at end of each record)
-        7, 8, 9, 10,
-        // Mid-record (within payload)
-        20, 25, 30,
-        // Around record boundary (each record is 52 bytes)
-        50, 51, 52, 53, 54,
-        // Multiple records
-        100, 104, 150, 200,
+        1, 2, 3, 4, 5,       // Small truncations (within checksum)
+        7, 8, 9, 10,         // Around checksum boundary (8-byte checksum at end of each record)
+        20, 25, 30,          // Mid-record (within payload)
+        50, 51, 52, 53, 54,  // Around record boundary (each record is 52 bytes)
+        100, 104, 150, 200,  // Multiple records
     ];
 
     for bytes_to_truncate in truncation_sizes {
