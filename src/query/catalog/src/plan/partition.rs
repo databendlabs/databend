@@ -103,6 +103,8 @@ pub enum PartitionsShuffleKind {
     ConsistentHash,
     // Bind the Partition to executor by partition.rand() order.
     Rand,
+    // Bind the Partition to executor by block-level modulo (block_idx % num_executors)
+    BlockMod,
     // Bind the Partition to executor by broadcast
     BroadcastCluster,
     // Bind the Partition to warehouse executor by broadcast
@@ -194,13 +196,16 @@ impl Partitions {
                 parts
             }
             // the executors will be all nodes in the warehouse if a query is BroadcastWarehouse.
-            PartitionsShuffleKind::BroadcastCluster | PartitionsShuffleKind::BroadcastWarehouse => {
+            PartitionsShuffleKind::BlockMod
+            | PartitionsShuffleKind::BroadcastCluster
+            | PartitionsShuffleKind::BroadcastWarehouse => {
                 return Ok(executors_sorted
                     .into_iter()
                     .map(|executor| {
                         (
                             executor.id.clone(),
-                            Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
+                            // Preserve the original kind so executors know how to handle it
+                            Partitions::create(self.kind.clone(), self.partitions.clone()),
                         )
                     })
                     .collect());
