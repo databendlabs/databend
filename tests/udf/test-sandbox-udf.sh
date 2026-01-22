@@ -25,12 +25,29 @@ S3_ENDPOINT_URL="${S3_ENDPOINT_URL:-http://127.0.0.1:9900}"
 S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-minioadmin}"
 S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
 UDF_IMPORT_PRESIGN_EXPIRE_SECS="${UDF_IMPORT_PRESIGN_EXPIRE_SECS:-43200}"
+UDF_DOCKER_BASE_IMAGE="python:3.12-slim"
+UDF_DOCKER_RUNTIME_IMAGE="databend-udf-runtime:py312"
 
 echo "Cleaning up previous runs"
 
 killall -9 databend-query || true
 killall -9 databend-meta || true
 rm -rf .databend
+
+echo "Pre-pulling base image"
+docker pull "${UDF_DOCKER_BASE_IMAGE}"
+
+echo "Building runtime image"
+tmp_dir="$(mktemp -d)"
+cat <<EOF > "${tmp_dir}/Dockerfile"
+FROM ${UDF_DOCKER_BASE_IMAGE}
+WORKDIR /app
+RUN python -m pip install --no-cache-dir uv
+RUN uv pip install --system databend-udf
+EOF
+DOCKER_BUILDKIT=1 docker build -t "${UDF_DOCKER_RUNTIME_IMAGE}" -f "${tmp_dir}/Dockerfile" "${tmp_dir}"
+rm -rf "${tmp_dir}"
+UDF_DOCKER_BASE_IMAGE="${UDF_DOCKER_RUNTIME_IMAGE}"
 
 apply_query_settings() {
   local config_file="$1"
@@ -91,6 +108,8 @@ done
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
 
 echo "Starting sandbox control mock server"
+export DOCKER_BUILDKIT=1
+export UDF_DOCKER_BASE_IMAGE
 nohup env PYTHONUNBUFFERED=1 uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 50051
 

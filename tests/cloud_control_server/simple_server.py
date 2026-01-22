@@ -36,6 +36,7 @@ UDF_DOCKER_LOG_COMMANDS = True
 UDF_DOCKER_IMAGE_PREFIX = os.getenv("UDF_DOCKER_IMAGE_PREFIX", "databend-udf-cloud")
 UDF_DOCKER_HOST = os.getenv("UDF_DOCKER_HOST", "127.0.0.1")
 UDF_DOCKER_CONTAINER_PORT = int(os.getenv("UDF_DOCKER_CONTAINER_PORT", "8815"))
+UDF_DOCKER_BASE_IMAGE = os.getenv("UDF_DOCKER_BASE_IMAGE", "python:3.12-slim")
 UDF_DOCKER_STARTUP_TIMEOUT_SECS = float(
     os.getenv("UDF_DOCKER_STARTUP_TIMEOUT_SECS", "15")
 )
@@ -253,7 +254,7 @@ def _build_udf_cloud_dockerfile(payload):
     )
 
     lines = [
-        "FROM python:3.12-slim",
+        f"FROM {UDF_DOCKER_BASE_IMAGE}",
         "WORKDIR /app",
         "RUN python -m pip install --no-cache-dir uv",
         f"RUN cat <<'{pyproject_marker}' > /app/pyproject.toml",
