@@ -10,9 +10,20 @@ message UdfAsset {
   string tag = 3;
 }
 
+message UdfRuntimeSpec {
+  string language = 1;
+  string handler = 2;
+  repeated string input_types = 3;
+  string result_type = 4;
+  repeated string imports = 5;
+  repeated string packages = 6;
+  string runtime_version = 7;
+  string code = 8;
+}
+
 message ApplyUdfResourceRequest {
-  // JSON runtime spec (code/handler/types/packages). Control plane builds Dockerfile.
-  string spec = 1;
+  // Runtime spec. Control plane builds Dockerfile.
+  UdfRuntimeSpec spec = 1;
   repeated UdfAsset imports = 2;
 }
 

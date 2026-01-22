@@ -186,7 +186,8 @@ def _ensure_udf_endpoint(spec, imports):
         ],
         sort_keys=True,
     )
-    spec_hash = hashlib.sha256((spec + imports_key).encode("utf-8")).hexdigest()[:12]
+    spec_bytes = spec.SerializeToString(deterministic=True)
+    spec_hash = hashlib.sha256(spec_bytes + imports_key.encode("utf-8")).hexdigest()[:12]
     image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{spec_hash}"
 
     with UDF_DOCKER_LOCK:
@@ -225,25 +226,25 @@ def _ensure_udf_endpoint(spec, imports):
 
 
 def _spec_to_dockerfile(spec):
-    try:
-        payload = json.loads(spec)
-    except Exception:
-        return spec
-    if isinstance(payload, dict):
-        dockerfile = payload.get("dockerfile")
-        if isinstance(dockerfile, str) and dockerfile.strip():
-            return dockerfile
-        return _build_udf_cloud_dockerfile(payload)
-    raise ValueError("spec must be a JSON object")
+    if not spec.code:
+        raise ValueError("spec missing code")
+    if not spec.handler:
+        raise ValueError("spec missing handler")
+    if not spec.result_type:
+        raise ValueError("spec missing result_type")
+    return _build_udf_cloud_dockerfile(
+        spec.code,
+        spec.handler,
+        list(spec.input_types),
+        spec.result_type,
+        list(spec.imports),
+        list(spec.packages),
+    )
 
 
-def _build_udf_cloud_dockerfile(payload):
-    code = _spec_string(payload, "code")
-    handler = _spec_string(payload, "handler")
-    input_types = _spec_string_list(payload, "input_types")
-    result_type = _spec_string(payload, "result_type")
-    imports = _spec_string_list(payload, "imports")
-    packages = _spec_string_list(payload, "packages")
+def _build_udf_cloud_dockerfile(
+    code, handler, input_types, result_type, imports, packages
+):
 
     server_stub = _build_udf_cloud_server_stub(handler, input_types, result_type)
     code_marker = _unique_heredoc_marker("UDF_CODE", [code, server_stub])
@@ -376,25 +377,6 @@ def _unique_heredoc_marker(base, contents):
     return marker
 
 
-def _spec_string(payload, key):
-    value = payload.get(key)
-    if isinstance(value, str) and value:
-        return value
-    raise ValueError(f"spec missing {key}")
-
-
-def _spec_string_list(payload, key):
-    value = payload.get(key, [])
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        raise ValueError(f"spec field {key} must be list")
-    result = []
-    for item in value:
-        if not isinstance(item, str):
-            raise ValueError(f"spec field {key} must be list of strings")
-        result.append(item)
-    return result
 
 
 def load_data_from_json():
@@ -838,10 +820,10 @@ class UdfService(udf_pb2_grpc.UdfServiceServicer):
                 "docker not found; a working docker CLI is required",
             )
 
+        if not request.HasField("spec"):
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing spec")
         spec = request.spec
         imports = list(request.imports)
-        if not spec.strip():
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty spec")
 
         try:
             endpoint = _ensure_udf_endpoint(spec, imports)
