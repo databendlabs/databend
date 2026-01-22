@@ -71,3 +71,55 @@ unset force_sort_data_spill;
 
 statement ok
 unset spilling_file_format;
+
+statement ok
+set enable_compact_after_write = 0;
+
+statement ok
+drop table if exists order_null_ts;
+
+statement ok
+create table order_null_ts (
+    ts timestamp null,
+    level varchar null,
+    message varchar null,
+    extra variant null
+);
+
+statement ok
+insert into order_null_ts select null, 'null_level', null, null from numbers(3);
+
+statement ok
+insert into order_null_ts select
+    '2024-01-01 00:00:00', 'info', 'first', null  from numbers(3);
+
+statement ok
+insert into order_null_ts select
+    '2024-02-01 00:00:00', 'warn', 'second', null from numbers(2);
+
+query IIII
+select ts, level, message, extra from order_null_ts order by ts desc limit 1;
+----
+2024-02-01 00:00:00.000000 warn second NULL
+
+
+query IIII
+select ts, level, message, extra from order_null_ts order by ts desc limit 2;
+----
+2024-02-01 00:00:00.000000 warn second NULL
+2024-02-01 00:00:00.000000 warn second NULL
+
+
+query IIII
+select ts, level, message, extra from order_null_ts order by ts desc limit 3;
+----
+2024-02-01 00:00:00.000000 warn second NULL
+2024-02-01 00:00:00.000000 warn second NULL
+2024-01-01 00:00:00.000000 info first NULL
+
+
+statement ok
+drop table order_null_ts;
+
+statement ok
+unset enable_compact_after_write;
