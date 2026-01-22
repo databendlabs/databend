@@ -22,4 +22,5 @@ pub use buffer_reader::BufferReader;
 pub use files::Files;
 pub use merge_io_reader::MergeIOReader;
 pub use merge_io_result::MergeIOReadResult;
+pub use merge_io_result::OwnerMemory;
 pub use read_settings::ReadSettings;

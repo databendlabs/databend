@@ -379,6 +379,10 @@ pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
         Box::new(self)
     }
 
+    fn downcast_block(mut block: DataBlock) -> Option<Self> {
+        block.take_meta().and_then(Self::downcast_from)
+    }
+
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
         let boxed: Box<dyn Any> = boxed;
         boxed.downcast().ok().map(|x| *x)

@@ -42,7 +42,7 @@ use crate::operations::read::TransformRuntimeFilterWait;
 use crate::operations::read::block_partition_receiver_source::BlockPartitionReceiverSource;
 use crate::operations::read::block_partition_source::BlockPartitionSource;
 use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
-use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
+use crate::operations::read::parquet_data_transform_reader::NewReadParquetDataTransform;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -177,7 +177,7 @@ pub fn build_fuse_parquet_source_pipeline(
     })?;
 
     pipeline.add_transform(|input, output| {
-        ReadParquetDataTransform::create(
+        NewReadParquetDataTransform::create(
             plan.table_index,
             ctx.clone(),
             table_schema.clone(),

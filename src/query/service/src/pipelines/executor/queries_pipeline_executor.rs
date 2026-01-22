@@ -86,6 +86,15 @@ impl QueriesPipelineExecutor {
             }
         }
 
+        info!(
+            wakeup_count = self.workers_condvar.get_total_wakeup_count(),
+            wait_count = self.workers_condvar.get_total_wait_count(),
+            wait_time_ms = self.workers_condvar.get_total_wait_time_ms(),
+            max_wait_time_ms = self.workers_condvar.get_max_wait_time_ms(),
+            worker_stats:? = self.workers_condvar.get_all_worker_stats();
+            "QueriesPipelineExecutor finished"
+        );
+
         Ok(())
     }
 

@@ -18,9 +18,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use parking_lot::Mutex;
+use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
+use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
@@ -67,7 +69,11 @@ impl QueryExecutorTasksQueue {
 
     /// Pull task from the global task queue
     /// Method is thread unsafe and require thread safe call
-    pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
+    pub fn steal_task_to_context(
+        &self,
+        context: &mut ExecutorWorkerContext,
+        last_executed: Option<(NodeIndex, Arc<RunningGraph>)>,
+    ) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         if !workers_tasks.is_empty() {
@@ -108,6 +114,13 @@ impl QueryExecutorTasksQueue {
             drop(workers_tasks);
             self.finish(workers_condvar.clone());
             return;
+        }
+
+        // Record processor wait statistics before entering wait
+        if let Some((node_index, graph)) = last_executed {
+            graph
+                .get_node_wait_counter(node_index)
+                .fetch_add(1, Ordering::Relaxed);
         }
 
         let worker_id = context.get_worker_id();

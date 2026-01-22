@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -24,8 +25,17 @@ use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
 use opendal::Buffer;
 
-type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+pub type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
+pub type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+
+/// Result from synchronous cache read operation.
+/// Contains cached data and ranges that need async IO.
+pub struct CachedReader {
+    pub cached_column_data: CachedColumnData,
+    pub cached_column_array: CachedColumnArray,
+    /// Ranges that need to be read from remote storage (cache miss)
+    pub ranges_to_read: Vec<(ColumnId, Range<u64>)>,
+}
 
 #[derive(EnumAsInner)]
 pub enum DataItem<'a> {
