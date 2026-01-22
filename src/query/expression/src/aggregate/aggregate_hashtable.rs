@@ -37,6 +37,8 @@ use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::types::DataType;
 
+const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
+
 pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
@@ -253,7 +255,8 @@ impl AggregateHashTable {
     ) -> usize {
         // exceed capacity or should resize
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
-            self.resize(self.hash_index.capacity() * 2);
+            let new_capacity = self.next_resize_capacity();
+            self.resize(new_capacity);
         }
 
         let mut adapter = AdapterImpl {
@@ -262,6 +265,26 @@ impl AggregateHashTable {
         };
         self.hash_index
             .probe_and_create(state, row_count, &mut adapter)
+    }
+
+    fn next_resize_capacity(&self) -> usize {
+        // Use *4 for the first few resizes, then switch back to *2.
+        // SMALL_CAPACITY_RESIZE_COUNT = 4:
+        //
+        // | Quad resizes used | Equivalent double-resize steps |
+        // | 0                 | 0                              |
+        // | 1                 | 2                              |
+        // | 2                 | 4                              |
+        // | 3                 | 6                              |
+        // | 4                 | 8                              |
+        // | 5                 | 9                              |
+        // | 6                 | 10                             |
+        let current = self.hash_index.capacity();
+        if self.hash_index_resize_count < SMALL_CAPACITY_RESIZE_COUNT {
+            current * 4
+        } else {
+            current * 2
+        }
     }
 
     pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
@@ -395,11 +418,12 @@ impl AggregateHashTable {
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
         if self.config.partial_agg {
-            if self.hash_index.capacity() == self.config.max_partial_capacity {
+            let target = new_capacity.min(self.config.max_partial_capacity);
+            if target == self.hash_index.capacity() {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = self.config.new_hash_index(new_capacity);
+            self.hash_index = self.config.new_hash_index(target);
             return;
         }
 
