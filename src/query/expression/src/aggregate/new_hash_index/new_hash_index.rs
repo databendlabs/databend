@@ -63,7 +63,7 @@ impl NewHashIndex {
     where I: IntoIterator<Item = (u64, RowPtr)> {
         let mut hash_index = NewHashIndex::with_capacity(capacity);
         for (hash, row_ptr) in iter {
-            let slot = hash_index.probe_empty_and_set_ctrl(hash);
+            let slot = hash_index.probe_empty(hash);
             hash_index.pointers[slot] = row_ptr;
             hash_index.count += 1;
         }
@@ -75,7 +75,7 @@ impl NewHashIndex {
     #[inline]
     fn ctrl(&mut self, index: usize) -> *mut Tag {
         debug_assert!(index < self.ctrls.len());
-        unsafe { self.ctrls.as_mut_ptr().add(index) }
+        unsafe { self.ctrls.get_unchecked_mut(index) }
     }
 
     #[inline]
@@ -125,7 +125,10 @@ impl NewHashIndex {
         }
     }
 
-    pub fn probe_empty_and_set_ctrl(&mut self, hash: u64) -> usize {
+    /// Probes the hash table for an empty slot using SIMD groups (batches) and sets the control byte.
+    ///
+    /// Returns the index of the found slot.
+    pub fn probe_empty_batch(&mut self, hash: u64) -> usize {
         let mut pos = self.h1(hash);
         loop {
             let group = unsafe { Group::load(&self.ctrls, pos) };
@@ -134,6 +137,28 @@ impl NewHashIndex {
                 return index;
             }
             pos = (pos + Group::WIDTH) & self.bucket_mask;
+        }
+    }
+
+    /// Probes the hash table linearly (scalar probing) for an empty slot and sets the control byte.
+    /// Returns the absolute index of the slot.
+    ///
+    /// # Performance Note
+    /// This method is primarily used during resize operations. In such cases, the map is very
+    /// sparse, meaning collisions are rare.
+    ///
+    /// While SIMD probing (`probe_empty_batch`) is efficient for skipping full groups, it has
+    /// overhead. When the map is sparse, we expect to find an empty slot almost immediately
+    /// (often the first probe). In this specific situation, a simple scalar probe is faster
+    pub fn probe_empty(&mut self, hash: u64) -> usize {
+        let mut pos = self.h1(hash);
+        loop {
+            let ctrl = unsafe { *self.ctrl(pos) };
+            if ctrl == Tag::EMPTY {
+                self.set_ctrl(pos, Tag::full(hash));
+                return pos;
+            }
+            pos = (pos + 1) & self.bucket_mask;
         }
     }
 
