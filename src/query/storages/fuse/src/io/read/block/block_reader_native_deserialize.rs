@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use arrow_array::Array;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -214,8 +215,6 @@ impl BlockReader {
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
         let mut field_leaf_ids = Vec::with_capacity(estimated_cap);
-        let mut field_uncompressed_size = 0;
-
         for (i, leaf_index) in indices.iter().enumerate() {
             let column_id = column_node.leaf_column_ids[i];
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
@@ -225,7 +224,6 @@ impl BlockReader {
                             field_column_metas.push(column_meta);
                             field_column_data.push(data.clone());
                             field_leaf_ids.push(*leaf_index);
-                            field_uncompressed_size += data.len();
                         }
                         DataItem::ColumnArray(column_array) => {
                             if is_nested {
@@ -264,10 +262,11 @@ impl BlockReader {
             } else {
                 // the array is deserialized from raw bytes, should be cached
                 let column_id = column_node.leaf_column_ids[0];
+                let array_memory_size = array.get_array_memory_size();
                 Ok(Some(DeserializedArray::Deserialized((
                     column_id,
                     array,
-                    field_uncompressed_size,
+                    array_memory_size,
                 ))))
             }
         } else {

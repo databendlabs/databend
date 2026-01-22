@@ -19,20 +19,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::plans::RenameTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::rename_column_in_cluster_key;
+use crate::interpreters::common::rename_column_in_comma_separated_ident;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+
 pub struct RenameTableColumnInterpreter {
     ctx: Arc<QueryContext>,
     plan: RenameTableColumnPlan,
@@ -113,13 +116,30 @@ impl Interpreter for RenameTableColumnInterpreter {
             // update table options
             let opts = &mut new_table_meta.options;
             if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-                let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
-                if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
-                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.old_column) {
-                        // replace the bloom index columns with new column name.
-                        cols[pos] = self.plan.new_column.clone();
-                        *value = cols.join(",");
-                    }
+                rename_column_in_comma_separated_ident(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
+            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+                rename_column_in_comma_separated_ident(
+                    self.ctx.as_ref(),
+                    value,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )?;
+            }
+
+            if let Some(cluster_key) = &new_table_meta.cluster_key {
+                if let Some(updated) = rename_column_in_cluster_key(
+                    self.ctx.as_ref(),
+                    cluster_key,
+                    &self.plan.old_column,
+                    &self.plan.new_column,
+                )? {
+                    new_table_meta.cluster_key = Some(updated);
                 }
             }
 

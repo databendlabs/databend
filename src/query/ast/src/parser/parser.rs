@@ -100,6 +100,21 @@ pub fn parse_values(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
     run_parser(tokens, dialect, ParseMode::Default, false, values)
 }
 
+pub fn parse_cluster_key_exprs(cluster_key: &str) -> Result<Vec<Expr>> {
+    // `cluster_key` is persisted in table metadata and may be created/rewritten under a
+    // different session dialect. Parse it with a dialect that accepts both identifier
+    // quote styles to keep ALTER behavior stable across sessions.
+    let tokens = tokenize_sql(cluster_key)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, Dialect::default())?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1
+        && let Expr::Tuple { exprs, .. } = &ast_exprs[0]
+    {
+        ast_exprs = exprs.clone();
+    }
+    Ok(ast_exprs)
+}
+
 pub fn parse_raw_insert_stmt(
     tokens: &[Token],
     dialect: Dialect,

@@ -51,6 +51,7 @@
 mod block;
 
 pub mod aggregate;
+mod block_vec;
 mod constant_folder;
 pub mod converts;
 mod evaluator;
@@ -79,6 +80,7 @@ pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
+pub use crate::block_vec::DataBlockVec;
 pub use crate::constant_folder::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;

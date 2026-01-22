@@ -175,6 +175,7 @@ fn frames_post_processor() -> impl Fn(&mut pprof::Frames) {
 mod tests {
     use crate::runtime::QueryPerf;
     use crate::runtime::ThreadTracker;
+    use crate::runtime::TrackingPayloadExt;
 
     #[test]
     fn test_tracking_payload_perf_sync() {
@@ -258,11 +259,13 @@ mod tests {
         payload.perf_enabled = true;
 
         {
-            let _guard = ThreadTracker::tracking(payload);
-            assert!(QueryPerf::flag(), "Perf should be enabled in outer scope");
+            assert!(
+                !QueryPerf::flag(),
+                "Perf should NOT be enabled in outer scope"
+            );
 
             // Create a tracking future that should inherit the perf state
-            let tracked_future = ThreadTracker::tracking_future(async {
+            let tracked_future = payload.tracking(async {
                 // The future should see the perf state from TrackingPayload
                 QueryPerf::flag()
             });
@@ -276,10 +279,9 @@ mod tests {
         payload_disabled.perf_enabled = false;
 
         {
-            let _guard = ThreadTracker::tracking(payload_disabled);
             assert!(!QueryPerf::flag(), "Perf should be disabled in outer scope");
 
-            let tracked_future = ThreadTracker::tracking_future(async { QueryPerf::flag() });
+            let tracked_future = payload_disabled.tracking(async { QueryPerf::flag() });
 
             let result = tracked_future.await;
             assert!(

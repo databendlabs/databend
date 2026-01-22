@@ -46,6 +46,14 @@ pub trait KvApiExt: KVApi {
 
         let reply = strm_item.value.map(SeqV::from);
 
+        // Drain the stream to wait for gRPC trailers before dropping.
+        //
+        // In gRPC, a response consists of: Headers -> Data* -> Trailers.
+        // If we drop the stream after reading data but before trailers arrive,
+        // h2 sends RST_STREAM CANCEL. Under high load, this can trigger
+        // "too_many_internal_resets" (ENHANCE_YOUR_CALM) errors in h2.
+        while strm.next().await.transpose()?.is_some() {}
+
         Ok(reply)
     }
 

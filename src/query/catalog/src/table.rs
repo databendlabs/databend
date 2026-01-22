@@ -20,6 +20,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
@@ -166,12 +167,15 @@ pub trait Table: Sync + Send {
         Some(cluster_type)
     }
 
-    fn resolve_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Option<Vec<Expr>> {
+    fn resolve_cluster_keys(&self) -> Option<Vec<Expr>> {
         let Some((_, cluster_key_str)) = &self.cluster_key_meta() else {
             return None;
         };
         let tokens = tokenize_sql(cluster_key_str).unwrap();
-        let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        // `cluster_key` is persisted in table metadata and may be created/rewritten under a
+        // different session dialect. Parse it with a dialect that accepts both identifier
+        // quote styles to keep ALTER behavior stable across sessions.
+        let sql_dialect = Dialect::default();
         let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect).unwrap();
         // unwrap tuple.
         if ast_exprs.len() == 1 {

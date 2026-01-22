@@ -26,6 +26,7 @@ use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
+use databend_common_storages_fuse::table_functions::FusePageFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
@@ -185,6 +186,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_page".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FusePageFunc>::create),
             ),
         );
 

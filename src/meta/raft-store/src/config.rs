@@ -18,11 +18,11 @@ use std::io;
 use std::net::Ipv4Addr;
 use std::path::Path;
 
-use databend_common_grpc::DNSResolver;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::raft_types::NodeId;
 
+use crate::dns_resolver;
 use crate::ondisk::DATA_VERSION;
 use crate::raft_log_v004;
 
@@ -269,18 +269,21 @@ impl RaftConfig {
 
     /// Resolves the advertise host to an endpoint, supporting both IP addresses and hostnames.
     pub async fn raft_api_addr(&self) -> Result<Endpoint, io::Error> {
-        let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
-        match ipv4_addr {
-            Ok(addr) => Ok(Endpoint::new(addr, self.raft_api_port)),
-            Err(_) => {
-                let _ip_addrs = DNSResolver::instance()
-                    .map_err(io::Error::other)?
-                    .resolve(self.raft_advertise_host.clone())
-                    .await
-                    .map_err(io::Error::other)?;
-                Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
-            }
+        if let Ok(addr) = self.raft_advertise_host.parse::<Ipv4Addr>() {
+            return Ok(Endpoint::new(addr, self.raft_api_port));
         }
+
+        let ip = dns_resolver::resolve(&self.raft_advertise_host)
+            .await?
+            .next()
+            .ok_or_else(|| {
+                io::Error::other(format!(
+                    "No IP address found for hostname: {}",
+                    self.raft_advertise_host
+                ))
+            })?;
+
+        Ok(Endpoint::new(ip, self.raft_api_port))
     }
 
     /// Returns the min and max election timeout, in milli seconds.

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::decimal::DecimalColumn;
@@ -26,6 +27,8 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
+use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use geozero::ToWkt;
@@ -83,8 +86,11 @@ pub struct FieldEncoderCSV {
 
 impl FieldEncoderCSV {
     pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+        let binary_format = Self::binary_settings(params, options_ext);
+        let mut nested_options = options_ext.clone();
+        nested_options.binary_format = binary_format;
         Self {
-            nested: FieldEncoderValues::create(options_ext),
+            nested: FieldEncoderValues::create(&nested_options),
             simple: FieldEncoderValues {
                 common_settings: OutputCommonSettings {
                     true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -99,6 +105,7 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
+                binary_format,
             },
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -123,6 +130,7 @@ impl FieldEncoderCSV {
                 },
                 escape_char: 0, // not used
                 quote_char: 0,  // not used
+                binary_format: options_ext.binary_format,
             },
             string_formatter: StringFormatter::Tsv {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
@@ -130,9 +138,28 @@ impl FieldEncoderCSV {
         }
     }
 
-    pub(crate) fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn binary_settings(
+        params: &CsvFileFormatParams,
+        options_ext: &FileFormatOptionsExt,
+    ) -> BinaryDisplayFormat {
+        if options_ext.is_select {
+            options_ext.binary_format
+        } else {
+            match params.binary_format {
+                BinaryFormat::Hex => BinaryDisplayFormat::Hex,
+                BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
+            }
+        }
+    }
+
+    pub(crate) fn write_field(
+        &self,
+        column: &Column,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         match &column {
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf),
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
@@ -152,7 +179,8 @@ impl FieldEncoderCSV {
             | Column::Variant(..)
             | Column::Interval(_) => {
                 let mut buf = Vec::new();
-                self.simple.write_field(column, row_index, &mut buf, false);
+                self.simple
+                    .write_field(column, row_index, &mut buf, false)?;
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
@@ -170,7 +198,8 @@ impl FieldEncoderCSV {
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) | Column::Vector(..) => {
                 let mut buf = Vec::new();
-                self.nested.write_field(column, row_index, &mut buf, false);
+                self.nested
+                    .write_field(column, row_index, &mut buf, false)?;
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
@@ -180,8 +209,9 @@ impl FieldEncoderCSV {
             | Column::EmptyArray { .. }
             | Column::EmptyMap { .. }
             | Column::Number(_)
-            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
+            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false)?,
         }
+        Ok(())
     }
 
     fn write_decimal_trimmed(
@@ -210,9 +240,10 @@ impl FieldEncoderCSV {
         column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-    ) {
+    ) -> Result<()> {
         if !column.validity.get_bit(row_index) {
-            self.simple.write_null(out_buf)
+            self.simple.write_null(out_buf);
+            Ok(())
         } else {
             self.write_field(&column.column, row_index, out_buf)
         }

@@ -23,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterVisitor;
 use databend_common_expression::FromData;
 use databend_common_expression::IterationStrategy;
+use databend_common_expression::RepeatIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::block_debug::assert_block_value_eq;
@@ -104,20 +105,21 @@ pub fn test_pass() {
     {
         let mut blocks = Vec::with_capacity(3);
         let indices = vec![
-            (0, 0, 1),
-            (1, 0, 1),
-            (2, 0, 1),
-            (0, 1, 1),
-            (1, 1, 1),
-            (2, 1, 1),
-            (0, 2, 1),
-            (1, 2, 1),
-            (2, 2, 1),
-            (0, 3, 1),
-            (1, 3, 1),
-            (2, 3, 1),
-            // repeat 3
-            (0, 0, 3),
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (0, 1),
+            (1, 1),
+            (2, 1),
+            (0, 2),
+            (1, 2),
+            (2, 2),
+            (0, 3),
+            (1, 3),
+            (2, 3),
+            (0, 0),
+            (0, 0),
+            (0, 0),
         ];
         for i in 0..3 {
             let mut entries = Vec::with_capacity(3);
@@ -173,38 +175,6 @@ pub fn test_pass() {
         run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, None);
         run_take_block_by_slices_with_limit(&mut file, &indices, &blocks, Some(4));
     }
-
-    run_take_by_slice_limit(
-        &mut file,
-        &DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
-            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
-        ]),
-        (2, 3),
-        None,
-    );
-
-    run_take_by_slice_limit(
-        &mut file,
-        &DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
-            UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
-                false, true, false, false, false,
-            ]),
-            Column::Null { len: 5 },
-            StringType::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
-                false, true, true, false, false,
-            ]),
-        ]),
-        (2, 3),
-        Some(2),
-    );
 
     run_scatter(
         &mut file,
@@ -304,7 +274,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                     chunk_index: i as u32,
                     row_index: j as u32,
                 });
-                take_compact_indices.push((idx, 1));
+                take_compact_indices.push(RepeatIndex { row: idx, count: 1 });
             }
             idx += 1;
         }
@@ -321,9 +291,9 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         .collect_vec();
 
     let concated_blocks = DataBlock::concat(&blocks)?;
-    let block_1 = concated_blocks.take(&take_indices)?;
+    let block_1 = concated_blocks.take(take_indices.as_slice())?;
     let block_2 = concated_blocks.take_compacted_indices(&take_compact_indices, count)?;
-    let block_3 = DataBlock::take_column_vec(&column_vec, &data_types, &take_chunks_indices, count);
+    let block_3 = DataBlock::take_column_vec(&column_vec, &data_types, &take_chunks_indices);
     let block_4 = DataBlock::concat(&filtered_blocks)?;
     let block_5 = concated_blocks.take_ranges(
         &build_range_selection(&take_indices, take_indices.len()),
@@ -416,9 +386,12 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
             let batch_size = rng.gen_range(1..1025);
             count += batch_size;
             take_indices.extend(std::iter::repeat_n(batch_index as u32, batch_size));
-            take_compact_indices.push((batch_index as u32, batch_size as u32));
+            take_compact_indices.push(RepeatIndex {
+                row: batch_index as u32,
+                count: batch_size as u32,
+            });
         }
-        let block_1 = block.take(&take_indices)?;
+        let block_1 = block.take(take_indices.as_slice())?;
         let block_2 = block.take_compacted_indices(&take_compact_indices, count)?;
 
         assert_eq!(block_1.num_columns(), block_2.num_columns());
@@ -486,8 +459,8 @@ pub fn test_filters() -> databend_common_exception::Result<()> {
                 .map(|(i, _)| i as u32)
                 .collect::<Vec<_>>();
 
-            let t_b = bb.take(&indices)?;
-            let t_c = cc.take(&indices)?;
+            let t_b = bb.take(indices.as_slice())?;
+            let t_c = cc.take(indices.as_slice())?;
 
             let f_b = bb.filter_with_bitmap(&f)?;
             let f_c = cc.filter_with_bitmap(&f)?;
@@ -575,7 +548,7 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
             }
         }
 
-        let block_1 = random_block.take(&take_indices)?;
+        let block_1 = random_block.take(take_indices.as_slice())?;
         let block_2 = DataBlock::concat(&scattered_blocks)?;
 
         assert_eq!(block_1.num_columns(), block_2.num_columns());
