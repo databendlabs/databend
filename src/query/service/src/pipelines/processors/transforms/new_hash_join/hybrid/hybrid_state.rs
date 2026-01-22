@@ -12,18 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
+use concurrent_queue::ConcurrentQueue;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::HashJoinFactory;
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
+use crate::pipelines::processors::transforms::HybridHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
 use crate::sessions::QueryContext;
 
 pub struct HybridHashJoinState {
-    pub mutex: Mutex<()>,
     pub ctx: Arc<QueryContext>,
 
     // Current recursion level (0 = initial)
@@ -35,36 +39,47 @@ pub struct HybridHashJoinState {
     pub factory: Arc<HashJoinFactory>,
 
     // Flag indicating whether spill has been triggered (for multi-thread sync)
-    pub spilled: CStyleCell<bool>,
+    pub spilled: AtomicBool,
 
-    // Queue of data blocks to be transitioned to grace mode
-    // Multiple processors can pop from this queue to help with the transition
-    pub transition_queue: CStyleCell<VecDeque<DataBlock>>,
-
-    // Flag indicating whether transition has been initialized
-    pub transition_initialized: CStyleCell<bool>,
+    pub transition_queue: ConcurrentQueue<DataBlock>,
 }
 
 impl HybridHashJoinState {
     pub fn create(
         ctx: Arc<QueryContext>,
         level: usize,
-        max_level: usize,
         factory: Arc<HashJoinFactory>,
-    ) -> Arc<HybridHashJoinState> {
-        Arc::new(HybridHashJoinState {
+    ) -> Result<Arc<HybridHashJoinState>> {
+        let settings = ctx.get_settings();
+        let max_level = settings.get_max_hash_join_spill_level()? as usize;
+
+        Ok(Arc::new(HybridHashJoinState {
             ctx,
             level,
             max_level,
             factory,
-            mutex: Mutex::new(()),
-            spilled: CStyleCell::new(false),
-            transition_queue: CStyleCell::new(VecDeque::new()),
-            transition_initialized: CStyleCell::new(false),
-        })
+            spilled: AtomicBool::new(false),
+            transition_queue: ConcurrentQueue::unbounded(),
+        }))
     }
 
-    pub fn can_spill(&self) -> bool {
+    pub fn can_next_layer_join(&self) -> bool {
         self.level < self.max_level
+    }
+
+    pub fn check_spilled(&self) -> bool {
+        self.spilled.load(Ordering::Relaxed)
+    }
+
+    pub fn set_spilled(&self) -> bool {
+        !self.spilled.swap(true, Ordering::AcqRel)
+    }
+
+    pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {
+        self.factory.create_grace_state(self.level + 1)
+    }
+
+    pub fn create_hybrid_join(&self, typ: JoinType) -> Result<HybridHashJoin> {
+        self.factory.create_hybrid_join(typ, self.level + 1)
     }
 }

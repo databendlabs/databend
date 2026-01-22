@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 use std::sync::PoisonError;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
@@ -93,112 +94,114 @@ impl HybridHashJoin {
         }
     }
 
-    /// Trigger spill: mark as spilled and initialize the transition queue
-    fn trigger_spill(&mut self) -> Result<()> {
-        let locked = self.state.mutex.lock();
+    fn add_transition_work(&self) -> Result<()> {
+        // Use basic_state.mutex to protect both basic_state and hybrid state fields
+        let locked = self.basic_state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        // Double-check: another thread might have already triggered spill
-        if !*self.state.spilled {
-            // I am the first processor to trigger spill
+        // Clear other BasicHashJoinState fields
+        *self.basic_state.build_rows.as_mut() = 0;
+        self.basic_state.build_queue.as_mut().clear();
+        self.basic_state.scan_map.as_mut().clear();
+        self.basic_state.scan_queue.as_mut().clear();
 
-            // 1. Move BasicHashJoinState.chunks to transition_queue
-            //    so other processors can help process the data
-            let chunks = std::mem::take(self.basic_state.chunks.as_mut());
-            *self.state.transition_queue.as_mut() = chunks.into();
-            *self.state.transition_initialized.as_mut() = true;
-
-            // 2. Clear other BasicHashJoinState fields
-            *self.basic_state.build_rows.as_mut() = 0;
-            self.basic_state.build_queue.as_mut().clear();
-            self.basic_state.scan_map.as_mut().clear();
-            self.basic_state.scan_queue.as_mut().clear();
-
-            // 3. Set spilled flag
-            *self.state.spilled.as_mut() = true;
+        // Move chunks to transition_queue
+        for memory_block in std::mem::take(self.basic_state.chunks.as_mut()) {
+            self.state
+                .transition_queue
+                .push(memory_block)
+                .expect("push unbound concurrent queue is error.");
         }
 
-        drop(_locked);
-
-        // Switch to grace mode (will process data from transition_queue)
-        self.switch_to_grace_mode()
+        Ok(())
     }
 
     /// Switch from Memory mode to Grace mode
-    fn switch_to_grace_mode(&mut self) -> Result<()> {
+    fn switch_to_grace_mode(&mut self, finished: bool) -> Result<()> {
+        if let HybridJoinMode::Memory(memory_join) = &mut self.mode {
+            if !finished {
+                memory_join.add_block(None)?;
+            }
+
+            self.add_transition_work()?;
+
+            self.mode = HybridJoinMode::Grace(Box::new(self.create_grace_join()?));
+        }
+
+        // Due to potential memory constraints, our current primary objective is to migrate the blocks out of memory.
+        self.do_transition_work(finished)
+    }
+
+    fn do_transition_work(&mut self, finished: bool) -> Result<()> {
+        if let HybridJoinMode::Grace(grace_join) = &mut self.mode {
+            while let Ok(memory_block) = self.state.transition_queue.pop() {
+                grace_join.add_block(Some(memory_block))?;
+            }
+
+            if finished {
+                grace_join.add_block(None)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_grace_join(&mut self) -> Result<GraceHashJoin<HybridHashJoin>> {
         // 1. Get shared grace_state (all processors share the same state)
-        let grace_state = self
-            .state
-            .factory
-            .create_grace_state(self.state.level + 1)?;
+        let grace_state = self.state.create_grace_state()?;
 
         // 2. Create new HybridHashJoin as the memory_hash_join for GraceHashJoin
-        let sub_hybrid = self.state.factory.create_hybrid_join(
-            self.join_type,
-            self.state.level + 1,
-            self.state.max_level,
-        )?;
+        let sub_hybrid = self.state.create_hybrid_join(self.join_type)?;
 
         // 3. Create GraceHashJoin (each processor creates its own instance, but shares grace_state)
-        let shift_bits = self.state.level * 4;
-        let mut grace_join = GraceHashJoin::create(
+        GraceHashJoin::create(
             self.ctx.clone(),
             self.function_ctx.clone(),
             self.hash_method_kind.clone(),
             self.desc.clone(),
             grace_state,
             sub_hybrid,
-            shift_bits,
-        )?;
-
-        // 4. Pop data from transition_queue and spill (multiple processors compete)
-        loop {
-            let block = {
-                let locked = self.state.mutex.lock();
-                let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-                self.state.transition_queue.as_mut().pop_front()
-            };
-
-            let Some(block) = block else {
-                break;
-            };
-            grace_join.add_block(Some(block))?;
-        }
-
-        // 5. Switch mode
-        self.mode = HybridJoinMode::Grace(Box::new(grace_join));
-        Ok(())
+            self.state.level * 4,
+        )
     }
 }
 
 impl Join for HybridHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         // 1. Check if another processor has already triggered spill
-        if *self.state.spilled && matches!(self.mode, HybridJoinMode::Memory(_)) {
-            self.switch_to_grace_mode()?;
+        if self.state.check_spilled() {
+            self.switch_to_grace_mode(false)?;
         }
 
+        let finished = data.is_none();
         // 2. Process data based on current mode
         match &mut self.mode {
+            HybridJoinMode::Grace(grace_join) => match finished {
+                true => self.do_transition_work(finished),
+                false => {
+                    grace_join.add_block(data)?;
+                    self.do_transition_work(false)
+                }
+            },
             HybridJoinMode::Memory(memory_join) => {
                 memory_join.add_block(data)?;
 
-                // 3. Check if we need to spill
-                if self.memory_settings.check_spill() && self.state.can_spill() {
-                    self.trigger_spill()?;
+                if self.state.can_next_layer_join()
+                    && (self.memory_settings.check_spill() || self.state.check_spilled())
+                {
+                    self.switch_to_grace_mode(finished)?;
                 }
+
                 Ok(())
             }
-            HybridJoinMode::Grace(grace_join) => grace_join.add_block(data),
         }
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        // ===== Critical sync point =====
-        // Some processors might not have detected spilled during add_block.
-        // final_build is a sync point (outer barrier), need to check again.
-        if *self.state.spilled && matches!(self.mode, HybridJoinMode::Memory(_)) {
-            self.switch_to_grace_mode()?;
+        // Only the state needs to be transitioned, as all data migration must have been completed in the previous stage.
+        if self.state.check_spilled() && matches!(self.mode, HybridJoinMode::Memory(_)) {
+            let grace_join = self.create_grace_join()?;
+            self.mode = HybridJoinMode::Grace(Box::new(grace_join));
         }
 
         match &mut self.mode {
@@ -240,11 +243,10 @@ impl GraceMemoryJoin for HybridHashJoin {
     fn reset_memory(&mut self) {
         // 1. Reset spilled and transition state
         {
-            let locked = self.state.mutex.lock();
+            let locked = self.basic_state.mutex.lock();
             let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-            *self.state.spilled.as_mut() = false;
-            *self.state.transition_initialized.as_mut() = false;
-            self.state.transition_queue.as_mut().clear();
+            self.state.spilled.swap(false, Ordering::AcqRel);
+            while self.state.transition_queue.pop().is_ok() {}
         }
 
         // 2. Reset based on current mode

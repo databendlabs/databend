@@ -19,7 +19,6 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::Weak;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -54,6 +53,7 @@ pub struct HashJoinFactory {
     function_ctx: FunctionContext,
     grace_state: CStyleCell<HashMap<usize, Weak<GraceHashJoinState>>>,
     basic_state: CStyleCell<HashMap<usize, Weak<BasicHashJoinState>>>,
+    hybrid_state: CStyleCell<HashMap<usize, Weak<HybridHashJoinState>>>,
 }
 
 impl HashJoinFactory {
@@ -71,6 +71,7 @@ impl HashJoinFactory {
             mutex: Mutex::new(()),
             grace_state: CStyleCell::new(HashMap::new()),
             basic_state: CStyleCell::new(HashMap::new()),
+            hybrid_state: CStyleCell::new(HashMap::new()),
         })
     }
 
@@ -79,6 +80,7 @@ impl HashJoinFactory {
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
         let ctx = self.ctx.clone();
+
         match self.grace_state.as_mut().entry(id) {
             Entry::Occupied(v) => match v.get().upgrade() {
                 Some(v) => Ok(v),
@@ -115,6 +117,27 @@ impl HashJoinFactory {
         }
     }
 
+    pub fn create_hybrid_state(self: &Arc<Self>, level: usize) -> Result<Arc<HybridHashJoinState>> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        match self.hybrid_state.as_mut().entry(level) {
+            Entry::Occupied(v) => match v.get().upgrade() {
+                Some(v) => Ok(v),
+                None => Err(ErrorCode::Internal(format!(
+                    "Error state: The level {} hybrid hash state has been destroyed.",
+                    level
+                ))),
+            },
+            Entry::Vacant(v) => {
+                let ctx = self.ctx.clone();
+                let hybrid_state = HybridHashJoinState::create(ctx, level, self.clone())?;
+                v.insert(Arc::downgrade(&hybrid_state));
+                Ok(hybrid_state)
+            }
+        }
+    }
+
     pub fn remove_basic_state(&self, id: usize) {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
@@ -129,15 +152,13 @@ impl HashJoinFactory {
     }
 
     pub fn create_hash_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
-        let settings = self.ctx.get_settings();
+        // let settings = self.ctx.get_settings();
+        //
+        // if settings.get_force_join_data_spill()? {
+        //     return self.create_grace_join(typ, id);
+        // }
 
-        if settings.get_force_join_data_spill()? {
-            return self.create_grace_join(typ, id);
-        }
-
-        // Use hybrid join by default with configurable max spill level
-        let max_level = settings.get_max_hash_join_spill_level()? as usize;
-        Ok(Box::new(self.create_hybrid_join(typ, id, max_level)?))
+        Ok(Box::new(self.create_hybrid_join(typ, id)?))
     }
 
     pub fn create_grace_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
@@ -345,14 +366,13 @@ impl HashJoinFactory {
         self: &Arc<Self>,
         typ: JoinType,
         level: usize,
-        max_level: usize,
     ) -> Result<HybridHashJoin> {
         let basic_state = self.create_basic_state(level)?;
         let memory_join = self.create_memory_join(typ, level)?;
         let memory_settings = MemorySettings::from_join_settings(&self.ctx)?;
 
-        let hybrid_state =
-            HybridHashJoinState::create(self.ctx.clone(), level, max_level, self.clone());
+        // Use shared hybrid_state so all processors can coordinate spill
+        let hybrid_state = self.create_hybrid_state(level)?;
 
         Ok(HybridHashJoin::create(
             self.ctx.clone(),
