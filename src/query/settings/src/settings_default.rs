@@ -1505,7 +1505,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_new_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables the experimental new join implement",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
