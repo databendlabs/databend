@@ -23,9 +23,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
@@ -143,7 +145,13 @@ impl BlockReader {
                             "unexpected nested field: nested leaf field hits cached",
                         ));
                     }
-                    Value::from_arrow_rs(cached.0.clone(), &data_type)?
+                    let mut value = Value::from_arrow_rs(cached.0.clone(), &data_type)?;
+                    if let Some(selection) = selection {
+                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
+                        filter_visitor.visit_value(value)?;
+                        value = filter_visitor.take_result().unwrap();
+                    }
+                    value
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

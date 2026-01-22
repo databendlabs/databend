@@ -22,16 +22,20 @@ pub struct RowSelection {
     pub selection: parquet::arrow::arrow_reader::RowSelection,
     /// Number of selected rows (bits set to 1 in the bitmap).
     pub selected_rows: usize,
+    /// Original bitmap that drives the selection.
+    pub bitmap: Bitmap,
 }
 
 impl RowSelection {
     pub fn new(
         selection: parquet::arrow::arrow_reader::RowSelection,
         selected_rows: usize,
+        bitmap: Bitmap,
     ) -> Self {
         Self {
             selection,
             selected_rows,
+            bitmap,
         }
     }
 }
@@ -57,6 +61,7 @@ impl From<&Bitmap> for RowSelection {
         Self {
             selection: parquet::arrow::arrow_reader::RowSelection::from(selectors),
             selected_rows,
+            bitmap: bitmap.clone(),
         }
     }
 }
@@ -87,6 +92,7 @@ mod tests {
 
         // 6 bits are set to 1: indices 0, 1, 4, 6, 7, 8
         assert_eq!(row_selection.selected_rows, 6);
+        assert_eq!(row_selection.bitmap.len(), bitmap.len());
         // Expected: select(2), skip(2), select(1), skip(1), select(3), skip(1)
         assert_eq!(selectors.len(), 6);
         assert_eq!(selectors[0].row_count, 2);
@@ -111,6 +117,7 @@ mod tests {
 
         // All 5 bits are set to 1
         assert_eq!(row_selection.selected_rows, 5);
+        assert_eq!(row_selection.bitmap.len(), bitmap.len());
         assert_eq!(selectors.len(), 1);
         assert_eq!(selectors[0].row_count, 5);
         assert!(!selectors[0].skip);
@@ -124,6 +131,7 @@ mod tests {
 
         // No bits are set to 1
         assert_eq!(row_selection.selected_rows, 0);
+        assert_eq!(row_selection.bitmap.len(), bitmap.len());
         assert_eq!(selectors.len(), 1);
         assert_eq!(selectors[0].row_count, 5);
         assert!(selectors[0].skip);
