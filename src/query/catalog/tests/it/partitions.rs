@@ -254,6 +254,23 @@ fn test_partition_reshuffle() {
         writeln!(file, "{:?}", e2_parts.len()).unwrap();
     }
 
+    // Broadcast.
+    {
+        let partitions = gen_parts(PartitionsShuffleKind::BroadcastCluster, 3);
+        let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
+
+        writeln!(
+            file,
+            "PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors"
+        )
+        .unwrap();
+        let e1_parts = shuffle.get(&executors_2[0].id).unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
+
+        let e2_parts = shuffle.get(&executors_2[1].id).unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
+    }
+
     // BlockMod.
     {
         let partitions = gen_parts(PartitionsShuffleKind::BlockMod, 3);
