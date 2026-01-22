@@ -105,6 +105,10 @@ impl FilterBuilder for Xor8Builder {
 
         Ok(Xor8Filter { filter: f })
     }
+
+    fn peek_digest_count(&self) -> Option<usize> {
+        Some(self.builder.digest_count())
+    }
 }
 
 impl Xor8Builder {

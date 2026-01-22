@@ -89,7 +89,7 @@ impl BlockStatsBuilder {
     pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
         self.builders
             .iter()
-            .map(|item| (item.field.column_id(), item.builder.peek()))
+            .map(|item| (item.field.column_id(), item.builder.count()))
             .collect()
     }
 

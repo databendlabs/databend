@@ -148,6 +148,7 @@ mod dummy {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary,
+            enable_parquet_delta_binary_packed_heuristic_rule: false,
         };
         let schema = Arc::new(schema);
         let mut buffer = Vec::new();

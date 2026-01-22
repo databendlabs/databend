@@ -589,4 +589,4 @@ tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b6
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "68ab55c" }
 tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", rev = "2e434bc" }

@@ -40,9 +40,10 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_blocks::DeltaOrderingStats;
 use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
-use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_blocks::collect_delta_ordering_stats;
 use databend_storages_common_blocks::write_batch_with_page_limit;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -52,6 +53,7 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -89,7 +91,9 @@ impl UninitializedArrowWriter {
         let writer_properties = build_parquet_writer_properties(
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
-            Some(cols_ndv_info),
+            write_settings.enable_parquet_delta_binary_packed_heuristic_rule,
+            Some(&cols_ndv_info.cols_stats),
+            Some(&cols_ndv_info.delta_ordering_stats),
             None,
             num_rows,
             self.table_schema.as_ref(),
@@ -149,18 +153,22 @@ impl ArrowParquetWriter {
 }
 
 pub struct ColumnsNdvInfo {
-    cols_ndv: HashMap<ColumnId, usize>,
+    cols_stats: StatisticsOfColumns,
+    delta_ordering_stats: HashMap<ColumnId, DeltaOrderingStats>,
     num_rows: usize,
 }
 
 impl ColumnsNdvInfo {
-    fn new(num_rows: usize, cols_ndv: HashMap<ColumnId, usize>) -> Self {
-        Self { cols_ndv, num_rows }
-    }
-}
-impl NdvProvider for ColumnsNdvInfo {
-    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-        self.cols_ndv.get(column_id).map(|v| *v as u64)
+    fn new(
+        num_rows: usize,
+        cols_stats: StatisticsOfColumns,
+        delta_ordering_stats: HashMap<ColumnId, DeltaOrderingStats>,
+    ) -> Self {
+        Self {
+            cols_stats,
+            delta_ordering_stats,
+            num_rows,
+        }
     }
 }
 
@@ -382,11 +390,63 @@ impl StreamBlockBuilder {
 
         if !had_existing_rows {
             // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
-            // block's NDV stats to heuristically configure the parquet writer.
-            let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
-            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
-            self.block_writer
-                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
+            // block's stats to heuristically configure the parquet writer.
+
+            // Only collect stats if encoding heuristics are enabled (dictionary or delta_binary_packed)
+            let needs_stats = self.properties.write_settings.enable_parquet_dictionary
+                || self
+                    .properties
+                    .write_settings
+                    .enable_parquet_delta_binary_packed_heuristic_rule;
+
+            let cols_stats = if needs_stats {
+                // Collect NDV information from various sources
+                let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
+                cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+
+                // Override HLL-estimated NDV with accurate counts from bloom index builders
+                // This provides more precise cardinality for delta_binary_packed encoding decisions
+                // Only collect bloom NDV when DBP heuristic is enabled
+                if self
+                    .properties
+                    .write_settings
+                    .enable_parquet_delta_binary_packed_heuristic_rule
+                {
+                    let bloom_ndv = self.bloom_index_builder.peek_cols_ndv();
+                    for (col_id, ndv) in bloom_ndv {
+                        cols_ndv.insert(col_id, ndv);
+                    }
+                }
+
+                // Get column statistics and fill in NDV information
+                let mut cols_stats = self.column_stats_state.peek_column_stats()?;
+                for (col_id, ndv) in cols_ndv {
+                    if let Some(stats) = cols_stats.get_mut(&col_id) {
+                        stats.distinct_of_values = Some(ndv as u64);
+                    }
+                }
+                cols_stats
+            } else {
+                // When no encoding heuristics are enabled, skip stats collection
+                HashMap::new()
+            };
+
+            // Only compute delta ordering stats if the DBP heuristic rule is enabled
+            let delta_stats = if self
+                .properties
+                .write_settings
+                .enable_parquet_delta_binary_packed_heuristic_rule
+            {
+                collect_delta_ordering_stats(&self.properties.source_schema, &block)?
+            } else {
+                HashMap::new()
+            };
+
+            self.block_writer.start(ColumnsNdvInfo::new(
+                block.num_rows(),
+                cols_stats,
+                delta_stats,
+            ))?;
         }
 
         self.block_writer
@@ -557,7 +617,7 @@ impl StreamBlockProperties {
             ..table.schema().as_ref().clone()
         });
 
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_ctx(ctx.as_ref())?;
 
         let bloom_columns_map = table
             .bloom_index_cols

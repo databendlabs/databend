@@ -48,8 +48,7 @@ pub trait ColumnNDVEstimatorOps: Send + Sync {
     fn update_column(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef);
 
-    fn peek(&self) -> usize;
-    fn finalize(&self) -> usize;
+    fn count(&self) -> usize;
     fn hll(self) -> MetaHLL;
 }
 
@@ -184,11 +183,7 @@ where
         self.hll.add_object(&val);
     }
 
-    fn peek(&self) -> usize {
-        self.hll.count()
-    }
-
-    fn finalize(&self) -> usize {
+    fn count(&self) -> usize {
         self.hll.count()
     }
 

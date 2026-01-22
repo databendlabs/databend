@@ -87,6 +87,11 @@ impl FilterBuilder for BloomBuilder {
         }
         Ok(filter)
     }
+
+    fn peek_digest_count(&self) -> Option<usize> {
+        // Return the distinct digest count used for the filter.
+        Some(self.inner.len())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -984,6 +984,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_parquet_delta_binary_packed_heuristic_rule", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables the DELTA_BINARY_PACKED heuristic rule for Parquet integer columns.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("external_server_connect_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
                     desc: "Connection timeout to external server",
