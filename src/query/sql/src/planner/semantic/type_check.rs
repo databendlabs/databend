@@ -5584,7 +5584,7 @@ impl<'a> TypeChecker<'a> {
         &self,
         imports: &[String],
         expire: Duration,
-    ) -> Result<Vec<databend_common_cloud_control::pb::UdfImport>> {
+    ) -> Result<Vec<databend_common_cloud_control::pb::UdfAsset>> {
         if imports.is_empty() {
             return Ok(Vec::new());
         }
@@ -5630,7 +5630,7 @@ impl<'a> TypeChecker<'a> {
                     .map(str::to_string)
                     .unwrap_or_else(|| meta.content_length().to_string());
 
-                results.push(databend_common_cloud_control::pb::UdfImport {
+                results.push(databend_common_cloud_control::pb::UdfAsset {
                     location: location.to_string(),
                     url: presigned.uri().to_string(),
                     tag,

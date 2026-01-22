@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tudf.proto\x12\x08udfproto\"7\n\tUdfImport\x12\x10\n\x08location\x18\x01 \x01(\t\x12\x0b\n\x03url\x18\x02 \x01(\t\x12\x0b\n\x03tag\x18\x03 \x01(\t\"M\n\x17\x41pplyUdfResourceRequest\x12\x0c\n\x04spec\x18\x01 \x01(\t\x12$\n\x07imports\x18\x02 \x03(\x0b\x32\x13.udfproto.UdfImport\"\x9e\x01\n\x18\x41pplyUdfResourceResponse\x12\x10\n\x08\x65ndpoint\x18\x01 \x01(\t\x12@\n\x07headers\x18\x02 \x03(\x0b\x32/.udfproto.ApplyUdfResourceResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32g\n\nUdfService\x12Y\n\x10\x41pplyUdfResource\x12!.udfproto.ApplyUdfResourceRequest\x1a\".udfproto.ApplyUdfResourceResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tudf.proto\x12\x08udfproto\"6\n\x08UdfAsset\x12\x10\n\x08location\x18\x01 \x01(\t\x12\x0b\n\x03url\x18\x02 \x01(\t\x12\x0b\n\x03tag\x18\x03 \x01(\t\"L\n\x17\x41pplyUdfResourceRequest\x12\x0c\n\x04spec\x18\x01 \x01(\t\x12#\n\x07imports\x18\x02 \x03(\x0b\x32\x12.udfproto.UdfAsset\"\x9e\x01\n\x18\x41pplyUdfResourceResponse\x12\x10\n\x08\x65ndpoint\x18\x01 \x01(\t\x12@\n\x07headers\x18\x02 \x03(\x0b\x32/.udfproto.ApplyUdfResourceResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32g\n\nUdfService\x12Y\n\x10\x41pplyUdfResource\x12!.udfproto.ApplyUdfResourceRequest\x1a\".udfproto.ApplyUdfResourceResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,14 +34,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'Z\037databend.com/cloudcontrol/proto'
   _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._loaded_options = None
   _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._serialized_options = b'8\001'
-  _globals['_UDFIMPORT']._serialized_start=23
-  _globals['_UDFIMPORT']._serialized_end=78
-  _globals['_APPLYUDFRESOURCEREQUEST']._serialized_start=80
-  _globals['_APPLYUDFRESOURCEREQUEST']._serialized_end=157
-  _globals['_APPLYUDFRESOURCERESPONSE']._serialized_start=160
-  _globals['_APPLYUDFRESOURCERESPONSE']._serialized_end=318
-  _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._serialized_start=272
-  _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._serialized_end=318
-  _globals['_UDFSERVICE']._serialized_start=320
-  _globals['_UDFSERVICE']._serialized_end=423
+  _globals['_UDFASSET']._serialized_start=23
+  _globals['_UDFASSET']._serialized_end=77
+  _globals['_APPLYUDFRESOURCEREQUEST']._serialized_start=79
+  _globals['_APPLYUDFRESOURCEREQUEST']._serialized_end=155
+  _globals['_APPLYUDFRESOURCERESPONSE']._serialized_start=158
+  _globals['_APPLYUDFRESOURCERESPONSE']._serialized_end=316
+  _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._serialized_start=270
+  _globals['_APPLYUDFRESOURCERESPONSE_HEADERSENTRY']._serialized_end=316
+  _globals['_UDFSERVICE']._serialized_start=318
+  _globals['_UDFSERVICE']._serialized_end=421
 # @@protoc_insertion_point(module_scope)

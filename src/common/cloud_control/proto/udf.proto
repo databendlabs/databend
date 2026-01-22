@@ -3,7 +3,7 @@ option go_package = "databend.com/cloudcontrol/proto";
 
 package udfproto;
 
-message UdfImport {
+message UdfAsset {
   string location = 1;
   string url = 2;
   // Content tag for caching (e.g. etag or content length), independent of presigned URL.
@@ -13,7 +13,7 @@ message UdfImport {
 message ApplyUdfResourceRequest {
   // JSON runtime spec (code/handler/types/packages). Control plane builds Dockerfile.
   string spec = 1;
-  repeated UdfImport imports = 2;
+  repeated UdfAsset imports = 2;
 }
 
 message ApplyUdfResourceResponse {
