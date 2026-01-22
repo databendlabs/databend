@@ -18,6 +18,7 @@ use std::io;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use log::error;
 use raft_log::codeq::Decode;
 use raft_log::codeq::Encode;
 use raft_log::codeq::OffsetWriter;
@@ -74,10 +75,13 @@ where T: DeserializeOwned
     fn decode<R: io::Read>(r: R) -> Result<Self, io::Error> {
         // rmp_serde::decode::from_read returns when a value is successfully decoded.
         let d = rmp_serde::decode::from_read(r).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("{e}; when:(decode: {})", type_name::<T>()),
-            )
+            error!("error: {:?} when:(decoding: {})", e, type_name::<T>());
+            let typ = match &e {
+                rmp_serde::decode::Error::InvalidMarkerRead(io_err) => io_err.kind(),
+                rmp_serde::decode::Error::InvalidDataRead(io_err) => io_err.kind(),
+                _ => io::ErrorKind::InvalidData,
+            };
+            io::Error::new(typ, format!("{e}; when:(decode: {})", type_name::<T>()))
         })?;
 
         Ok(Cw(d))
