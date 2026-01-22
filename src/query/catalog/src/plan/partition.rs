@@ -195,7 +195,8 @@ impl Partitions {
                 parts.shuffle(&mut rng);
                 parts
             }
-            // the executors will be all nodes in the warehouse if a query is BroadcastWarehouse.
+            // All executors receive all partitions, process them sequentially.
+            // For BlockMod, block filtering is controlled by plan.block_slot, not by kind.
             PartitionsShuffleKind::BlockMod
             | PartitionsShuffleKind::BroadcastCluster
             | PartitionsShuffleKind::BroadcastWarehouse => {
@@ -204,8 +205,7 @@ impl Partitions {
                     .map(|executor| {
                         (
                             executor.id.clone(),
-                            // Preserve the original kind so executors know how to handle it
-                            Partitions::create(self.kind.clone(), self.partitions.clone()),
+                            Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
                         )
                     })
                     .collect());
