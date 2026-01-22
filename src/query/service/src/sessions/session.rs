@@ -225,8 +225,10 @@ impl Session {
         self.format_settings = other
     }
 
-    pub fn get_format_settings(&self) -> FormatSettings {
-        self.format_settings.clone()
+    pub fn get_format_settings(&self) -> Result<FormatSettings> {
+        let mut format_settings = self.format_settings.clone();
+        format_settings.binary_format = self.get_settings().get_binary_output_format()?;
+        Ok(format_settings)
     }
 
     pub fn get_current_query_id(&self) -> Option<String> {
