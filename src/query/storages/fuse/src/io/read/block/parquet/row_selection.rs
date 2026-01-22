@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_expression::types::Bitmap;
 use parquet::arrow::arrow_reader::RowSelector;
 
@@ -39,21 +40,19 @@ impl From<&Bitmap> for RowSelection {
     fn from(bitmap: &Bitmap) -> Self {
         let mut selectors = Vec::new();
         let mut selected_rows = 0;
-        let mut i = 0;
-        while i < bitmap.len() {
-            let current = bitmap.get_bit(i);
-            let mut run = 1;
-            while i + run < bitmap.len() && bitmap.get_bit(i + run) == current {
-                run += 1;
+        let mut last_end = 0;
+        for (start, len) in SlicesIterator::new(bitmap) {
+            if start > last_end {
+                selectors.push(RowSelector::skip(start - last_end));
             }
-
-            if current {
-                selectors.push(RowSelector::select(run));
-                selected_rows += run;
-            } else {
-                selectors.push(RowSelector::skip(run));
+            if len > 0 {
+                selectors.push(RowSelector::select(len));
+                selected_rows += len;
             }
-            i += run;
+            last_end = start + len;
+        }
+        if last_end < bitmap.len() {
+            selectors.push(RowSelector::skip(bitmap.len() - last_end));
         }
         Self {
             selection: parquet::arrow::arrow_reader::RowSelection::from(selectors),
