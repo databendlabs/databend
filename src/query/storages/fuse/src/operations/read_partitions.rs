@@ -56,6 +56,7 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
@@ -168,6 +169,27 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    // Determine shuffle kind based on heuristic:
+                    // Use block-level shuffle when segment count is small relative to cluster size
+                    let threshold = ctx.get_settings().get_auto_block_shuffle_threshold()?;
+                    let shuffle_kind =
+                        if threshold > 0 && nodes_num > 1 && segment_len < nodes_num * threshold {
+                            // Block-level shuffle: broadcast all segments to all executors,
+                            // each executor filters blocks by block_idx % num_executors == executor_idx
+                            info!(
+                                "Using BlockMod shuffle: segments={}, nodes={}, threshold={}",
+                                segment_len, nodes_num, threshold
+                            );
+                            PartitionsShuffleKind::BlockMod
+                        } else {
+                            // Default: use Mod shuffle kind for cache affinity at segment level
+                            info!(
+                                "Using Mod shuffle: segments={}, nodes={}, threshold={}",
+                                segment_len, nodes_num, threshold
+                            );
+                            PartitionsShuffleKind::Mod
+                        };
+
                     return Ok((
                         PartStatistics::new_estimated(
                             Some(snapshot_loc),
@@ -176,7 +198,7 @@ impl FuseTable {
                             segment_len,
                             segment_len,
                         ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments),
+                        Partitions::create(shuffle_kind, segments),
                     ));
                 }
 
@@ -283,6 +305,9 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
+        // Check if we should use block-level shuffle based on the partition kind
+        let use_block_level_shuffle = plan.parts.kind == PartitionsShuffleKind::BlockMod;
+
         match segment_format {
             FuseSegmentFormat::Row => {
                 self.prune_segments_with_pipeline(
@@ -294,6 +319,7 @@ impl FuseTable {
                     derterministic_cache_key.clone(),
                     lazy_init_segments.len(),
                     plan_id,
+                    use_block_level_shuffle,
                 )?;
             }
             FuseSegmentFormat::Column => {
@@ -419,6 +445,7 @@ impl FuseTable {
         derterministic_cache_key: Option<String>,
         partitions_total: usize,
         plan_id: u32,
+        use_block_level_shuffle: bool,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -523,6 +550,26 @@ impl FuseTable {
             .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
         let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
+
+        // Compute block slot for block-level shuffle
+        let block_slot = if use_block_level_shuffle {
+            let cluster = ctx.get_cluster();
+            if !cluster.is_empty() {
+                // Sort nodes by cache_id for deterministic ordering
+                let mut nodes = cluster.nodes.clone();
+                nodes.sort_by(|a, b| a.cache_id.cmp(&b.cache_id));
+                let num_slots = nodes.len();
+                let local_id = &cluster.local_id;
+                // Find the local node's position in the sorted list
+                let slot = nodes.iter().position(|n| &n.id == local_id).unwrap_or(0) as u32;
+                Some(BlockSlotDescription { num_slots, slot })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -539,6 +586,7 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 enable_prune_cache,
+                block_slot.clone(),
             )
         })?;
 
