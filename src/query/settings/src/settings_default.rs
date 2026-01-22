@@ -1535,6 +1535,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),
                 }),
+                ("max_hash_join_spill_level", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maximum recursion depth for the hash join spill. Each recursion level repartition data into 16 smaller parts to ensure it fits in memory.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
+                }),
                 ("enable_experimental_table_ref", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable table ref(disable by default).",

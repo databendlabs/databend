@@ -14,6 +14,8 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
+#![allow(clippy::collapsible_if)]
 
 mod config;
+mod raft_log_v004_recovery;
 mod types;
