@@ -208,8 +208,7 @@ impl TopNPruner {
             }
             Ok(pruned_metas)
         } else {
-            id_stats
-                .sort_by(|a, b| compare_block_stats(&a.1, &b.1, *asc, *nulls_first));
+            id_stats.sort_by(|a, b| compare_block_stats(&a.1, &b.1, *asc, *nulls_first));
 
             let pruned_metas = id_stats
                 .into_iter()
@@ -493,13 +492,7 @@ mod tests {
         max: i64,
         matched_rows: usize,
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
-        let column_stats = ColumnStatistics::new(
-            Scalar::from(min),
-            Scalar::from(max),
-            0,
-            0,
-            None,
-        );
+        let column_stats = ColumnStatistics::new(Scalar::from(min), Scalar::from(max), 0, 0, None);
         build_block_with_stats(column_id, block_id, column_stats, matched_rows)
     }
 
