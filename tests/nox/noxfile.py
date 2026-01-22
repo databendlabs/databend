@@ -2,7 +2,7 @@ import nox
 import os
 
 
-PYTHON_DRIVER = ["0.33.1"]
+PYTHON_DRIVER = ["0.33.1", "0.33.4"]
 
 
 @nox.session
@@ -17,8 +17,8 @@ def python_client(session, driver_version):
         env = {
             "DRIVER_VERSION": driver_version,
         }
-        # for impl in ['blocking', "asyncio", 'cursor']:
-        #     session.run("behave", f"tests/{impl}", env=env)
+        for impl in ['blocking', "asyncio", 'cursor']:
+            session.run("behave", f"tests/{impl}", env=env)
 
 
 JDBC_DRIVER = ["0.4.0", "main"]
