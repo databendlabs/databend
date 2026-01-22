@@ -34,6 +34,7 @@ killall -9 databend-query || true
 killall -9 databend-meta || true
 rm -rf .databend
 
+
 echo "Pre-pulling base image"
 docker pull "${UDF_DOCKER_BASE_IMAGE}"
 
@@ -45,7 +46,7 @@ WORKDIR /app
 RUN python -m pip install --no-cache-dir uv
 RUN uv pip install --system databend-udf
 EOF
-DOCKER_BUILDKIT=1 docker build -t "${UDF_DOCKER_RUNTIME_IMAGE}" -f "${tmp_dir}/Dockerfile" "${tmp_dir}"
+docker build -t "${UDF_DOCKER_RUNTIME_IMAGE}" -f "${tmp_dir}/Dockerfile" "${tmp_dir}"
 rm -rf "${tmp_dir}"
 UDF_DOCKER_BASE_IMAGE="${UDF_DOCKER_RUNTIME_IMAGE}"
 
@@ -108,7 +109,6 @@ done
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
 
 echo "Starting sandbox control mock server"
-export DOCKER_BUILDKIT=1
 export UDF_DOCKER_BASE_IMAGE
 nohup env PYTHONUNBUFFERED=1 uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 50051

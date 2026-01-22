@@ -237,25 +237,23 @@ fn udf_type_string(data_type: &DataType) -> String {
 fn build_udf_cloud_spec(
     code: &str,
     handler: &str,
+    language: &str,
     imports: &[String],
     packages: &[String],
     input_types: &[String],
     result_type: &str,
     runtime_version: &str,
-) -> Result<String> {
-    let spec = json!({
-        "version": 1,
-        "kind": "udf",
-        "language": "python",
-        "handler": handler,
-        "input_types": input_types,
-        "result_type": result_type,
-        "imports": imports,
-        "packages": packages,
-        "runtime_version": runtime_version,
-        "code": code,
-    });
-    to_string(&spec).map_err(|err| ErrorCode::Internal(format!("Failed to build UDF spec: {err}")))
+) -> Result<databend_common_cloud_control::pb::UdfRuntimeSpec> {
+    Ok(databend_common_cloud_control::pb::UdfRuntimeSpec {
+        language: language.to_string(),
+        handler: handler.to_string(),
+        input_types: input_types.to_vec(),
+        result_type: result_type.to_string(),
+        imports: imports.to_vec(),
+        packages: packages.to_vec(),
+        runtime_version: runtime_version.to_string(),
+        code: code.to_string(),
+    })
 }
 
 /// A helper for type checking.
@@ -5525,7 +5523,7 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
-        spec: &str,
+        spec: databend_common_cloud_control::pb::UdfRuntimeSpec,
         imports: &[String],
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
@@ -5560,7 +5558,7 @@ impl<'a> TypeChecker<'a> {
             Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
         )?;
         let req = ApplyUdfResourceRequest {
-            spec: spec.to_string(),
+            spec: Some(spec),
             imports,
         };
 
@@ -5645,17 +5643,19 @@ impl<'a> TypeChecker<'a> {
         &self,
         code: &str,
         handler: &str,
+        language: &str,
         imports: &[String],
         packages: &[String],
         arg_types: &[DataType],
         return_type: &DataType,
         runtime_version: &str,
-    ) -> Result<String> {
+    ) -> Result<databend_common_cloud_control::pb::UdfRuntimeSpec> {
         let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
         let result_type = udf_type_string(return_type);
         build_udf_cloud_spec(
             code,
             handler,
+            language,
             imports,
             packages,
             &input_types,
@@ -5774,13 +5774,14 @@ impl<'a> TypeChecker<'a> {
             let spec = self.build_udf_cloud_spec(
                 &code,
                 &handler,
+                &language.to_string(),
                 &imports,
                 &packages,
                 &arg_types,
                 &return_type,
                 &runtime_version,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource(&spec, &imports)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource(spec, &imports)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,
