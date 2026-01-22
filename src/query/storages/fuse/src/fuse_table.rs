@@ -514,7 +514,7 @@ impl FuseTable {
         }
 
         let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys(ctx.clone()).unwrap();
+        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
         let cluster_keys = exprs
             .iter()
@@ -545,7 +545,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys(ctx.clone()) else {
+        let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
         let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
@@ -91,7 +92,7 @@ impl BlockReader {
             //  Yes, it is too obscure, we need to polish it later.
 
             let value = match column_chunks.get(&field.column_id) {
-                Some(DataItem::RawData(data)) => {
+                Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     if !column_node.is_nested {
@@ -100,7 +101,8 @@ impl BlockReader {
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.insert(key.into(), (arrow_array.clone(), data.len()));
+                            let array_memory_size = arrow_array.get_array_memory_size();
+                            cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                         }
                     }
                     Value::from_arrow_rs(arrow_array, &data_type)?

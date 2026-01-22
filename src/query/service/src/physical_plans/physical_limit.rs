@@ -24,6 +24,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::filters::TransformLimit;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -32,6 +33,7 @@ use crate::physical_plans::format::LimitFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
 use crate::pipelines::PipelineBuilder;
@@ -161,91 +163,142 @@ impl PhysicalPlanBuilder {
         }
 
         // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
-        let input_schema = input_plan.output_schema()?;
+        let mut plan = PhysicalPlan::new(Limit {
+            meta: PhysicalPlanMeta::new("Limit"),
+            input: input_plan,
+            limit: limit.limit,
+            offset: limit.offset,
+            stat_info: Some(stat_info.clone()),
+        });
+        let input_schema = plan.output_schema()?;
 
         // Lazy materialization is enabled.
         let metadata = self.metadata.read();
-        let row_id_col_index = metadata
-            .columns()
-            .iter()
-            .position(|col| col.name() == ROW_ID_COL_NAME)
-            .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
-
-        if !input_schema.has_field(&row_id_col_index.to_string()) {
-            return Ok(PhysicalPlan::new(Limit {
-                input: input_plan,
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info),
-                meta: PhysicalPlanMeta::new("Limit"),
-            }));
-        }
-
-        let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
 
         // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
         // See the case in tests/sqllogictests/suites/crdb/limit:
         // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
-        let lazy_columns = limit
-            .lazy_columns
-            .iter()
-            .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
-            .cloned()
-            .collect::<Vec<_>>();
-
-        if limit.before_exchange || lazy_columns.is_empty() {
-            // If there is no lazy column, we don't need to build a `RowFetch` plan.
-            return Ok(PhysicalPlan::new(Limit {
-                input: input_plan,
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info),
-                meta: PhysicalPlanMeta::new("Limit"),
-            }));
+        let mut lazy_columns_by_table: HashMap<IndexType, Vec<IndexType>> = HashMap::new();
+        for index in limit.lazy_columns.iter() {
+            if input_schema.has_field(&index.to_string()) {
+                continue;
+            }
+            let table_index = match metadata.column(*index) {
+                ColumnEntry::BaseTableColumn(c) => c.table_index,
+                _ => continue,
+            };
+            lazy_columns_by_table
+                .entry(table_index)
+                .or_default()
+                .push(*index);
         }
 
-        let mut has_inner_column = false;
-        let fetched_fields = lazy_columns
-            .iter()
-            .map(|index| {
-                let col = metadata.column(*index);
-                if let ColumnEntry::BaseTableColumn(c) = col {
-                    if c.path_indices.is_some() {
-                        has_inner_column = true;
-                    }
+        if lazy_columns_by_table.is_empty() {
+            // If there is no lazy column, we don't need to build a `RowFetch` plan.
+            return Ok(plan);
+        }
+
+        fn collect_table_sources(
+            plan: &PhysicalPlan,
+            sources: &mut HashMap<IndexType, DataSourcePlan>,
+        ) {
+            if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
+                if let Some(table_index) = scan.table_index {
+                    sources
+                        .entry(table_index)
+                        .or_insert_with(|| (*scan.source).clone());
                 }
-                DataField::new(&index.to_string(), col.data_type())
-            })
-            .collect();
+            }
+            for child in plan.children() {
+                collect_table_sources(child, sources);
+            }
+        }
 
-        let source = input_plan.try_find_single_data_source();
-        debug_assert!(source.is_some());
-        let source_info = source.cloned().unwrap();
-        let table_schema = source_info.source_info.schema();
-        let cols_to_fetch = Self::build_projection(
-            &metadata,
-            &table_schema,
-            lazy_columns.iter(),
-            has_inner_column,
-            true,
-            true,
-        );
+        let mut table_sources = HashMap::new();
+        collect_table_sources(&plan, &mut table_sources);
 
-        Ok(PhysicalPlan::new(RowFetch {
-            meta: PhysicalPlanMeta::new("RowFetch"),
-            input: PhysicalPlan::new(Limit {
-                meta: PhysicalPlanMeta::new("Limit"),
-                input: input_plan,
-                limit: limit.limit,
-                offset: limit.offset,
+        let mut table_indexes: Vec<IndexType> = lazy_columns_by_table.keys().copied().collect();
+        table_indexes.sort_unstable();
+
+        let mut row_id_col_offsets = HashMap::new();
+        for table_index in table_indexes.iter() {
+            let row_id_col_index = match metadata.row_id_index_by_table_index(*table_index) {
+                Some(index) => index,
+                None => return Ok(plan),
+            };
+            if !input_schema.has_field(&row_id_col_index.to_string()) {
+                return Ok(plan);
+            }
+            let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
+            row_id_col_offsets.insert(*table_index, row_id_col_offset);
+        }
+
+        for table_index in table_indexes {
+            let lazy_columns: &[IndexType] = match lazy_columns_by_table.get(&table_index) {
+                Some(columns) => columns,
+                None => continue,
+            };
+            if lazy_columns.is_empty() {
+                continue;
+            }
+
+            let mut has_inner_column = false;
+            let fetched_fields = lazy_columns
+                .iter()
+                .map(|index| {
+                    let col = metadata.column(*index);
+                    if let ColumnEntry::BaseTableColumn(c) = col {
+                        if c.path_indices.is_some() {
+                            has_inner_column = true;
+                        }
+                    }
+                    DataField::new(&index.to_string(), col.data_type())
+                })
+                .collect();
+
+            let source_info = table_sources
+                .get(&table_index)
+                .cloned()
+                .or_else(|| metadata.get_table_source(&table_index).cloned())
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Table source not found for table index {}",
+                        table_index
+                    ))
+                })?;
+            let table_schema = source_info.source_info.schema();
+            let cols_to_fetch = Self::build_projection(
+                &metadata,
+                &table_schema,
+                lazy_columns.iter(),
+                has_inner_column,
+                true,
+                true,
+            );
+
+            let row_id_col_offset =
+                row_id_col_offsets
+                    .get(&table_index)
+                    .copied()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Internal column {} is not found for table index {}",
+                            ROW_ID_COL_NAME, table_index
+                        ))
+                    })?;
+
+            plan = PhysicalPlan::new(RowFetch {
+                meta: PhysicalPlanMeta::new("RowFetch"),
+                input: plan,
+                source: Box::new(source_info),
+                row_id_col_offset,
+                cols_to_fetch,
+                fetched_fields,
+                need_wrap_nullable: false,
                 stat_info: Some(stat_info.clone()),
-            }),
-            source: Box::new(source_info),
-            row_id_col_offset,
-            cols_to_fetch,
-            fetched_fields,
-            need_wrap_nullable: false,
-            stat_info: Some(stat_info),
-        }))
+            });
+        }
+
+        Ok(plan)
     }
 }

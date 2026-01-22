@@ -45,7 +45,7 @@ use log::warn;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
-use crate::util::generate_catalog_meta;
+use crate::util::generate_default_catalog_meta;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
 pub type DatabasesTableWithoutHistory = DatabasesTable<false>;
@@ -319,7 +319,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()

@@ -762,6 +762,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_lazy_read_across_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables lazy read across join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 1MB",
@@ -1251,6 +1258,34 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("binary_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("hex".to_owned()),
+                    desc: "Controls how BINARY columns are rendered (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                        "utf8".into(),
+                        "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
+                    ])),
+                }),
+                ("binary_input_format", DefaultSettingValue {
+                    value: UserSettingValue::String("utf-8".to_owned()),
+                    desc: "Controls how string literals are interpreted when inserted into BINARY columns (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                        "utf8".into(),
+                        "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
+                    ])),
+                }),
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",
@@ -1465,13 +1500,6 @@ impl DefaultSettings {
                 ("enable_parallel_union_all", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_binary_to_utf8_lossy", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable binary-to-UTF8 lossy conversion, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

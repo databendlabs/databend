@@ -29,6 +29,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -87,6 +88,16 @@ impl Interpreter for DropTableColumnInterpreter {
 
         let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
+
+        if let Some(cluster_key) = &table_info.meta.cluster_key {
+            let referenced = cluster_key_referenced_columns(cluster_key)?;
+            if referenced.contains(self.plan.column.as_str()) {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot drop column '{}' because it is referenced by cluster key {}",
+                    self.plan.column, cluster_key
+                )));
+            }
+        }
 
         if table_info.meta.is_column_reference_policy(&field.column_id) {
             return Err(ErrorCode::AlterTableError(format!(

@@ -1,0 +1,48 @@
+statement ok
+drop table if exists csv_bin_demo
+
+statement ok
+create table csv_bin_demo(id int, payload binary, notes string)
+
+statement ok
+drop stage if exists csv_bin_stage
+
+statement ok
+create stage csv_bin_stage
+
+# Create CSV with HEX encoded payload
+statement ok
+copy into @csv_bin_stage/hex_example.csv
+from (select 1, '48656C6C6F20576F726C64', 'hex_sample')
+file_format = (type = csv)
+
+statement ok
+copy into csv_bin_demo(id, payload, notes)
+from @csv_bin_stage/hex_example.csv
+file_format = (type = csv binary_format = hex)
+
+# Create CSV with BASE64 encoded payload
+statement ok
+copy into @csv_bin_stage/base64_example.csv
+from (select 2, 'AP8QgA==', 'base64_sample')
+file_format = (type = csv)
+
+statement ok
+copy into csv_bin_demo(id, payload, notes)
+from @csv_bin_stage/base64_example.csv
+file_format = (type = csv binary_format = base64)
+
+statement ok
+set binary_output_format = 'hex'
+
+query ITT
+select id, to_hex(payload), notes from csv_bin_demo order by id
+----
+1 48656c6c6f20576f726c64 hex_sample
+2 00ff1080 base64_sample
+
+statement ok
+drop stage csv_bin_stage
+
+statement ok
+drop table csv_bin_demo

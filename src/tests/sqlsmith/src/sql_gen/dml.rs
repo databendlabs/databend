@@ -600,6 +600,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     },
                     escape_char: b'\\',
                     quote_char: b'"',
+                    binary_format: Default::default(),
                 };
 
                 for i in 0..row_count {
@@ -637,7 +638,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {
-                                encoder.write_field(column, i, &mut buf, true);
+                                encoder
+                                    .write_field(column, i, &mut buf, true)
+                                    .expect("failed to encode column value");
                             }
                         }
                     }
