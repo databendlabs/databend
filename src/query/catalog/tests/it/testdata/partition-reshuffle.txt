@@ -27,6 +27,9 @@ Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"4"}, {"type":"fu
 PartitionsShuffleKind::Rand: 11 partitions of 2 executors
 5
 6
+PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors
+Partitions { kind: BroadcastCluster, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+Partitions { kind: BroadcastCluster, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
 PartitionsShuffleKind::BlockMod: 3 partitions of 2 executors
 Partitions { kind: BlockMod, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
 Partitions { kind: BlockMod, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
