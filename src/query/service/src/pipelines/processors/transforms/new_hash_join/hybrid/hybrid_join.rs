@@ -123,7 +123,7 @@ impl HybridHashJoin {
                 memory_join.add_block(None)?;
             }
 
-            self.state.set_spilled()?;
+            self.state.set_spilled();
             self.add_transition_work()?;
 
             self.mode = HybridJoinMode::Grace(Box::new(self.create_grace_join()?));
