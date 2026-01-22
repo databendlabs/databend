@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column;
 mod grant;
 mod metrics;
 mod notification;
@@ -23,6 +24,7 @@ mod util;
 
 pub mod table_option_validation;
 
+pub use column::*;
 pub use grant::validate_grant_object_exists;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;

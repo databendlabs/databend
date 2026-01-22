@@ -26,7 +26,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::ViewTable;
 
-use crate::generate_catalog_meta;
+use crate::generate_default_catalog_meta;
 
 pub struct PrivateTaskHistoryTable {}
 
@@ -117,7 +117,7 @@ impl PrivateTaskHistoryTable {
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), CATALOG_DEFAULT)
                     .into(),
-                meta: generate_catalog_meta(CATALOG_DEFAULT),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()

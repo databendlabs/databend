@@ -408,9 +408,15 @@ impl ExecuteState {
             .get_geometry_output_format()
             .with_context(make_error)?
             .to_string();
+        let binary_output_format = settings
+            .get_binary_output_format()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
         let result_format_settings = Some(ResultFormatSettings {
             timezone,
             geometry_output_format,
+            binary_output_format,
         });
 
         let running_state = ExecuteRunning {

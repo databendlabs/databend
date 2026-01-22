@@ -42,6 +42,6 @@ ndjson/numbers.ndjson 3 0 NULL NULL
 query IIT
 SELECT * FROM number
 ----
-1 100 1e38
-2 200 -1e77
+1 100 1e+38
+2 200 -1e+77
 3 300 null

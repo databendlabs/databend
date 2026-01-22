@@ -119,9 +119,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
             // TODO md5 lib doesn't allow encode into buffer...
             output.row_buffer.resize(32, 0);
-            if let Err(err) =
-                hex::encode_to_slice(Md5Hasher::digest(val).as_slice(), &mut output.row_buffer)
-            {
+            if let Err(err) = hex::encode_to_slice(Md5Hasher::digest(val), &mut output.row_buffer) {
                 ctx.set_error(output.len(), err.to_string());
             }
             output.commit_row();
@@ -137,8 +135,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let mut m = ::sha1::Sha1::new();
             sha1::digest::Update::update(&mut m, val.as_bytes());
 
-            if let Err(err) = hex::encode_to_slice(m.finalize().as_slice(), &mut output.row_buffer)
-            {
+            if let Err(err) = hex::encode_to_slice(m.finalize(), &mut output.row_buffer) {
                 ctx.set_error(output.len(), err.to_string());
             }
             output.commit_row();

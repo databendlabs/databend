@@ -39,6 +39,7 @@ pub struct OutputCommonSettings {
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
     pub jiff_timezone: TimeZone,
+    // File-format binary encoding (Hex/Base64); distinct from BinaryDisplayFormat.
     pub binary_format: BinaryFormat,
     pub geometry_format: GeometryDataType,
 }
