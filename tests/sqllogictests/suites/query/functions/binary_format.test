@@ -23,7 +23,7 @@ select v from fmt_bin order by id
 statement ok
 set binary_output_format = 'base64'
 
-skipif ttc-rust
+onlyif http
 query IT
 select v from fmt_bin order by id
 ----
@@ -34,7 +34,7 @@ aGVsbG8gdW5pY29kZQ==
 statement ok
 set binary_output_format = 'utf-8'
 
-skipif ttc-rust
+onlyif http
 query IT
 select v from fmt_bin order by id
 ----

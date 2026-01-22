@@ -14,3 +14,6 @@
 
 mod hybrid_join;
 mod hybrid_state;
+
+pub use hybrid_join::HybridHashJoin;
+pub use hybrid_state::HybridHashJoinState;
