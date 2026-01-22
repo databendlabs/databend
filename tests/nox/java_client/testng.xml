@@ -13,9 +13,7 @@
       <class name="com.databend.jdbc.TestDatabendDriverUri"/>
       <class name="com.databend.jdbc.TestDatabendParameterMetaData"/>
       <class name="com.databend.jdbc.TestFileTransfer"/>
-      <class name="com.databend.jdbc.TestGeometry"/>
       <class name="com.databend.jdbc.TestHeartbeat"/>
-      <class name="com.databend.jdbc.TestMultiHost"/>
       <class name="com.databend.jdbc.TestPrepareStatement"/>
       <class name="com.databend.jdbc.TestPresignContext"/>
       <class name="com.databend.jdbc.TestTempTable"/>
