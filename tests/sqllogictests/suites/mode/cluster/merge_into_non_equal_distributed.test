@@ -220,6 +220,9 @@ statement ok
 create stage ss FILE_FORMAT = (TYPE = CSV);
 
 statement ok
+remove @ss;
+
+statement ok
 create table t2(a int);
 
 statement ok

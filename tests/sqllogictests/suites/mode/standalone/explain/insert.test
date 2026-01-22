@@ -25,13 +25,11 @@ InsertPlan (subquery):
 ├── table: default.default.t2
 ├── inserted columns: [t2.a (#0),t2.b (#1)]
 ├── overwrite: false
-└── Filter
+└── Scan
+    ├── table: default.t1 (#0)
     ├── filters: [eq(t1.a (#0), 1)]
-    └── Scan
-        ├── table: default.t1 (#0)
-        ├── filters: [eq(t1.a (#0), 1)]
-        ├── order by: []
-        └── limit: NONE
+    ├── order by: []
+    └── limit: NONE
 
 
 

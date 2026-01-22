@@ -77,21 +77,17 @@ AggregateFinal
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── Filter
+    └── TableScan
+        ├── table: default.default.t
+        ├── scan id: 0
         ├── output columns: []
-        ├── filters: [is_true(t.number (#0) > 10)]
-        ├── estimated rows: 2983.50
-        └── TableScan
-            ├── table: default.default.t
-            ├── scan id: 0
-            ├── output columns: [number (#0)]
-            ├── read rows: 3000
-            ├── read size: 5.90 KiB
-            ├── partitions total: 2
-            ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-            ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
-            └── estimated rows: 3000.00
+        ├── read rows: 3000
+        ├── read size: 5.90 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
+        └── estimated rows: 2983.50
 
 query T
 explain select count(*) from t group by number

@@ -29,36 +29,28 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 4.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 3.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    └── estimated rows: 4.00
 
 # convert full outer join to right outer join, can propagate t2.a > 0
 query T
@@ -74,37 +66,29 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 4.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 3.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
-        ├── apply join filters: [#0]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 4.00
 
 # convert full outer join to left outer join, can not propagate t1.b > 0
 query T
@@ -129,21 +113,17 @@ HashJoin
 │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.b (#1) > 0)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.b (#1) > 0)], limit: NONE]
-        └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.b (#1) > 0)], limit: NONE]
+    └── estimated rows: 4.00
 
 # convert full outer join to right outer join, can not propagate t2.b > 0
 query T
@@ -159,21 +139,17 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 4.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.b (#3) > 0)]
-│   ├── estimated rows: 3.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.b (#3) > 0)], limit: NONE]
-│       └── estimated rows: 3.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.b (#3) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0
@@ -201,37 +177,29 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 4.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0), is_true(t2.b (#3) > 0)]
-│   ├── estimated rows: 3.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [t2.a (#2) > 0 and t2.b (#3) > 0], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
-        ├── apply join filters: [#0]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [t2.a (#2) > 0 and t2.b (#3) > 0], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 4.00
 
 # convert full outer join to inner join, can propagate t2.a > 0
 query T
@@ -247,37 +215,29 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 4.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 3.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [is_true(t1.a (#0) > 0), is_true(t1.b (#1) > 0)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [t1.a (#0) > 0 and t1.b (#1) > 0], limit: NONE]
-        ├── apply join filters: [#0]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [t1.a (#0) > 0 and t1.b (#1) > 0], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 4.00
 
 # full outer join, can not push down t2.a > 0
 query T
