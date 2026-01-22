@@ -17,6 +17,6 @@
 /// [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate
 mod bitmask;
 mod group;
-mod new_hash_index;
+mod hash_index;
 
-pub use new_hash_index::NewHashIndex;
+pub use hash_index::NewHashIndex;
