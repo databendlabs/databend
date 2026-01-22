@@ -16,4 +16,5 @@
 #![allow(clippy::diverging_sub_expression)]
 
 mod config;
+mod raft_log_v004_recovery;
 mod types;
