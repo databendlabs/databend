@@ -14,211 +14,14 @@
 // limitations under the License.
 
 use std::hint::likely;
-use std::num::NonZeroU64;
-use std::ptr::NonNull;
-
-use databend_common_ast::parser::token::GROUP;
 
 use crate::ProbeState;
-use crate::aggregate::BATCH_SIZE;
+use crate::aggregate::LOAD_FACTOR;
 use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
+use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
-
-// Portions of this file are derived from excellent `hashbrown` crate
-
-/// Single tag in a control group.
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[repr(transparent)]
-struct Tag(u8);
-impl Tag {
-    /// Control tag value for an empty bucket.
-    const EMPTY: Tag = Tag(0b1111_1111);
-
-    /// Creates a control tag representing a full bucket with the given hash.
-    #[inline]
-    const fn full(hash: u64) -> Tag {
-        let top7 = hash >> (8 * 8 - 7);
-        Tag((top7 & 0x7f) as u8) // truncation
-    }
-}
-
-const BITMASK_ITER_MASK: u64 = 0x8080_8080_8080_8080;
-
-const BITMASK_STRIDE: usize = 8;
-
-type NonZeroBitMaskWord = NonZeroU64;
-
-#[derive(Copy, Clone)]
-struct BitMask(u64);
-
-impl BitMask {
-    #[inline]
-    #[must_use]
-    fn remove_lowest_bit(self) -> Self {
-        BitMask(self.0 & (self.0 - 1))
-    }
-
-    #[inline]
-    fn nonzero_trailing_zeros(nonzero: NonZeroBitMaskWord) -> usize {
-        if cfg!(target_arch = "arm") && BITMASK_STRIDE % 8 == 0 {
-            // SAFETY: A byte-swapped non-zero value is still non-zero.
-            let swapped = unsafe { NonZeroBitMaskWord::new_unchecked(nonzero.get().swap_bytes()) };
-            swapped.leading_zeros() as usize / BITMASK_STRIDE
-        } else {
-            nonzero.trailing_zeros() as usize / BITMASK_STRIDE
-        }
-    }
-
-    fn lowest_set_bit(self) -> Option<usize> {
-        NonZeroBitMaskWord::new(self.0).map(Self::nonzero_trailing_zeros)
-    }
-}
-
-impl IntoIterator for BitMask {
-    type Item = usize;
-    type IntoIter = BitMaskIter;
-
-    #[inline]
-    fn into_iter(self) -> BitMaskIter {
-        // A BitMask only requires each element (group of bits) to be non-zero.
-        // However for iteration we need each element to only contain 1 bit.
-        BitMaskIter(BitMask(self.0 & BITMASK_ITER_MASK))
-    }
-}
-
-/// Iterator over the contents of a `BitMask`, returning the indices of set
-/// bits.
-#[derive(Clone)]
-struct BitMaskIter(BitMask);
-
-impl Iterator for BitMaskIter {
-    type Item = usize;
-
-    #[inline]
-    fn next(&mut self) -> Option<usize> {
-        let bit = self.0.lowest_set_bit()?;
-        self.0 = self.0.remove_lowest_bit();
-        Some(bit)
-    }
-}
-
-/// Helper function to replicate a tag across a `GroupWord`.
-#[inline]
-fn repeat(tag: Tag) -> u64 {
-    u64::from_ne_bytes([tag.0; Group::WIDTH])
-}
-
-mod group {
-
-    #[cfg(not(all(
-        target_arch = "aarch64",
-        target_feature = "neon",
-        target_endian = "little",
-        not(miri),
-    )))]
-    pub use generic::Group;
-    #[cfg(all(
-        target_arch = "aarch64",
-        target_feature = "neon",
-        // NEON intrinsics are currently broken on big-endian targets.
-        // See https://github.com/rust-lang/stdarch/issues/1484.
-        target_endian = "little",
-        not(miri),
-    ))]
-    pub use neon::Group;
-
-    mod generic {
-        use crate::aggregate::new_hash_index::BitMask;
-        use crate::aggregate::new_hash_index::Tag;
-        use crate::aggregate::new_hash_index::repeat;
-
-        #[derive(Copy, Clone)]
-        pub struct Group(u64);
-
-        impl Group {
-            /// Number of bytes in the group.
-            pub const WIDTH: usize = 8;
-
-            #[inline]
-            pub fn match_tag(self, tag: Tag) -> BitMask {
-                // This algorithm is derived from
-                // https://graphics.stanford.edu/~seander/bithacks.html##ValueInWord
-                let cmp = self.0 ^ repeat(tag);
-                BitMask((cmp.wrapping_sub(repeat(Tag(0x01))) & !cmp & repeat(Tag(0x80))).to_le())
-            }
-
-            #[inline]
-            pub fn match_empty(self) -> BitMask {
-                BitMask((self.0 & repeat(Tag(0x80))).to_le())
-            }
-
-            #[inline]
-            pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
-                unsafe { Group((ctrls.as_ptr().add(index) as *const u64).read_unaligned()) }
-            }
-        }
-    }
-
-    mod neon {
-        use core::arch::aarch64 as neon;
-        use std::mem;
-
-        use crate::aggregate::new_hash_index::BitMask;
-        use crate::aggregate::new_hash_index::Tag;
-
-        #[derive(Copy, Clone)]
-        pub struct Group(neon::uint8x8_t);
-
-        impl Group {
-            /// Number of bytes in the group.
-            pub const WIDTH: usize = mem::size_of::<Self>();
-
-            #[inline]
-            pub fn match_tag(self, tag: Tag) -> BitMask {
-                unsafe {
-                    let cmp = neon::vceq_u8(self.0, neon::vdup_n_u8(tag.0));
-                    BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
-                }
-            }
-
-            #[inline]
-            pub fn match_empty(self) -> BitMask {
-                unsafe {
-                    let cmp = neon::vcltz_s8(neon::vreinterpret_s8_u8(self.0));
-                    BitMask(neon::vget_lane_u64(neon::vreinterpret_u64_u8(cmp), 0))
-                }
-            }
-
-            #[inline]
-            pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
-                unsafe { Group(neon::vld1_u8(ctrls.as_ptr().add(index) as *const u8)) }
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-struct ProbeSeq {
-    pos: usize,
-    stride: usize,
-}
-
-impl ProbeSeq {
-    #[inline]
-    fn move_next(&mut self, bucket_mask: usize) {
-        // We should have found an empty bucket by now and ended the probe.
-        debug_assert!(
-            self.stride <= bucket_mask,
-            "Went past end of probe sequence"
-        );
-
-        self.stride += Group::WIDTH;
-        self.pos += self.stride;
-        self.pos &= bucket_mask;
-    }
-}
 
 pub struct NewHashIndex {
     ctrls: Vec<Tag>,
@@ -415,7 +218,7 @@ impl HashIndexOps for NewHashIndex {
     }
 
     fn resize_threshold(&self) -> usize {
-        (self.capacity as f64 / super::LOAD_FACTOR) as usize
+        (self.capacity as f64 / LOAD_FACTOR) as usize
     }
 
     fn allocated_bytes(&self) -> usize {

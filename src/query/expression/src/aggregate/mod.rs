@@ -36,7 +36,6 @@ pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use group_hash::*;
-use hash_index::Entry;
 use hash_index::HashIndexOps;
 pub use partitioned_payload::*;
 pub use payload::*;
@@ -44,6 +43,9 @@ pub use payload_flush::*;
 pub use probe_state::ProbeState;
 use probe_state::*;
 use row_ptr::*;
+
+use crate::aggregate::hash_index::HashIndex;
+use crate::aggregate::new_hash_index::NewHashIndex;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
@@ -171,28 +173,26 @@ impl HashTableConfig {
 
     fn new_hash_index(&self, capacity: usize) -> Box<dyn HashIndexOps> {
         if self.enable_experiment_hash_index {
-            Box::new(new_hash_index::NewHashIndex::with_capacity(capacity))
+            Box::new(NewHashIndex::with_capacity(capacity))
         } else {
-            Box::new(hash_index::HashIndex::with_capacity(capacity))
+            Box::new(HashIndex::with_capacity(capacity))
         }
     }
 
     fn new_dummy_hash_index(&self) -> Box<dyn HashIndexOps> {
         if self.enable_experiment_hash_index {
-            Box::new(new_hash_index::NewHashIndex::dummy())
+            Box::new(NewHashIndex::dummy())
         } else {
-            Box::new(hash_index::HashIndex::dummy())
+            Box::new(HashIndex::dummy())
         }
     }
 
     fn rebuild_hash_index<I>(&self, capacity: usize, iter: I) -> Box<dyn HashIndexOps>
     where I: IntoIterator<Item = (u64, RowPtr)> {
         if self.enable_experiment_hash_index {
-            Box::new(new_hash_index::NewHashIndex::rebuild_from_iter(
-                capacity, iter,
-            ))
+            Box::new(NewHashIndex::rebuild_from_iter(capacity, iter))
         } else {
-            Box::new(hash_index::HashIndex::rebuild_from_iter(capacity, iter))
+            Box::new(HashIndex::rebuild_from_iter(capacity, iter))
         }
     }
 }
