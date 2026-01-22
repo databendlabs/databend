@@ -305,8 +305,8 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        // Check if we should use block-level shuffle based on the partition kind
-        let use_block_level_shuffle = plan.parts.kind == PartitionsShuffleKind::BlockMod;
+        // Get block_slot from plan (computed at coordinator during redistribution)
+        let block_slot = plan.block_slot.clone();
 
         match segment_format {
             FuseSegmentFormat::Row => {
@@ -319,7 +319,7 @@ impl FuseTable {
                     derterministic_cache_key.clone(),
                     lazy_init_segments.len(),
                     plan_id,
-                    use_block_level_shuffle,
+                    block_slot,
                 )?;
             }
             FuseSegmentFormat::Column => {
@@ -445,7 +445,7 @@ impl FuseTable {
         derterministic_cache_key: Option<String>,
         partitions_total: usize,
         plan_id: u32,
-        use_block_level_shuffle: bool,
+        block_slot: Option<BlockSlotDescription>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -550,25 +550,6 @@ impl FuseTable {
             .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
         let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
-
-        // Compute block slot for block-level shuffle
-        let block_slot = if use_block_level_shuffle {
-            let cluster = ctx.get_cluster();
-            if !cluster.is_empty() {
-                // Sort nodes by cache_id for deterministic ordering
-                let mut nodes = cluster.nodes.clone();
-                nodes.sort_by(|a, b| a.cache_id.cmp(&b.cache_id));
-                let num_slots = nodes.len();
-                let local_id = &cluster.local_id;
-                // Find the local node's position in the sorted list
-                let slot = nodes.iter().position(|n| &n.id == local_id).unwrap_or(0) as u32;
-                Some(BlockSlotDescription { num_slots, slot })
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
