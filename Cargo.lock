@@ -13118,9 +13118,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "raft-log"
-version = "0.2.11"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0165867dff6247addcaa9569e4cb4b6b401305fc6319f3c4bd7c87f7a748911"
+checksum = "678b96c3f0a42e2219f66bcc95eebbbc5acbf5848287074a9a510c09efe81294"
 dependencies = [
  "byteorder",
  "codeq",
