@@ -69,9 +69,7 @@ impl NewHashIndex {
         }
         hash_index
     }
-}
 
-impl NewHashIndex {
     #[inline]
     fn ctrl(&mut self, index: usize) -> *mut Tag {
         debug_assert!(index < self.ctrls.len());
@@ -105,10 +103,11 @@ impl NewHashIndex {
             None
         }
     }
+}
 
-    pub fn find_or_insert(&mut self, mut pos: usize, hash: u64) -> (usize, bool) {
+impl NewHashIndex {
+    fn find_or_insert_batch(&mut self, mut pos: usize, tag_hash: Tag) -> (usize, bool) {
         let mut insert_index = None;
-        let tag_hash = Tag::full(hash);
         loop {
             let group = unsafe { Group::load(&self.ctrls, pos) };
             if let Some(bit) = group.match_tag(tag_hash).into_iter().next() {
@@ -123,6 +122,19 @@ impl NewHashIndex {
 
             pos = (pos + Group::WIDTH) & self.bucket_mask;
         }
+    }
+
+    pub fn find_or_insert(&mut self, pos: usize, hash: u64) -> (usize, bool) {
+        let tag_hash = Tag::full(hash);
+        let ctrl = unsafe { *self.ctrl(pos) };
+        if ctrl == tag_hash {
+            return (pos, false);
+        }
+        if ctrl == Tag::EMPTY {
+            self.set_ctrl(pos, tag_hash);
+            return (pos, true);
+        }
+        self.find_or_insert_batch(pos, tag_hash)
     }
 
     /// Probes the hash table for an empty slot using SIMD groups (batches) and sets the control byte.
@@ -267,5 +279,26 @@ impl HashIndexOps for NewHashIndex {
         adapter: &mut dyn TableAdapter,
     ) -> usize {
         NewHashIndex::probe_and_create(self, state, row_count, adapter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NewHashIndex;
+
+    #[test]
+    fn find_or_insert_inserts_on_empty_slot() {
+        let capacity = 8;
+        let mut index = NewHashIndex::with_capacity(capacity);
+        let hash = 0x1234_5678_9abc_def0_u64;
+        let pos = (hash as usize) & (capacity - 1);
+
+        let (slot, is_new) = index.find_or_insert(pos, hash);
+        assert_eq!(slot, pos);
+        assert!(is_new);
+
+        let (slot, is_new) = index.find_or_insert(pos, hash);
+        assert_eq!(slot, pos);
+        assert!(!is_new);
     }
 }
