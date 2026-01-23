@@ -302,5 +302,6 @@ impl HashIndexOps for NewHashIndex {
         unsafe {
             *self.pointers.get_unchecked_mut(index) = row_ptr;
         }
+        self.count += 1;
     }
 }
