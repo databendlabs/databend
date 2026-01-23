@@ -42,6 +42,15 @@ UDF_DOCKER_STARTUP_TIMEOUT_SECS = float(
 )
 UDF_DOCKER_CACHE = {}
 UDF_DOCKER_LOCK = threading.Lock()
+RESOURCE_STATUS_CONTAINER_PORT = 8080
+RESOURCE_DOCKER_CACHE = {}
+RESOURCE_DOCKER_LOCK = threading.Lock()
+RESOURCE_IMAGE_BY_TYPE = {
+    "udf": UDF_DOCKER_BASE_IMAGE,
+}
+RESOURCE_SERVICE_PORT_BY_TYPE = {
+    "udf": UDF_DOCKER_CONTAINER_PORT,
+}
 
 
 def _log(*args):
@@ -50,7 +59,7 @@ def _log(*args):
 
 def _run_command(args, input_text=None):
     if UDF_DOCKER_LOG_COMMANDS:
-        _log("UDF docker exec:", " ".join(args))
+        _log("Sandbox docker exec:", " ".join(args))
     try:
         return subprocess.run(
             args,
@@ -61,12 +70,26 @@ def _run_command(args, input_text=None):
         )
     except subprocess.CalledProcessError as exc:
         if UDF_DOCKER_LOG_COMMANDS:
-            _log("UDF docker failed:", exc)
+            _log("Sandbox docker failed:", exc)
             if exc.stdout:
-                _log("UDF docker stdout:", exc.stdout.strip())
+                _log("Sandbox docker stdout:", exc.stdout.strip())
             if exc.stderr:
-                _log("UDF docker stderr:", exc.stderr.strip())
+                _log("Sandbox docker stderr:", exc.stderr.strip())
         raise
+
+
+def _get_resource_image(resource_type):
+    image = RESOURCE_IMAGE_BY_TYPE.get(resource_type)
+    if not image:
+        raise RuntimeError(f"unknown sandbox type '{resource_type}'")
+    return image
+
+
+def _get_resource_service_port(resource_type):
+    port = RESOURCE_SERVICE_PORT_BY_TYPE.get(resource_type)
+    if not port:
+        raise RuntimeError(f"missing service port for sandbox type '{resource_type}'")
+    return int(port)
 
 
 def _docker_available():
@@ -144,85 +167,110 @@ def _build_udf_image(dockerfile, image_tag, imports):
         _run_command(["docker", "build", "-t", image_tag, "-f", dockerfile_path, temp_dir])
 
 
-def _start_udf_container(image_tag, host_port, container_name):
+def _start_resource_container(
+    image_tag,
+    host_port,
+    service_port,
+    status_port,
+    container_name,
+    script,
+):
     if UDF_DOCKER_LOG_COMMANDS:
         _log(
-            "UDF docker run:",
+            "Sandbox docker run:",
             f"image={image_tag}",
             f"container={container_name}",
-            f"port={host_port}->{UDF_DOCKER_CONTAINER_PORT}",
+            f"port={host_port}->{service_port}",
+            f"status={status_port}->{RESOURCE_STATUS_CONTAINER_PORT}",
         )
     cmd = [
         "docker",
         "run",
         "-d",
+        "--network",
+        "host",
+        "-e",
+        f"RESOURCE_STATUS_ADDR=0.0.0.0:{status_port}",
+        "-e",
+        f"UDF_SERVER_ADDR=0.0.0.0:{host_port}",
     ]
     if not UDF_DOCKER_KEEP_CONTAINER:
         cmd.append("--rm")
     cmd.extend(
         [
-            "-p",
-            f"{host_port}:{UDF_DOCKER_CONTAINER_PORT}",
             "--name",
             container_name,
             image_tag,
+            "bash",
+            "-lc",
+            script,
         ]
     )
     result = _run_command(cmd)
     if UDF_DOCKER_LOG_COMMANDS:
         container_id = result.stdout.strip()
         if container_id:
-            _log(f"UDF docker container_id={container_id}")
+            _log(f"Sandbox docker container_id={container_id}")
 
 
-def _ensure_udf_endpoint(spec, imports):
-    imports_key = json.dumps(
-        [
-            {
-                "location": item.location,
-                "tag": item.tag,
-            }
-            for item in imports
-        ],
+def _ensure_resource_endpoint(resource_type, script):
+    image_tag = _get_resource_image(resource_type)
+    service_port = _get_resource_service_port(resource_type)
+    key_payload = json.dumps(
+        {"type": resource_type, "image": image_tag, "script": script},
         sort_keys=True,
     )
-    spec_bytes = spec.SerializeToString(deterministic=True)
-    spec_hash = hashlib.sha256(spec_bytes + imports_key.encode("utf-8")).hexdigest()[:12]
-    image_tag = f"{UDF_DOCKER_IMAGE_PREFIX}:{spec_hash}"
+    key_hash = hashlib.sha256(key_payload.encode("utf-8")).hexdigest()[:12]
 
-    with UDF_DOCKER_LOCK:
-        cached = UDF_DOCKER_CACHE.get(spec_hash)
+    with RESOURCE_DOCKER_LOCK:
+        cached = RESOURCE_DOCKER_CACHE.get(key_hash)
         if cached and _docker_container_running(cached["container"]):
             if UDF_DOCKER_LOG_COMMANDS:
                 _log(
-                    "UDF docker reuse:",
+                    "Sandbox docker reuse:",
                     f"container={cached['container']}",
                     f"endpoint={cached['endpoint']}",
+                    f"status={cached['status_endpoint']}",
                 )
-            return cached["endpoint"]
-
-        if not _docker_image_exists(image_tag):
-            dockerfile = _spec_to_dockerfile(spec)
-            _build_udf_image(dockerfile, image_tag, imports)
+            return cached["endpoint"], cached["status_endpoint"]
 
         host_port = _reserve_port()
-        container_name = f"{UDF_DOCKER_IMAGE_PREFIX}-{spec_hash}-{host_port}"
-        _start_udf_container(image_tag, host_port, container_name)
+        status_port = _reserve_port()
+        container_name = (
+            f"{UDF_DOCKER_IMAGE_PREFIX}-{resource_type}-{key_hash}-{host_port}"
+        )
+        _start_resource_container(
+            image_tag,
+            host_port,
+            service_port,
+            status_port,
+            container_name,
+            script,
+        )
 
         endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
-        UDF_DOCKER_CACHE[spec_hash] = {
+        status_endpoint = f"http://{UDF_DOCKER_HOST}:{status_port}/health"
+        RESOURCE_DOCKER_CACHE[key_hash] = {
             "container": container_name,
             "endpoint": endpoint,
+            "status_endpoint": status_endpoint,
         }
 
     if UDF_DOCKER_LOG_COMMANDS:
-        _log(f"UDF docker endpoint={endpoint}")
+        _log(f"Sandbox docker endpoint={endpoint}")
+        _log(f"Sandbox docker status_endpoint={status_endpoint}")
     if not _wait_for_port(UDF_DOCKER_HOST, host_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS):
         raise RuntimeError(
-            f"UDF container {container_name} did not start on {endpoint}"
+            f"Sandbox container {container_name} did not start on {endpoint}"
+        )
+    if not _wait_for_port(
+        UDF_DOCKER_HOST, status_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS
+    ):
+        raise RuntimeError(
+            f"Sandbox container {container_name} did not start on {status_endpoint}"
         )
 
-    return endpoint
+    return endpoint, status_endpoint
 
 
 def _spec_to_dockerfile(spec):
@@ -820,17 +868,18 @@ class UdfService(udf_pb2_grpc.UdfServiceServicer):
                 "docker not found; a working docker CLI is required",
             )
 
-        if not request.HasField("spec"):
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing spec")
-        spec = request.spec
-        imports = list(request.imports)
+        resource_type = request.type or "udf"
+        script = request.script
+        if not script:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing script")
+        _log("Sandbox script:\n", script)
 
         try:
-            endpoint = _ensure_udf_endpoint(spec, imports)
+            endpoint, _status_endpoint = _ensure_resource_endpoint(resource_type, script)
         except Exception as exc:
             context.abort(
                 grpc.StatusCode.INTERNAL,
-                f"failed to provision udf container: {exc}",
+                f"failed to provision sandbox container: {exc}",
             )
 
         return udf_pb2.ApplyUdfResourceResponse(

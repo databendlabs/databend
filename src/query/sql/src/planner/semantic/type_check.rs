@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -234,26 +235,346 @@ fn udf_type_string(data_type: &DataType) -> String {
     }
 }
 
-fn build_udf_cloud_spec(
+fn build_udf_cloud_script(
     code: &str,
     handler: &str,
-    language: &str,
-    imports: &[String],
+    imports: &[databend_common_cloud_control::pb::UdfAsset],
     packages: &[String],
     input_types: &[String],
     result_type: &str,
-    runtime_version: &str,
-) -> Result<databend_common_cloud_control::pb::UdfRuntimeSpec> {
-    Ok(databend_common_cloud_control::pb::UdfRuntimeSpec {
-        language: language.to_string(),
-        handler: handler.to_string(),
-        input_types: input_types.to_vec(),
-        result_type: result_type.to_string(),
-        imports: imports.to_vec(),
-        packages: packages.to_vec(),
-        runtime_version: runtime_version.to_string(),
-        code: code.to_string(),
-    })
+) -> Result<String> {
+    let server_stub = build_udf_cloud_server_stub(handler, input_types, result_type);
+    let imports_json = if imports.is_empty() {
+        None
+    } else {
+        let imports_payload = imports
+            .iter()
+            .map(|asset| {
+                json!({
+                    "location": asset.location.as_str(),
+                    "url": asset.url.as_str(),
+                    "tag": asset.tag.as_str(),
+                })
+            })
+            .collect::<Vec<_>>();
+        Some(to_string(&imports_payload)?)
+    };
+    let mut contents = vec![code, server_stub.as_str()];
+    if let Some(json) = imports_json.as_ref() {
+        contents.push(json);
+    }
+    let code_marker = unique_heredoc_marker("UDF_CODE", &contents);
+    let server_marker = unique_heredoc_marker("UDF_SERVER", &contents);
+    let imports_marker = imports_json
+        .as_ref()
+        .map(|_| unique_heredoc_marker("UDF_IMPORTS", &contents));
+
+    let packages = packages
+        .iter()
+        .map(|pkg| pkg.trim())
+        .filter(|pkg| !pkg.is_empty())
+        .collect::<Vec<_>>();
+
+    let mut script = String::with_capacity(
+        512 + code.len()
+            + server_stub.len()
+            + imports_json.as_ref().map(|json| json.len()).unwrap_or(0),
+    );
+    push_line(&mut script, "#!/usr/bin/env bash");
+    push_line(&mut script, "set -euo pipefail");
+    push_line(&mut script, "WORKDIR=/app");
+    push_line(&mut script, "mkdir -p \"$WORKDIR\"");
+    push_line(&mut script, "cd \"$WORKDIR\"");
+
+    if !packages.is_empty() {
+        script.push_str("python -m pip install --no-cache-dir");
+        for pkg in &packages {
+            script.push(' ');
+            script.push_str(pkg);
+        }
+        script.push('\n');
+    }
+
+    if let Some(json) = imports_json {
+        push_line(&mut script, "mkdir -p /app/imports");
+        let marker = imports_marker.expect("imports marker must exist");
+        write!(&mut script, "cat <<'{marker}' > /app/imports.json").unwrap();
+        script.push('\n');
+        push_line(&mut script, &json);
+        push_line(&mut script, &marker);
+        append_udf_import_downloader(&mut script);
+    }
+
+    write!(&mut script, "cat <<'{code_marker}' > /app/udf.py").unwrap();
+    script.push('\n');
+    push_line(&mut script, code);
+    push_line(&mut script, &code_marker);
+    write!(&mut script, "cat <<'{server_marker}' > /app/server.py").unwrap();
+    script.push('\n');
+    push_line(&mut script, &server_stub);
+    push_line(&mut script, &server_marker);
+    push_line(&mut script, "exec python /app/server.py");
+
+    Ok(script)
+}
+
+fn build_udf_cloud_server_stub(handler: &str, input_types: &[String], result_type: &str) -> String {
+    let handler_literal = escape_python_double_quoted(handler);
+    let input_types_literal = python_string_list(input_types);
+    let result_type_literal = escape_python_double_quoted(result_type);
+    let mut output =
+        String::with_capacity(2048 + handler_literal.len() + result_type_literal.len());
+    push_line(&mut output, "import importlib");
+    push_line(&mut output, "import json");
+    push_line(&mut output, "import os");
+    push_line(&mut output, "import sys");
+    push_line(&mut output, "import threading");
+    push_line(&mut output, "import time");
+    push_line(&mut output, "from datetime import datetime, timezone");
+    push_line(
+        &mut output,
+        "from http.server import BaseHTTPRequestHandler, HTTPServer",
+    );
+    push_line(
+        &mut output,
+        "from databend_udf import UDFServer, udf as udf_decorator",
+    );
+    push_line(&mut output, "");
+    push_line(&mut output, "IMPORTS_DIR = \"/app/imports\"");
+    push_line(
+        &mut output,
+        "STATUS_ADDR = os.getenv(\"RESOURCE_STATUS_ADDR\", \"0.0.0.0:8080\")",
+    );
+    push_line(&mut output, "_request_lock = threading.Lock()");
+    push_line(&mut output, "_request_count = 0");
+    push_line(&mut output, "_first_request_time = None");
+    push_line(&mut output, "_last_request_time = None");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _record_request():");
+    push_line(
+        &mut output,
+        "    global _request_count, _first_request_time, _last_request_time",
+    );
+    push_line(&mut output, "    now = time.time()");
+    push_line(&mut output, "    with _request_lock:");
+    push_line(&mut output, "        if _first_request_time is None:");
+    push_line(&mut output, "            _first_request_time = now");
+    push_line(&mut output, "        _last_request_time = now");
+    push_line(&mut output, "        _request_count += 1");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _format_time(value):");
+    push_line(&mut output, "    if value is None:");
+    push_line(&mut output, "        return None");
+    push_line(
+        &mut output,
+        "    return datetime.fromtimestamp(value, timezone.utc).isoformat()",
+    );
+    push_line(&mut output, "");
+    push_line(&mut output, "class StatusHandler(BaseHTTPRequestHandler):");
+    push_line(&mut output, "    def do_GET(self):");
+    push_line(&mut output, "        if self.path != \"/health\":");
+    push_line(&mut output, "            self.send_response(404)");
+    push_line(&mut output, "            self.end_headers()");
+    push_line(&mut output, "            return");
+    push_line(&mut output, "        payload = {");
+    push_line(
+        &mut output,
+        "            \"request_count\": _request_count,",
+    );
+    push_line(
+        &mut output,
+        "            \"first_request_time\": _format_time(_first_request_time),",
+    );
+    push_line(
+        &mut output,
+        "            \"last_request_time\": _format_time(_last_request_time),",
+    );
+    push_line(&mut output, "        }");
+    push_line(
+        &mut output,
+        "        data = json.dumps(payload).encode(\"utf-8\")",
+    );
+    push_line(&mut output, "        self.send_response(200)");
+    push_line(
+        &mut output,
+        "        self.send_header(\"Content-Type\", \"application/json\")",
+    );
+    push_line(
+        &mut output,
+        "        self.send_header(\"Content-Length\", str(len(data)))",
+    );
+    push_line(&mut output, "        self.end_headers()");
+    push_line(&mut output, "        self.wfile.write(data)");
+    push_line(&mut output, "    def log_message(self, format, *args):");
+    push_line(&mut output, "        return");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _serve_status():");
+    push_line(&mut output, "    host, port = STATUS_ADDR.rsplit(\":\", 1)");
+    push_line(
+        &mut output,
+        "    server = HTTPServer((host, int(port)), StatusHandler)",
+    );
+    push_line(&mut output, "    server.serve_forever()");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _add_imports():");
+    push_line(&mut output, "    if not os.path.isdir(IMPORTS_DIR):");
+    push_line(&mut output, "        return");
+    push_line(&mut output, "    sys.path.insert(0, IMPORTS_DIR)");
+    push_line(&mut output, "    for name in os.listdir(IMPORTS_DIR):");
+    push_line(
+        &mut output,
+        "        path = os.path.join(IMPORTS_DIR, name)",
+    );
+    push_line(&mut output, "        if os.path.isfile(path):");
+    push_line(
+        &mut output,
+        "            ext = os.path.splitext(name)[1].lower()",
+    );
+    push_line(
+        &mut output,
+        "            if ext in (\".zip\", \".whl\", \".egg\"):",
+    );
+    push_line(&mut output, "                sys.path.insert(0, path)");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _load_udf():");
+    push_line(&mut output, "    return importlib.import_module(\"udf\")");
+    push_line(&mut output, "");
+    push_line(&mut output, "def _wrap_udf(func):");
+    write!(
+        &mut output,
+        "    return udf_decorator(name=\"{handler_literal}\", input_types={input_types_literal}, result_type=\"{result_type_literal}\")(func)"
+    )
+    .unwrap();
+    output.push('\n');
+    push_line(&mut output, "");
+    push_line(&mut output, "def _track_udf(udf):");
+    push_line(&mut output, "    if hasattr(udf, \"eval_batch\"):");
+    push_line(&mut output, "        original = udf.eval_batch");
+    push_line(&mut output, "        def wrapped(*args, **kwargs):");
+    push_line(&mut output, "            _record_request()");
+    push_line(&mut output, "            return original(*args, **kwargs)");
+    push_line(&mut output, "        udf.eval_batch = wrapped");
+    push_line(&mut output, "        return udf");
+    push_line(&mut output, "    def wrapper(*args, **kwargs):");
+    push_line(&mut output, "        _record_request()");
+    push_line(&mut output, "        return udf(*args, **kwargs)");
+    push_line(&mut output, "    return wrapper");
+    push_line(&mut output, "");
+    push_line(&mut output, "def main():");
+    push_line(
+        &mut output,
+        "    status_thread = threading.Thread(target=_serve_status, daemon=True)",
+    );
+    push_line(&mut output, "    status_thread.start()");
+    push_line(&mut output, "    _add_imports()");
+    push_line(&mut output, "    udf = _load_udf()");
+    push_line(
+        &mut output,
+        "    address = os.getenv(\"UDF_SERVER_ADDR\", \"0.0.0.0:8815\")",
+    );
+    push_line(&mut output, "    server = UDFServer(location=address)");
+    write!(
+        &mut output,
+        "    func = getattr(udf, \"{handler_literal}\")"
+    )
+    .unwrap();
+    output.push('\n');
+    push_line(&mut output, "    if not hasattr(func, \"_name\"):");
+    push_line(&mut output, "        func = _wrap_udf(func)");
+    push_line(&mut output, "    func = _track_udf(func)");
+    push_line(&mut output, "    server.add_function(func)");
+    push_line(&mut output, "    server.serve()");
+    push_line(&mut output, "");
+    push_line(&mut output, "if __name__ == \"__main__\":");
+    push_line(&mut output, "    main()");
+    push_line(&mut output, "");
+    output
+}
+
+fn append_udf_import_downloader(script: &mut String) {
+    push_line(script, "python - <<'PY'");
+    push_line(script, "import json");
+    push_line(script, "import os");
+    push_line(script, "import urllib.request");
+    push_line(script, "import urllib.parse");
+    push_line(script, "");
+    push_line(script, "def _rewrite_url(url):");
+    push_line(
+        script,
+        "    override = os.getenv(\"RESOURCE_IMPORTS_HOST\")",
+    );
+    push_line(script, "    if not override:");
+    push_line(script, "        return url");
+    push_line(script, "    parsed = urllib.parse.urlsplit(url)");
+    push_line(
+        script,
+        "    if parsed.hostname not in (\"127.0.0.1\", \"localhost\"):",
+    );
+    push_line(script, "        return url");
+    push_line(script, "    netloc = override");
+    push_line(script, "    if parsed.port:");
+    push_line(script, "        netloc = f\"{override}:{parsed.port}\"");
+    push_line(
+        script,
+        "    return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))",
+    );
+    push_line(script, "");
+    push_line(script, "def _import_basename(location, index):");
+    push_line(
+        script,
+        "    name = location.strip().rstrip(\"/\").split(\"/\")[-1]",
+    );
+    push_line(script, "    if not name:");
+    push_line(script, "        return f\"import_{index}\"");
+    push_line(script, "    return name");
+    push_line(script, "");
+    push_line(script, "with open(\"/app/imports.json\", \"r\") as f:");
+    push_line(script, "    imports = json.load(f)");
+    push_line(script, "");
+    push_line(script, "for index, item in enumerate(imports):");
+    push_line(script, "    location = item.get(\"location\", \"\")");
+    push_line(script, "    url = item.get(\"url\", \"\")");
+    push_line(script, "    if not url:");
+    push_line(script, "        continue");
+    push_line(script, "    url = _rewrite_url(url)");
+    push_line(
+        script,
+        "    dest = os.path.join(\"/app/imports\", _import_basename(location, index))",
+    );
+    push_line(
+        script,
+        "    with urllib.request.urlopen(url, timeout=30) as resp, open(dest, \"wb\") as out:",
+    );
+    push_line(script, "        out.write(resp.read())");
+    push_line(script, "PY");
+}
+
+fn push_line(buffer: &mut String, line: &str) {
+    buffer.push_str(line);
+    buffer.push('\n');
+}
+
+fn python_string_list(values: &[String]) -> String {
+    let items = values
+        .iter()
+        .map(|value| format!("\"{}\"", escape_python_double_quoted(value)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("[{items}]")
+}
+
+fn escape_python_double_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
+    let mut suffix = 0;
+    let mut marker = base.to_string();
+    while contents.iter().any(|content| content.contains(&marker)) {
+        suffix += 1;
+        marker = format!("{base}_{suffix}");
+    }
+    marker
 }
 
 /// A helper for type checking.
@@ -5523,8 +5844,8 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
-        spec: databend_common_cloud_control::pb::UdfRuntimeSpec,
-        imports: &[String],
+        resource_type: &str,
+        script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
             .query
@@ -5552,14 +5873,9 @@ impl<'a> TypeChecker<'a> {
         );
         cfg.add_udf_version_info();
 
-        let settings = self.ctx.get_settings();
-        let imports = self.build_udf_cloud_imports(
-            imports,
-            Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
-        )?;
         let req = ApplyUdfResourceRequest {
-            spec: Some(spec),
-            imports,
+            r#type: resource_type.to_string(),
+            script,
         };
 
         let resp = databend_common_base::runtime::block_on(
@@ -5639,29 +5955,18 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    fn build_udf_cloud_spec(
+    fn build_udf_cloud_script(
         &self,
         code: &str,
         handler: &str,
-        language: &str,
-        imports: &[String],
+        imports: &[databend_common_cloud_control::pb::UdfAsset],
         packages: &[String],
         arg_types: &[DataType],
         return_type: &DataType,
-        runtime_version: &str,
-    ) -> Result<databend_common_cloud_control::pb::UdfRuntimeSpec> {
+    ) -> Result<String> {
         let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
         let result_type = udf_type_string(return_type);
-        build_udf_cloud_spec(
-            code,
-            handler,
-            language,
-            imports,
-            packages,
-            &input_types,
-            &result_type,
-            runtime_version,
-        )
+        build_udf_cloud_script(code, handler, imports, packages, &input_types, &result_type)
     }
 
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
@@ -5771,17 +6076,20 @@ impl<'a> TypeChecker<'a> {
         }
 
         if use_cloud {
-            let spec = self.build_udf_cloud_spec(
+            let settings = self.ctx.get_settings();
+            let import_assets = self.build_udf_cloud_imports(
+                &imports,
+                Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
+            )?;
+            let script = self.build_udf_cloud_script(
                 &code,
                 &handler,
-                &language.to_string(),
-                &imports,
+                &import_assets,
                 &packages,
                 &arg_types,
                 &return_type,
-                &runtime_version,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource(spec, &imports)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource("udf", script)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,
