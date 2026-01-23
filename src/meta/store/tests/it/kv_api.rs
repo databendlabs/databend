@@ -22,14 +22,14 @@ use databend_common_version::BUILD_INFO;
 struct MetaNodeUnitTestBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<LocalMetaService<TokioRuntime>> for MetaNodeUnitTestBuilder {
-    async fn build(&self) -> LocalMetaService<TokioRuntime> {
-        LocalMetaService::<TokioRuntime>::new("UT-Meta", BUILD_INFO.semver())
+impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> LocalMetaService {
+        LocalMetaService::new::<TokioRuntime>("UT-Meta", BUILD_INFO.semver())
             .await
             .unwrap()
     }
 
-    async fn build_cluster(&self) -> Vec<LocalMetaService<TokioRuntime>> {
+    async fn build_cluster(&self) -> Vec<LocalMetaService> {
         todo!()
     }
 }

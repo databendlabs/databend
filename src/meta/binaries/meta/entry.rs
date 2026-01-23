@@ -49,6 +49,7 @@ use databend_meta::metrics::server_metrics;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
+use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
 use tokio::time::Instant;
@@ -243,7 +244,10 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 password: conf.password.clone(),
                 ..RpcClientConf::empty(BUILD_INFO.semver())
             };
-            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
+            let client = match MetaStoreProvider::new(rpc_conf)
+                .create_meta_store::<DatabendRuntime>()
+                .await
+            {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
                     eprintln!("{}", e);

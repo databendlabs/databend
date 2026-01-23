@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::future::Future;
+use std::sync::Arc;
 use std::thread::JoinHandle as ThreadJoinHandle;
 
 use tokio::runtime::Handle;
@@ -42,12 +43,19 @@ use crate::TrackingData;
 /// This approach is simpler than alternatives like:
 /// - Moving runtime to a new thread at drop time (doesn't wait for completion)
 /// - Using `ManuallyDrop` with explicit shutdown (not ergonomic)
+///
+/// # Cloning
+///
+/// `TokioRuntime` is cloneable. Clones share the same underlying runtime.
+/// The runtime shuts down only when the last clone is dropped.
+#[derive(Clone)]
 pub struct TokioRuntime {
     /// Handle to spawn tasks on the runtime.
     handle: Handle,
 
     /// Dropping this signals the runtime thread to shut down.
-    _shutdown: Shutdown,
+    /// Wrapped in Arc so clones share the same shutdown mechanism.
+    _shutdown: Arc<Shutdown>,
 }
 
 /// Manages the shutdown of the runtime thread.
@@ -140,10 +148,10 @@ impl RuntimeApi for TokioRuntime {
 
         Ok(Self {
             handle,
-            _shutdown: Shutdown {
+            _shutdown: Arc::new(Shutdown {
                 tx: Some(tx),
                 thread: Some(thread),
-            },
+            }),
         })
     }
 

@@ -24,7 +24,6 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -41,7 +40,7 @@ use tokio::time::sleep;
 ///
 /// The service will be shutdown if this struct is dropped.
 /// It deref to `ClientHandle` thus it can be used as a client.
-pub struct LocalMetaService<RT: SpawnApi> {
+pub struct LocalMetaService {
     _temp_dir: Option<tempfile::TempDir>,
 
     /// For debugging
@@ -49,12 +48,13 @@ pub struct LocalMetaService<RT: SpawnApi> {
 
     pub config: configs::Config,
 
-    pub grpc_server: Option<Box<GrpcServer<RT>>>,
+    /// Kept alive for shutdown; dropped when `LocalMetaService` is dropped.
+    _grpc_server: Option<Box<dyn Send + Sync>>,
 
     client: Arc<ClientHandle>,
 }
 
-impl<RT: SpawnApi> fmt::Display for LocalMetaService<RT> {
+impl fmt::Display for LocalMetaService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -65,7 +65,7 @@ impl<RT: SpawnApi> fmt::Display for LocalMetaService<RT> {
 }
 
 /// The [LocalMetaService] implements the [Deref] trait, so it can be used as a [ClientHandle].
-impl<RT: SpawnApi> Deref for LocalMetaService<RT> {
+impl Deref for LocalMetaService {
     type Target = Arc<ClientHandle>;
 
     fn deref(&self) -> &Self::Target {
@@ -73,7 +73,7 @@ impl<RT: SpawnApi> Deref for LocalMetaService<RT> {
     }
 }
 
-impl<RT: SpawnApi> Drop for LocalMetaService<RT> {
+impl Drop for LocalMetaService {
     fn drop(&mut self) {
         if self._temp_dir.is_some() {
             Self::rm_raft_dir(
@@ -84,12 +84,12 @@ impl<RT: SpawnApi> Drop for LocalMetaService<RT> {
     }
 }
 
-impl<RT: RuntimeApi> LocalMetaService<RT> {
-    pub async fn new(
+impl LocalMetaService {
+    pub async fn new<RT: RuntimeApi>(
         name: impl fmt::Display,
         version: Version,
-    ) -> anyhow::Result<LocalMetaService<RT>> {
-        Self::new_with_fixed_dir(None, name, version).await
+    ) -> anyhow::Result<LocalMetaService> {
+        Self::new_with_fixed_dir::<RT>(None, name, version).await
     }
 
     /// Create a new Config for test, with unique port assigned
@@ -97,11 +97,11 @@ impl<RT: RuntimeApi> LocalMetaService<RT> {
     /// It brings up a meta-service process with the port number based on the base_port.
     /// If it is None, 19_000 is used.
     /// If dir is not empty, we should persistent the dir without cleanup, this could be used in databend-local and bendpy
-    pub async fn new_with_fixed_dir(
+    pub async fn new_with_fixed_dir<RT: RuntimeApi>(
         dir: Option<String>,
         name: impl fmt::Display,
         version: Version,
-    ) -> anyhow::Result<LocalMetaService<RT>> {
+    ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
             (None, dir_path)
@@ -161,7 +161,7 @@ impl<RT: RuntimeApi> LocalMetaService<RT> {
             _temp_dir: temp_dir,
             name,
             config,
-            grpc_server: Some(Box::new(grpc_server)),
+            _grpc_server: Some(Box::new(grpc_server)),
             client,
         };
 
@@ -169,7 +169,7 @@ impl<RT: RuntimeApi> LocalMetaService<RT> {
     }
 }
 
-impl<RT: SpawnApi> LocalMetaService<RT> {
+impl LocalMetaService {
     pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
         let raft_dir = &config.raft_config.raft_dir;
 
