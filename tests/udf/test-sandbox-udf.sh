@@ -27,6 +27,7 @@ S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
 UDF_IMPORT_PRESIGN_EXPIRE_SECS="${UDF_IMPORT_PRESIGN_EXPIRE_SECS:-43200}"
 UDF_DOCKER_BASE_IMAGE="python:3.12-slim"
 UDF_DOCKER_RUNTIME_IMAGE="databend-udf-runtime:py312"
+UDF_QUERY_TIMEOUT_SECS="${UDF_QUERY_TIMEOUT_SECS:-180}"
 
 echo "Cleaning up previous runs"
 
@@ -124,6 +125,34 @@ check_response_error() {
   fi
 }
 
+collect_query_data() {
+  local response="$1"
+  local data next_uri page
+  local start_ts elapsed
+  data=$(echo "$response" | jq -c '.data // []')
+  next_uri=$(echo "$response" | jq -r '.next_uri // empty')
+  start_ts=$(date +%s)
+
+  while [ -n "$next_uri" ]; do
+    elapsed=$(( $(date +%s) - start_ts ))
+    if [ "$elapsed" -ge "$UDF_QUERY_TIMEOUT_SECS" ]; then
+      echo "[Test Error] query timed out after ${UDF_QUERY_TIMEOUT_SECS}s" >&2
+      exit 1
+    fi
+
+    response=$(curl -s -u root: "http://localhost:8000${next_uri}")
+    check_response_error "$response"
+    page=$(echo "$response" | jq -c '.data // []')
+    data=$(jq -c --argjson acc "$data" --argjson page "$page" -n '$acc + $page')
+    next_uri=$(echo "$response" | jq -r '.next_uri // empty')
+    if [ -n "$next_uri" ] && [ "$page" = "[]" ]; then
+      sleep 0.2
+    fi
+  done
+
+  echo "$data"
+}
+
 echo "Preparing stage imports"
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9900
 
@@ -190,7 +219,7 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
     '{sql: $sql, settings: {udf_cloud_import_presign_expire_secs: $presign_secs}}')" )
 check_response_error "$response"
 
-actual=$(echo "$response" | jq -c '.data')
+actual=$(collect_query_data "$response")
 expected='[["2"]]'
 
 if [ "$actual" = "$expected" ]; then
