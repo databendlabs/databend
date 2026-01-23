@@ -46,7 +46,6 @@ impl JSONOutputFormat {
             first_row: true,
             rows: 0,
             format_settings: FormatSettings {
-                timezone: options.timezone,
                 jiff_timezone: options.jiff_timezone.clone(),
                 geometry_format: options.geometry_format,
                 binary_format: options.binary_format,

@@ -52,7 +52,6 @@ impl FieldEncoderJSON {
                     nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-                    timezone: options.timezone,
                     jiff_timezone: options.jiff_timezone.clone(),
                     binary_format: Default::default(),
                     geometry_format: Default::default(),

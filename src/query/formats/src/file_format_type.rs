@@ -45,11 +45,15 @@ pub struct FileFormatOptionsExt {
     pub headers: usize,
     pub json_compact: bool,
     pub json_strings: bool,
-    pub disable_variant_check: bool,
-    pub timezone: Tz,
-    pub jiff_timezone: TimeZone,
+
     pub is_select: bool,
     pub is_clickhouse: bool,
+
+    // from copy options
+    pub disable_variant_check: bool,
+
+    // from settings
+    pub jiff_timezone: TimeZone,
     pub is_rounding_mode: bool,
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
@@ -61,7 +65,6 @@ impl FileFormatOptionsExt {
         settings: &Settings,
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let geometry_format = settings.get_geometry_output_format()?;
@@ -77,7 +80,6 @@ impl FileFormatOptionsExt {
             json_compact: false,
             json_strings: false,
             disable_variant_check: false,
-            timezone,
             jiff_timezone,
             is_select,
             is_clickhouse: false,
@@ -93,7 +95,6 @@ impl FileFormatOptionsExt {
         clickhouse_type: ClickhouseFormatType,
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let geometry_format = settings.get_geometry_output_format()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
@@ -104,7 +105,6 @@ impl FileFormatOptionsExt {
             json_compact: false,
             json_strings: false,
             disable_variant_check: false,
-            timezone,
             jiff_timezone,
             is_select: false,
             is_clickhouse: true,

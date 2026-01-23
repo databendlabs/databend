@@ -33,7 +33,6 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use chrono_tz::Tz;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
 use databend_common_ast::ast::FormatTreeNode;
@@ -1216,9 +1215,6 @@ impl TableContext for QueryContext {
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.get_settings().get_timezone()?;
-        let timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Invalid timezone format - timezone validation failed")
-        })?;
         let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
             ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
         })?;
@@ -1228,7 +1224,6 @@ impl TableContext for QueryContext {
         let format_null_as_str = settings.get_format_null_as_str()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let format = FormatSettings {
-            timezone,
             jiff_timezone,
             geometry_format,
             binary_format,
