@@ -14,11 +14,11 @@
 
 use std::fmt::Debug;
 
-use super::LOAD_FACTOR;
+use super::payload_row::CompareState;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::RowPtr;
-use super::payload_row::CompareState;
+use super::LOAD_FACTOR;
 use crate::ProjectedBlock;
 
 pub(super) struct HashIndex {
@@ -75,11 +75,10 @@ impl HashIndex {
         }
     }
 
-    pub(super) fn rebuild_from_iter<I>(capacity: usize, iter: I) -> Self
-    where I: IntoIterator<Item = (u64, RowPtr)> {
+    pub(super) fn rebuild_from(capacity: usize, data: Vec<(u64, RowPtr)>) -> Self {
         let mut hash_index = HashIndex::with_capacity(capacity);
 
-        for (hash, row_ptr) in iter {
+        for (hash, row_ptr) in data {
             let slot = hash_index.probe_slot(hash);
 
             let entry = hash_index.mut_entry(slot);

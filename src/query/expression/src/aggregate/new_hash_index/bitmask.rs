@@ -91,6 +91,10 @@ impl Tag {
         let top7 = hash >> (8 * 8 - 7);
         Tag((top7 & 0x7f) as u8) // truncation
     }
+
+    pub(super) fn is_empty(&self) -> bool {
+        *self == Tag::EMPTY
+    }
 }
 /// Helper function to replicate a tag across a `GroupWord`.
 #[inline]

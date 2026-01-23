@@ -15,13 +15,13 @@
 
 use std::hint::likely;
 
-use crate::ProbeState;
-use crate::aggregate::LOAD_FACTOR;
 use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
+use crate::aggregate::LOAD_FACTOR;
+use crate::ProbeState;
 
 pub struct NewHashIndex {
     ctrls: Vec<Tag>,
@@ -59,14 +59,41 @@ impl NewHashIndex {
         }
     }
 
-    pub fn rebuild_from_iter<I>(capacity: usize, iter: I) -> Self
-    where I: IntoIterator<Item = (u64, RowPtr)> {
+    const BATCH_PROBING_THRESHOLD: usize = 2_097_152;
+
+    pub fn rebuild_from(capacity: usize, data: Vec<(u64, RowPtr)>) -> Self {
         let mut hash_index = NewHashIndex::with_capacity(capacity);
-        for (hash, row_ptr) in iter {
-            let slot = hash_index.probe_empty(hash);
-            hash_index.pointers[slot] = row_ptr;
+
+        let len = data.len();
+        let split_idx = if len <= Self::BATCH_PROBING_THRESHOLD {
+            len
+        } else {
+            len * 4 / 5
+        };
+
+        let (part1, part2) = data.split_at(split_idx);
+
+        for (hash, row_ptr) in part1 {
+            // scalar probing because the table is sparse
+            let slot = hash_index.probe_empty(*hash);
+
+            // SAFETY: slot is guaranteed to be valid and empty
+            unsafe {
+                *hash_index.pointers.get_unchecked_mut(slot) = *row_ptr;
+            }
             hash_index.count += 1;
         }
+
+        for (hash, row_ptr) in part2 {
+            let slot = hash_index.probe_empty_batch(*hash);
+
+            // SAFETY: slot is guaranteed to be valid and empty
+            unsafe {
+                *hash_index.pointers.get_unchecked_mut(slot) = *row_ptr;
+            }
+            hash_index.count += 1;
+        }
+
         hash_index
     }
 }
@@ -151,11 +178,12 @@ impl NewHashIndex {
     /// overhead. When the map is sparse, we expect to find an empty slot almost immediately
     /// (often the first probe). In this specific situation, a simple scalar probe is faster
     pub fn probe_empty(&mut self, hash: u64) -> usize {
+        let tag_hash = Tag::full(hash);
         let mut pos = self.h1(hash);
         loop {
             let ctrl = unsafe { *self.ctrl(pos) };
-            if ctrl == Tag::EMPTY {
-                self.set_ctrl(pos, Tag::full(hash));
+            if likely(ctrl.is_empty()) {
+                self.set_ctrl(pos, tag_hash);
                 return pos;
             }
             pos = (pos + 1) & self.bucket_mask;

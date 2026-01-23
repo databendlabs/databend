@@ -14,28 +14,29 @@
 
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
 
-use super::BATCH_SIZE;
-use super::HashTableConfig;
-use super::LOAD_FACTOR;
-use super::MAX_PAGE_SIZE;
-use super::Payload;
 use super::group_hash_entries;
 use super::hash_index::AdapterImpl;
 use super::hash_index::HashIndexOps;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
+use super::HashTableConfig;
+use super::Payload;
+use super::BATCH_SIZE;
+use super::LOAD_FACTOR;
+use super::MAX_PAGE_SIZE;
+use crate::aggregate::row_ptr::RowPtr;
+use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
@@ -440,7 +441,9 @@ impl AggregateHashTable {
             })
         });
 
-        self.hash_index = self.config.rebuild_hash_index(new_capacity, iter);
+        self.hash_index = self
+            .config
+            .rebuild_hash_index(new_capacity, iter.collect::<Vec<(u64, RowPtr)>>());
     }
 
     fn initial_capacity() -> usize {
