@@ -27,6 +27,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use data_version::DataVersion;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -241,7 +242,7 @@ impl OnDisk {
 
     /// Upgrade the on-disk data to latest version `DATA_VERSION`.
     #[fastrace::trace]
-    pub async fn upgrade(&mut self) -> Result<(), MetaStorageError> {
+    pub async fn upgrade<SP: SpawnApi>(&mut self) -> Result<(), MetaStorageError> {
         self.progress(format_args!(
             "Upgrade ondisk data if out of date: {}",
             self.header
@@ -272,7 +273,7 @@ impl OnDisk {
                     );
                 }
                 DataVersion::V004 => {
-                    self.clean_in_progress_v003_to_v004().await?;
+                    self.clean_in_progress_v003_to_v004::<SP>().await?;
                 }
             }
 
@@ -304,7 +305,7 @@ impl OnDisk {
                     )
                 }
                 DataVersion::V003 => {
-                    self.upgrade_v003_to_v004().await?;
+                    self.upgrade_v003_to_v004::<SP>().await?;
                 }
                 DataVersion::V004 => {
                     unreachable!("{} is the latest version", self.header.version)

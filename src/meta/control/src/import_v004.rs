@@ -28,7 +28,7 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::adapter::SMEntryV002ToV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
-use databend_common_meta_runtime_api::TokioRuntime;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::sys_data::SysData;
 
@@ -37,7 +37,7 @@ use databend_common_meta_types::sys_data::SysData;
 /// While importing, the max log id is also returned.
 ///
 /// It writes logs and related entries to WAL based raft log, and state_machine entries to a snapshot.
-pub async fn import_v004(
+pub async fn import_v004<SP: SpawnApi>(
     raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
@@ -55,8 +55,7 @@ pub async fn import_v004(
         raft_log_v004::Importer::new(raft_log)
     };
 
-    let snapshot_store: SnapshotStoreV004<TokioRuntime> =
-        SnapshotStoreV004::new(raft_config.clone());
+    let snapshot_store: SnapshotStoreV004<SP> = SnapshotStoreV004::new(raft_config.clone());
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v004");
 

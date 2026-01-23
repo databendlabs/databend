@@ -24,7 +24,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_runtime_api::TokioRuntime;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -41,7 +41,7 @@ use tokio::time::sleep;
 ///
 /// The service will be shutdown if this struct is dropped.
 /// It deref to `ClientHandle` thus it can be used as a client.
-pub struct LocalMetaService {
+pub struct LocalMetaService<RT: SpawnApi> {
     _temp_dir: Option<tempfile::TempDir>,
 
     /// For debugging
@@ -49,12 +49,12 @@ pub struct LocalMetaService {
 
     pub config: configs::Config,
 
-    pub grpc_server: Option<Box<GrpcServer<TokioRuntime>>>,
+    pub grpc_server: Option<Box<GrpcServer<RT>>>,
 
     client: Arc<ClientHandle>,
 }
 
-impl fmt::Display for LocalMetaService {
+impl<RT: SpawnApi> fmt::Display for LocalMetaService<RT> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -65,7 +65,7 @@ impl fmt::Display for LocalMetaService {
 }
 
 /// The [LocalMetaService] implements the [Deref] trait, so it can be used as a [ClientHandle].
-impl Deref for LocalMetaService {
+impl<RT: SpawnApi> Deref for LocalMetaService<RT> {
     type Target = Arc<ClientHandle>;
 
     fn deref(&self) -> &Self::Target {
@@ -73,7 +73,7 @@ impl Deref for LocalMetaService {
     }
 }
 
-impl Drop for LocalMetaService {
+impl<RT: SpawnApi> Drop for LocalMetaService<RT> {
     fn drop(&mut self) {
         if self._temp_dir.is_some() {
             Self::rm_raft_dir(
@@ -84,11 +84,11 @@ impl Drop for LocalMetaService {
     }
 }
 
-impl LocalMetaService {
+impl<RT: RuntimeApi> LocalMetaService<RT> {
     pub async fn new(
         name: impl fmt::Display,
         version: Version,
-    ) -> anyhow::Result<LocalMetaService> {
+    ) -> anyhow::Result<LocalMetaService<RT>> {
         Self::new_with_fixed_dir(None, name, version).await
     }
 
@@ -101,7 +101,7 @@ impl LocalMetaService {
         dir: Option<String>,
         name: impl fmt::Display,
         version: Version,
-    ) -> anyhow::Result<LocalMetaService> {
+    ) -> anyhow::Result<LocalMetaService<RT>> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
             (None, dir_path)
@@ -149,7 +149,7 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let runtime = TokioRuntime::new_embedded("meta-io-rt-embedded");
+        let runtime = RT::new_embedded("meta-io-rt-embedded");
         let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
         let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
@@ -167,7 +167,9 @@ impl LocalMetaService {
 
         Ok(local)
     }
+}
 
+impl<RT: SpawnApi> LocalMetaService<RT> {
     pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
         let raft_dir = &config.raft_config.raft_dir;
 

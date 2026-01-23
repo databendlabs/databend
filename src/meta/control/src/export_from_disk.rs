@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io::Write;
 
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_runtime_api::TokioRuntime;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_meta::store::RaftStore;
 use futures::TryStreamExt;
 
@@ -29,14 +29,14 @@ use crate::upgrade;
 /// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
 /// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
+pub async fn export_from_dir<SP: SpawnApi>(args: &ExportArgs) -> anyhow::Result<()> {
     let raft_config: RaftConfig = args.clone().into();
-    upgrade::upgrade(&raft_config).await?;
+    upgrade::upgrade::<SP>(&raft_config).await?;
 
     eprintln!();
     eprintln!("Export:");
 
-    let sto = RaftStore::<TokioRuntime>::open(&raft_config).await?;
+    let sto = RaftStore::<SP>::open(&raft_config).await?;
     let mut lines = sto.clone().export();
 
     eprintln!("    From: {}", raft_config.raft_dir);

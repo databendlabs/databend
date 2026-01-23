@@ -145,7 +145,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         println!();
     }
 
-    on_disk.upgrade().await?;
+    on_disk.upgrade::<RT>().await?;
 
     info!(
         "Starting MetaNode, is-single: {} with config: {:?}",

@@ -25,6 +25,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
@@ -50,7 +51,7 @@ pub struct MetaStoreProvider {
 /// MetaStore is impl with either a local meta-service, or a grpc-client of metasrv
 #[derive(Clone)]
 pub enum MetaStore {
-    L(Arc<LocalMetaService>),
+    L(Arc<LocalMetaService<TokioRuntime>>),
     R(Arc<ClientHandle>),
 }
 
@@ -73,7 +74,7 @@ impl MetaStore {
     /// It is required to assign a base port as the port number range.
     pub async fn new_local_testing(version: Version) -> Self {
         MetaStore::L(Arc::new(
-            LocalMetaService::new("MetaStore-new-local-testing", version)
+            LocalMetaService::<TokioRuntime>::new("MetaStore-new-local-testing", version)
                 .await
                 .unwrap(),
         ))
@@ -195,7 +196,7 @@ impl MetaStoreProvider {
 
             // NOTE: This can only be used for test: data will be removed when program quit.
             Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new_with_fixed_dir(
+                LocalMetaService::<TokioRuntime>::new_with_fixed_dir(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
                     self.rpc_conf.version.clone(),
