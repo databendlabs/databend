@@ -2081,6 +2081,15 @@ impl Binder {
                         self.validate_vector_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Vector, column_ids, options)
                 }
+                AstTableIndexType::Spatial => {
+                    let column_ids = self.validate_spatial_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_spatial_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Spatial, column_ids, options)
+                }
                 AstTableIndexType::Aggregating => unreachable!(),
             };
 
