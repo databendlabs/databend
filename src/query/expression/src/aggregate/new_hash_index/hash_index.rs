@@ -296,4 +296,11 @@ impl HashIndexOps for NewHashIndex {
     ) -> usize {
         NewHashIndex::probe_and_create(self, state, row_count, adapter)
     }
+
+    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+        let index = self.probe_empty(hash);
+        unsafe {
+            *self.pointers.get_unchecked_mut(index) = row_ptr;
+        }
+    }
 }

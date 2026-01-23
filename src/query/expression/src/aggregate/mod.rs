@@ -186,16 +186,4 @@ impl HashTableConfig {
             Box::new(HashIndex::dummy())
         }
     }
-
-    fn rebuild_hash_index(
-        &self,
-        capacity: usize,
-        data: Vec<(u64, RowPtr)>,
-    ) -> Box<dyn HashIndexOps> {
-        if self.enable_experiment_hash_index {
-            Box::new(NewHashIndex::rebuild_from(capacity, data))
-        } else {
-            Box::new(HashIndex::rebuild_from(capacity, data))
-        }
-    }
 }

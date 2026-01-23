@@ -35,7 +35,6 @@ use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::aggregate::row_ptr::RowPtr;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
@@ -429,21 +428,21 @@ impl AggregateHashTable {
         }
 
         self.hash_index_resize_count += 1;
-        let iter = self.payload.payloads.iter().flat_map(|payload| {
-            let row_layout = &payload.row_layout;
-            let tuple_size = payload.tuple_size;
-            payload.pages.iter().flat_map(move |page| {
-                (0..page.rows).map(move |idx| {
-                    let row_ptr = page.data_ptr(idx, tuple_size);
-                    let hash = row_ptr.hash(row_layout);
-                    (hash, row_ptr)
-                })
-            })
-        });
 
-        self.hash_index = self
-            .config
-            .rebuild_hash_index(new_capacity, iter.collect::<Vec<(u64, RowPtr)>>());
+        let mut hash_index = self.config.new_hash_index(new_capacity);
+        // iterate over payloads and copy to new entries
+        for payload in self.payload.payloads.iter() {
+            for page in payload.pages.iter() {
+                for idx in 0..page.rows {
+                    let row_ptr = page.data_ptr(idx, payload.tuple_size);
+                    let hash = row_ptr.hash(&payload.row_layout);
+
+                    hash_index.probe_slot_and_set(hash, row_ptr);
+                }
+            }
+        }
+
+        self.hash_index = hash_index
     }
 
     fn initial_capacity() -> usize {

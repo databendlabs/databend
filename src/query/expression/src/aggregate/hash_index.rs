@@ -221,6 +221,7 @@ pub(super) trait HashIndexOps {
         row_count: usize,
         adapter: &mut dyn TableAdapter,
     ) -> usize;
+    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr);
 }
 
 impl HashIndex {
@@ -331,6 +332,14 @@ impl HashIndexOps for HashIndex {
         adapter: &mut dyn TableAdapter,
     ) -> usize {
         HashIndex::probe_and_create(self, state, row_count, adapter)
+    }
+
+    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+        let slot = HashIndex::probe_slot(self, hash);
+        let mut entry = self.mut_entry(slot);
+        entry.set_hash(hash);
+        entry.set_pointer(row_ptr);
+        self.count += 1;
     }
 }
 
