@@ -25,21 +25,17 @@ explain analyze explain analyze select t1.a from t1 where a > 0
 query T
 explain select t1.a from t1 where a > 0
 ----
-Filter
-├── output columns: [t1.a (#0)]
-├── filters: [t1.a (#0) > 0]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
+└── estimated rows: 0.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
@@ -58,37 +54,29 @@ Filter
     ├── build join filters:
     │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
-    ├── Filter(Build)
-    │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 3 or t1.a (#0) > 1]
-    │   ├── estimated rows: 0.00
-    │   └── TableScan
-    │       ├── table: default.default.t1
-    │       ├── scan id: 0
-    │       ├── output columns: [a (#0), b (#1)]
-    │       ├── read rows: 0
-    │       ├── read size: 0
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 0
-    │       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    │       ├── push downs: [filters: [t1.a (#0) > 3 or t1.a (#0) > 1], limit: NONE]
-    │       └── estimated rows: 1.00
-    └── Filter(Probe)
-        ├── output columns: [t2.a (#2), t2.b (#3)]
-        ├── filters: [t2.a (#2) > 3 or t2.a (#2) > 1]
-        ├── estimated rows: 3.40
-        └── TableScan
-            ├── table: default.default.t2
-            ├── scan id: 1
-            ├── output columns: [a (#2), b (#3)]
-            ├── read rows: 5
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [t2.a (#2) > 3 or t2.a (#2) > 1], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 5.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── scan id: 0
+    │   ├── output columns: [a (#0), b (#1)]
+    │   ├── read rows: 0
+    │   ├── read size: 0
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 0
+    │   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    │   ├── push downs: [filters: [t1.a (#0) > 3 or t1.a (#0) > 1], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── scan id: 1
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [t2.a (#2) > 3 or t2.a (#2) > 1], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 3.40
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
@@ -343,36 +331,28 @@ Filter
     ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 4.40
-    ├── Filter(Build)
-    │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 1 or t1.b (#1) < 3]
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.default.t1
-    │       ├── scan id: 0
-    │       ├── output columns: [a (#0), b (#1)]
-    │       ├── read rows: 1
-    │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    │       ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
-    │       └── estimated rows: 1.00
-    └── Filter(Probe)
-        ├── output columns: [t2.a (#2), t2.b (#3)]
-        ├── filters: [t2.a (#2) > 2 or t2.b (#3) < 4]
-        ├── estimated rows: 4.40
-        └── TableScan
-            ├── table: default.default.t2
-            ├── scan id: 1
-            ├── output columns: [a (#2), b (#3)]
-            ├── read rows: 5
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
-            └── estimated rows: 5.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── scan id: 0
+    │   ├── output columns: [a (#0), b (#1)]
+    │   ├── read rows: 1
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
+    │   └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── scan id: 1
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
+        └── estimated rows: 4.40
 
 query T
 explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b < 4) or t1.a = 2
@@ -389,21 +369,17 @@ Filter
     ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 5.00
-    ├── Filter(Build)
-    │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [t1.a (#0) > 1 or t1.b (#1) < 3 or t1.a (#0) = 2]
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.default.t1
-    │       ├── scan id: 0
-    │       ├── output columns: [a (#0), b (#1)]
-    │       ├── read rows: 1
-    │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    │       ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3 or t1.a (#0) = 2], limit: NONE]
-    │       └── estimated rows: 1.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── scan id: 0
+    │   ├── output columns: [a (#0), b (#1)]
+    │   ├── read rows: 1
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3 or t1.a (#0) = 2], limit: NONE]
+    │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── scan id: 1
@@ -498,51 +474,39 @@ HashJoin
 │       ├── keys is null equal: []
 │       ├── filters: []
 │       ├── estimated rows: 4.40
-│       ├── Filter(Build)
-│       │   ├── output columns: [t1.a (#0), t1.b (#1)]
-│       │   ├── filters: [t1.a (#0) > 1 or t1.b (#1) < 3]
-│       │   ├── estimated rows: 1.00
-│       │   └── TableScan
-│       │       ├── table: default.default.t1
-│       │       ├── scan id: 0
-│       │       ├── output columns: [a (#0), b (#1)]
-│       │       ├── read rows: 1
-│       │       ├── read size: < 1 KiB
-│       │       ├── partitions total: 1
-│       │       ├── partitions scanned: 1
-│       │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       │       ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
-│       │       └── estimated rows: 1.00
-│       └── Filter(Probe)
-│           ├── output columns: [t2.a (#2), t2.b (#3)]
-│           ├── filters: [t2.a (#2) > 2 or t2.b (#3) < 4]
-│           ├── estimated rows: 4.40
-│           └── TableScan
-│               ├── table: default.default.t2
-│               ├── scan id: 1
-│               ├── output columns: [a (#2), b (#3)]
-│               ├── read rows: 5
-│               ├── read size: < 1 KiB
-│               ├── partitions total: 1
-│               ├── partitions scanned: 1
-│               ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
-│               └── estimated rows: 5.00
-└── Filter(Probe)
-    ├── output columns: [t3.a (#4), t3.b (#5)]
-    ├── filters: [t3.a (#4) > 1]
-    ├── estimated rows: 8.00
-    └── TableScan
-        ├── table: default.default.t3
-        ├── scan id: 2
-        ├── output columns: [a (#4), b (#5)]
-        ├── read rows: 10
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [t3.a (#4) > 1], limit: NONE]
-        └── estimated rows: 10.00
+│       ├── TableScan(Build)
+│       │   ├── table: default.default.t1
+│       │   ├── scan id: 0
+│       │   ├── output columns: [a (#0), b (#1)]
+│       │   ├── read rows: 1
+│       │   ├── read size: < 1 KiB
+│       │   ├── partitions total: 1
+│       │   ├── partitions scanned: 1
+│       │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
+│       │   └── estimated rows: 1.00
+│       └── TableScan(Probe)
+│           ├── table: default.default.t2
+│           ├── scan id: 1
+│           ├── output columns: [a (#2), b (#3)]
+│           ├── read rows: 5
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│           ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
+│           └── estimated rows: 4.40
+└── TableScan(Probe)
+    ├── table: default.default.t3
+    ├── scan id: 2
+    ├── output columns: [a (#4), b (#5)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [t3.a (#4) > 1], limit: NONE]
+    └── estimated rows: 8.00
 
 query T
 explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b < 3 and t2.b < 4) order by 1 desc limit 3
@@ -568,36 +532,28 @@ Limit
             ├── keys is null equal: []
             ├── filters: []
             ├── estimated rows: 4.40
-            ├── Filter(Build)
-            │   ├── output columns: [t1.a (#0), t1.b (#1)]
-            │   ├── filters: [t1.a (#0) > 1 or t1.b (#1) < 2 or t1.b (#1) < 3]
-            │   ├── estimated rows: 1.00
-            │   └── TableScan
-            │       ├── table: default.default.t1
-            │       ├── scan id: 0
-            │       ├── output columns: [a (#0), b (#1)]
-            │       ├── read rows: 1
-            │       ├── read size: < 1 KiB
-            │       ├── partitions total: 1
-            │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            │       ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2 or t1.b (#1) < 3], limit: NONE]
-            │       └── estimated rows: 1.00
-            └── Filter(Probe)
-                ├── output columns: [t2.a (#2), t2.b (#3)]
-                ├── filters: [t2.a (#2) > 2 or t2.b (#3) < 4]
-                ├── estimated rows: 4.40
-                └── TableScan
-                    ├── table: default.default.t2
-                    ├── scan id: 1
-                    ├── output columns: [a (#2), b (#3)]
-                    ├── read rows: 5
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
-                    └── estimated rows: 5.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t1
+            │   ├── scan id: 0
+            │   ├── output columns: [a (#0), b (#1)]
+            │   ├── read rows: 1
+            │   ├── read size: < 1 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2 or t1.b (#1) < 3], limit: NONE]
+            │   └── estimated rows: 1.00
+            └── TableScan(Probe)
+                ├── table: default.default.t2
+                ├── scan id: 1
+                ├── output columns: [a (#2), b (#3)]
+                ├── read rows: 5
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
+                └── estimated rows: 4.40
 
 query T
 explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2)
@@ -610,21 +566,17 @@ HashJoin
 ├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 5.00
-├── Filter(Build)
-│   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [t1.a (#0) > 1 or t1.b (#1) < 2]
-│   ├── estimated rows: 1.00
-│   └── TableScan
-│       ├── table: default.default.t1
-│       ├── scan id: 0
-│       ├── output columns: [a (#0), b (#1)]
-│       ├── read rows: 1
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2], limit: NONE]
-│       └── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.default.t1
+│   ├── scan id: 0
+│   ├── output columns: [a (#0), b (#1)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2], limit: NONE]
+│   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── scan id: 1
@@ -746,20 +698,16 @@ create OR REPLACE table t4(a int, b string);
 query T
 explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as varchar) = 'xx';
 ----
-Filter
-├── output columns: [t4.a (#0), t4.b (#1)]
-├── filters: [is_true(t4.a (#0) = 1), is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t4
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [t4.a (#0) = 1 and TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx'], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.t4
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [t4.a (#0) = 1 and TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx'], limit: NONE]
+└── estimated rows: 0.00
 
 statement ok
 drop view if exists v4
@@ -774,20 +722,16 @@ EvalScalar
 ├── output columns: [t4.a (#0), b (#2)]
 ├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
-└── Filter
-    ├── output columns: [t4.a (#0), t4.b (#1)]
-    ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t4
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
-        └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select * from v4 where a > 100;
@@ -796,20 +740,16 @@ EvalScalar
 ├── output columns: [t4.a (#0), b (#2)]
 ├── expressions: [TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
 ├── estimated rows: 0.00
-└── Filter
-    ├── output columns: [t4.a (#0), t4.b (#1)]
-    ├── filters: [is_true(t4.a (#0) > 100)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t4
-        ├── scan id: 0
-        ├── output columns: [a (#0), b (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
-        └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t4
+    ├── scan id: 0
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
+    └── estimated rows: 0.00
 
 statement ok
 drop table if exists a
@@ -851,37 +791,29 @@ Limit
     ├── build join filters:
     │   └── filter id:0, build key:a.id (#0), probe targets:[b.id (#2)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 1.00
-    ├── Filter(Build)
-    │   ├── output columns: [a.id (#0), a.c1 (#1)]
-    │   ├── filters: [is_true(a.c1 (#1) >= 1683648000), is_true(a.c1 (#1) <= 1683734400)]
-    │   ├── estimated rows: 1.00
-    │   └── TableScan
-    │       ├── table: default.default.a
-    │       ├── scan id: 0
-    │       ├── output columns: [id (#0), c1 (#1)]
-    │       ├── read rows: 1
-    │       ├── read size: < 1 KiB
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    │       ├── push downs: [filters: [a.c1 (#1) >= 1683648000 and a.c1 (#1) <= 1683734400], limit: NONE]
-    │       └── estimated rows: 1.00
-    └── Filter(Probe)
-        ├── output columns: [b.id (#2), b.c1 (#3)]
-        ├── filters: [is_true(b.c1 (#3) >= 1683648000), is_true(b.c1 (#3) <= 1683734400)]
-        ├── estimated rows: 2.00
-        └── TableScan
-            ├── table: default.default.b
-            ├── scan id: 1
-            ├── output columns: [id (#2), c1 (#3)]
-            ├── read rows: 2
-            ├── read size: < 1 KiB
-            ├── partitions total: 2
-            ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-            ├── push downs: [filters: [b.c1 (#3) >= 1683648000 and b.c1 (#3) <= 1683734400], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 2.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.a
+    │   ├── scan id: 0
+    │   ├── output columns: [id (#0), c1 (#1)]
+    │   ├── read rows: 1
+    │   ├── read size: < 1 KiB
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │   ├── push downs: [filters: [a.c1 (#1) >= 1683648000 and a.c1 (#1) <= 1683734400], limit: NONE]
+    │   └── estimated rows: 1.00
+    └── TableScan(Probe)
+        ├── table: default.default.b
+        ├── scan id: 1
+        ├── output columns: [id (#2), c1 (#3)]
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── push downs: [filters: [b.c1 (#3) >= 1683648000 and b.c1 (#3) <= 1683734400], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 2.00
 
 statement ok
 drop table a;
@@ -975,21 +907,17 @@ HashJoin
 │   ├── filter id:0, build key:scalar_subquery_2 (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
 │   └── filter id:1, build key:id (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.40
-├── Filter(Build)
-│   ├── output columns: [b.id (#2)]
-│   ├── filters: [is_true(b.id (#2) = b.id (#2))]
-│   ├── estimated rows: 0.40
-│   └── TableScan
-│       ├── table: default.default.b
-│       ├── scan id: 1
-│       ├── output columns: [id (#2)]
-│       ├── read rows: 2
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
-│       └── estimated rows: 2.00
+├── TableScan(Build)
+│   ├── table: default.default.b
+│   ├── scan id: 1
+│   ├── output columns: [id (#2)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(b.id (#2) = b.id (#2))], limit: NONE]
+│   └── estimated rows: 0.40
 └── TableScan(Probe)
     ├── table: default.default.a
     ├── scan id: 0
@@ -1162,59 +1090,47 @@ INSERT INTO t3 VALUES (4, {'k1':'a', 'k2':'m'}, {'k1':'"a"', 'k2':'"m"'}), (5, n
 query T
 EXPLAIN SELECT * FROM t3 WHERE b['k2'] = 'm';
 ----
-Filter
-├── output columns: [t3.a (#0), t3.b (#1), t3.c (#2)]
-├── filters: [is_true(get(t3.b (#1), 'k2') = 'm')]
-├── estimated rows: 1.20
-└── TableScan
-    ├── table: default.default.t3
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), c (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(get(t3.b (#1), 'k2') = 'm')], limit: NONE]
-    └── estimated rows: 6.00
+TableScan
+├── table: default.default.t3
+├── scan id: 0
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(get(t3.b (#1), 'k2') = 'm')], limit: NONE]
+└── estimated rows: 1.20
 
 query T
 EXPLAIN SELECT * FROM t3 WHERE c['k3'] = 'v';
 ----
-Filter
-├── output columns: [t3.a (#0), t3.b (#1), t3.c (#2)]
-├── filters: [is_true(get(t3.c (#2), 'k3') = '"v"')]
-├── estimated rows: 1.20
-└── TableScan
-    ├── table: default.default.t3
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), c (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(get(t3.c (#2), 'k3') = '"v"')], limit: NONE]
-    └── estimated rows: 6.00
+TableScan
+├── table: default.default.t3
+├── scan id: 0
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(get(t3.c (#2), 'k3') = '"v"')], limit: NONE]
+└── estimated rows: 1.20
 
 query T
 EXPLAIN SELECT * FROM t3 WHERE c['k2'] = 100;
 ----
-Filter
-├── output columns: [t3.a (#0), t3.b (#1), t3.c (#2)]
-├── filters: [is_true(TRY_CAST(get(t3.c (#2), 'k2') AS UInt8 NULL) = 100)]
-├── estimated rows: 1.20
-└── TableScan
-    ├── table: default.default.t3
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), c (#2)]
-    ├── read rows: 6
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k2') AS UInt8 NULL) = 100)], limit: NONE]
-    └── estimated rows: 6.00
+TableScan
+├── table: default.default.t3
+├── scan id: 0
+├── output columns: [a (#0), b (#1), c (#2)]
+├── read rows: 6
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(TRY_CAST(get(t3.c (#2), 'k2') AS UInt8 NULL) = 100)], limit: NONE]
+└── estimated rows: 1.20
 
 statement ok
 drop table t1;
@@ -1337,34 +1253,26 @@ EvalScalar
     ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 0.00
-    ├── Filter(Build)
-    │   ├── output columns: [t2.b (#1)]
-    │   ├── filters: [false]
-    │   ├── estimated rows: 0.00
-    │   └── TableScan
-    │       ├── table: default.default.t2
-    │       ├── scan id: 1
-    │       ├── output columns: [b (#1)]
-    │       ├── read rows: 0
-    │       ├── read size: 0
-    │       ├── partitions total: 0
-    │       ├── partitions scanned: 0
-    │       ├── push downs: [filters: [false], limit: NONE]
-    │       └── estimated rows: 0.00
-    └── Filter(Probe)
-        ├── output columns: [t1.a (#0)]
-        ├── filters: [false]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [a (#0)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [false], limit: NONE]
-            └── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t2
+    │   ├── scan id: 1
+    │   ├── output columns: [b (#1)]
+    │   ├── read rows: 0
+    │   ├── read size: 0
+    │   ├── partitions total: 0
+    │   ├── partitions scanned: 0
+    │   ├── push downs: [filters: [false], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [false], limit: NONE]
+        └── estimated rows: 0.00
 
 
 statement ok
@@ -1416,21 +1324,17 @@ HashJoin
             ├── group by: [c, a]
             ├── aggregate functions: [count(a)]
             ├── estimated rows: 1.00
-            └── Filter
-                ├── output columns: [t1.a (#3), t1.c (#5)]
-                ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── scan id: 1
-                    ├── output columns: [a (#3), c (#5)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-                    ├── apply join filters: [#0]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── scan id: 1
+                ├── output columns: [a (#3), c (#5)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 0.00
 
 query T
 explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(*));
@@ -1510,20 +1414,16 @@ create or replace table date_sub_query_test(id bigint null, test_time timestamp 
 query T
 explain select * from date_sub_query_test where test_time >= (select to_timestamp('2024-01-01 00:00:00'));
 ----
-Filter
-├── output columns: [date_sub_query_test.id (#0), date_sub_query_test.test_time (#1)]
-├── filters: [is_true(date_sub_query_test.test_time (#1) >= '2024-01-01 00:00:00.000000')]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.date_sub_query_test
-    ├── scan id: 0
-    ├── output columns: [id (#0), test_time (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [is_true(date_sub_query_test.test_time (#1) >= '2024-01-01 00:00:00.000000')], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.date_sub_query_test
+├── scan id: 0
+├── output columns: [id (#0), test_time (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [is_true(date_sub_query_test.test_time (#1) >= '2024-01-01 00:00:00.000000')], limit: NONE]
+└── estimated rows: 0.00
 
 statement ok
 drop table date_sub_query_test;
@@ -1677,59 +1577,47 @@ INSERT INTO t VALUES((1, 2)), ((3, 4));
 query T
 EXPLAIN SELECT * FROM t WHERE a.1 > 0;
 ----
-Filter
-├── output columns: [t.a (#0)]
-├── filters: [is_true(t.a:"1" (#2) > 0)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [a (#0), a:"1" (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.a:"1" (#2) > 0)], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.a:"1" (#2) > 0)], limit: NONE]
+└── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT * FROM t WHERE a.1 > 1;
 ----
-Filter
-├── output columns: [t.a (#0)]
-├── filters: [is_true(t.a:"1" (#2) > 1)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [a (#0), a:"1" (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.a:"1" (#2) > 1)], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.a:"1" (#2) > 1)], limit: NONE]
+└── estimated rows: 1.00
 
 query T
 EXPLAIN SELECT * FROM t WHERE a.2 > 1;
 ----
-Filter
-├── output columns: [t.a (#0)]
-├── filters: [is_true(t.a:"2" (#1) > 1)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [a (#0), a:"2" (#1)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.a:"2" (#1) > 1)], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.a:"2" (#1) > 1)], limit: NONE]
+└── estimated rows: 2.00
 
 statement ok
 DROP TABLE IF EXISTS t;

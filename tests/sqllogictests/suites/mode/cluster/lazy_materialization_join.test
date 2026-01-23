@@ -103,21 +103,17 @@ RowFetch
                     ├── Exchange(Build)
                     │   ├── output columns: [t1.id (#0), t1._row_id (#7)]
                     │   ├── exchange type: Broadcast
-                    │   └── Filter
-                    │       ├── output columns: [t1.id (#0), t1._row_id (#7)]
-                    │       ├── filters: [is_true(t1.create_time (#3) >= '2021-01-02 00:00:00.000000')]
-                    │       ├── estimated rows: 2.67
-                    │       └── TableScan
-                    │           ├── table: default.default.lazy_join_t1
-                    │           ├── scan id: 0
-                    │           ├── output columns: [id (#0), create_time (#3), _row_id (#7)]
-                    │           ├── read rows: 4
-                    │           ├── read size: < 1 KiB
-                    │           ├── partitions total: 1
-                    │           ├── partitions scanned: 1
-                    │           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    │           ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
-                    │           └── estimated rows: 4.00
+                    │   └── TableScan
+                    │       ├── table: default.default.lazy_join_t1
+                    │       ├── scan id: 0
+                    │       ├── output columns: [id (#0), _row_id (#7)]
+                    │       ├── read rows: 4
+                    │       ├── read size: < 1 KiB
+                    │       ├── partitions total: 1
+                    │       ├── partitions scanned: 1
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    │       ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
+                    │       └── estimated rows: 2.67
                     └── TableScan(Probe)
                         ├── table: default.default.lazy_join_t2
                         ├── scan id: 1
@@ -174,21 +170,17 @@ RowFetch
             │           ├── limit: 3
             │           ├── offset: 0
             │           ├── estimated rows: 2.67
-            │           └── Filter
-            │               ├── output columns: [t1.id (#0), t1._row_id (#7)]
-            │               ├── filters: [is_true(t1.create_time (#3) >= '2021-01-02 00:00:00.000000')]
-            │               ├── estimated rows: 2.67
-            │               └── TableScan
-            │                   ├── table: default.default.lazy_join_t1
-            │                   ├── scan id: 0
-            │                   ├── output columns: [id (#0), create_time (#3), _row_id (#7)]
-            │                   ├── read rows: 4
-            │                   ├── read size: < 1 KiB
-            │                   ├── partitions total: 1
-            │                   ├── partitions scanned: 1
-            │                   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            │                   ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: NONE]
-            │                   └── estimated rows: 4.00
+            │           └── TableScan
+            │               ├── table: default.default.lazy_join_t1
+            │               ├── scan id: 0
+            │               ├── output columns: [id (#0), _row_id (#7)]
+            │               ├── read rows: 4
+            │               ├── read size: < 1 KiB
+            │               ├── partitions total: 1
+            │               ├── partitions scanned: 1
+            │               ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │               ├── push downs: [filters: [is_true(lazy_join_t1.create_time (#3) >= '2021-01-02 00:00:00.000000')], limit: 3]
+            │               └── estimated rows: 2.67
             └── Exchange(Probe)
                 ├── output columns: [t2.id (#4), t2._row_id (#8)]
                 ├── exchange type: Merge

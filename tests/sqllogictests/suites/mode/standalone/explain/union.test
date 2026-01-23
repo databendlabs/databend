@@ -28,36 +28,28 @@ explain select * from v where a > b
 UnionAll
 ├── output columns: [a (#4), b (#5)]
 ├── estimated rows: 0.80
-├── Filter
-│   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [is_true(t1.a (#0) > t1.b (#1))]
-│   ├── estimated rows: 0.40
-│   └── TableScan
-│       ├── table: default.default.t1
-│       ├── scan id: 0
-│       ├── output columns: [a (#0), b (#1)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 1
-│       ├── partitions scanned: 0
-│       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t1.a (#0) > t1.b (#1))], limit: NONE]
-│       └── estimated rows: 2.00
-└── Filter
-    ├── output columns: [t2.a (#2), t2.b (#3)]
-    ├── filters: [is_true(t2.a (#2) > t2.b (#3))]
-    ├── estimated rows: 0.40
-    └── TableScan
-        ├── table: default.default.t2
-        ├── scan id: 1
-        ├── output columns: [a (#2), b (#3)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t2.a (#2) > t2.b (#3))], limit: NONE]
-        └── estimated rows: 2.00
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── scan id: 0
+│   ├── output columns: [a (#0), b (#1)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t1.a (#0) > t1.b (#1))], limit: NONE]
+│   └── estimated rows: 0.40
+└── TableScan
+    ├── table: default.default.t2
+    ├── scan id: 1
+    ├── output columns: [a (#2), b (#3)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t2.a (#2) > t2.b (#3))], limit: NONE]
+    └── estimated rows: 0.40
 
 query T
 explain select * from v where a > 1
@@ -65,36 +57,28 @@ explain select * from v where a > 1
 UnionAll
 ├── output columns: [a (#4), b (#5)]
 ├── estimated rows: 2.00
-├── Filter
-│   ├── output columns: [t1.a (#0), t1.b (#1)]
-│   ├── filters: [is_true(t1.a (#0) > 1)]
-│   ├── estimated rows: 1.00
-│   └── TableScan
-│       ├── table: default.default.t1
-│       ├── scan id: 0
-│       ├── output columns: [a (#0), b (#1)]
-│       ├── read rows: 2
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
-│       └── estimated rows: 2.00
-└── Filter
-    ├── output columns: [t2.a (#2), t2.b (#3)]
-    ├── filters: [is_true(t2.a (#2) > 1)]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.t2
-        ├── scan id: 1
-        ├── output columns: [a (#2), b (#3)]
-        ├── read rows: 2
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
-        └── estimated rows: 2.00
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── scan id: 0
+│   ├── output columns: [a (#0), b (#1)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.t2
+    ├── scan id: 1
+    ├── output columns: [a (#2), b (#3)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select * from v limit 3
@@ -235,36 +219,28 @@ explain select b from (select * from t1 where a>1 union all select * from t2 whe
 UnionAll
 ├── output columns: [b (#5)]
 ├── estimated rows: 2.00
-├── Filter
-│   ├── output columns: [t1.b (#1)]
-│   ├── filters: [is_true(t1.a (#0) > 1)]
-│   ├── estimated rows: 1.00
-│   └── TableScan
-│       ├── table: default.default.t1
-│       ├── scan id: 0
-│       ├── output columns: [a (#0), b (#1)]
-│       ├── read rows: 2
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
-│       └── estimated rows: 2.00
-└── Filter
-    ├── output columns: [t2.b (#3)]
-    ├── filters: [is_true(t2.b (#3) > 2)]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.t2
-        ├── scan id: 1
-        ├── output columns: [b (#3)]
-        ├── read rows: 2
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t2.b (#3) > 2)], limit: NONE]
-        └── estimated rows: 2.00
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── scan id: 0
+│   ├── output columns: [b (#1)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.t2
+    ├── scan id: 1
+    ├── output columns: [b (#3)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t2.b (#3) > 2)], limit: NONE]
+    └── estimated rows: 1.00
 
 statement ok
 drop table t1
