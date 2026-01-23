@@ -164,11 +164,9 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                // Use segment-level mod shuffle only when the total segments exceed both the
-                // cluster size and the local pruning concurrency (from max_storage_io_requests,
-                // with a minimum of 10). If segment_len <= C, the coordinator can scan all
-                // segments in one wave and we prefer local pruning to avoid skew.
-                // Example: C=16, segment_len=12 => local pruning; C=16, segment_len=40 => mod.
+                // Use segment-level mod shuffle only when total segments exceed both cluster size
+                // and local pruning concurrency C. If segment_len <= C, the coordinator can scan
+                // and prune all segments in one wave, then distribute blocks to avoid skew.
                 if self.is_column_oriented()
                     || (segment_len > nodes_num
                         && distributed_pruning
