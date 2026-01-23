@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::AtomicI32;
 
@@ -41,7 +40,6 @@ pub struct MetaNodeBuilder<SP> {
     pub(crate) sto: Option<RaftStore<SP>>,
     pub(crate) raft_service_endpoint: Option<Endpoint>,
     pub(crate) version: Option<Version>,
-    pub(crate) _phantom: PhantomData<SP>,
 }
 
 impl<SP: SpawnApi> MetaNodeBuilder<SP> {

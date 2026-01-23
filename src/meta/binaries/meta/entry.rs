@@ -24,6 +24,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::Cmd;
@@ -243,7 +244,10 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 password: conf.password.clone(),
                 ..RpcClientConf::empty(BUILD_INFO.semver())
             };
-            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
+            let client = match MetaStoreProvider::new(rpc_conf)
+                .create_meta_store::<TokioRuntime>()
+                .await
+            {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
                     eprintln!("{}", e);

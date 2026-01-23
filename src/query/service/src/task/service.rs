@@ -61,6 +61,7 @@ use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -157,7 +158,7 @@ impl TaskService {
         let tenant = cfg.query.tenant_id.clone();
         let meta_store =
             MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()))
-                .create_meta_store()
+                .create_meta_store::<DatabendRuntime>()
                 .await
                 .map_err(|e| {
                     ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))

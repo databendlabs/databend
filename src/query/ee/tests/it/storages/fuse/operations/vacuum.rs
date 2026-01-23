@@ -47,6 +47,7 @@ use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_file
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -903,7 +904,10 @@ async fn new_local_meta() -> MetaStore {
     let meta_config = MetaConfig::default();
     let config = meta_config.to_meta_grpc_client_conf(version.semver());
     let provider = MetaStoreProvider::new(config);
-    provider.create_meta_store().await.unwrap()
+    provider
+        .create_meta_store::<DatabendRuntime>()
+        .await
+        .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]

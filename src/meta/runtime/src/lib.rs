@@ -21,6 +21,7 @@
 //! core decoupled from the query runtime.
 
 use std::future::Future;
+use std::sync::Arc;
 
 use databend_common_base::runtime;
 use databend_common_meta_runtime_api::BoxFuture;
@@ -34,8 +35,14 @@ use databend_common_meta_runtime_api::TrackingData;
 /// This provides the `RuntimeApi` implementation for meta-service binaries,
 /// enabling integration with Databend's runtime infrastructure including
 /// memory tracking and thread tracking.
+///
+/// # Cloning
+///
+/// `DatabendRuntime` is cloneable. Clones share the same underlying runtime.
+/// The runtime shuts down only when the last clone is dropped.
+#[derive(Clone)]
 pub struct DatabendRuntime {
-    inner: runtime::Runtime,
+    inner: Arc<runtime::Runtime>,
 }
 
 impl std::fmt::Debug for DatabendRuntime {
@@ -91,7 +98,10 @@ impl RuntimeApi for DatabendRuntime {
             Some(n) => runtime::Runtime::with_worker_threads(n, name),
             None => runtime::Runtime::with_default_worker_threads(),
         };
-        rt.map(|inner| Self { inner }).map_err(|e| e.to_string())
+        rt.map(|inner| Self {
+            inner: Arc::new(inner),
+        })
+        .map_err(|e| e.to_string())
     }
 
     fn spawn_on<F>(&self, future: F, name: Option<String>) -> JoinHandle<F::Output>
