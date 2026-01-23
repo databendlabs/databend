@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use log::warn;
+
 mod block_pruner;
 mod bloom_pruner;
 mod expr_bloom_filter;
@@ -43,3 +49,15 @@ pub use pruning_statistics::PruningCostKind;
 pub use segment_pruner::SegmentPruner;
 pub use vector_index_pruner::VectorIndexPruner;
 pub use virtual_column_pruner::VirtualColumnPruner;
+
+pub fn pruning_concurrency(ctx: &Arc<dyn TableContext>) -> Result<usize> {
+    let requested = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let value = std::cmp::max(requested, 10);
+    if value > requested {
+        warn!(
+            "max_io_requests setting too low ({}), automatically increased to {} for optimal performance",
+            requested, value
+        )
+    }
+    Ok(value)
+}
