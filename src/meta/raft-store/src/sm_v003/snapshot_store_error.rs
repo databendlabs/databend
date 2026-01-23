@@ -79,7 +79,6 @@ impl From<SnapshotStoreError> for StorageError {
     }
 }
 
-
 impl From<SnapshotStoreError> for io::Error {
     fn from(e: SnapshotStoreError) -> Self {
         io::Error::other(e)

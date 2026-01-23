@@ -53,7 +53,6 @@ impl MetaError {
     }
 }
 
-
 impl From<io::Error> for MetaError {
     fn from(e: io::Error) -> Self {
         MetaError::StorageError(AnyError::new(&e))
