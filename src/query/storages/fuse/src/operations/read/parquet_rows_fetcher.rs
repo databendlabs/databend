@@ -250,6 +250,7 @@ impl ParquetRowsFetcher {
             let settings = self.settings;
             let reader = self.reader.clone();
             async move {
+                log::info!("RowFetch read block: {}", metadata.location);
                 let chunk = reader
                     .read_columns_data_by_merge_io(
                         &settings,
