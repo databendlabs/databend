@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use std::future::Future;
+use std::thread::JoinHandle as ThreadJoinHandle;
 
+use tokio::runtime::Handle;
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::BoxFuture;
@@ -26,8 +29,49 @@ use crate::TrackingData;
 /// Can be used in two ways:
 /// - As an owned runtime instance (via `RuntimeApi::new()`)
 /// - As a type parameter for `SpawnApi` static methods (no instance needed)
+///
+/// # Why the runtime lives in a separate thread
+///
+/// Tokio runtime cannot be dropped from within an async context - it panics with:
+/// "Cannot drop a runtime in a context where blocking is not allowed."
+///
+/// To avoid this, we spawn a dedicated thread that owns the actual runtime.
+/// The thread blocks on a shutdown signal, and when `TokioRuntime` is dropped,
+/// it sends the signal and waits for the thread to complete.
+///
+/// This approach is simpler than alternatives like:
+/// - Moving runtime to a new thread at drop time (doesn't wait for completion)
+/// - Using `ManuallyDrop` with explicit shutdown (not ergonomic)
 pub struct TokioRuntime {
-    inner: tokio::runtime::Runtime,
+    /// Handle to spawn tasks on the runtime.
+    handle: Handle,
+
+    /// Dropping this signals the runtime thread to shut down.
+    _shutdown: Shutdown,
+}
+
+/// Manages the shutdown of the runtime thread.
+///
+/// When dropped, sends a shutdown signal and waits for the thread to complete.
+struct Shutdown {
+    /// Send to signal the runtime thread to shut down.
+    tx: Option<oneshot::Sender<()>>,
+
+    /// The thread that owns the actual tokio runtime.
+    thread: Option<ThreadJoinHandle<()>>,
+}
+
+impl Drop for Shutdown {
+    fn drop(&mut self) {
+        // Signal the runtime thread to shut down
+        if let Some(tx) = self.tx.take() {
+            let _ = tx.send(());
+        }
+        // Wait for the thread to complete
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }
 
 impl std::fmt::Debug for TokioRuntime {
@@ -72,12 +116,35 @@ impl RuntimeApi for TokioRuntime {
         if let Some(n) = workers {
             builder.worker_threads(n);
         }
-        if let Some(name) = name {
+        if let Some(ref name) = name {
             builder.thread_name(name);
         }
         builder.enable_all();
-        let inner = builder.build().map_err(|e| e.to_string())?;
-        Ok(Self { inner })
+        let runtime = builder.build().map_err(|e| e.to_string())?;
+        let handle = runtime.handle().clone();
+
+        // Create shutdown channel
+        let (tx, rx) = oneshot::channel();
+
+        // Spawn a thread that owns the runtime and waits for shutdown signal.
+        // This avoids the "Cannot drop a runtime in a context where blocking is not allowed" panic.
+        let thread_name = name.map(|n| format!("rt-shutdown-{}", n));
+        let thread = std::thread::Builder::new()
+            .name(thread_name.unwrap_or_else(|| "rt-shutdown".to_string()))
+            .spawn(move || {
+                // Block until shutdown signal received, then drop runtime
+                let _ = runtime.block_on(rx);
+                // runtime is dropped here, outside of async context
+            })
+            .map_err(|e| e.to_string())?;
+
+        Ok(Self {
+            handle,
+            _shutdown: Shutdown {
+                tx: Some(tx),
+                thread: Some(thread),
+            },
+        })
     }
 
     fn spawn_on<F>(&self, future: F, _name: Option<String>) -> JoinHandle<F::Output>
@@ -85,7 +152,7 @@ impl RuntimeApi for TokioRuntime {
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        self.inner.spawn(future)
+        self.handle.spawn(future)
     }
 }
 
@@ -97,9 +164,30 @@ mod tests {
     fn test_spawn_on() {
         let rt = TokioRuntime::new(Some(1), None).unwrap();
         let handle = rt.spawn_on(async { 42 }, None);
-        rt.inner.block_on(async {
-            assert_eq!(handle.await.unwrap(), 42);
-        });
+
+        // Use a separate runtime to block_on since we can't access the inner runtime
+        #[allow(clippy::disallowed_methods)]
+        let result = std::thread::spawn(move || {
+            let rt2 = tokio::runtime::Runtime::new().unwrap();
+            rt2.block_on(handle)
+        })
+        .join()
+        .unwrap();
+
+        assert_eq!(result.unwrap(), 42);
+    }
+
+    /// Test that TokioRuntime can be dropped from within an async context.
+    ///
+    /// Before the fix, this would panic with:
+    /// "Cannot drop a runtime in a context where blocking is not allowed"
+    #[tokio::test]
+    async fn test_drop_from_async_context() {
+        let rt = TokioRuntime::new(Some(1), Some("test-drop".to_string())).unwrap();
+        let handle = rt.spawn_on(async { 42 }, None);
+        assert_eq!(handle.await.unwrap(), 42);
+        // rt is dropped here, inside async context - this should NOT panic
+        drop(rt);
     }
 
     #[tokio::test]
