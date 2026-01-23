@@ -276,7 +276,7 @@ TableScan
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 10
 ├── read size: < 1 KiB
-├── partitions total: 2
+├── partitions total: 13
 ├── partitions scanned: 5
 ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 13 to 5 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
@@ -297,7 +297,7 @@ TableScan
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 10
 ├── read size: < 1 KiB
-├── partitions total: 3
+├── partitions total: 14
 ├── partitions scanned: 5
 ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 14 to 6 cost: <slt:ignore>, bloom pruning: 6 to 5 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
