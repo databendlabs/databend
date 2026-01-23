@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+
 use anyerror::AnyError;
-use databend_common_meta_stoerr::MetaStorageError;
 
 use crate::MetaNetworkError;
 use crate::raft_types::InitializeError;
@@ -32,7 +33,7 @@ pub enum MetaStartupError {
     InvalidConfig(String),
 
     #[error("fail to open store: {0}")]
-    StoreOpenError(#[from] MetaStorageError),
+    StoreOpenError(AnyError),
 
     #[error(transparent)]
     ServiceStartupError(#[from] MetaNetworkError),
@@ -53,5 +54,11 @@ impl From<RaftError<InitializeError>> for MetaStartupError {
             RaftError::APIError(e) => e.into(),
             RaftError::Fatal(f) => Self::MetaServiceError(f.to_string()),
         }
+    }
+}
+
+impl From<io::Error> for MetaStartupError {
+    fn from(e: io::Error) -> Self {
+        MetaStartupError::StoreOpenError(AnyError::new(&e))
     }
 }

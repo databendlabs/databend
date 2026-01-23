@@ -3962,7 +3962,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-meta-kvapi",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "display-more 0.2.1",
@@ -4175,7 +4174,6 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "deepsize",
  "derive_more",
@@ -4275,16 +4273,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-stoerr"
-version = "0.1.0"
-dependencies = [
- "anyerror",
- "serde_json",
- "sled",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "databend-common-meta-store"
 version = "0.1.0"
 dependencies = [
@@ -4314,7 +4302,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
  "derive_more",
@@ -5467,7 +5454,6 @@ dependencies = [
  "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-storage",

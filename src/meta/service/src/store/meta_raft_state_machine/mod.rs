@@ -28,7 +28,6 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
@@ -265,7 +264,7 @@ impl<SP: SpawnApi> MetaRaftStateMachine<SP> {
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[fastrace::trace]
-    pub async fn do_install_snapshot(&mut self, db: DB) -> Result<(), MetaStorageError> {
+    pub async fn do_install_snapshot(&mut self, db: DB) -> Result<(), io::Error> {
         let data_size = db.inner().file_size();
         let sys_data = db.sys_data().clone();
 

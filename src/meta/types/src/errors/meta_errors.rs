@@ -14,7 +14,7 @@
 
 use std::io;
 
-use databend_common_meta_stoerr::MetaStorageError;
+use anyerror::AnyError;
 use thiserror::Error;
 
 use crate::InvalidArgument;
@@ -32,8 +32,8 @@ pub enum MetaError {
     #[error(transparent)]
     NetworkError(#[from] MetaNetworkError),
 
-    #[error(transparent)]
-    StorageError(#[from] MetaStorageError),
+    #[error("StorageError: {0}")]
+    StorageError(AnyError),
 
     #[error(transparent)]
     ClientError(#[from] MetaClientError),
@@ -46,17 +46,17 @@ impl MetaError {
     pub fn name(&self) -> &'static str {
         match self {
             MetaError::NetworkError(err) => err.name(),
-            MetaError::StorageError(err) => err.name(),
+            MetaError::StorageError(_) => "StorageError",
             MetaError::ClientError(err) => err.name(),
             MetaError::APIError(err) => err.name(),
         }
     }
 }
 
+
 impl From<io::Error> for MetaError {
     fn from(e: io::Error) -> Self {
-        let net_err = MetaStorageError::from(e);
-        MetaError::StorageError(net_err)
+        MetaError::StorageError(AnyError::new(&e))
     }
 }
 
@@ -99,7 +99,7 @@ impl From<MetaError> for io::Error {
     fn from(e: MetaError) -> Self {
         match e {
             MetaError::NetworkError(net_err) => net_err.into(),
-            MetaError::StorageError(e) => e.into(),
+            MetaError::StorageError(e) => io::Error::other(e.to_string()),
             MetaError::ClientError(e) => e.into(),
             MetaError::APIError(e) => e.into(),
         }

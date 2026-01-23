@@ -26,11 +26,12 @@
 //!
 //! V003 uses sled storage (legacy), V004 uses separate raft log with leveled state machine.
 
+use std::io;
+
 use databend_common_meta_sled_store::SledKeySpace;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_sled_store::sled;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::SeqNum;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::node::Node;
@@ -181,9 +182,9 @@ impl SledKeySpace for DataHeader {
     type V = Header;
 }
 
-/// Convert SledBytesError to MetaStorageError via io::Error.
-fn sled_bytes_err(e: databend_common_meta_sled_store::SledBytesError) -> MetaStorageError {
-    MetaStorageError::from(std::io::Error::from(e))
+/// Convert SledBytesError to io::Error.
+fn sled_bytes_err(e: databend_common_meta_sled_store::SledBytesError) -> io::Error {
+    io::Error::from(e)
 }
 
 /// Serialize SledKeySpace key value pair
@@ -232,7 +233,7 @@ pub enum SMEntry {
 impl SMEntry {
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
-    pub fn serialize(kv: &SMEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
+    pub fn serialize(kv: &SMEntry) -> Result<(sled::IVec, sled::IVec), io::Error> {
 
         match kv {
             Self::DataHeader       { key, value } => serialize_for_sled!(DataHeader,       key, value),
@@ -248,7 +249,7 @@ impl SMEntry {
     ///
     /// It is able to deserialize openraft-v7 or openraft-v8 key-value pairs.
     /// The compatibility is provided by [`SledSerde`] implementation for value types.
-    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
+    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, io::Error> {
         let prefix = prefix_key[0];
         let vec_key = &prefix_key[1..];
 
@@ -337,7 +338,7 @@ impl RaftStoreEntry {
 
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
-    pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), MetaStorageError> {
+    pub fn serialize(kv: &RaftStoreEntry) -> Result<(sled::IVec, sled::IVec), io::Error> {
 
         match kv {
             Self::DataHeader       { key, value } => serialize_for_sled!(DataHeader,       key, value),
@@ -364,7 +365,7 @@ impl RaftStoreEntry {
     ///
     /// It is able to deserialize openraft-v7 or openraft-v8 key-value pairs.
     /// The compatibility is provided by [`SledSerde`] implementation for value types.
-    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
+    pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, io::Error> {
         let prefix = prefix_key[0];
         let vec_key = &prefix_key[1..];
 

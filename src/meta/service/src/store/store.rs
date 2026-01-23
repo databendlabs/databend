@@ -34,7 +34,6 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::compactor_acquirer::CompactorAcquirer;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
@@ -85,8 +84,7 @@ impl<SP: SpawnApi> RaftStore<SP> {
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
-            let store_err = MetaStorageError(ae);
-            MetaStartupError::StoreOpenError(store_err)
+            MetaStartupError::StoreOpenError(ae)
         }
 
         let raft_log_config = Arc::new(config.to_raft_log_config());

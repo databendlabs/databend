@@ -22,7 +22,7 @@
 //! 
 //!    MetaError
 //!    |
-//!    +-  MetaStorageError
+//!    +-  StorageError (AnyError)
 //!    |
 //!    +-  MetaClientError
 //!    |   |
@@ -53,14 +53,14 @@
 //!                        v                            v
 //!           MetaDataReadError                       Raft*Error
 //!           |                                       |
-//!           +- MetaStorageError                     +- MetaStorageError
+//!           +- io::Error                            +- io::Error
 //! ```
 //!
 //! ## Bottom level errors:
 //!
 //! Bottom level errors are derived from non-meta-store layers.
 //!
-//! - `MetaStorageError`
+//! - `io::Error` (wrapped as `AnyError` in `StorageError` variant)
 //! - `MetaNetworkError`
 //! - `MetaBytesError`
 //!
@@ -71,7 +71,7 @@
 //! +- DNS errors
 //! `- Payload codec error
 //!
-//! MetaStorageError
+//! StorageError (io::Error -> AnyError)
 //! |
 //! +- Sled errors
 //! +- Txn conflict
@@ -103,7 +103,7 @@
 //!
 //! For a local meta-store:
 //!
-//! - `MetaStorageError`: meta-store is implemented directly upon storage layer.
+//! - `StorageError`: meta-store is implemented directly upon storage layer (wraps `io::Error`).
 //!
 //! ## `MetaApiError`
 //!
@@ -128,7 +128,7 @@
 //! related: `RaftWriteError` or `RaftChangeMembershipError`.
 //!
 //! In meta-store reading data does not depend on Raft protocol, thus read errors is defined as
-//! `MetaDataReadError` and is derived directly from MetaStorageError.
+//! `MetaDataReadError` and is derived directly from `io::Error`.
 //!
 //!
 //! ## Other errors:

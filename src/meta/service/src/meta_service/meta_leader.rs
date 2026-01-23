@@ -25,7 +25,6 @@ use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -307,7 +306,7 @@ impl<'a, SP: SpawnApi> MetaLeader<'a, SP> {
     /// Check if a node is allowed to leave the cluster.
     ///
     /// A cluster must have at least one node in it.
-    async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
+    async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, io::Error> {
         let membership = {
             let sm = self.sto.get_sm_v003();
             sm.sys_data().last_membership_ref().membership().clone()
