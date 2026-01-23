@@ -267,7 +267,7 @@ where T: ScalarFunction
             None => Bitmap::new_trued(len),
         };
         if bitmap.null_count() > 0 {
-            ctx.validity = Some(bitmap.clone())
+            ctx.validity = ctx.validity.as_ref().map(|validity| validity & &bitmap);
         }
         let results = self.0.eval(&nonull_args, ctx);
         if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
