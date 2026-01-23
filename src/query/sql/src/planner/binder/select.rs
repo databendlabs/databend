@@ -513,12 +513,6 @@ impl Binder {
             return Ok(());
         }
 
-        let enable_lazy_read_across_join =
-            self.ctx.get_settings().get_enable_lazy_read_across_join()?;
-        if !enable_lazy_read_across_join && metadata.tables().len() != 1 {
-            return Ok(());
-        }
-
         for order_by_item in order_by {
             let column = metadata.column(order_by_item.index);
             // If order by contains derived column or virtual column,
@@ -564,6 +558,16 @@ impl Binder {
         if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
         {
             return Ok(());
+        }
+
+        if metadata.tables().len() != 1 {
+            let across_join_threshold =
+                self.ctx
+                    .get_settings()
+                    .get_lazy_read_across_join_threshold()? as usize;
+            if across_join_threshold == 0 || limit > across_join_threshold {
+                return Ok(());
+            }
         }
 
         let cols = metadata.columns();
