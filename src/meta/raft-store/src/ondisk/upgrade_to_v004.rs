@@ -18,7 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use databend_common_meta_runtime_api::TokioRuntime;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_sled_store::drop_sled_db;
 use databend_common_meta_sled_store::init_get_sled_db;
@@ -45,7 +45,7 @@ impl OnDisk {
     /// `V003` saves log in sled db.
     /// `V004` saves log in WAL based raft log.
     #[fastrace::trace]
-    pub(crate) async fn upgrade_v003_to_v004(&mut self) -> Result<(), io::Error> {
+    pub(crate) async fn upgrade_v003_to_v004<SP: SpawnApi>(&mut self) -> Result<(), io::Error> {
         // The previous cleaning step may remove the dir
         Self::ensure_dirs(&self.config.raft_dir)?;
 
@@ -126,10 +126,8 @@ impl OnDisk {
 
         // 1.2. copy snapshot
 
-        let ss_store_v003: SnapshotStoreV003<TokioRuntime> =
-            SnapshotStoreV003::new(self.config.clone());
-        let ss_store_v004: SnapshotStoreV004<TokioRuntime> =
-            SnapshotStoreV004::new(self.config.clone());
+        let ss_store_v003: SnapshotStoreV003<SP> = SnapshotStoreV003::new(self.config.clone());
+        let ss_store_v004: SnapshotStoreV004<SP> = SnapshotStoreV004::new(self.config.clone());
 
         let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
         let v004_path = ss_store_v004.snapshot_config().version_dir();
@@ -150,7 +148,7 @@ impl OnDisk {
         self.clean_upgrading()?;
 
         self.remove_v003_logs().await?;
-        self.remove_v003_snapshot().await?;
+        self.remove_v003_snapshot::<SP>().await?;
 
         // 3. finish upgrading
 
@@ -160,11 +158,13 @@ impl OnDisk {
     }
 
     /// Revert or finish the unfinished upgrade to v003.
-    pub(crate) async fn clean_in_progress_v003_to_v004(&mut self) -> Result<(), MetaStorageError> {
+    pub(crate) async fn clean_in_progress_v003_to_v004<SP: SpawnApi>(
+        &mut self,
+    ) -> Result<(), MetaStorageError> {
         assert!(self.header.upgrading.is_some());
         if self.header.cleaning {
             self.remove_v003_logs().await?;
-            self.remove_v003_snapshot().await?;
+            self.remove_v003_snapshot::<SP>().await?;
 
             // Note that this will increase `header.version`.
             self.finish_upgrading()?;
@@ -183,9 +183,8 @@ impl OnDisk {
         Ok(())
     }
 
-    async fn remove_v003_snapshot(&mut self) -> Result<(), io::Error> {
-        let ss_store_v003: SnapshotStoreV003<TokioRuntime> =
-            SnapshotStoreV003::new(self.config.clone());
+    async fn remove_v003_snapshot<SP: SpawnApi>(&mut self) -> Result<(), io::Error> {
+        let ss_store_v003: SnapshotStoreV003<SP> = SnapshotStoreV003::new(self.config.clone());
 
         let v003_path = ss_store_v003.snapshot_config().snapshot_dir();
 

@@ -3299,6 +3299,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
+ "databend-meta-runtime",
  "databend-query",
  "form_urlencoded",
  "futures",
