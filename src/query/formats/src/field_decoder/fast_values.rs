@@ -91,7 +91,6 @@ impl FastFieldDecoderValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                timezone: format.timezone,
                 jiff_timezone: format.jiff_timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),

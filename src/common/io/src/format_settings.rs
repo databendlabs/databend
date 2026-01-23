@@ -16,7 +16,6 @@ use std::borrow::Cow;
 
 use base64::Engine as _;
 use base64::engine::general_purpose;
-use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use jiff::tz::TimeZone;
 
@@ -56,7 +55,6 @@ impl BinaryDisplayFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
-    pub timezone: Tz,
     pub jiff_timezone: TimeZone,
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
@@ -68,7 +66,6 @@ pub struct FormatSettings {
 impl Default for FormatSettings {
     fn default() -> Self {
         Self {
-            timezone: "UTC".parse::<Tz>().unwrap(),
             jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
