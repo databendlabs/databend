@@ -85,7 +85,7 @@ impl Interpreter for DropUserStageInterpreter {
         // 1. Remove stage files for internal stages
         if let Ok(stage) = &stage {
             if !matches!(&stage.stage_type, StageType::External) {
-                let op = StageTable::get_op(&stage)?;
+                let op = StageTable::get_op(stage)?;
                 Self::remove_all(self.ctx.clone(), op).await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",
