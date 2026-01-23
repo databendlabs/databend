@@ -22,9 +22,8 @@ message UdfRuntimeSpec {
 }
 
 message ApplyUdfResourceRequest {
-  // Runtime spec. Control plane builds Dockerfile.
-  UdfRuntimeSpec spec = 1;
-  repeated UdfAsset imports = 2;
+  string type = 3;
+  string script = 4;
 }
 
 message ApplyUdfResourceResponse {

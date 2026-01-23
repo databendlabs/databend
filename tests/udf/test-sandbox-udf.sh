@@ -33,6 +33,8 @@ echo "Cleaning up previous runs"
 
 killall -9 databend-query || true
 killall -9 databend-meta || true
+pkill -f "tests/cloud_control_server/simple_server.py" || true
+pkill -f "uv run --project tests/cloud_control_server" || true
 rm -rf .databend
 
 
@@ -228,6 +230,33 @@ else
   echo "❌ Mismatch"
   echo "Expected: $expected"
   echo "Actual  : $actual"
+  exit 1
+fi
+
+echo "Checking sandbox health endpoint"
+status_url=""
+for _ in $(seq 1 30); do
+  if command -v rg >/dev/null 2>&1; then
+    status_url=$(rg -o "http://[^ ]+/health" ./.databend/cloud-control.out | tail -n 1 || true)
+  else
+    status_url=$(grep -oE "http://[^ ]+/health" ./.databend/cloud-control.out | tail -n 1 || true)
+  fi
+  if [ -n "$status_url" ]; then
+    break
+  fi
+  sleep 1
+done
+
+if [ -z "$status_url" ]; then
+  echo "[Test Error] health endpoint not found in cloud-control.out" >&2
+  exit 1
+fi
+
+health_response=$(curl -s "$status_url")
+echo "Health response: $health_response"
+if ! echo "$health_response" | jq -e \
+  'has("request_count") and has("first_request_time") and has("last_request_time") and (.request_count >= 1)' >/dev/null; then
+  echo "[Test Error] health endpoint returned invalid payload: $health_response" >&2
   exit 1
 fi
 
