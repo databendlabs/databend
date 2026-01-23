@@ -51,7 +51,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
@@ -263,18 +262,7 @@ impl FusePruner {
         ngram_args: Vec<NgramArgs>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        let max_concurrency = {
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
-            let v = std::cmp::max(max_io_requests, 10);
-            if v > max_io_requests {
-                warn!(
-                    "max_io_requests setting too low ({}), automatically increased to {} for optimal performance",
-                    max_io_requests, v
-                )
-            }
-            v
-        };
+        let max_concurrency = crate::pruning::pruning_concurrency(ctx)?;
 
         info!(
             "Pruning max concurrency configured to {} threads",

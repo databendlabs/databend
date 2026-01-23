@@ -117,6 +117,7 @@ impl FuseTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
+        let pruning_concurrency = crate::pruning::pruning_concurrency(&ctx)?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
             let change_type = push_downs.as_ref().map_or(ChangeType::Insert, |v| {
@@ -163,7 +164,16 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                // Use segment-level mod shuffle only when the total segments exceed both the
+                // cluster size and the local pruning concurrency (from max_storage_io_requests,
+                // with a minimum of 10). If segment_len <= C, the coordinator can scan all
+                // segments in one wave and we prefer local pruning to avoid skew.
+                // Example: C=16, segment_len=12 => local pruning; C=16, segment_len=40 => mod.
+                if self.is_column_oriented()
+                    || (segment_len > nodes_num
+                        && distributed_pruning
+                        && segment_len > pruning_concurrency)
+                {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
