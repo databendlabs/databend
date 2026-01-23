@@ -18,38 +18,30 @@ EmptyResultScan
 query T
 explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 1 and b > 2) or (a = 1 and b < 100);
 ----
-Filter
-├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [is_true(t1.a (#0) = 1), t1.b (#1) > 2 or t1.b (#1) < 100]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [t1.a (#0) = 1 and (t1.b (#1) > 2 or t1.b (#1) < 100)], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [t1.a (#0) = 1 and (t1.b (#1) > 2 or t1.b (#1) < 100)], limit: NONE]
+└── estimated rows: 0.00
 
 query T
 explain select * from t1 where b > 2 or b > 2 or b < 100;
 ----
-Filter
-├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [t1.b (#1) > 2 or t1.b (#1) < 100]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [t1.b (#1) > 2 or t1.b (#1) < 100], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [t1.b (#1) > 2 or t1.b (#1) < 100], limit: NONE]
+└── estimated rows: 0.00
 
 statement ok
 create or replace table t1(d timestamp null, a varchar null);
@@ -72,40 +64,32 @@ insert into t2 select to_timestamp('2007-01-01'),  concat( '2006-01-0' ,(number 
 query T
 explain select * from  t1 where d < a;
 ----
-Filter
-├── output columns: [t1.d (#0), t1.a (#1)]
-├── filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))]
-├── estimated rows: 40.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [d (#0), a (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 2
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))], limit: NONE]
-    └── estimated rows: 200.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [d (#0), a (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))], limit: NONE]
+└── estimated rows: 40.00
 
 query T
 explain select * from  t2 where d < a;
 ----
-Filter
-├── output columns: [t2.d (#0), t2.a (#1)]
-├── filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)]
-├── estimated rows: 40.00
-└── TableScan
-    ├── table: default.default.t2
-    ├── scan id: 0
-    ├── output columns: [d (#0), a (#1)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 2
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)], limit: NONE]
-    └── estimated rows: 200.00
+TableScan
+├── table: default.default.t2
+├── scan id: 0
+├── output columns: [d (#0), a (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)], limit: NONE]
+└── estimated rows: 40.00
 
 query T
 explain select number from numbers(6) where number = 1 or number = 5 or number = 3;
@@ -146,37 +130,29 @@ insert into t2_tz select to_timestamp_tz('2007-01-01'),  concat( '2006-01-0' ,(n
 query T
 explain select * from  t1_tz where d < a;
 ----
-Filter
-├── output columns: [t1_tz.d (#0), t1_tz.a (#1)]
-├── filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTz NULL))]
-├── estimated rows: 40.00
-└── TableScan
-    ├── table: default.default.t1_tz
-    ├── scan id: 0
-    ├── output columns: [d (#0), a (#1)]
-    ├── read rows: 200
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTz NULL))], limit: NONE]
-    └── estimated rows: 200.00
+TableScan
+├── table: default.default.t1_tz
+├── scan id: 0
+├── output columns: [d (#0), a (#1)]
+├── read rows: 200
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTz NULL))], limit: NONE]
+└── estimated rows: 40.00
 
 query T
 explain select * from  t2_tz where d < a;
 ----
-Filter
-├── output columns: [t2_tz.d (#0), t2_tz.a (#1)]
-├── filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTz)]
-├── estimated rows: 40.00
-└── TableScan
-    ├── table: default.default.t2_tz
-    ├── scan id: 0
-    ├── output columns: [d (#0), a (#1)]
-    ├── read rows: 200
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-    ├── push downs: [filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTz)], limit: NONE]
-    └── estimated rows: 200.00
+TableScan
+├── table: default.default.t2_tz
+├── scan id: 0
+├── output columns: [d (#0), a (#1)]
+├── read rows: 200
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+├── push downs: [filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTz)], limit: NONE]
+└── estimated rows: 40.00

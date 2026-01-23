@@ -3,7 +3,7 @@
 a	VARCHAR	NO	''	
 b	INT	NO	0	
 c	INT	NO	0	
-1	2
+1.0	2
 a	FLOAT	NO	0	
 b	VARCHAR	NO	''	
 c	INT	NO	0	
@@ -15,9 +15,9 @@ Error: APIError: QueryFailed: [1006]null value in column `a` of table `c` violat
 1
 0	1
 Error: APIError: QueryFailed: [1006]invalid float literal while evaluating function `to_float32('a')` in expr `CAST('a' AS Float32)`
-0	1
+0.0	1
 1
-0	1
+0.0	1
 1.2	2
 1
 1	10

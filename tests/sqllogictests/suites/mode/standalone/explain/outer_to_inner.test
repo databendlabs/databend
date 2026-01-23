@@ -24,20 +24,16 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.b (#3), probe targets:[t1.b (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 'a')]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 0
-│       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 'a')], limit: NONE]
-│       └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 'a')], limit: NONE]
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0
@@ -77,20 +73,16 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.b (#3), probe targets:[t1.b (#1)@scan0], filter type:inlist,min_max
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > '2022-01-01')]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 0
-│       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(t2.a (#2) > '2022-01-01')], limit: NONE]
-│       └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [is_true(t2.a (#2) > '2022-01-01')], limit: NONE]
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0
@@ -129,20 +121,16 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.b (#3), probe targets:[t1.b (#1)@scan0], filter type:inlist
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 1.1)]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 0
-│       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
-│       └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0
@@ -181,20 +169,16 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:t2.b (#3), probe targets:[t1.b (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [is_true(t2.a (#2) > 1.1)]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2), b (#3)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 0
-│       ├── partitions scanned: 0
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
-│       └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0

@@ -101,8 +101,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     }
 
     // Generate sync inverted indexes.
-    let inverted_index_plans =
-        generate_refresh_inverted_index_plan(ctx.clone(), &desc, table).await?;
+    let inverted_index_plans = generate_refresh_table_index_plan(ctx.clone(), &desc, table).await?;
     plans.extend_from_slice(&inverted_index_plans);
 
     let mut tasks = Vec::with_capacity(std::cmp::min(
@@ -257,7 +256,7 @@ async fn build_refresh_index_plan(
         .await
 }
 
-async fn generate_refresh_inverted_index_plan(
+async fn generate_refresh_table_index_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
@@ -274,6 +273,7 @@ async fn generate_refresh_inverted_index_plan(
             TableIndexType::Inverted => ast::TableIndexType::Inverted,
             TableIndexType::Ngram => ast::TableIndexType::Ngram,
             TableIndexType::Vector => ast::TableIndexType::Vector,
+            TableIndexType::Spatial => ast::TableIndexType::Spatial,
         };
         let plan = RefreshTableIndexPlan {
             index_type,

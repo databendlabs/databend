@@ -29,6 +29,7 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::Compression;
+use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
@@ -106,6 +107,7 @@ impl VirtualColumnReader {
         &self,
         mut data_block: DataBlock,
         virtual_data: Option<VirtualBlockReadResult>,
+        row_selection: Option<RowSelection>,
     ) -> Result<DataBlock> {
         let orig_schema = virtual_data
             .as_ref()
@@ -119,6 +121,7 @@ impl VirtualColumnReader {
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
+                    row_selection,
                 )
             })
             .transpose()?;

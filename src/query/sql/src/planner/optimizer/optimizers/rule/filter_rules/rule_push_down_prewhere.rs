@@ -21,6 +21,7 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::is_internal_column;
 
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -181,11 +182,19 @@ impl RulePushDownPrewhere {
 
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
+        let mut remaining_pred = Vec::new();
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
             match Self::collect_columns(scan.table_index, &table.schema(), pred) {
                 Some(columns) => {
+                    let has_virtual_column = columns.iter().any(|index| {
+                        matches!(metadata.column(*index), ColumnEntry::VirtualColumn(_))
+                    });
+                    if has_virtual_column {
+                        remaining_pred.push(pred.clone());
+                        continue;
+                    }
                     prewhere_pred.push(pred.clone());
                     prewhere_columns.extend(&columns);
                 }
@@ -193,27 +202,40 @@ impl RulePushDownPrewhere {
             }
         }
 
-        if !prewhere_pred.is_empty() {
-            if let Some(prewhere) = scan.prewhere.as_ref() {
-                prewhere_pred.extend(prewhere.predicates.clone());
-                prewhere_columns.extend(&prewhere.prewhere_columns);
-            }
-
-            scan.prewhere = Some(Prewhere {
-                output_columns: scan.columns.clone(),
-                prewhere_columns,
-                predicates: prewhere_pred,
-            });
+        if prewhere_pred.is_empty() {
+            return Ok(s_expr.clone());
         }
 
+        if let Some(prewhere) = scan.prewhere.as_ref() {
+            prewhere_pred.extend(prewhere.predicates.clone());
+            prewhere_columns.extend(&prewhere.prewhere_columns);
+        }
+
+        scan.prewhere = Some(Prewhere {
+            output_columns: scan.columns.clone(),
+            prewhere_columns,
+            predicates: prewhere_pred,
+        });
+
         let scan_expr = SExpr::create_leaf(Arc::new(scan.into()));
-        if let Some(secure_filter) = secure_filter {
-            Ok(SExpr::create_unary(
-                Arc::new(secure_filter.into()),
-                Arc::new(scan_expr),
-            ))
+        let child_expr = if let Some(secure_filter) = secure_filter {
+            SExpr::create_unary(Arc::new(secure_filter.into()), Arc::new(scan_expr))
         } else {
-            Ok(scan_expr)
+            scan_expr
+        };
+
+        if remaining_pred.is_empty() {
+            Ok(child_expr)
+        } else {
+            Ok(SExpr::create_unary(
+                Arc::new(
+                    Filter {
+                        predicates: remaining_pred,
+                    }
+                    .into(),
+                ),
+                Arc::new(child_expr),
+            ))
         }
     }
 }

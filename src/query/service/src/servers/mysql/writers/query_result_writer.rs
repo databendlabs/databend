@@ -259,7 +259,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
-        let _tz = format.timezone;
         match convert_schema(&query_result.schema) {
             Err(error) => self.err(&error, dataset_writer).await,
             Ok(columns) => {

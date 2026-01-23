@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::ops::BitAnd;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -23,20 +22,15 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
+use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
@@ -46,6 +40,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::read_state::ReadState;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -53,7 +48,6 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::pruning::ExprBloomFilter;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
@@ -73,16 +67,10 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
     need_reserve_block_info: bool,
-}
 
-#[derive(Clone)]
-struct BloomRuntimeFilterRef {
-    column_index: FieldIndex,
-    filter_id: usize,
-    filter: RuntimeBloomFilter,
-    stats: Arc<RuntimeFilterStats>,
+    prewhere_info: Option<PrewhereInfo>,
+    read_state: Option<ReadState>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -115,6 +103,13 @@ impl DeserializeDataTransform {
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
+
+        let prewhere_info = plan
+            .push_downs
+            .as_ref()
+            .and_then(|p| p.prewhere.as_ref())
+            .cloned();
+
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx: ctx.clone(),
@@ -131,68 +126,10 @@ impl DeserializeDataTransform {
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
-            cached_runtime_filter: None,
             need_reserve_block_info,
+            prewhere_info,
+            read_state: None,
         })))
-    }
-
-    fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
-        // Check if already cached runtime filters
-        if self.cached_runtime_filter.is_none() {
-            let bloom_filters = self
-                .ctx
-                .get_runtime_filters(self.scan_id)
-                .into_iter()
-                .filter_map(|entry| {
-                    let filter_id = entry.id;
-                    let RuntimeFilterEntry { bloom, stats, .. } = entry;
-                    let bloom = bloom?;
-                    let column_index = self.src_schema.index_of(bloom.column_name.as_str()).ok()?;
-                    Some(BloomRuntimeFilterRef {
-                        column_index,
-                        filter_id,
-                        filter: bloom.filter.clone(),
-                        stats,
-                    })
-                })
-                .collect::<Vec<_>>();
-            if bloom_filters.is_empty() {
-                return Ok(None);
-            }
-            let mut filter_ids = bloom_filters
-                .iter()
-                .map(|f| f.filter_id)
-                .collect::<Vec<_>>();
-            filter_ids.sort_unstable();
-            self.cached_runtime_filter = Some(bloom_filters);
-        }
-
-        let mut bitmaps = vec![];
-        for runtime_filter in self.cached_runtime_filter.as_ref().unwrap().iter() {
-            let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
-            let probe_block_entry = data_block.get_by_offset(runtime_filter.column_index);
-            let probe_column = probe_block_entry.to_column();
-
-            // Apply bloom filter
-            let start = Instant::now();
-            ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column, &mut bitmap)?;
-            let elapsed = start.elapsed();
-            let unset_bits = bitmap.null_count();
-            runtime_filter
-                .stats
-                .record_bloom(elapsed.as_nanos() as u64, unset_bits as u64);
-            bitmaps.push(bitmap);
-        }
-        if !bitmaps.is_empty() {
-            let rf_bitmap = bitmaps
-                .into_iter()
-                .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
-                .unwrap();
-
-            Ok(rf_bitmap.into())
-        } else {
-            Ok(None)
-        }
     }
 }
 
@@ -278,41 +215,27 @@ impl Processor for DeserializeDataTransform {
                     let columns_chunks = data.columns_chunks()?;
                     let part = FuseBlockPartInfo::from_part(&part)?;
 
-                    let mut data_block = self.block_reader.deserialize_parquet_chunks(
-                        part.nums_rows,
-                        &part.columns_meta,
-                        columns_chunks,
-                        &part.compression,
-                        &part.location,
-                    )?;
-
-                    let origin_num_rows = data_block.num_rows();
-
-                    let mut filter = None;
-                    let bloom_start = Instant::now();
-
-                    let rows_before = data_block.num_rows();
-                    if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
-                        data_block = data_block.filter_with_bitmap(&bitmap)?;
-                        filter = Some(bitmap);
-                        let rows_after = data_block.num_rows();
-                        let bloom_duration = bloom_start.elapsed();
-                        Profile::record_usize_profile(
-                            ProfileStatisticsName::RuntimeFilterBloomTime,
-                            bloom_duration.as_nanos() as usize,
-                        );
-                        if rows_before > rows_after {
-                            Profile::record_usize_profile(
-                                ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
-                                rows_before - rows_after,
-                            );
-                        }
+                    if self.read_state.is_none() {
+                        self.read_state = Some(ReadState::create(
+                            self.ctx.clone(),
+                            self.scan_id,
+                            self.prewhere_info.as_ref(),
+                            &self.block_reader,
+                        )?);
                     }
 
-                    // Add optional virtual columns
+                    let (mut data_block, row_selection, bitmap_selection) = self
+                        .read_state
+                        .as_ref()
+                        .unwrap()
+                        .deserialize_and_filter(columns_chunks, part)?;
+
                     if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                        data_block = virtual_reader
-                            .deserialize_virtual_columns(data_block.clone(), virtual_data)?;
+                        data_block = virtual_reader.deserialize_virtual_columns(
+                            data_block,
+                            virtual_data,
+                            row_selection.as_ref().map(|s| s.selection.clone()),
+                        )?;
                     }
 
                     // Perf.
@@ -338,9 +261,9 @@ impl Processor for DeserializeDataTransform {
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     let offsets = if self.block_reader.query_internal_columns() {
-                        filter.as_ref().map(|bitmap| {
+                        bitmap_selection.as_ref().map(|bitmap| {
                             RoaringTreemap::from_sorted_iter(
-                                (0..origin_num_rows)
+                                (0..bitmap.len())
                                     .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
                                     .map(|i| i as u64),
                             )
