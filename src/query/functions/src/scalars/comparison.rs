@@ -662,69 +662,69 @@ fn string_float_cmp<T: Number + std::str::FromStr>(
 }
 
 fn register_array_cmp(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "eq",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "noteq",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "gt",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "gte",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "lt",
         |_, _, _| FunctionDomain::Domain(ALL_FALSE_DOMAIN),
         |_, _, _| false,
     );
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, BooleanType, _>(
         "lte",
         |_, _, _| FunctionDomain::Domain(ALL_TRUE_DOMAIN),
         |_, _, _| true,
     );
 
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "eq",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs == rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "noteq",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs != rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "gt",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs > rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "gte",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs >= rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "lt",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs < rhs,
         );
     registry
-        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _, _>(
+        .register_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, BooleanType, _>(
             "lte",
             |_, _, _| FunctionDomain::Full,
             |lhs, rhs, _| lhs <= rhs,
@@ -810,6 +810,7 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                             )),
                         }
                     }),
+                    derive_stat: None,
                 },
             }))
         }));
@@ -910,6 +911,7 @@ fn register_like(registry: &mut FunctionRegistry) {
                 signature,
                 FunctionDomain::Full,
                 like_any_fn,
+                None,
                 is_nullable,
             )))
         })),

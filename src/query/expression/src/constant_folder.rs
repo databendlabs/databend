@@ -429,7 +429,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 });
 
                 let (calc_domain, eval) = match &function.eval {
-                    FunctionEval::Scalar { calc_domain, eval } => (calc_domain, eval),
+                    FunctionEval::Scalar {
+                        calc_domain, eval, ..
+                    } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
                         return (func_expr, None);
                     }

@@ -491,21 +491,19 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
             return_size,
             arithmetic_op,
         };
-        let eval = {
-            let args_type = args_type.clone();
-            DecimalBinaryFunctionEvaluator {
-                args_type,
-                left_size,
-                right_size,
-                return_size,
-                arithmetic_op,
-            }
+        let eval = DecimalBinaryFunctionEvaluator {
+            args_type,
+            left_size,
+            right_size,
+            return_size,
+            arithmetic_op,
         };
 
         Some(Arc::new(Function::with_passthrough_nullable(
             signature,
             calc_domain,
             eval,
+            None,
             has_nullable,
         )))
     }));
@@ -537,6 +535,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                 signature,
                 minus_domain,
                 unary_minus_decimal,
+                None,
                 is_nullable,
             )))
         })),

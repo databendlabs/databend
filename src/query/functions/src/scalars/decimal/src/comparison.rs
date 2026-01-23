@@ -76,6 +76,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             signature,
             DecimalComparisonDomain::<Op>::default(),
             eval,
+            None,
             has_nullable,
         )))
     }));

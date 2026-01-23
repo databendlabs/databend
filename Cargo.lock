@@ -3482,6 +3482,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-pipeline",
  "databend-common-settings",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-common-users",
  "databend-meta-runtime",
@@ -3664,6 +3665,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-metrics",
+ "databend-common-statistics",
  "databend-common-timezone",
  "databend_educe",
  "divan",
@@ -4578,6 +4580,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-settings",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-common-storages-basic",
  "databend-common-tracing",
@@ -4615,6 +4618,15 @@ dependencies = [
  "unicase",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "databend-common-statistics"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-exception",
+ "serde",
 ]
 
 [[package]]
@@ -4763,6 +4775,7 @@ dependencies = [
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
  "databend-common-sql",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-users",
@@ -5452,7 +5465,6 @@ dependencies = [
  "databend-common-expression",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "match-template",
- "num-traits",
 ]
 
 [[package]]
@@ -5729,6 +5741,7 @@ dependencies = [
  "databend-common-script",
  "databend-common-settings",
  "databend-common-sql",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-common-storages-basic",
  "databend-common-storages-delta",
@@ -6069,6 +6082,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-io",
  "databend-common-native",
+ "databend-common-statistics",
  "databend-common-storage",
  "enum-as-inner",
  "log",

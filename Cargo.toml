@@ -123,6 +123,7 @@ databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
+databend-common-statistics = { path = "src/common/statistics" }
 databend-common-storage = { path = "src/common/storage" }
 databend-common-storages-basic = { path = "src/query/storages/basic" }
 databend-common-storages-delta = { path = "src/query/storages/delta" }

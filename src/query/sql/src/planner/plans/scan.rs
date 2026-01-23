@@ -24,9 +24,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::ScalarItem;

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use databend_common_expression::ColumnId;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
-use databend_common_storage::Histogram;
+use databend_common_statistics::Histogram;
 use databend_common_storage::MetaHLL;
 
 use crate::meta::FormatVersion;

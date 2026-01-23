@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt;
 use std::fmt::Debug;
 use std::ops::BitAnd;
 use std::ops::BitOr;
@@ -40,6 +41,7 @@ use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
+use crate::function_stat::DeriveStat;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -48,7 +50,12 @@ use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
+pub mod function_builder;
 pub mod function_factory;
+pub mod function_stat;
+pub mod register;
+pub mod register_comparison;
+pub mod register_vectorize;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;
@@ -102,6 +109,8 @@ pub enum FunctionEval {
         /// Given a set of arguments, return a single value.
         /// The result must be in the same length as the input arguments if its a column.
         eval: Box<dyn ScalarFunction>,
+
+        derive_stat: Option<DeriveStat>,
     },
     /// Set-returning-function that input a scalar and then return a set.
     SRF {
@@ -208,6 +217,7 @@ pub struct FunctionRegistry {
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
+    pub derive_stat: HashMap<String, DeriveStat>,
 }
 
 impl FunctionRegistry {
@@ -398,6 +408,10 @@ impl FunctionRegistry {
         self.auto_try_cast_rules.extend(auto_try_cast_rules);
     }
 
+    pub fn get_derive_stat(&self, func_name: &str) -> Option<&DeriveStat> {
+        self.derive_stat.get(func_name)
+    }
+
     pub fn next_function_id(&self, name: &str) -> usize {
         self.funcs.get(name).map(|funcs| funcs.len()).unwrap_or(0)
             + self.factories.get(name).map(|f| f.len()).unwrap_or(0)
@@ -488,7 +502,7 @@ impl FunctionID {
 
 impl EvalContext<'_> {
     #[inline]
-    pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
+    pub fn set_error(&mut self, row: usize, error_msg: impl fmt::Display) {
         // If the row is NULL, we don't need to set error.
         if self
             .validity
@@ -506,7 +520,7 @@ impl EvalContext<'_> {
             None => {
                 let mut valids = Bitmap::new_constant(true, self.num_rows.max(1)).make_mut();
                 valids.set(row, false);
-                self.errors = Some((valids, error_msg.into()));
+                self.errors = Some((valids, error_msg.to_string()));
             }
         }
     }

@@ -51,22 +51,27 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
-        "st_geographyfromewkt",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, GeographyType>(|wkt, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
+    registry
+        .scalar_builder("st_geographyfromewkt")
+        .function()
+        .typed_1_arg::<StringType, GeographyType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, GeographyType>(
+            |wkt, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
                 }
-            }
 
-            match geography_from_ewkt(wkt) {
-                Ok(data) => builder.put_slice(data.as_slice()),
-                Err(e) => ctx.set_error(builder.len(), e.to_string()),
-            }
-            builder.commit_row();
-        }),
-    );
+                match geography_from_ewkt(wkt) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(builder.len(), e.to_string()),
+                }
+                builder.commit_row();
+            },
+        ))
+        .register();
 }

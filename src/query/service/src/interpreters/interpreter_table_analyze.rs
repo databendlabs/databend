@@ -22,7 +22,7 @@ use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HistogramInfoSink;

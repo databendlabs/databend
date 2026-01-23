@@ -35,6 +35,7 @@ use crate::FunctionDomain;
 use crate::FunctionSignature;
 use crate::Scalar;
 use crate::Value;
+use crate::function_stat::DeriveStat;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NullableColumn;
@@ -89,14 +90,15 @@ where F: Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
         let Function { signature, eval } = self;
-        let (calc_domain, eval) = eval.into_scalar().unwrap();
-        Function::with_passthrough_nullable(signature, calc_domain, eval, true)
+        let (calc_domain, eval, derive_stat) = eval.into_scalar().unwrap();
+        Function::with_passthrough_nullable(signature, calc_domain, eval, derive_stat, true)
     }
 
     pub fn with_passthrough_nullable(
         signature: FunctionSignature,
         calc_domain: impl ScalarFunctionDomain,
         eval: impl ScalarFunction,
+        derive_stat: Option<DeriveStat>,
         is_nullable: bool,
     ) -> Self {
         if !is_nullable {
@@ -105,6 +107,7 @@ impl Function {
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(calc_domain),
                     eval: Box::new(eval),
+                    derive_stat,
                 },
             };
         }
@@ -131,6 +134,7 @@ impl Function {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(PassthroughNullableDomain(calc_domain)),
                 eval: Box::new(PassthroughNullable(eval)),
+                derive_stat,
             },
         }
     }
@@ -142,7 +146,7 @@ impl Function {
         let return_type = signature.return_type.wrap_nullable();
         signature.return_type = return_type.clone();
 
-        let (calc_domain, eval) = self.eval.into_scalar().unwrap();
+        let (calc_domain, eval, derive_stat) = self.eval.into_scalar().unwrap();
 
         let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
             let domain = calc_domain.calc_domain(ctx, domains);
@@ -186,12 +190,13 @@ impl Function {
             eval: FunctionEval::Scalar {
                 calc_domain: new_calc_domain,
                 eval: new_eval,
+                derive_stat,
             },
         }
     }
 }
 
-struct PassthroughNullableDomain<T>(T);
+pub struct PassthroughNullableDomain<T>(pub T);
 
 impl<T> ScalarFunctionDomain for PassthroughNullableDomain<T>
 where T: ScalarFunctionDomain
