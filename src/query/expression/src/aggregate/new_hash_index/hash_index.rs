@@ -15,13 +15,13 @@
 
 use std::hint::likely;
 
+use crate::ProbeState;
+use crate::aggregate::LOAD_FACTOR;
 use crate::aggregate::hash_index::HashIndexOps;
 use crate::aggregate::hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
-use crate::aggregate::LOAD_FACTOR;
-use crate::ProbeState;
 
 pub struct NewHashIndex {
     ctrls: Vec<Tag>,
