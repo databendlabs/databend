@@ -14,9 +14,11 @@
 
 use std::fs;
 use std::io;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::snapshot_db::DB;
 
 use crate::config::RaftConfig;
@@ -27,43 +29,46 @@ use crate::sm_v003::snapshot_loader::SnapshotLoader;
 use crate::snapshot_config::SnapshotConfig;
 
 #[derive(Debug)]
-pub struct SnapshotStoreV003 {
-    v004: SnapshotStoreV004,
+pub struct SnapshotStoreV003<SP> {
+    v004: SnapshotStoreV004<SP>,
 }
 
-impl SnapshotStoreV003 {
+impl<SP: SpawnApi> SnapshotStoreV003<SP> {
     pub fn new(config: RaftConfig) -> Self {
         SnapshotStoreV003 {
             v004: SnapshotStoreV004 {
                 snapshot_config: SnapshotConfig::new(DataVersion::V003, config),
+                _phantom: PhantomData,
             },
         }
     }
 }
 
-impl Deref for SnapshotStoreV003 {
-    type Target = SnapshotStoreV004;
+impl<SP> Deref for SnapshotStoreV003<SP> {
+    type Target = SnapshotStoreV004<SP>;
 
     fn deref(&self) -> &Self::Target {
         &self.v004
     }
 }
 
-impl DerefMut for SnapshotStoreV003 {
+impl<SP> DerefMut for SnapshotStoreV003<SP> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.v004
     }
 }
 
 #[derive(Debug)]
-pub struct SnapshotStoreV004 {
+pub struct SnapshotStoreV004<SP> {
     snapshot_config: SnapshotConfig,
+    _phantom: PhantomData<SP>,
 }
 
-impl SnapshotStoreV004 {
+impl<SP: SpawnApi> SnapshotStoreV004<SP> {
     pub fn new(config: RaftConfig) -> Self {
         SnapshotStoreV004 {
             snapshot_config: SnapshotConfig::new(DataVersion::V004, config),
+            _phantom: PhantomData,
         }
     }
 
@@ -80,7 +85,7 @@ impl SnapshotStoreV004 {
     }
 
     /// Create a receiver to receive snapshot in binary form.
-    pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<ReceiverV003, io::Error> {
+    pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<ReceiverV003<SP>, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
 
         let (storage_path, temp_rel_path) = self.snapshot_config.snapshot_temp_dir_fn();
@@ -109,7 +114,7 @@ impl SnapshotStoreV004 {
     }
 
     /// Create a writer to build a snapshot from key-value pairs
-    pub fn new_writer(&self) -> Result<WriterV003, io::Error> {
+    pub fn new_writer(&self) -> Result<WriterV003<SP>, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
         WriterV003::new(&self.snapshot_config)
     }

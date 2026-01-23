@@ -58,6 +58,7 @@ use databend_common_tracing::LogFormat;
 use databend_common_tracing::init_logging;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_runtime::DatabendRuntime;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
 use mlua::Lua;
@@ -203,14 +204,14 @@ impl App {
                 export_from_grpc::export_from_running_node(args, BUILD_INFO.semver()).await?;
             }
             Some(ref _dir) => {
-                export_from_disk::export_from_dir(args).await?;
+                export_from_disk::export_from_dir::<DatabendRuntime>(args).await?;
             }
         }
         Ok(())
     }
 
     async fn import(&self, args: &ImportArgs) -> anyhow::Result<()> {
-        import::import_data(args).await?;
+        import::import_data::<DatabendRuntime>(args).await?;
         Ok(())
     }
 

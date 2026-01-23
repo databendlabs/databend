@@ -21,13 +21,12 @@ use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayload;
-use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TrackingData;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::TxnReply;
@@ -164,16 +163,16 @@ impl Drop for ThroughputLogger {
     }
 }
 
-pub struct MetaServiceImpl {
+pub struct MetaServiceImpl<SP: SpawnApi> {
     token: GrpcToken,
     version: Version,
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
-    pub(crate) meta_handle: Weak<MetaHandle>,
+    pub(crate) meta_handle: Weak<MetaHandle<SP>>,
 }
 
-impl Drop for MetaServiceImpl {
+impl<SP: SpawnApi> Drop for MetaServiceImpl<SP> {
     fn drop(&mut self) {
         if let Some(meta_node) = self.meta_handle.upgrade() {
             debug!("MetaServiceImpl::drop: id={}", meta_node.id);
@@ -183,8 +182,8 @@ impl Drop for MetaServiceImpl {
     }
 }
 
-impl MetaServiceImpl {
-    pub fn create(meta_handle: Weak<MetaHandle>) -> Self {
+impl<SP: SpawnApi> MetaServiceImpl<SP> {
+    pub fn create(meta_handle: Weak<MetaHandle<SP>>) -> Self {
         Self {
             version: meta_handle.upgrade().unwrap().version.clone(),
             token: GrpcToken::create(),
@@ -192,7 +191,7 @@ impl MetaServiceImpl {
         }
     }
 
-    pub fn try_get_meta_handle(&self) -> Result<Arc<MetaHandle>, Status> {
+    pub fn try_get_meta_handle(&self) -> Result<Arc<MetaHandle<SP>>, Status> {
         self.meta_handle.upgrade().ok_or_else(|| {
             Status::internal("MetaNode is already dropped, can not serve new requests")
         })
@@ -330,12 +329,12 @@ impl MetaServiceImpl {
     }
 }
 
-impl NamedService for MetaServiceImpl {
+impl<SP: SpawnApi> NamedService for MetaServiceImpl<SP> {
     const NAME: &'static str = "meta_service";
 }
 
 #[async_trait::async_trait]
-impl MetaService for MetaServiceImpl {
+impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
     type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
@@ -401,7 +400,7 @@ impl MetaService for MetaServiceImpl {
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let root = start_trace_for_remote_request(func_path!(), &request);
-        let tracking_payload = new_tracking_payload(&request);
+        let query_id = get_query_id(&request);
 
         let fu = async move {
             let _guard = InFlightWrite::guard();
@@ -413,7 +412,7 @@ impl MetaService for MetaServiceImpl {
             Ok(Response::new(reply))
         };
 
-        tracking_payload.tracking(fu.in_span(root)).await
+        SP::track_future(fu.in_span(root), vec![TrackingData::new_query_id(query_id)]).await
     }
 
     type KvReadV1Stream = BoxStream<StreamItem>;
@@ -426,7 +425,7 @@ impl MetaService for MetaServiceImpl {
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let root = start_trace_for_remote_request(func_path!(), &request);
-        let tracking_payload = new_tracking_payload(&request);
+        let query_id = get_query_id(&request);
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
         let in_flight = InFlightRequest::new(req.type_name(), format!("ReadRequest: {:?}", req));
 
@@ -440,7 +439,10 @@ impl MetaService for MetaServiceImpl {
             Ok(resp)
         };
 
-        tracking_payload.tracking(fut.in_span(root)).await
+        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
+            query_id,
+        )])
+        .await
     }
 
     type KvListStream = BoxStream<StreamItem>;
@@ -458,7 +460,7 @@ impl MetaService for MetaServiceImpl {
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let root = start_trace_for_remote_request(func_path!(), &request);
-        let tracking_payload = new_tracking_payload(&request);
+        let query_id = get_query_id(&request);
         let in_flight = InFlightRequest::new(
             "kv_list",
             format!(
@@ -476,7 +478,10 @@ impl MetaService for MetaServiceImpl {
             Ok(Response::new(strm.boxed()))
         };
 
-        tracking_payload.tracking(fut.in_span(root)).await
+        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
+            query_id,
+        )])
+        .await
     }
 
     type KvGetManyStream = BoxStream<StreamItem>;
@@ -493,7 +498,8 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
 
         let root = start_trace_for_remote_request(func_path!(), &request);
-        let tracking_payload = new_tracking_payload(&request);
+        let query_id = get_query_id(&request);
+
         let in_flight = InFlightRequest::new("kv_get_many", "KvGetMany".to_string());
         let input = request
             .into_inner()
@@ -506,7 +512,10 @@ impl MetaService for MetaServiceImpl {
             Ok(Response::new(strm.boxed()))
         };
 
-        tracking_payload.tracking(fut.in_span(root)).await
+        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
+            query_id,
+        )])
+        .await
     }
 
     async fn transaction(
@@ -515,24 +524,27 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
 
-        let tracking_payload = new_tracking_payload(&request);
+        let root = start_trace_for_remote_request(func_path!(), &request);
+        let query_id = get_query_id(&request);
 
-        tracking_payload
-            .tracking(async move {
-                network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-                let _guard = InFlightWrite::guard();
+        let fut = async move {
+            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+            let _guard = InFlightWrite::guard();
 
-                let root = start_trace_for_remote_request(func_path!(), &request);
-                let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
+            let (endpoint, reply) = self.handle_txn(request).await?;
 
-                network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-                let mut resp = Response::new(reply);
-                GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+            let mut resp = Response::new(reply);
+            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
 
-                Ok(resp)
-            })
-            .await
+            Ok(resp)
+        };
+
+        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
+            query_id,
+        )])
+        .await
     }
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
@@ -733,15 +745,11 @@ impl MetaService for MetaServiceImpl {
     }
 }
 
-fn new_tracking_payload<T>(req: &Request<T>) -> Option<Arc<TrackingPayload>> {
+fn get_query_id<T>(req: &Request<T>) -> Option<String> {
     let value = req.metadata().get("QueryID")?;
-
     let value = value.to_str().ok()?;
 
-    let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    tracking_payload.query_id = Some(value.to_string());
-
-    Some(Arc::new(tracking_payload))
+    Some(value.to_string())
 }
 
 /// Try to remove a [`WatchStream`] from the subscriber.

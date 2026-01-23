@@ -3299,6 +3299,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
+ "databend-meta-runtime",
  "databend-query",
  "form_urlencoded",
  "futures",
@@ -3483,6 +3484,7 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
+ "databend-meta-runtime",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "dyn-clone",
@@ -3934,6 +3936,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "databend-common-version",
+ "databend-meta-runtime",
  "enumflags2",
  "fastrace",
  "futures",
@@ -4092,6 +4095,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
  "databend-common-tracing",
@@ -4169,6 +4173,7 @@ dependencies = [
  "databend-base",
  "databend-common-base",
  "databend-common-meta-kvapi",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
@@ -4200,6 +4205,13 @@ dependencies = [
  "strum_macros 0.24.3",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "databend-common-meta-runtime-api"
+version = "0.1.0"
+dependencies = [
  "tokio",
 ]
 
@@ -4283,6 +4295,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-common-version",
@@ -5106,6 +5119,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-version",
+ "databend-meta-runtime",
  "divan",
  "enumflags2",
  "itertools 0.13.0",
@@ -5238,6 +5252,7 @@ dependencies = [
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
+ "databend-meta-runtime",
  "databend-query",
  "databend-storages-common-cache",
  "databend-storages-common-io",
@@ -5439,7 +5454,6 @@ dependencies = [
  "chrono",
  "clap",
  "databend-base",
- "databend-common-base",
  "databend-common-config",
  "databend-common-grpc",
  "databend-common-http",
@@ -5449,6 +5463,7 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
@@ -5484,6 +5499,7 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "serfig",
  "state-machine-api",
  "temp-env",
@@ -5514,6 +5530,7 @@ dependencies = [
  "databend-common-meta-control",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
@@ -5522,6 +5539,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
+ "databend-meta-runtime",
  "display-more 0.2.1",
  "fastrace",
  "futures",
@@ -5532,6 +5550,15 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "databend-meta-runtime"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-meta-runtime-api",
  "tokio",
 ]
 
@@ -5629,6 +5656,7 @@ dependencies = [
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
+ "databend-meta-runtime",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -17447,8 +17475,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.4.2"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.4.2#38e5109dd07a0fd496a48646dddd7de43242d75d"
+version = "0.5.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.5.0#4508a803df787f525ebd9b91729a7c5b31931916"
 dependencies = [
  "futures",
  "log",

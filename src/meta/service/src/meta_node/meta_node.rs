@@ -31,6 +31,8 @@ use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
 use databend_common_meta_raft_store::utils::seq_marked_to_seqv;
+use databend_common_meta_runtime_api::JoinHandle;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_sled_store::openraft::async_runtime::RecvError;
@@ -89,7 +91,6 @@ use state_machine_api::UserKey;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
-use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio::time::sleep;
 use tonic::Status;
@@ -128,14 +129,14 @@ use crate::store::meta_raft_log::MetaRaftLog;
 use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 
 pub type LogStore = MetaRaftLog;
-pub type SMStore = MetaRaftStateMachine;
+pub type SMStore<SP> = MetaRaftStateMachine<SP>;
 
 /// MetaRaft is an implementation of the generic Raft handling metadata R/W.
 pub type MetaRaft = Raft<TypeConfig>;
 
 /// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
-pub struct MetaNode {
-    pub raft_store: RaftStore,
+pub struct MetaNode<SP: SpawnApi> {
+    pub raft_store: RaftStore<SP>,
     /// MetaNode hold a strong reference to the dispatcher handle.
     ///
     /// Other components should keep a weak one.
@@ -149,7 +150,7 @@ pub struct MetaNode {
     pub version: Version,
 }
 
-impl Drop for MetaNode {
+impl<SP: SpawnApi> Drop for MetaNode<SP> {
     fn drop(&mut self) {
         info!(
             "MetaNode(id={}, raft={}) is dropping",
@@ -159,9 +160,9 @@ impl Drop for MetaNode {
     }
 }
 
-impl MetaNode {
-    pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
-        let raft_config = MetaNode::new_raft_config(config);
+impl<SP: SpawnApi> MetaNode<SP> {
+    pub fn builder(config: &RaftConfig) -> MetaNodeBuilder<SP> {
+        let raft_config = Self::new_raft_config(config);
 
         MetaNodeBuilder {
             node_id: None,
@@ -198,7 +199,7 @@ impl MetaNode {
     /// Start the grpc service for raft communication and meta operation API.
     #[fastrace::trace]
     pub async fn start_raft_service(
-        meta_node: Arc<MetaNode>,
+        meta_node: Arc<MetaNode<SP>>,
         endpoint: &Endpoint,
     ) -> Result<(), MetaNetworkError> {
         info!("Start raft service listening on: {}", endpoint);
@@ -243,21 +244,24 @@ impl MetaNode {
             // .timeout(Duration::from_secs(60))
             .add_service(raft_server);
 
-        let h = databend_common_base::runtime::spawn(async move {
-            srv.serve_with_shutdown(socket_addr, async move {
-                let _ = running_rx.changed().await;
-                info!(
-                    "running_rx for Raft server received, shutting down: id={} {} ",
-                    node_id, ip_port
-                );
-            })
-            .await
-            .map_err(|e| {
-                AnyError::new(&e).add_context(|| "when serving meta-service raft service")
-            })?;
+        let h = SP::spawn(
+            async move {
+                srv.serve_with_shutdown(socket_addr, async move {
+                    let _ = running_rx.changed().await;
+                    info!(
+                        "running_rx for Raft server received, shutting down: id={} {} ",
+                        node_id, ip_port
+                    );
+                })
+                .await
+                .map_err(|e| {
+                    AnyError::new(&e).add_context(|| "when serving meta-service raft service")
+                })?;
 
-            Ok::<(), AnyError>(())
-        });
+                Ok::<(), AnyError>(())
+            },
+            Some("raft-server".into()),
+        );
 
         let mut jh = meta_node.join_handles.lock().await;
         jh.push(h);
@@ -269,7 +273,7 @@ impl MetaNode {
     pub async fn open(
         config: &RaftConfig,
         version: Version,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+    ) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
         let config = config.clone();
@@ -279,7 +283,7 @@ impl MetaNode {
         // config.id only used for the first time
         let self_node_id = log_store.id;
 
-        let builder = MetaNode::builder(&config)
+        let builder = Self::builder(&config)
             .sto(log_store.clone())
             .node_id(self_node_id)
             .raft_service_endpoint(config.raft_api_listen_host_endpoint())
@@ -300,7 +304,7 @@ impl MetaNode {
         config: &RaftConfig,
         initialize_cluster: Option<Node>,
         version: Version,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+    ) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let mn = Self::open(config, version).await?;
 
         if let Some(node) = initialize_cluster {
@@ -363,8 +367,9 @@ impl MetaNode {
 
         let fut = Self::report_metrics_loop(mn.clone(), metrics_rx);
 
-        let h = databend_common_base::runtime::spawn(
+        let h = SP::spawn(
             fut.in_span(Span::enter_with_local_parent("watch-metrics")),
+            Some("watch-metrics".into()),
         );
 
         {
@@ -782,7 +787,7 @@ impl MetaNode {
     pub async fn start(
         config: &MetaConfig,
         version: Version,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+    ) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config, version).await?;
         info!("Done starting MetaNode: {:?}", config);
@@ -1063,16 +1068,16 @@ impl MetaNode {
     async fn do_start(
         conf: &MetaConfig,
         version: Version,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+    ) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open(raft_conf, version).await?;
+            let mn = Self::open(raft_conf, version).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
-        let mn = MetaNode::open(raft_conf, version).await?;
+        let mn = Self::open(raft_conf, version).await?;
         Ok(mn)
     }
 
@@ -1082,7 +1087,7 @@ impl MetaNode {
     pub async fn boot(
         config: &MetaConfig,
         version: Version,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+    ) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let mn = Self::open(&config.raft_config, version).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)
@@ -1288,8 +1293,8 @@ impl MetaNode {
     ) -> Result<(Option<Endpoint>, Req::Reply), MetaAPIError>
     where
         Req: RequestFor,
-        for<'a> MetaLeader<'a>: Handler<Req>,
-        for<'a> MetaForwarder<'a>: Forwarder<Req>,
+        for<'a> MetaLeader<'a, SP>: Handler<Req>,
+        for<'a> MetaForwarder<'a, SP>: Forwarder<Req>,
     {
         let id = self.raft_store.id;
         debug!(
@@ -1391,7 +1396,7 @@ impl MetaNode {
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
     #[fastrace::trace]
-    pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
+    pub async fn assume_leader(&self) -> Result<MetaLeader<'_, SP>, ForwardToLeader> {
         let leader_id = self.get_leader().await.map_err(|e| {
             error!("raft metrics rx closed: {}", e);
             ForwardToLeader {
@@ -1716,6 +1721,8 @@ pub(crate) fn event_filter_from_filter_type(filter_type: FilterType) -> EventFil
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_runtime_api::TokioRuntime;
+
     use super::*;
 
     #[test]
@@ -1739,7 +1746,7 @@ non_metasrv_metric 123
 
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         // Verify expected categories are present
         assert!(result.get("meta_network").is_some());
@@ -1760,7 +1767,7 @@ non_metasrv_metric 123
 
     #[test]
     fn test_parse_metrics_empty_input() {
-        let result = MetaNode::parse_metrics_to_json("");
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json("");
 
         // Should return empty JSON object
         assert!(result.is_object());
@@ -1774,7 +1781,7 @@ non_metasrv_metric 123
 # Comment line 2
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         // Should return empty JSON object for comments only
         assert!(result.is_object());
@@ -1790,7 +1797,7 @@ metasrv_meta_network_invalid_value abc
 metasrv_server_is_leader 0
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         // Should handle malformed lines gracefully and return valid JSON object
         assert!(result.is_object());
@@ -1820,7 +1827,7 @@ metasrv_server_is_leader 0
         buckets.insert("10.0".to_string(), 80.0);
         buckets.insert("100.0".to_string(), 100.0);
 
-        let result = MetaNode::convert_histogram_to_percentiles(buckets).unwrap();
+        let result = MetaNode::<TokioRuntime>::convert_histogram_to_percentiles(buckets).unwrap();
         let array = result.as_array().unwrap();
         assert_eq!(array.len(), 4);
         assert_eq!(array[0][0], "p50");
@@ -1834,17 +1841,20 @@ metasrv_server_is_leader 0
         fast_buckets.insert("0.01".to_string(), 9.0);
         fast_buckets.insert("1.0".to_string(), 9.0);
 
-        let fast_result = MetaNode::convert_histogram_to_percentiles(fast_buckets).unwrap();
+        let fast_result =
+            MetaNode::<TokioRuntime>::convert_histogram_to_percentiles(fast_buckets).unwrap();
         let fast_array = fast_result.as_array().unwrap();
         assert_eq!(fast_array[0][1], 0.001);
         assert_eq!(fast_array[2][1], 0.001); // p99
 
         // Edge case: empty or zero counts
-        assert!(MetaNode::convert_histogram_to_percentiles(BTreeMap::new()).is_none());
+        assert!(
+            MetaNode::<TokioRuntime>::convert_histogram_to_percentiles(BTreeMap::new()).is_none()
+        );
 
         let mut zero_buckets = BTreeMap::new();
         zero_buckets.insert("1.0".to_string(), 0.0);
-        assert!(MetaNode::convert_histogram_to_percentiles(zero_buckets).is_none());
+        assert!(MetaNode::<TokioRuntime>::convert_histogram_to_percentiles(zero_buckets).is_none());
     }
 
     #[test]
@@ -1916,7 +1926,7 @@ metasrv_raft_storage_snapshot_written_entries_total 80114031
 
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         println!("{}", result);
 
@@ -1988,7 +1998,7 @@ metasrv_raft_network_append_sent_seconds_count{to="2"} 6
 
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         println!("{}", result);
 
@@ -2030,7 +2040,7 @@ metasrv_meta_network_req_inflights{type="write"} 3
 metasrv_server_no_labels 42
         "#;
 
-        let result = MetaNode::parse_metrics_to_json(metrics_input);
+        let result = MetaNode::<TokioRuntime>::parse_metrics_to_json(metrics_input);
 
         // Verify categories exist
         assert!(result.get("server").is_some());

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::ServerState;
@@ -57,7 +58,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
-    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
 
     let got = mn.get_node(&0).await;
     assert_eq!(addr, got.unwrap().endpoint);
@@ -110,7 +111,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let node_id = 2;
     let mut tc2 = MetaSrvTestContext::new(node_id);
     {
-        let mn2 = MetaNode::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
+        let mn2 =
+            MetaNode::<TokioRuntime>::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
         all.push(mn2);
     }
 
@@ -146,7 +148,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let node_id = 3;
     let mut tc3 = MetaSrvTestContext::new(node_id);
     {
-        let mn3 = MetaNode::open(&tc3.config.raft_config, BUILD_INFO.semver()).await?;
+        let mn3 =
+            MetaNode::<TokioRuntime>::open(&tc3.config.raft_config, BUILD_INFO.semver()).await?;
         all.push(mn3.clone());
     }
 
@@ -192,10 +195,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     sleep(Duration::from_secs(1)).await;
 
-    let mn0 = MetaNode::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
-    let mn1 = MetaNode::open(&tc1.config.raft_config, BUILD_INFO.semver()).await?;
-    let mn2 = MetaNode::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
-    let mn3 = MetaNode::open(&tc3.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn0 = MetaNode::<TokioRuntime>::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn1 = MetaNode::<TokioRuntime>::open(&tc1.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn3 = MetaNode::<TokioRuntime>::open(&tc3.config.raft_config, BUILD_INFO.semver()).await?;
 
     let all = [mn0, mn1, mn2, mn3];
 
@@ -228,7 +231,8 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
     {
-        let mn2 = MetaNode::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
+        let mn2 =
+            MetaNode::<TokioRuntime>::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
         all.push(mn2);
     }
 
@@ -330,7 +334,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 1;
     let tc1 = MetaSrvTestContext::new(node_id);
 
-    let mn1 = MetaNode::open(&tc1.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn1 = MetaNode::<TokioRuntime>::open(&tc1.config.raft_config, BUILD_INFO.semver()).await?;
 
     info!("--- join non-voter 1 to cluster");
 
@@ -364,7 +368,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
 
-    let mn2 = MetaNode::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
 
     info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
@@ -422,7 +426,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.single = false;
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let n1 = MetaNode::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let n1 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
     // Initial membership log, leader blank log, add node-0 log.
     let mut log_index = 3;
 
@@ -434,7 +438,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         .await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
-    let n1 = MetaNode::start(&tc1.config, BUILD_INFO.semver()).await?;
+    let n1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
     let res = n1
         .join_cluster(
             &tc1.config.raft_config,
@@ -452,7 +456,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- initialize store for node-2");
     {
-        let n2 = MetaNode::start(&tc2.config, BUILD_INFO.semver()).await?;
+        let n2 = MetaNode::<TokioRuntime>::start(&tc2.config, BUILD_INFO.semver()).await?;
         n2.stop().await?;
     }
 
@@ -461,7 +465,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- Allow to join node-2 with initialized store");
     {
-        let n2 = MetaNode::start(&tc2.config, BUILD_INFO.semver()).await?;
+        let n2 = MetaNode::<TokioRuntime>::start(&tc2.config, BUILD_INFO.semver()).await?;
         let res = n2
             .join_cluster(
                 &tc2.config.raft_config,
@@ -489,7 +493,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- Not allowed to join node-2 with store with membership");
     {
-        let n2 = MetaNode::start(&tc2.config, BUILD_INFO.semver()).await?;
+        let n2 = MetaNode::<TokioRuntime>::start(&tc2.config, BUILD_INFO.semver()).await?;
         let res = n2
             .join_cluster(
                 &tc2.config.raft_config,
@@ -604,8 +608,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let tc0 = &tcs[0];
     let tc2 = &tcs[2];
 
-    let mn0 = MetaNode::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
-    let mn2 = MetaNode::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn0 = MetaNode::<TokioRuntime>::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
+    let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config, BUILD_INFO.semver()).await?;
 
     let all = [mn0, mn2];
 
@@ -695,7 +699,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
         tc.config.raft_config.max_applied_log_to_keep = 0;
         let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
-        let mn = MetaNode::boot(&tc.config, BUILD_INFO.semver()).await?;
+        let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
 
         tc.meta_node = Some(mn.clone());
 
@@ -754,13 +758,13 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // restart
     let config = configs::Config::default();
     let version = BUILD_INFO.semver();
-    let mn0 = MetaNode::builder(&config.raft_config)
+    let mn0 = MetaNode::<TokioRuntime>::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
         .version(version.clone())
         .build()
         .await?;
-    let mn1 = MetaNode::builder(&config.raft_config)
+    let mn1 = MetaNode::<TokioRuntime>::builder(&config.raft_config)
         .node_id(1)
         .sto(sto1)
         .version(version)
@@ -844,7 +848,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     let raft_conf = &tc.config.raft_config;
 
-    let leader = MetaNode::open(raft_conf, BUILD_INFO.semver()).await?;
+    let leader = MetaNode::<TokioRuntime>::open(raft_conf, BUILD_INFO.semver()).await?;
 
     log_index += 1;
 
@@ -913,7 +917,10 @@ fn join_req(
 
 /// Write one log on leader, check all nodes replicated the log.
 /// Returns the number log committed.
-async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> anyhow::Result<u64> {
+async fn assert_upsert_kv_synced(
+    meta_nodes: Vec<Arc<MetaNode<TokioRuntime>>>,
+    key: &str,
+) -> anyhow::Result<u64> {
     let leader_id = meta_nodes[0].get_leader().await?.unwrap();
     let leader = meta_nodes[leader_id as usize].clone();
 
@@ -950,7 +957,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
 }
 
 async fn assert_get_kv(
-    meta_nodes: Vec<Arc<MetaNode>>,
+    meta_nodes: Vec<Arc<MetaNode<TokioRuntime>>>,
     key: &str,
     value: &str,
 ) -> anyhow::Result<()> {
@@ -966,6 +973,6 @@ async fn assert_get_kv(
     Ok(())
 }
 
-fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
+fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode<TokioRuntime>>> {
     tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }

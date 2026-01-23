@@ -25,6 +25,8 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
@@ -60,11 +62,14 @@ async fn test_watch_main(
 
     {
         let client = make_client(&addr)?;
-        let _h = databend_common_base::runtime::spawn(async move {
-            for update in updates.iter() {
-                client.upsert_kv(update.clone()).await.unwrap();
-            }
-        });
+        let _h = TokioRuntime::spawn(
+            async move {
+                for update in updates.iter() {
+                    client.upsert_kv(update.clone()).await.unwrap();
+                }
+            },
+            None,
+        );
     }
 
     loop {
@@ -96,9 +101,12 @@ async fn test_watch_txn_main(
 
     {
         let client = make_client(&addr)?;
-        let _h = databend_common_base::runtime::spawn(async move {
-            client.transaction(txn).await.unwrap();
-        });
+        let _h = TokioRuntime::spawn(
+            async move {
+                client.transaction(txn).await.unwrap();
+            },
+            None,
+        );
     }
 
     loop {
@@ -376,7 +384,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
         }
     };
 
-    let _h = databend_common_base::runtime::spawn(cache_updater);
+    let _h = TokioRuntime::spawn(cache_updater, None);
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -485,9 +493,12 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         ]);
 
         let client = make_client(&addr)?;
-        let _h = databend_common_base::runtime::spawn(async move {
-            let _res = client.transaction(txn).await;
-        });
+        let _h = TokioRuntime::spawn(
+            async move {
+                let _res = client.transaction(txn).await;
+            },
+            None,
+        );
     }
 
     info!("--- check emitted events");
@@ -577,7 +588,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
     let client1 = make_client(&addr)?;
     let _watch_stream1 = client1.request(watch_req()).await?;
 
-    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().unwrap().get_meta_node().await;
+    let mn: Arc<MetaNode<TokioRuntime>> = tc.grpc_srv.as_ref().unwrap().get_meta_node().await;
 
     info!("one watcher");
     {

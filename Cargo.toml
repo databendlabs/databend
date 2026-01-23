@@ -63,6 +63,7 @@ databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-kvapi-test-suite = { path = "src/meta/kvapi-test-suite" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
+databend-common-meta-runtime-api = { path = "src/meta/runtime-api" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
@@ -119,6 +120,7 @@ databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functio
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/service" }
+databend-meta-runtime = { path = "src/meta/runtime" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
@@ -455,7 +457,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
-watcher = { version = "0.4.2" }
+watcher = { version = "0.5.0" }
 wiremock = "0.6"
 wkt = "0.11.1"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
@@ -588,5 +590,5 @@ tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e" 
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "68ab55c" }
 tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "b600b0e", package = "tantivy-query-grammar" }
-watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

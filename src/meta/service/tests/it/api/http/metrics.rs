@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta::api::http::v1::metrics::metrics_handler;
+use databend_common_meta_runtime_api::TokioRuntime;
+use databend_meta::api::HttpService;
 use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
 use databend_meta::metrics::server_metrics;
@@ -22,7 +23,6 @@ use http::Uri;
 use log::info;
 use maplit::btreeset;
 use poem::Endpoint;
-use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use poem::get;
@@ -53,9 +53,13 @@ async fn test_metrics() -> anyhow::Result<()> {
     raft_metrics::network::incr_recvfrom_bytes("addr".to_string(), 1);
     raft_metrics::storage::incr_raft_storage_fail("fun", true);
 
-    let cluster_router = Route::new()
-        .at("/v1/metrics", get(metrics_handler))
-        .data(leader);
+    let cluster_router = Route::new().at("/v1/metrics", {
+        let mh = leader.clone();
+        get(poem::endpoint::make(move |_req: Request| {
+            let mh = mh.clone();
+            async move { HttpService::<TokioRuntime>::metrics_handler(mh).await }
+        }))
+    });
 
     let mut response = cluster_router
         .call(

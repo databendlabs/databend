@@ -23,6 +23,7 @@ use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
+use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -47,7 +48,8 @@ pub struct LocalMetaService {
 
     pub config: configs::Config,
 
-    pub grpc_server: Option<Box<GrpcServer>>,
+    /// Kept alive for shutdown; dropped when `LocalMetaService` is dropped.
+    _grpc_server: Option<Box<dyn Send + Sync>>,
 
     client: Arc<ClientHandle>,
 }
@@ -83,11 +85,11 @@ impl Drop for LocalMetaService {
 }
 
 impl LocalMetaService {
-    pub async fn new(
+    pub async fn new<RT: RuntimeApi>(
         name: impl fmt::Display,
         version: Version,
     ) -> anyhow::Result<LocalMetaService> {
-        Self::new_with_fixed_dir(None, name, version).await
+        Self::new_with_fixed_dir::<RT>(None, name, version).await
     }
 
     /// Create a new Config for test, with unique port assigned
@@ -95,7 +97,7 @@ impl LocalMetaService {
     /// It brings up a meta-service process with the port number based on the base_port.
     /// If it is None, 19_000 is used.
     /// If dir is not empty, we should persistent the dir without cleanup, this could be used in databend-local and bendpy
-    pub async fn new_with_fixed_dir(
+    pub async fn new_with_fixed_dir<RT: RuntimeApi>(
         dir: Option<String>,
         name: impl fmt::Display,
         version: Version,
@@ -147,7 +149,8 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
+        let runtime = RT::new_embedded("meta-io-rt-embedded");
+        let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
         let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
         grpc_server.do_start().await?;
@@ -158,13 +161,15 @@ impl LocalMetaService {
             _temp_dir: temp_dir,
             name,
             config,
-            grpc_server: Some(Box::new(grpc_server)),
+            _grpc_server: Some(Box::new(grpc_server)),
             client,
         };
 
         Ok(local)
     }
+}
 
+impl LocalMetaService {
     pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
         let raft_dir = &config.raft_config.raft_dir;
 

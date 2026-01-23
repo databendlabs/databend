@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::node::Node;
@@ -158,7 +159,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
     dbg!(&tc.config.raft_config.raft_dir);
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(&tc.config, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
 
     tc.meta_node = Some(mn.clone());
 
@@ -185,7 +186,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 /// Start a NonVoter and setup replication from leader to it.
 /// Assert the NonVoter is ready and upto date such as the known leader, state and grpc service.
 pub(crate) async fn start_meta_node_non_voter(
-    leader: Arc<MetaNode>,
+    leader: Arc<MetaNode<TokioRuntime>>,
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
     let mut tc = MetaSrvTestContext::new(id);
@@ -193,7 +194,7 @@ pub(crate) async fn start_meta_node_non_voter(
 
     let raft_conf = &tc.config.raft_config;
 
-    let mn = MetaNode::open(raft_conf, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::open(raft_conf, BUILD_INFO.semver()).await?;
 
     // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
     // // Log index becomes non-deterministic.

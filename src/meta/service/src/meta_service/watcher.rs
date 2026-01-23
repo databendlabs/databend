@@ -15,7 +15,6 @@
 //! This mod integrates watcher into meta service
 
 use std::fmt;
-use std::future::Future;
 use std::io::Error;
 use std::ops::Deref;
 
@@ -33,7 +32,7 @@ use crate::metrics::server_metrics;
 
 /// Watch Type Config
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WatchTypes {}
+pub struct WatchTypes;
 
 impl TypeConfig for WatchTypes {
     type Key = String;
@@ -55,14 +54,6 @@ impl TypeConfig for WatchTypes {
 
     fn update_watcher_metrics(delta: i64) {
         server_metrics::incr_watchers(delta);
-    }
-
-    fn spawn<T>(fut: T)
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        databend_common_base::runtime::spawn(fut);
     }
 }
 

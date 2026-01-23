@@ -14,19 +14,20 @@
 
 use std::collections::BTreeMap;
 use std::io;
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::Duration;
 
-use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::immutable_compactor::InMemoryCompactor;
 use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
@@ -46,8 +47,8 @@ use crate::metrics::raft_metrics;
 mod raft_state_machine_impl;
 
 /// A shared wrapper for use of SMV003 in this crate.
-#[derive(Debug, Clone)]
-pub struct MetaRaftStateMachine {
+#[derive(Debug)]
+pub struct MetaRaftStateMachine<SP> {
     pub(crate) id: NodeId,
 
     pub(crate) config: Arc<RaftConfig>,
@@ -55,15 +56,30 @@ pub struct MetaRaftStateMachine {
     pub(crate) in_memory_compactor_cancel: Option<Arc<oneshot::Sender<()>>>,
 
     inner: Arc<Mutex<Arc<SMV003>>>,
+
+    _phantom: PhantomData<SP>,
 }
 
-impl MetaRaftStateMachine {
+impl<SP> Clone for MetaRaftStateMachine<SP> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            config: self.config.clone(),
+            in_memory_compactor_cancel: self.in_memory_compactor_cancel.clone(),
+            inner: self.inner.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<SP: SpawnApi> MetaRaftStateMachine<SP> {
     pub fn new(id: NodeId, config: Arc<RaftConfig>, inner: Arc<SMV003>) -> Self {
         Self {
             id,
             config,
             in_memory_compactor_cancel: None,
             inner: Arc::new(Mutex::new(inner)),
+            _phantom: PhantomData,
         }
     }
 
@@ -75,7 +91,8 @@ impl MetaRaftStateMachine {
         let weak = Arc::downgrade(&self.get_inner());
         let fu = Self::compact_loop(weak, interval, rx);
 
-        let _j = spawn_named(fu, "in_memory_compactor".to_string());
+        #[allow(unused_must_use)]
+        SP::spawn(fu, Some("in_memory_compactor".into()));
     }
 
     async fn compact_loop(
@@ -225,7 +242,7 @@ impl MetaRaftStateMachine {
         }
 
         // Consume and drop compactor, dropping it may involve blocking IO
-        databend_common_base::runtime::spawn_blocking(move || {
+        SP::spawn_blocking(move || {
             let drop_start = std::time::Instant::now();
             drop(compactor);
             info!(
@@ -287,7 +304,7 @@ impl MetaRaftStateMachine {
     }
 
     /// Return a snapshot store of this instance.
-    pub fn snapshot_store(&self) -> SnapshotStoreV004 {
+    pub fn snapshot_store(&self) -> SnapshotStoreV004<SP> {
         SnapshotStoreV004::new(self.config.as_ref().clone())
     }
 }

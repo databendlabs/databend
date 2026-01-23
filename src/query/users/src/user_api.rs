@@ -50,6 +50,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_meta_runtime::DatabendRuntime;
 use log::debug;
 use tokio::sync::Mutex;
 
@@ -101,7 +102,7 @@ impl UserApiProvider {
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         let meta_store = MetaStoreProvider::new(conf)
-            .create_meta_store()
+            .create_meta_store::<DatabendRuntime>()
             .await
             .map_err(|e| {
                 ErrorCode::MetaServiceError(e.to_string())

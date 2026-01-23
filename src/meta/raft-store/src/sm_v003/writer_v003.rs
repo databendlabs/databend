@@ -14,7 +14,10 @@
 
 use std::fmt;
 use std::io;
+use std::marker::PhantomData;
 
+use databend_common_meta_runtime_api::JoinHandle;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
@@ -22,7 +25,6 @@ use futures_util::TryStreamExt;
 use log::info;
 use rotbl::v001::SeqMarked;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::sm_v003::write_entry::WriteEntry;
@@ -31,15 +33,17 @@ use crate::snapshot_config::SnapshotConfig;
 use crate::state_machine::MetaSnapshotId;
 
 /// Write kv pair snapshot data to [`SnapshotStoreV002`].
-pub struct WriterV003 {
+pub struct WriterV003<SP: SpawnApi> {
     db_builder: DBBuilder,
 
     snapshot_config: SnapshotConfig,
 
     stat: WriterStat,
+
+    _phantom: PhantomData<SP>,
 }
 
-impl WriterV003 {
+impl<SP: SpawnApi> WriterV003<SP> {
     /// Create a singleton writer for the snapshot.
     pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
         let (storage_path, temp_rel_path) = snapshot_config.snapshot_temp_dir_fn();
@@ -54,6 +58,7 @@ impl WriterV003 {
             db_builder,
             snapshot_config: snapshot_config.clone(),
             stat: WriterStat::new(),
+            _phantom: PhantomData,
         };
 
         Ok(writer)
@@ -131,7 +136,7 @@ impl WriterV003 {
     /// and write them to a temp snapshot file.
     ///
     /// It returns a sender to send entries and a handle to wait for the thread to finish.
-    /// Internally it calls tokio::spawn_blocking.
+    /// Internally it calls `SP::spawn_blocking`.
     ///
     /// When a [`WriteEntry::Finish`] is received, the thread will flush the data to disk and return
     /// a [`TempSnapshotDataV003`] and a [`SnapshotStat`].
@@ -148,7 +153,7 @@ impl WriterV003 {
         let (tx, rx) = mpsc::channel(64 * 1024);
 
         // Spawn another thread to write entries to disk.
-        let join_handle = databend_common_base::runtime::spawn_blocking(move || {
+        let join_handle = SP::spawn_blocking(move || {
             let with_context =
                 |e: io::Error| io::Error::new(e.kind(), format!("{} while {}", e, context));
 

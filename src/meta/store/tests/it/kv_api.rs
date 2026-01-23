@@ -14,6 +14,7 @@
 
 use async_trait::async_trait;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_version::BUILD_INFO;
 
@@ -23,7 +24,7 @@ struct MetaNodeUnitTestBuilder {}
 #[async_trait]
 impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> LocalMetaService {
-        LocalMetaService::new("UT-Meta", BUILD_INFO.semver())
+        LocalMetaService::new::<TokioRuntime>("UT-Meta", BUILD_INFO.semver())
             .await
             .unwrap()
     }

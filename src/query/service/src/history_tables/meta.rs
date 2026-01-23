@@ -382,6 +382,7 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_store::MetaStore;
     use databend_common_meta_types::UpsertKV;
+    use databend_meta_runtime::DatabendRuntime;
 
     use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
@@ -389,7 +390,10 @@ mod tests {
     use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing(databend_common_version::BUILD_INFO.semver()).await
+        MetaStore::new_local_testing::<DatabendRuntime>(
+            databend_common_version::BUILD_INFO.semver(),
+        )
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]

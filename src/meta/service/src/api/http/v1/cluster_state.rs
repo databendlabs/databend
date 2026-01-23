@@ -14,38 +14,33 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_runtime_api::SpawnApi;
 use http::StatusCode;
-use poem::web::Data;
-use poem::web::IntoResponse;
+use poem::IntoResponse;
+use poem::Response;
 use poem::web::Json;
 
+use crate::api::http_service::HttpService;
 use crate::meta_node::meta_handle::MetaHandle;
 
-/// list all nodes in current databend-meta cluster.
-///
-/// request: None
-/// return: return a list of cluster node information
-#[poem::handler]
-pub async fn nodes_handler(meta_handle: Data<&Arc<MetaHandle>>) -> poem::Result<impl IntoResponse> {
-    let nodes = meta_handle.handle_get_nodes().await.map_err(|e| {
-        poem::Error::from_string(
-            format!("Failed to get status: {}", e),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    })?;
-    Ok(Json(nodes))
-}
+impl<SP: SpawnApi> HttpService<SP> {
+    pub async fn nodes_handler(meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
+        let nodes = meta_handle.handle_get_nodes().await.map_err(|e| {
+            poem::Error::from_string(
+                format!("Failed to get nodes: {}", e),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+        Ok(Json(nodes).into_response())
+    }
 
-#[poem::handler]
-pub async fn status_handler(
-    meta_handle: Data<&Arc<MetaHandle>>,
-) -> poem::Result<impl IntoResponse> {
-    let status = meta_handle.handle_get_status().await.map_err(|e| {
-        poem::Error::from_string(
-            format!("Failed to get status: {}", e),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    })?;
-
-    Ok(Json(status))
+    pub async fn status_handler(meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
+        let status = meta_handle.handle_get_status().await.map_err(|e| {
+            poem::Error::from_string(
+                format!("Failed to get status: {}", e),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+        Ok(Json(status).into_response())
+    }
 }

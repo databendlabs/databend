@@ -13,6 +13,7 @@ edition = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }

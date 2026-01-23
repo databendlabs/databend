@@ -22,6 +22,7 @@ use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListOptions;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -65,13 +66,13 @@ use crate::store::RaftStore;
 ///
 /// A leader does not imply it is actually the leader granted by the cluster.
 /// It just means it believes it is the leader and have not yet perceived there is other newer leader.
-pub struct MetaLeader<'a> {
-    sto: &'a RaftStore,
+pub struct MetaLeader<'a, SP> {
+    sto: &'a RaftStore<SP>,
     raft: &'a MetaRaft,
 }
 
 #[async_trait::async_trait]
-impl Handler<ForwardRequestBody> for MetaLeader<'_> {
+impl<SP: SpawnApi> Handler<ForwardRequestBody> for MetaLeader<'_, SP> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -120,7 +121,7 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
 }
 
 #[async_trait::async_trait]
-impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
+impl<SP: SpawnApi> Handler<MetaGrpcReadReq> for MetaLeader<'_, SP> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -170,8 +171,8 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     }
 }
 
-impl<'a> MetaLeader<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> MetaLeader<'a> {
+impl<'a, SP: SpawnApi> MetaLeader<'a, SP> {
+    pub fn new(meta_node: &'a MetaNode<SP>) -> MetaLeader<'a, SP> {
         MetaLeader {
             sto: &meta_node.raft_store,
             raft: &meta_node.raft,
