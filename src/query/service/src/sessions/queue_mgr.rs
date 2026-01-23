@@ -59,6 +59,7 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -121,9 +122,12 @@ impl<Data: QueueData> QueueManager<Data> {
                     .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.semver()),
             ));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);

@@ -170,7 +170,6 @@ impl<SP: SpawnApi> MetaNode<SP> {
             sto: None,
             raft_service_endpoint: None,
             version: None,
-            _phantom: std::marker::PhantomData,
         }
     }
 

@@ -27,6 +27,7 @@ use databend_common_expression::types::StringType;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
+use databend_meta_runtime::DatabendRuntime;
 use futures_util::StreamExt;
 
 use crate::interpreters::Interpreter;
@@ -73,7 +74,7 @@ impl ExplainPerfInterpreter {
         let version = GlobalConfig::version();
         let meta_conf = config.meta.to_meta_grpc_client_conf(version.semver());
         let meta_store = MetaStoreProvider::new(meta_conf)
-            .create_meta_store()
+            .create_meta_store::<DatabendRuntime>()
             .await
             .map_err(|_e| ErrorCode::Internal("Failed to get meta store for explain perf"))?;
         let meta_key = "__fd_explain_perf";

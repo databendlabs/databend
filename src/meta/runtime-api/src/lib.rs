@@ -34,7 +34,7 @@ impl TrackingData {
 }
 
 /// Spawn tasks on the current runtime context.
-pub trait SpawnApi: Debug + Send + Sync + 'static {
+pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     fn spawn<F>(future: F, name: Option<String>) -> JoinHandle<F::Output>
     where
         Self: Sized,

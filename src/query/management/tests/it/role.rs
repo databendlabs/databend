@@ -21,6 +21,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
@@ -87,7 +88,7 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
     let client = test_api.deref().clone();
 
     let test_api = Arc::new(test_api);

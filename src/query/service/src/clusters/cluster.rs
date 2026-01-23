@@ -57,6 +57,7 @@ use databend_common_version::DATABEND_TELEMETRY_API_KEY;
 use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_runtime::DatabendRuntime;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -230,7 +231,10 @@ impl ClusterDiscovery {
     pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
         let meta_api_provider =
             MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
-        match meta_api_provider.create_meta_store().await {
+        match meta_api_provider
+            .create_meta_store::<DatabendRuntime>()
+            .await
+        {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
                 "Failed to create meta store: {}",
