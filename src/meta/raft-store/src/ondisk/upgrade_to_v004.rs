@@ -22,7 +22,6 @@ use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_sled_store::drop_sled_db;
 use databend_common_meta_sled_store::init_get_sled_db;
-use databend_common_meta_stoerr::MetaStorageError;
 use fs_extra::dir::CopyOptions;
 use log::debug;
 use openraft::LogIdOptionExt;
@@ -160,7 +159,7 @@ impl OnDisk {
     /// Revert or finish the unfinished upgrade to v003.
     pub(crate) async fn clean_in_progress_v003_to_v004<SP: SpawnApi>(
         &mut self,
-    ) -> Result<(), MetaStorageError> {
+    ) -> Result<(), io::Error> {
         assert!(self.header.upgrading.is_some());
         if self.header.cleaning {
             self.remove_v003_logs().await?;
@@ -199,7 +198,7 @@ impl OnDisk {
 
     /// It removes the data from sled db.
     /// But not the sled db itself.
-    async fn remove_v003_logs(&mut self) -> Result<(), MetaStorageError> {
+    async fn remove_v003_logs(&mut self) -> Result<(), io::Error> {
         // After upgrading, no sled db is required.
 
         self.progress(format_args!("    Remove V003 log from sled db",));

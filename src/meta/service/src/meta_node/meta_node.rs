@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::future;
+use std::io;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -38,7 +39,6 @@ use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_sled_store::openraft::async_runtime::RecvError;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver as WatchReceiverTrait;
 use databend_common_meta_sled_store::openraft::error::RaftError;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -1043,7 +1043,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
     ///   Then the next leader does not know about this new node.
     ///
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
-    async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
+    async fn is_in_cluster(&self) -> Result<Result<String, String>, io::Error> {
         let membership = {
             let sm = &self.raft_store.get_sm_v003();
             sm.sys_data().last_membership_ref().membership().clone()

@@ -15,7 +15,6 @@
 use std::fmt::Display;
 use std::io;
 
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::raft_types::ErrorSubject;
 use databend_common_meta_types::raft_types::StorageError;
 use openraft::AnyError;
@@ -77,14 +76,6 @@ impl From<SnapshotStoreError> for StorageError {
             error.verb,
             AnyError::new(&error),
         )
-    }
-}
-
-impl From<SnapshotStoreError> for MetaStorageError {
-    fn from(value: SnapshotStoreError) -> Self {
-        MetaStorageError::damaged(&value.source, || {
-            format!("when {}: {}", value.verb, value.context)
-        })
     }
 }
 
