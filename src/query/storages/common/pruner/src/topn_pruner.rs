@@ -98,10 +98,6 @@ impl TopNPruner {
             return Ok(metas);
         }
 
-        if self.limit >= metas.len() && !self.filter_only_use_index {
-            return Ok(metas);
-        }
-
         let (sort, asc, nulls_first) = &self.sort[0];
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
@@ -210,10 +206,17 @@ impl TopNPruner {
         } else {
             id_stats.sort_by(|a, b| compare_block_stats(&a.1, &b.1, *asc, *nulls_first));
 
+            let keep_block_count = if self.limit == 0 {
+                0
+            } else {
+                truncate_blocks_after_limit(&id_stats, *asc, *nulls_first, self.limit)
+            };
+            let keep_block_count = keep_block_count.min(self.limit).min(id_stats.len());
+
             let pruned_metas = id_stats
                 .into_iter()
                 .map(|s| (s.0, s.2))
-                .take(self.limit)
+                .take(keep_block_count)
                 .collect();
             Ok(pruned_metas)
         }
@@ -358,6 +361,50 @@ fn compare_block_stats(
     compare_scalar_for_sorting(left_scalar, right_scalar, asc, nulls_first)
 }
 
+fn truncate_blocks_after_limit(
+    stats: &[(BlockMetaIndex, ColumnStatistics, Arc<BlockMeta>)],
+    asc: bool,
+    nulls_first: bool,
+    limit: usize,
+) -> usize {
+    if limit == 0 || stats.is_empty() {
+        return 0;
+    }
+
+    let mut keep = stats.len();
+    let mut accumulated_rows = 0usize;
+
+    for (idx, (_, col_stat, meta)) in stats.iter().enumerate() {
+        accumulated_rows = accumulated_rows.saturating_add(meta.row_count as usize);
+        if accumulated_rows >= limit {
+            keep = idx + 1;
+            if let Some((_, next_stat, _)) = stats.get(idx + 1) {
+                if ranges_do_not_overlap(col_stat, next_stat, asc, nulls_first) {
+                    return keep;
+                }
+            } else {
+                return keep;
+            }
+        }
+    }
+
+    keep
+}
+
+fn ranges_do_not_overlap(
+    current: &ColumnStatistics,
+    next: &ColumnStatistics,
+    asc: bool,
+    nulls_first: bool,
+) -> bool {
+    if asc {
+        compare_scalar_for_sorting(current.max(), next.min(), true, nulls_first) == Ordering::Less
+    } else {
+        compare_scalar_for_sorting(current.min(), next.max(), false, nulls_first)
+            == Ordering::Greater
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -483,6 +530,54 @@ mod tests {
         let result = pruner.prune(metas).unwrap();
         let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
         assert_eq!(kept_blocks, vec![1]);
+    }
+
+    #[test]
+    fn test_prune_topn_stops_when_ranges_disjoint() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_block(column_id, 0, 0, 9, 10),
+            build_block(column_id, 1, 15, 19, 8),
+            build_block(column_id, 2, 30, 39, 12),
+        ];
+        let row_counts: Vec<_> = metas
+            .iter()
+            .map(|(_, meta)| meta.row_count as usize)
+            .collect();
+        assert_eq!(row_counts, vec![10, 8, 12]);
+        let mut stats = metas
+            .iter()
+            .map(|(idx, meta)| {
+                (
+                    idx.clone(),
+                    meta.col_stats.get(&column_id).unwrap().clone(),
+                    meta.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        stats.sort_by(|a, b| super::compare_block_stats(&a.1, &b.1, true, false));
+        assert_eq!(super::truncate_blocks_after_limit(&stats, true, false, 5), 1);
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            5,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        assert_eq!(kept_blocks, vec![0]);
     }
 
     fn build_block(
