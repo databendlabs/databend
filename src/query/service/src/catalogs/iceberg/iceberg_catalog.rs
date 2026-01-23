@@ -284,12 +284,20 @@ impl Catalog for IcebergCatalog {
 
     async fn mget_databases(
         &self,
-        _tenant: &Tenant,
-        _db_names: &[DatabaseNameIdent],
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
     ) -> Result<Vec<Arc<dyn Database>>> {
-        Err(ErrorCode::Unimplemented(
-            "Cannot mget databases in ICEBERG catalog",
-        ))
+        let res = self
+            .immutable_catalog
+            .mget_databases(tenant, db_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            if !tables.is_empty() {
+                return Ok(tables);
+            }
+        }
+        self.iceberg_catalog.mget_databases(tenant, db_names).await
     }
 
     #[async_backtrace::framed]
@@ -343,6 +351,27 @@ impl Catalog for IcebergCatalog {
         }
         self.iceberg_catalog
             .get_table(tenant, db_name, table_name)
+            .await
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            if !tables.is_empty() {
+                return Ok(tables);
+            }
+        }
+        self.iceberg_catalog
+            .mget_tables(tenant, db_name, table_names)
             .await
     }
 

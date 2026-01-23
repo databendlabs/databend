@@ -25,7 +25,14 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
+use databend_common_storages_fuse::TableContext;
 
+use super::common::CStyleCell;
+use super::grace::GraceHashJoinState;
+use super::grace::GraceMemoryJoin;
+use super::hybrid::HybridHashJoin;
+use super::hybrid::HybridHashJoinState;
+use super::memory::NestedLoopJoin;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -38,11 +45,6 @@ use crate::pipelines::processors::transforms::memory::OuterRightHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceMemoryJoin;
-use crate::pipelines::processors::transforms::new_hash_join::hybrid::HybridHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::hybrid::HybridHashJoinState;
 use crate::sessions::QueryContext;
 
 pub struct HashJoinFactory {
@@ -165,11 +167,12 @@ impl HashJoinFactory {
         match typ {
             JoinType::Inner => {
                 let inner_hash_join = InnerHashJoin::create(
-                    &self.ctx,
+                    &self.ctx.get_settings(),
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
                     self.create_basic_state(id)?,
+                    0,
                 )?;
 
                 Ok(Box::new(GraceHashJoin::create(
@@ -308,13 +311,29 @@ impl HashJoinFactory {
     ) -> Result<Box<dyn GraceMemoryJoin>> {
         let basic_state = self.create_basic_state(level)?;
         match typ {
-            JoinType::Inner => Ok(Box::new(InnerHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                basic_state,
-            )?)),
+            JoinType::Inner => {
+                let settings = self.ctx.get_settings();
+                let nested_loop_desc = self
+                    .desc
+                    .create_nested_loop_desc(&settings, &self.function_ctx)?;
+
+                let inner = InnerHashJoin::create(
+                    &settings,
+                    self.function_ctx.clone(),
+                    self.hash_method.clone(),
+                    self.desc.clone(),
+                    basic_state.clone(),
+                    nested_loop_desc
+                        .as_ref()
+                        .map(|desc| desc.nested_loop_join_threshold)
+                        .unwrap_or_default(),
+                )?;
+
+                match nested_loop_desc {
+                    Some(desc) => Ok(Box::new(NestedLoopJoin::new(inner, basic_state, desc))),
+                    None => Ok(Box::new(inner)),
+                }
+            }
             JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
                 &self.ctx,
                 self.function_ctx.clone(),

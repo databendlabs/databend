@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::marker::PhantomPinned;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -46,6 +47,7 @@ pub struct TransformHashJoin {
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
     instant: Instant,
+    _p: PhantomPinned,
 }
 
 impl TransformHashJoin {
@@ -81,6 +83,7 @@ impl TransformHashJoin {
                 build_data: None,
             }),
             instant: Instant::now(),
+            _p: PhantomPinned,
         })))
     }
 }
@@ -133,7 +136,6 @@ impl Processor for TransformHashJoin {
         }
     }
 
-    #[allow(clippy::missing_transmute_annotations)]
     fn process(&mut self) -> Result<()> {
         match &mut self.stage {
             Stage::Finished => Ok(()),
@@ -163,7 +165,9 @@ impl Processor for TransformHashJoin {
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
-                    state.stream = Some(unsafe { std::mem::transmute(stream) });
+                    state.stream = Some(unsafe {
+                        std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(stream)
+                    });
                 }
 
                 if let Some(mut stream) = state.stream.take() {
@@ -180,7 +184,11 @@ impl Processor for TransformHashJoin {
                     if let Some(final_stream) = self.join.final_probe()? {
                         state.initialize = true;
                         // This is safe because both join and stream are properties of the struct.
-                        state.stream = Some(unsafe { std::mem::transmute(final_stream) });
+                        state.stream = Some(unsafe {
+                            std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(
+                                final_stream,
+                            )
+                        });
                     } else {
                         state.finished = true;
                     }

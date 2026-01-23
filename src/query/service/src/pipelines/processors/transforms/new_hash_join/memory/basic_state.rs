@@ -64,10 +64,28 @@ impl BasicHashJoinState {
         }
     }
 
+    pub(super) fn push_chunk(&self, chunk: DataBlock) {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        *self.build_rows.as_mut() += chunk.num_rows();
+        let chunk_index = self.chunks.len();
+        self.chunks.as_mut().push(chunk);
+        self.build_queue.as_mut().push_back(chunk_index);
+        self.scan_map.as_mut().push(vec![]);
+        self.scan_queue.as_mut().push_back(chunk_index);
+    }
+
     pub fn steal_scan_chunk_index(&self) -> Option<(usize, usize)> {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
         self.scan_queue.as_mut().pop_front().map(|x| (x, 0))
+    }
+
+    pub fn steal_chunk_index(&self) -> Option<usize> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.build_queue.as_mut().pop_front()
     }
 }
 

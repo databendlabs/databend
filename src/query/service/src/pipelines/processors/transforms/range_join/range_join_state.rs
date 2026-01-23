@@ -17,9 +17,9 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -39,7 +39,6 @@ use crate::physical_plans::RangeJoinCondition;
 use crate::physical_plans::RangeJoinType;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
-use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {
@@ -109,16 +108,17 @@ impl RangeJoinState {
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        let mut right_block = block;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
-            let validity = Bitmap::new_constant(true, right_block.num_rows());
-            let nullable_right_columns = right_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, right_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            right_block = DataBlock::new(nullable_right_columns, right_block.num_rows());
-        }
+        let right_block = if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+            let rows = block.num_rows();
+            let nullable_right_columns = block
+                .take_columns()
+                .into_iter()
+                .map(BlockEntry::into_nullable)
+                .collect();
+            DataBlock::new(nullable_right_columns, rows)
+        } else {
+            block
+        };
         right_table.push(right_block);
         Ok(())
     }
@@ -126,16 +126,17 @@ impl RangeJoinState {
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        let mut left_block = block;
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
-            let validity = Bitmap::new_constant(true, left_block.num_rows());
-            let nullable_left_columns = left_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, left_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            left_block = DataBlock::new(nullable_left_columns, left_block.num_rows());
-        }
+        let left_block = if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+            let rows = block.num_rows();
+            let nullable_left_columns = block
+                .take_columns()
+                .into_iter()
+                .map(BlockEntry::into_nullable)
+                .collect();
+            DataBlock::new(nullable_left_columns, rows)
+        } else {
+            block
+        };
         left_table.push(left_block);
         Ok(())
     }

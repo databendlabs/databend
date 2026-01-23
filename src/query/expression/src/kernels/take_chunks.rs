@@ -612,7 +612,7 @@ impl Column {
         }
     }
 
-    fn take_column_vec_indices(
+    pub fn take_column_vec_indices(
         columns: &ColumnVec,
         data_type: DataType,
         indices: &[RowPtr],

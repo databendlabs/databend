@@ -23,18 +23,24 @@ pub trait JoinStream: Send + Sync {
 }
 
 pub trait Join: Send + Sync + 'static {
+    /// Push one block into the build side. `None` signals the end of input.
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()>;
 
+    /// Finalize build phase in chunks; each call processes the next pending build batch and
+    /// returns its progress. Once all batches are consumed it returns `None` to signal completion.
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
 
     fn add_runtime_filter_packet(&self, _packet: JoinRuntimeFilterPacket) {}
 
+    /// Generate runtime filter packet for the given filter description.
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
         Ok(JoinRuntimeFilterPacket::default())
     }
 
+    /// Probe with a single block and return a streaming iterator over results.
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>>;
 
+    /// Final steps after probing all blocks; used when more output is pending.
     fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
         Ok(None)
     }
