@@ -567,7 +567,10 @@ mod tests {
             })
             .collect::<Vec<_>>();
         stats.sort_by(|a, b| super::compare_block_stats(&a.1, &b.1, true, false));
-        assert_eq!(super::truncate_blocks_after_limit(&stats, true, false, 5), 1);
+        assert_eq!(
+            super::truncate_blocks_after_limit(&stats, true, false, 5),
+            1
+        );
 
         let pruner = TopNPruner::create(
             schema.clone(),
