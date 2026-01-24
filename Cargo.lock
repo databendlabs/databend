@@ -4215,6 +4215,7 @@ name = "databend-common-meta-runtime-api"
 version = "0.1.0"
 dependencies = [
  "tokio",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -4308,7 +4309,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-tracing",
  "deepsize",
  "derive_more",
  "display-more 0.2.1",
@@ -5552,7 +5552,9 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-meta-runtime-api",
+ "databend-common-tracing",
  "tokio",
+ "tonic 0.13.1",
 ]
 
 [[package]]

@@ -31,12 +31,6 @@ const HEADER_LEADER: &str = "x-databend-meta-leader-grpc-endpoint";
 pub struct GrpcHelper;
 
 impl GrpcHelper {
-    /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
-    pub fn traced_req<T>(t: T) -> tonic::Request<T> {
-        let req = tonic::Request::new(t);
-        databend_common_tracing::inject_span_to_tonic_request(req)
-    }
-
     /// Add leader endpoint to the reply to inform the client to contact the leader directly.
     pub fn add_response_meta_leader<T>(
         reply: &mut tonic::Response<T>,
