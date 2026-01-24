@@ -54,6 +54,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use databend_meta_runtime::DatabendRuntime;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
 use futures::TryStreamExt;
@@ -95,7 +96,7 @@ impl RoleMgr {
     }
 
     /// Create a [`Cache`] for the data [`RoleMgr`] manages.
-    pub async fn new_cache(client: Arc<ClientHandle>) -> Cache {
+    pub async fn new_cache(client: Arc<ClientHandle<DatabendRuntime>>) -> Cache {
         let prefix = TenantOwnershipObjectIdent::key_space_prefix();
         let name = TenantOwnershipObjectIdent::type_name();
 

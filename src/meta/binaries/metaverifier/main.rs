@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
 
         let handle = DatabendRuntime::spawn(
             async move {
-                let client = MetaGrpcClient::try_create(
+                let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                     addrs.clone(),
                     BUILD_INFO.semver(),
                     "root",
@@ -229,7 +229,7 @@ async fn main() -> Result<()> {
 }
 
 async fn verifier(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     number: u64,
     client_num: u64,

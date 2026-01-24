@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use anyerror::AnyError;
 use databend_base::futures::ElapsedFutureExt;
+use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
@@ -58,9 +59,9 @@ pub(crate) enum ResponseAction<T> {
 /// let established = handler.new_established_client().await?;
 /// let result = handler.process_response_result(&request, rpc_result)?;
 /// ```
-pub(crate) struct RpcHandler<'a> {
+pub(crate) struct RpcHandler<'a, RT: RuntimeApi> {
     /// Reference to the gRPC client for meta-service communication
-    pub(crate) client: &'a MetaGrpcClient,
+    pub(crate) client: &'a MetaGrpcClient<RT>,
 
     /// History of failed RPC attempts, storing endpoint description and error details.
     /// Used for error reporting and debugging connection issues.
@@ -75,9 +76,9 @@ pub(crate) struct RpcHandler<'a> {
     pub(crate) established_client: Option<(EstablishedClient, Instant)>,
 }
 
-impl<'a> RpcHandler<'a> {
+impl<'a, RT: RuntimeApi> RpcHandler<'a, RT> {
     /// Creates a new RPC handler for the given client and feature requirements.
-    pub(crate) fn new(client: &'a MetaGrpcClient, required_feature: FeatureSpec) -> Self {
+    pub(crate) fn new(client: &'a MetaGrpcClient<RT>, required_feature: FeatureSpec) -> Self {
         Self {
             client,
             rpc_failures: Vec::new(),

@@ -32,11 +32,11 @@ use tonic::async_trait;
 use tonic::transport::Channel;
 
 use crate::FeatureSpec;
-use crate::MetaGrpcClient;
 use crate::endpoints::Endpoints;
 use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
+use crate::grpc_client::handshake;
 use crate::pool::ItemManager;
 
 /// Default connection TTL: 20 seconds.
@@ -108,7 +108,7 @@ impl MetaChannelManager {
             addr
         );
 
-        let handshake_res = MetaGrpcClient::handshake(
+        let handshake_res = handshake(
             &mut real_client,
             &self.version,
             self.required_features,

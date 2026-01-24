@@ -83,7 +83,7 @@ impl App {
 
     async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",
@@ -165,7 +165,7 @@ impl App {
         let mut i = 0;
         loop {
             i += 1;
-            let client = MetaGrpcClient::try_create(
+            let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
                 BUILD_INFO.semver(),
                 "root",
@@ -314,7 +314,10 @@ return metrics, nil
         Ok(())
     }
 
-    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
+    fn new_grpc_client(
+        &self,
+        addresses: Vec<String>,
+    ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         lua_support::new_grpc_client(addresses, BUILD_INFO.semver())
     }
 

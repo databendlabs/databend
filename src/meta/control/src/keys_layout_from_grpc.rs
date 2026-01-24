@@ -19,6 +19,7 @@ use std::net::ToSocketAddrs;
 use anyhow::anyhow;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf;
+use databend_meta_runtime::DatabendRuntime;
 use semver::Version;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
@@ -66,7 +67,7 @@ pub async fn keys_layout_from_grpc(
     depth: Option<u32>,
     version: Version,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
         vec![addr.to_string()],
         version,
         "root",

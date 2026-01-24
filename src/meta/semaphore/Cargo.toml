@@ -15,10 +15,11 @@ test = true
 
 [dependencies]
 codeq = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-meta-runtime = { workspace = true }
 display-more = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }

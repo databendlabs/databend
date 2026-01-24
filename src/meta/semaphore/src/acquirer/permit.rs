@@ -14,7 +14,8 @@
 
 use std::future::Future;
 
-use databend_common_base::runtime::spawn_named;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_meta_runtime::DatabendRuntime;
 use futures::FutureExt;
 use log::debug;
 use log::info;
@@ -113,7 +114,7 @@ impl Permit {
             is_removed_tx,
         );
 
-        spawn_named(fu, format!("{}-WatchRemove", acquirer_name.clone()));
+        DatabendRuntime::spawn(fu, Some(format!("{}-WatchRemove", acquirer_name.clone())));
 
         Permit {
             acquirer_name,

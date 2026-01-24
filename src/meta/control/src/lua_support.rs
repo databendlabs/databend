@@ -23,6 +23,7 @@ use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
 use mlua::Lua;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
@@ -36,11 +37,11 @@ use crate::admin::MetaAdminClient;
 const LUA_UTIL: &str = include_str!("../lua_util.lua");
 
 pub struct LuaGrpcClient {
-    client: Arc<ClientHandle>,
+    client: Arc<ClientHandle<DatabendRuntime>>,
 }
 
 impl LuaGrpcClient {
-    pub fn new(client: Arc<ClientHandle>) -> Self {
+    pub fn new(client: Arc<ClientHandle<DatabendRuntime>>) -> Self {
         Self { client }
     }
 }
@@ -267,7 +268,7 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
 pub fn new_grpc_client(
     addresses: Vec<String>,
     version: Version,
-) -> Result<Arc<ClientHandle>, CreationError> {
+) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
         serde_json::to_string(&addresses).unwrap()

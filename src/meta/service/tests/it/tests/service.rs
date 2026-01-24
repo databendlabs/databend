@@ -36,6 +36,7 @@ use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
+use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
 
@@ -100,8 +101,10 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     Ok(res)
 }
 
-pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-    let client = MetaGrpcClient::try_create(
+pub fn make_grpc_client(
+    addresses: Vec<String>,
+) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
         addresses,
         BUILD_INFO.semver(),
         "root",
@@ -206,10 +209,10 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle>> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",
@@ -266,11 +269,11 @@ pub struct MetaSrvBuilder {
 }
 
 #[async_trait]
-impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
-    async fn build(&self) -> Arc<ClientHandle> {
+impl kvapi::ApiBuilder<Arc<ClientHandle<DatabendRuntime>>> for MetaSrvBuilder {
+    async fn build(&self) -> Arc<ClientHandle<DatabendRuntime>> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",
@@ -289,7 +292,7 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
         client
     }
 
-    async fn build_cluster(&self) -> Vec<Arc<ClientHandle>> {
+    async fn build_cluster(&self) -> Vec<Arc<ClientHandle<DatabendRuntime>>> {
         let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
 
         let cluster = vec![

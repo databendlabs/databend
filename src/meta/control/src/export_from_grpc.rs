@@ -23,6 +23,7 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::required;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_types::protobuf;
+use databend_meta_runtime::DatabendRuntime;
 use semver::Version;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
@@ -72,7 +73,7 @@ pub async fn export_from_grpc(
     chunk_size: Option<u64>,
     version: Version,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create_with_features(
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create_with_features(
         vec![addr.to_string()],
         version,
         "root",

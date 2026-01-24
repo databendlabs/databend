@@ -31,6 +31,7 @@ use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_meta_runtime::DatabendRuntime;
 pub use local::LocalMetaService;
 use log::info;
 use log::warn;
@@ -52,13 +53,13 @@ pub struct MetaStoreProvider {
 #[derive(Clone)]
 pub enum MetaStore {
     L(Arc<LocalMetaService>),
-    R(Arc<ClientHandle>),
+    R(Arc<ClientHandle<DatabendRuntime>>),
 }
 
 /// Internally [`MetaStore`] contains a [`ClientHandle`] which is a client to either a local
 /// databend-meta service or a remote databend-meta service accessed via gRPC.
 impl Deref for MetaStore {
-    type Target = Arc<ClientHandle>;
+    type Target = Arc<ClientHandle<DatabendRuntime>>;
 
     fn deref(&self) -> &Self::Target {
         match self {
