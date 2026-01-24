@@ -236,15 +236,24 @@ impl FuseTable {
             &snapshot.snapshot_id,
             format_version,
         )?;
+
+        // Cluster key will be restored from the snapshot.
+        // If the snapshot has no cluster key, means the table is currently unclustered.
+        // We do NOT fall back to table-level cluster key metadata here, even if
+        // the base table defines one. This is expected and by design.
         let new_branch = match self.branch_info.as_ref() {
             Some(branch) => {
                 let mut new_branch = branch.clone();
                 new_branch.info.loc = loc;
                 new_branch.schema = Arc::new(snapshot.schema.clone());
+                new_branch.cluster_key_meta = snapshot.cluster_key_meta.clone();
                 Some(new_branch)
             }
             None => {
                 table_info.meta.schema = Arc::new(snapshot.schema.clone());
+                table_info.meta.cluster_key =
+                    snapshot.cluster_key_meta.as_ref().map(|v| v.1.clone());
+                table_info.meta.cluster_key_id = snapshot.cluster_key_meta.as_ref().map(|v| v.0);
                 table_info
                     .meta
                     .options
