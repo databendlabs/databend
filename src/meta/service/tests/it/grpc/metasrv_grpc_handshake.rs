@@ -20,8 +20,8 @@ use std::time::Duration;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
-use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::from_digit_ver;
+use databend_common_meta_client::handshake;
 use databend_common_meta_client::to_digit_ver;
 use databend_common_version::DATABEND_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -62,7 +62,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let min_client_ver = &MIN_METACLI_SEMVER;
         let cli_ver = smaller_ver(min_client_ver);
 
-        let res = MetaGrpcClient::handshake(&mut client, &cli_ver, &[], "root", "xxx").await;
+        let res = handshake(&mut client, &cli_ver, &[], "root", "xxx").await;
 
         debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
@@ -80,7 +80,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         let mut min_srv_ver = min_srv_ver.clone();
         min_srv_ver.major += 1;
 
-        let res = MetaGrpcClient::handshake(
+        let res = handshake(
             &mut client,
             &DATABEND_SEMVER,
             &[("foo", (500, 500, 500))],
@@ -113,7 +113,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
     {
         let zero = Version::new(0, 0, 0);
 
-        let res = MetaGrpcClient::handshake(&mut client, &zero, &[], "root", "xxx").await;
+        let res = handshake(&mut client, &zero, &[], "root", "xxx").await;
 
         debug!("handshake res: {:?}", res);
         assert!(res.is_ok());

@@ -193,7 +193,12 @@ async fn main() {
     );
 }
 
-async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_upsert(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let node_key = || format!("{}-{}-{}", prefix, client_num, i);
 
     let seq = MatchSeq::Any;
@@ -206,7 +211,12 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     print_res(i, "upsert_kv", &res);
 }
 
-async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_table(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -294,7 +304,12 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     print_res(i, "create_table again", &res);
 }
 
-async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_get_table(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -323,7 +338,7 @@ impl Default for TableCopyFileConfig {
 
 /// Benchmark upsert table with copy file.
 async fn benchmark_table_copy_file(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     client_num: u64,
     i: u64,
@@ -410,7 +425,7 @@ impl SemaphoreConfig {
 /// - `i` is the index of the current client.
 /// - `param` is a json string of bench specific config.
 async fn benchmark_semaphore(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     key_prefix: u64,
     client_num: u64,
     i: u64,
@@ -473,7 +488,7 @@ struct ListConfig {
 
 /// Benchmark listing keys with a prefix.
 async fn benchmark_list(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     client_num: u64,
     i: u64,

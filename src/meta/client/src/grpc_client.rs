@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,11 +23,10 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -112,7 +112,7 @@ pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthI
 /// Thus a cloned meta client may try to talk to a destroyed hyper worker if the creating tokio-runtime is dropped.
 /// Thus we have to guarantee that as long as there is a meta-client, the hyper worker runtime must not be dropped.
 /// Thus a meta client creates a runtime then spawn a MetaGrpcClientWorker.
-pub struct MetaGrpcClient {
+pub struct MetaGrpcClient<RT: RuntimeApi> {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: Arc<Mutex<Endpoints>>,
     endpoints_str: Vec<String>,
@@ -120,9 +120,11 @@ pub struct MetaGrpcClient {
 
     #[allow(dead_code)]
     required_features: &'static [FeatureSpec],
+
+    _phantom: PhantomData<RT>,
 }
 
-impl Debug for MetaGrpcClient {
+impl<RT: RuntimeApi> Debug for MetaGrpcClient<RT> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let mut de = f.debug_struct("MetaGrpcClient");
         de.field("endpoints", &*self.endpoints.lock());
@@ -131,13 +133,13 @@ impl Debug for MetaGrpcClient {
     }
 }
 
-impl Display for MetaGrpcClient {
+impl<RT: RuntimeApi> Display for MetaGrpcClient<RT> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MetaGrpcClient({})", self.endpoints_str.join(","))
     }
 }
 
-impl MetaGrpcClient {
+impl<RT: RuntimeApi> MetaGrpcClient<RT> {
     /// Create a new client of metasrv.
     ///
     /// It creates a new `Runtime` and spawn a background worker task in it that do all the RPC job.
@@ -148,7 +150,7 @@ impl MetaGrpcClient {
     ///
     /// The worker is a singleton and the returned handle is cheap to clone.
     /// When all handles are dropped the worker will quit, then the runtime will be destroyed.
-    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
+    pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle<RT>>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
             conf.version.clone(),
@@ -170,7 +172,7 @@ impl MetaGrpcClient {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
-    ) -> Result<Arc<ClientHandle>, CreationError> {
+    ) -> Result<Arc<ClientHandle<RT>>, CreationError> {
         Self::try_create_with_features(
             endpoints_str,
             version,
@@ -206,7 +208,7 @@ impl MetaGrpcClient {
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
         required_features: &'static [FeatureSpec],
-    ) -> Result<Arc<ClientHandle>, CreationError> {
+    ) -> Result<Arc<ClientHandle<RT>>, CreationError> {
         Self::endpoints_non_empty(&endpoints_str)?;
 
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
@@ -222,14 +224,11 @@ impl MetaGrpcClient {
             None, // Use default connection TTL
         );
 
-        let rt = Runtime::with_worker_threads(
-            1,
+        let rt = RT::new(
+            Some(1),
             Some(format!("meta-client-rt-{}", endpoints_str.join(","))),
         )
-        .map_err(|e| {
-            CreationError::new_runtime_error(e.to_string()).context("when creating meta-client")
-        })?;
-        let rt = Arc::new(rt);
+        .map_err(|e| CreationError::new_runtime_error(e).context("when creating meta-client"))?;
 
         // Build the handle-worker pair
 
@@ -240,7 +239,8 @@ impl MetaGrpcClient {
             endpoints: endpoints_str.clone(),
             req_tx: tx,
             cancel_auto_sync_tx: one_tx,
-            _rt: rt.clone(),
+            _rt: Arc::new(rt.clone()) as Arc<dyn std::any::Any + Send + Sync>,
+            _phantom: PhantomData,
         });
 
         let worker = Arc::new(Self {
@@ -249,18 +249,19 @@ impl MetaGrpcClient {
             endpoints_str,
             auto_sync_interval,
             required_features,
+            _phantom: PhantomData,
         });
 
         let worker_name = worker.to_string();
 
-        rt.spawn_named(
-            UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
-            format!("{}::worker_loop()", worker_name),
+        rt.spawn_on(
+            RT::unlimited_future(Self::worker_loop(worker.clone(), rx)),
+            Some(format!("{}::worker_loop()", worker_name)),
         );
 
-        rt.spawn_named(
-            UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_rx)),
-            format!("{}::auto_sync_endpoints()", worker_name),
+        rt.spawn_on(
+            RT::unlimited_future(Self::auto_sync_endpoints(worker, one_rx)),
+            Some(format!("{}::auto_sync_endpoints()", worker_name)),
         );
 
         Ok(handle)
@@ -309,11 +310,11 @@ impl MetaGrpcClient {
                 _ => {}
             }
 
-            databend_common_base::runtime::spawn_named(
+            RT::spawn(
                 self.clone()
                     .handle_rpc_request(worker_request)
                     .in_span(span),
-                format!("{}::handle_rpc_request()", self),
+                Some(format!("{}::handle_rpc_request()", self)),
             );
         }
     }
@@ -595,118 +596,6 @@ impl MetaGrpcClient {
         }
     }
 
-    /// Handshake with metasrv.
-    ///
-    /// - Check whether the versions of this client(`C`) and the remote metasrv(`S`) are compatible.
-    /// - Authorize this client.
-    ///
-    /// ## Check compatibility
-    ///
-    /// Both client `C` and  server `S` maintains two semantic-version:
-    /// - `C` maintains the its own semver(`C.ver`) and the minimal compatible `S` semver(`C.min_srv_ver`).
-    /// - `S` maintains the its own semver(`S.ver`) and the minimal compatible `S` semver(`S.min_cli_ver`).
-    ///
-    /// When handshaking:
-    /// - `C` sends its ver `C.ver` to `S`,
-    /// - When `S` receives handshake request, `S` asserts that `C.ver >= S.min_cli_ver`.
-    /// - Then `S` replies handshake-reply with its `S.ver`.
-    /// - When `C` receives the reply, `C` asserts that `S.ver >= C.min_srv_ver`.
-    ///
-    /// Handshake succeeds if both of these two assertions hold.
-    ///
-    /// E.g.:
-    /// - `S: (ver=3, min_cli_ver=1)` is compatible with `C: (ver=3, min_srv_ver=2)`.
-    /// - `S: (ver=4, min_cli_ver=4)` is **NOT** compatible with `C: (ver=3, min_srv_ver=2)`.
-    ///   Because although `S.ver(4) >= C.min_srv_ver(3)` holds,
-    ///   but `C.ver(3) >= S.min_cli_ver(4)` does not hold.
-    ///
-    /// ```text
-    /// C.ver:    1             3      4
-    /// C --------+-------------+------+------------>
-    ///           ^      .------'      ^
-    ///           |      |             |
-    ///           '-------------.      |
-    ///                  |      |      |
-    ///                  v      |      |
-    /// S ---------------+------+------+------------>
-    /// S.ver:           2      3      4
-    /// ```
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    pub async fn handshake(
-        client: &mut RealClient,
-        client_ver: &Version,
-        required_server_features: &'static [FeatureSpec],
-        username: &str,
-        password: &str,
-    ) -> Result<(Vec<u8>, u64, Features), MetaHandshakeError> {
-        debug!(
-            "client version: {client_ver}, required server versions: {required_server_features:?}"
-        );
-
-        let auth = BasicAuth {
-            username: username.to_string(),
-            password: password.to_string(),
-        };
-        let mut payload = vec![];
-
-        // TODO: return MetaNetworkError
-        auth.encode(&mut payload).map_err(|e| {
-            MetaHandshakeError::new("Fail to encode request payload").with_source(&e)
-        })?;
-
-        let my_ver = to_digit_ver(client_ver);
-        let req = Request::new(futures::stream::once(async move {
-            HandshakeRequest {
-                protocol_version: my_ver,
-                payload,
-            }
-        }));
-
-        // TODO: return MetaNetworkError
-        let rx = client
-            .handshake(req)
-            .await
-            .map_err(|e| MetaHandshakeError::new("Connection Failure").with_source(&e))?;
-        let mut rx = rx.into_inner();
-
-        let res = rx
-            .next()
-            .await
-            .ok_or_else(|| MetaHandshakeError::new("Server returned nothing"))?;
-
-        let resp = res
-            .map_err(|status| MetaHandshakeError::new("Connection Failure").with_source(&status))?;
-
-        assert!(
-            resp.protocol_version > 0,
-            "talking to a very old databend-meta: upgrade databend-meta to at least 0.8"
-        );
-
-        let server_version = from_digit_ver(resp.protocol_version);
-        let server_tuple = (
-            server_version.major,
-            server_version.minor,
-            server_version.patch,
-        );
-
-        let server_provided = supported_features(server_tuple);
-
-        for (feat, least_server_version) in required_server_features {
-            if server_tuple < *least_server_version {
-                return Err(MetaHandshakeError::new(format!(
-                    "Invalid: server protocol_version({:?}) < client required({:?}) for feature {}",
-                    server_tuple, least_server_version, feat
-                )));
-            }
-        }
-
-        let token = resp.payload;
-        let server_version = resp.protocol_version;
-
-        Ok((token, server_version, server_provided))
-    }
-
     /// Create a watching stream that receives KV change events.
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -894,6 +783,115 @@ impl MetaGrpcClient {
         let es = self.endpoints.lock();
         es.current().map(|x| x.to_string())
     }
+}
+
+/// Handshake with metasrv.
+///
+/// - Check whether the versions of this client(`C`) and the remote metasrv(`S`) are compatible.
+/// - Authorize this client.
+///
+/// ## Check compatibility
+///
+/// Both client `C` and  server `S` maintains two semantic-version:
+/// - `C` maintains the its own semver(`C.ver`) and the minimal compatible `S` semver(`C.min_srv_ver`).
+/// - `S` maintains the its own semver(`S.ver`) and the minimal compatible `S` semver(`S.min_cli_ver`).
+///
+/// When handshaking:
+/// - `C` sends its ver `C.ver` to `S`,
+/// - When `S` receives handshake request, `S` asserts that `C.ver >= S.min_cli_ver`.
+/// - Then `S` replies handshake-reply with its `S.ver`.
+/// - When `C` receives the reply, `C` asserts that `S.ver >= C.min_srv_ver`.
+///
+/// Handshake succeeds if both of these two assertions hold.
+///
+/// E.g.:
+/// - `S: (ver=3, min_cli_ver=1)` is compatible with `C: (ver=3, min_srv_ver=2)`.
+/// - `S: (ver=4, min_cli_ver=4)` is **NOT** compatible with `C: (ver=3, min_srv_ver=2)`.
+///   Because although `S.ver(4) >= C.min_srv_ver(3)` holds,
+///   but `C.ver(3) >= S.min_cli_ver(4)` does not hold.
+///
+/// ```text
+/// C.ver:    1             3      4
+/// C --------+-------------+------+------------>
+///           ^      .------'      ^
+///           |      |             |
+///           '-------------.      |
+///                  |      |      |
+///                  v      |      |
+/// S ---------------+------+------+------------>
+/// S.ver:           2      3      4
+/// ```
+#[fastrace::trace]
+#[async_backtrace::framed]
+pub async fn handshake(
+    client: &mut RealClient,
+    client_ver: &Version,
+    required_server_features: &'static [FeatureSpec],
+    username: &str,
+    password: &str,
+) -> Result<(Vec<u8>, u64, Features), MetaHandshakeError> {
+    debug!("client version: {client_ver}, required server versions: {required_server_features:?}");
+
+    let auth = BasicAuth {
+        username: username.to_string(),
+        password: password.to_string(),
+    };
+    let mut payload = vec![];
+
+    // TODO: return MetaNetworkError
+    auth.encode(&mut payload)
+        .map_err(|e| MetaHandshakeError::new("Fail to encode request payload").with_source(&e))?;
+
+    let my_ver = to_digit_ver(client_ver);
+    let req = Request::new(futures::stream::once(async move {
+        HandshakeRequest {
+            protocol_version: my_ver,
+            payload,
+        }
+    }));
+
+    // TODO: return MetaNetworkError
+    let rx = client
+        .handshake(req)
+        .await
+        .map_err(|e| MetaHandshakeError::new("Connection Failure").with_source(&e))?;
+    let mut rx = rx.into_inner();
+
+    let res = rx
+        .next()
+        .await
+        .ok_or_else(|| MetaHandshakeError::new("Server returned nothing"))?;
+
+    let resp =
+        res.map_err(|status| MetaHandshakeError::new("Connection Failure").with_source(&status))?;
+
+    assert!(
+        resp.protocol_version > 0,
+        "talking to a very old databend-meta: upgrade databend-meta to at least 0.8"
+    );
+
+    let server_version = from_digit_ver(resp.protocol_version);
+    let server_tuple = (
+        server_version.major,
+        server_version.minor,
+        server_version.patch,
+    );
+
+    let server_provided = supported_features(server_tuple);
+
+    for (feat, least_server_version) in required_server_features {
+        if server_tuple < *least_server_version {
+            return Err(MetaHandshakeError::new(format!(
+                "Invalid: server protocol_version({:?}) < client required({:?}) for feature {}",
+                server_tuple, least_server_version, feat
+            )));
+        }
+    }
+
+    let token = resp.payload;
+    let server_version = resp.protocol_version;
+
+    Ok((token, server_version, server_provided))
 }
 
 /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.

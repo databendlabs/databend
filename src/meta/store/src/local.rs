@@ -30,6 +30,7 @@ use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_node::meta_worker::MetaWorker;
+use databend_meta_runtime::DatabendRuntime;
 use log::debug;
 use log::info;
 use log::warn;
@@ -51,7 +52,7 @@ pub struct LocalMetaService {
     /// Kept alive for shutdown; dropped when `LocalMetaService` is dropped.
     _grpc_server: Option<Box<dyn Send + Sync>>,
 
-    client: Arc<ClientHandle>,
+    client: Arc<ClientHandle<DatabendRuntime>>,
 }
 
 impl fmt::Display for LocalMetaService {
@@ -66,7 +67,7 @@ impl fmt::Display for LocalMetaService {
 
 /// The [LocalMetaService] implements the [Deref] trait, so it can be used as a [ClientHandle].
 impl Deref for LocalMetaService {
-    type Target = Arc<ClientHandle>;
+    type Target = Arc<ClientHandle<DatabendRuntime>>;
 
     fn deref(&self) -> &Self::Target {
         &self.client
@@ -186,9 +187,9 @@ impl LocalMetaService {
     async fn grpc_client(
         config: &configs::Config,
         version: Version,
-    ) -> Result<Arc<ClientHandle>, CreationError> {
+    ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         let addr = config.grpc_api_address.clone();
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             version,
             "root",

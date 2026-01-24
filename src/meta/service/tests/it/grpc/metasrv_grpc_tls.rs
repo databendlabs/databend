@@ -22,6 +22,7 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -50,7 +51,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let client = MetaGrpcClient::try_create(
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
         vec![addr],
         BUILD_INFO.semver(),
         "root",
@@ -89,7 +90,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaGrpcClient::try_create(
+    let r = MetaGrpcClient::<DatabendRuntime>::try_create(
         vec!["addr".to_string()],
         BUILD_INFO.semver(),
         "root",

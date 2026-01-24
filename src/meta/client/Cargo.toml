@@ -19,6 +19,7 @@ databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
@@ -42,6 +43,7 @@ tonic = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-version = { workspace = true }
+databend-meta-runtime = { workspace = true }
 rand = { workspace = true }
 
 [lints]

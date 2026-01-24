@@ -115,6 +115,15 @@ impl SpawnApi for TokioRuntime {
         let _ = data;
         Box::pin(fut)
     }
+
+    /// No-op for TokioRuntime - just returns the future as-is.
+    fn unlimited_future<'a, T, Fut>(fut: Fut) -> BoxFuture<'a, T>
+    where
+        Fut: Future<Output = T> + Send + 'a,
+        T: Send + 'a,
+    {
+        Box::pin(fut)
+    }
 }
 
 #[expect(clippy::disallowed_methods)]

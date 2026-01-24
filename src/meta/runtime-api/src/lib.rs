@@ -52,6 +52,15 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     where
         Fut: Future<Output = T> + Send + 'a,
         T: Send + 'a;
+
+    /// Wrap a future to bypass memory limits during execution.
+    ///
+    /// This is used for futures that should not be subject to memory tracking
+    /// or limits, such as critical client operations that must complete.
+    fn unlimited_future<'a, T, Fut>(fut: Fut) -> BoxFuture<'a, T>
+    where
+        Fut: Future<Output = T> + Send + 'a,
+        T: Send + 'a;
 }
 
 /// Owned runtime instance that can spawn tasks.

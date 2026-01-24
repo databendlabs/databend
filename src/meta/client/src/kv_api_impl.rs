@@ -19,6 +19,7 @@ use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::limit_stream;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -31,7 +32,7 @@ use crate::ClientHandle;
 use crate::Streamed;
 
 #[tonic::async_trait]
-impl kvapi::KVApi for ClientHandle {
+impl<RT: SpawnApi> kvapi::KVApi for ClientHandle<RT> {
     type Error = MetaError;
 
     #[fastrace::trace]

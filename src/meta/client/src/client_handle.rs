@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use anyerror::AnyError;
-use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -56,7 +57,7 @@ use crate::message::Response;
 
 /// A handle to access meta-client worker.
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
-pub struct ClientHandle {
+pub struct ClientHandle<RT: SpawnApi> {
     /// For debug purpose only.
     pub endpoints: Vec<String>,
     /// For sending request to meta-client worker.
@@ -84,22 +85,25 @@ pub struct ClientHandle {
     /// - The last of these(say, `F`) two will drop `MetaGrpcClient.rt` and `Runtime::_dropper`
     ///   will block waiting for the runtime to shut down.
     /// - But `F` is still held, deadlock occurs.
-    pub(crate) _rt: Arc<Runtime>,
+    #[allow(dead_code)]
+    pub(crate) _rt: Arc<dyn Any + Send + Sync>,
+
+    pub(crate) _phantom: PhantomData<RT>,
 }
 
-impl Display for ClientHandle {
+impl<RT: SpawnApi> Display for ClientHandle<RT> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ClientHandle({})", self.endpoints.join(","))
     }
 }
 
-impl Drop for ClientHandle {
+impl<RT: SpawnApi> Drop for ClientHandle<RT> {
     fn drop(&mut self) {
         info!("{} handle dropped", self);
     }
 }
 
-impl ClientHandle {
+impl<RT: SpawnApi> ClientHandle<RT> {
     pub async fn list(&self, prefix: &str) -> Result<BoxStream<StreamItem>, MetaError> {
         let strm = self
             .request(Streamed(ListKVReq {
@@ -150,7 +154,7 @@ impl ClientHandle {
             .send_request_to_worker(req)
             .map_err(MetaClientError::from)?;
 
-        let recv_res = UnlimitedFuture::create(async move {
+        let recv_res = RT::unlimited_future(async move {
             let _g = grpc_metrics::client_request_inflight.counter_guard();
             rx.await
         })

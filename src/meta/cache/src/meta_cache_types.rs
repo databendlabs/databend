@@ -16,8 +16,9 @@
 
 use std::future::Future;
 
-use databend_common_base::runtime::spawn_named;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::SeqV;
+use databend_meta_runtime::DatabendRuntime;
 use sub_cache::TypeConfig;
 
 use crate::meta_client_source::MetaClientSource;
@@ -40,6 +41,6 @@ impl TypeConfig for MetaCacheTypes {
         F::Output: Send + 'static,
     {
         let name = name.to_string();
-        spawn_named(future, name);
+        DatabendRuntime::spawn(future, Some(name));
     }
 }

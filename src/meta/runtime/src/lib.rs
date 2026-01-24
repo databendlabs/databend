@@ -90,6 +90,14 @@ impl SpawnApi for DatabendRuntime {
 
         Box::pin(payload.tracking(fut))
     }
+
+    fn unlimited_future<'a, T, Fut>(fut: Fut) -> BoxFuture<'a, T>
+    where
+        Fut: Future<Output = T> + Send + 'a,
+        T: Send + 'a,
+    {
+        Box::pin(runtime::UnlimitedFuture::create(fut))
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

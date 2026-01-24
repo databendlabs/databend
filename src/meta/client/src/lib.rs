@@ -40,6 +40,7 @@ pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
+pub use grpc_client::handshake;
 pub use message::ClientWorkerRequest;
 pub use message::InitFlag;
 pub use message::Streamed;
