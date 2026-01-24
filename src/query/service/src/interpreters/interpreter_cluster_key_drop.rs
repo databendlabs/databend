@@ -55,11 +55,12 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let table = catalog
             .get_table_with_batch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
+        // check mutability
+        table.check_mutable()?;
+
         if table.cluster_key_meta().is_none() {
             return Ok(PipelineBuildResult::create());
         }
-        // check mutability
-        table.check_mutable()?;
 
         commit_table_meta(
             self.ctx.as_ref(),

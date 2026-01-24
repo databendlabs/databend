@@ -104,5 +104,24 @@ alter table t1/dev modify column c binary;
 query error 1081.*Unsupported data type 'Binary NULL' for cluster by expression `c`
 ALTER TABLE t1/dev CLUSTER BY(c);
 
+## Tag references remain read-only for ALTER
+statement ok
+ALTER TABLE t1 CREATE TAG tag1;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 ADD COLUMN c INT;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 DROP COLUMN b;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 RENAME COLUMN b to c;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 CLUSTER BY(b);
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 DROP CLUSTER KEY;
+
 statement ok
 DROP DATABASE test_branch_alter

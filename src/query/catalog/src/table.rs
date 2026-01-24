@@ -576,7 +576,7 @@ pub trait TableExt: Table {
         if self.is_read_only() {
             let branch_info = self
                 .get_branch_info()
-                .map(|v| format!(" (tag: {})", v.branch_name()))
+                .map(|v| format!(" (Tag: '{}')", v.branch_name()))
                 .unwrap_or_default();
             Err(ErrorCode::InvalidOperation(format!(
                 "Modification not permitted: Table '{}'{} is READ ONLY, preventing any changes or updates.",
