@@ -236,7 +236,8 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        (Some(e3), 3, 3 * row_per_block),
+        // TopN asc limit: only the first block is needed because its rows already satisfy the limit.
+        (Some(e3), 1, row_per_block),
         (Some(e4), 4, 4 * row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];

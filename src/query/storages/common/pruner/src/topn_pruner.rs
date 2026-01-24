@@ -400,7 +400,9 @@ fn ranges_do_not_overlap(
     if asc {
         compare_scalar_for_sorting(current.max(), next.min(), true, nulls_first) == Ordering::Less
     } else {
-        compare_scalar_for_sorting(current.min(), next.max(), false, nulls_first)
+        // In short, the flip is what keeps NULL ordering semantics consistent when we reuse the same comparator for both ASC and DESC overlap checks.
+        let natural_nulls_first = !nulls_first;
+        compare_scalar_for_sorting(current.min(), next.max(), true, natural_nulls_first)
             == Ordering::Greater
     }
 }
@@ -581,6 +583,36 @@ mod tests {
         let result = pruner.prune(metas).unwrap();
         let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
         assert_eq!(kept_blocks, vec![0]);
+    }
+
+    #[test]
+    fn test_prune_topn_keeps_overlapping_blocks() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_block(column_id, 0, 0, 99, 100),
+            build_block(column_id, 1, 0, 99, 100),
+            build_block(column_id, 2, 0, 99, 100),
+        ];
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), false, false)],
+            5,
+            false,
+        );
+        let result = pruner.prune(metas.clone()).unwrap();
+        assert_eq!(result.len(), metas.len());
     }
 
     fn build_block(
