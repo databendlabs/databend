@@ -98,6 +98,10 @@ impl SpawnApi for DatabendRuntime {
     {
         Box::pin(runtime::UnlimitedFuture::create(fut))
     }
+
+    fn inject_span_to_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
+        databend_common_tracing::inject_span_to_tonic_request(request)
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

@@ -8,7 +8,6 @@ edition = { workspace = true }
 
 [dependencies]
 anyerror = { workspace = true }
-databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }

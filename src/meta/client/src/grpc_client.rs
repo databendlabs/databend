@@ -713,7 +713,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         let mut rpc_handler = RpcHandler::new(self, service_spec);
 
         for _i in 0..RPC_RETRIES {
-            let req = traced_req(raft_req.clone());
+            let req = traced_req::<RT, _>(raft_req.clone());
 
             let established = rpc_handler.new_established_client().await?;
 
@@ -753,7 +753,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         let mut rpc_handler = RpcHandler::new(self, service_spec);
 
         for _i in 0..RPC_RETRIES {
-            let req = traced_req(txn.clone());
+            let req = traced_req::<RT, _>(txn.clone());
 
             let established = rpc_handler.new_established_client().await?;
 
@@ -895,9 +895,9 @@ pub async fn handshake(
 }
 
 /// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
-fn traced_req<T>(t: T) -> Request<T> {
+fn traced_req<RT: RuntimeApi, T>(t: T) -> Request<T> {
     let req = Request::new(t);
-    let mut req = databend_common_tracing::inject_span_to_tonic_request(req);
+    let mut req = RT::inject_span_to_request(req);
 
     if let Some(query_id) = ThreadTracker::query_id() {
         let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");

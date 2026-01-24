@@ -764,7 +764,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
             }
 
             // Send the request
-            let req = GrpcHelper::traced_req(raft_req);
+            let req = SP::inject_span_to_request(tonic::Request::new(raft_req));
             raft_metrics::network::incr_sendto_bytes(&self.target, req.get_ref().data.len() as u64);
 
             let mut client = self
@@ -903,7 +903,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
 
         // First, try VoteV001 with native protobuf types
         let vote_req_pb = pb::VoteRequest::from(rpc.clone());
-        let req_v001 = GrpcHelper::traced_req(vote_req_pb);
+        let req_v001 = SP::inject_span_to_request(tonic::Request::new(vote_req_pb));
 
         let grpc_res_v001 = client.vote_v001(req_v001).await;
         info!(
@@ -932,7 +932,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
 
         // Fallback to old Vote RPC using RaftRequest
         let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
-        let req = GrpcHelper::traced_req(raft_req);
+        let req = SP::inject_span_to_request(tonic::Request::new(raft_req));
 
         let bytes = req.get_ref().data.len() as u64;
         raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
@@ -961,7 +961,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
 
         let r = pb::TransferLeaderRequest::from(req);
 
-        let req = GrpcHelper::traced_req(r);
+        let req = SP::inject_span_to_request(tonic::Request::new(r));
 
         let mut client = self
             .take_client()
