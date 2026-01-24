@@ -61,6 +61,14 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     where
         Fut: Future<Output = T> + Send + 'a,
         T: Send + 'a;
+
+    /// Inject tracing span context into a tonic request.
+    ///
+    /// Enables distributed tracing across gRPC calls by propagating
+    /// the W3C traceparent header. Returns request unchanged if no
+    /// span context is available.
+    fn inject_span_to_request<T>(request: tonic::Request<T>) -> tonic::Request<T>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.

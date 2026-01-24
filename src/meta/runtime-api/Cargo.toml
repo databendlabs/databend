@@ -8,6 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 tokio = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util", "macros"] }
