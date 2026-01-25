@@ -98,6 +98,25 @@ impl SpawnApi for DatabendRuntime {
     {
         Box::pin(runtime::UnlimitedFuture::create(fut))
     }
+
+    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
+        use std::str::FromStr;
+
+        // Inject tracing span context
+        let mut req = databend_common_tracing::inject_span_to_tonic_request(request);
+
+        // Inject query ID if available
+        if let Some(query_id) = runtime::ThreadTracker::query_id() {
+            let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");
+            let value = tonic::metadata::AsciiMetadataValue::from_str(query_id);
+
+            if let Some((key, value)) = key.ok().zip(value.ok()) {
+                req.metadata_mut().insert(key, value);
+            }
+        }
+
+        req
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

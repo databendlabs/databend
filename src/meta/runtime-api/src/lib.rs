@@ -61,6 +61,19 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     where
         Fut: Future<Output = T> + Send + 'a,
         T: Send + 'a;
+
+    /// Prepare a tonic request by injecting implementation-specific metadata.
+    ///
+    /// This is a general-purpose hook for runtime implementations to inject
+    /// any metadata they need into outgoing gRPC requests. For example:
+    /// - Tracing span context (W3C traceparent header)
+    /// - Query ID for request correlation
+    /// - Any other implementation-specific headers
+    ///
+    /// `TokioRuntime` returns the request unchanged.
+    /// `DatabendRuntime` injects tracing context and query ID.
+    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.

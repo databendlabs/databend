@@ -124,6 +124,11 @@ impl SpawnApi for TokioRuntime {
     {
         Box::pin(fut)
     }
+
+    /// No-op for TokioRuntime - returns request unchanged.
+    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
+        request
+    }
 }
 
 #[expect(clippy::disallowed_methods)]

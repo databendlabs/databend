@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -713,7 +712,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         let mut rpc_handler = RpcHandler::new(self, service_spec);
 
         for _i in 0..RPC_RETRIES {
-            let req = traced_req(raft_req.clone());
+            let req = RT::prepare_request(Request::new(raft_req.clone()));
 
             let established = rpc_handler.new_established_client().await?;
 
@@ -753,7 +752,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         let mut rpc_handler = RpcHandler::new(self, service_spec);
 
         for _i in 0..RPC_RETRIES {
-            let req = traced_req(txn.clone());
+            let req = RT::prepare_request(Request::new(txn.clone()));
 
             let established = rpc_handler.new_established_client().await?;
 
@@ -892,23 +891,6 @@ pub async fn handshake(
     let server_version = resp.protocol_version;
 
     Ok((token, server_version, server_provided))
-}
-
-/// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
-fn traced_req<T>(t: T) -> Request<T> {
-    let req = Request::new(t);
-    let mut req = databend_common_tracing::inject_span_to_tonic_request(req);
-
-    if let Some(query_id) = ThreadTracker::query_id() {
-        let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");
-        let value = tonic::metadata::AsciiMetadataValue::from_str(query_id);
-
-        if let Some((key, value)) = key.ok().zip(value.ok()) {
-            req.metadata_mut().insert(key, value);
-        }
-    }
-
-    req
 }
 
 fn is_status_retryable(status: &Status) -> bool {
