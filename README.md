@@ -24,7 +24,7 @@
 
 ## 💡 Why Databend?
 
-Databend is an open-source, **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on top of object storage.
+Databend is an open-source **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on object storage.
 
 | | |
 | :--- | :--- |
@@ -37,7 +37,7 @@ Databend is an open-source, **All-in-One multimodal database** built in Rust. It
 ## ⚡ Quick Start
 
 ### 1. Cloud (Recommended)
-[Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) - Production-ready in 60 seconds.
+[Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) — Production-ready in 60 seconds.
 
 ### 2. Local (Python)
 Ideal for development and testing:
@@ -61,11 +61,11 @@ docker run -p 8000:8000 datafuselabs/databend
 
 ## 🚀 Use Cases
 
-- **BI & Analytics**: High-speed SQL on massive datasets. See [Query Processing](https://docs.databend.com/guides/query/sql-analytics).
-- **AI & Vectors**: Built-in vector search and embedding management. See [Vector Database](https://docs.databend.com/guides/query/vector-db).
-- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON). See [JSON Search](https://docs.databend.com/guides/query/json-search).
-- **Geospatial**: Advanced geo-analytics and mapping. See [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics).
-- **Stream & Task**: Continuous data ingestion and transformation. See [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl).
+- **BI & Analytics**: High-speed SQL on massive datasets — [Query Processing](https://docs.databend.com/guides/query/sql-analytics)
+- **AI & Vectors**: Built-in vector search and embedding management — [Vector Database](https://docs.databend.com/guides/query/vector-db)
+- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON) — [JSON Search](https://docs.databend.com/guides/query/json-search)
+- **Geospatial**: Advanced geo-analytics and mapping — [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics)
+- **Stream & Task**: Continuous data ingestion and transformation — [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl)
 
 ## 🤝 Community & Support
 
@@ -74,7 +74,7 @@ docker run -p 8000:8000 datafuselabs/databend
 - [🐛 Issue Tracker](https://github.com/databendlabs/databend/issues)
 - [🗺️ Roadmap](https://github.com/databendlabs/databend/issues/14167)
 
-**Contributors are immortalized in the `system.contributors` table! 🏆**
+**Contributors are immortalized in the `system.contributors` table 🏆**
 
 ## 📄 License
 
