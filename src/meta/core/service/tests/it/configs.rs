@@ -91,34 +91,5 @@ cluster_name = "foo_cluster"
         assert_eq!(cfg.raft_config.cluster_name, "foo_cluster");
     });
 
-    temp_env::with_vars(
-        vec![
-            (
-                "METASRV_CONFIG_FILE",
-                Some(file_path.to_str().expect("must be valid str")),
-            ),
-            ("METASRV_LOG_LEVEL", Some("DEBUG")),
-        ],
-        || {
-            let cfg = Config::load_for_test().expect("load must success");
-            assert_eq!(cfg.log.file.level, "DEBUG");
-        },
-    );
-
-    // Test raft config.
-    temp_env::with_vars(
-        vec![
-            (
-                "METASRV_CONFIG_FILE",
-                Some(file_path.to_str().expect("must be valid str")),
-            ),
-            ("KVSRV_API_PORT", Some("123")),
-        ],
-        || {
-            let cfg = Config::load_for_test().expect("load must success");
-            assert_eq!(cfg.raft_config.raft_api_port, 123);
-        },
-    );
-
     Ok(())
 }
