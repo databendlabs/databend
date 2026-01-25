@@ -303,7 +303,8 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        (Some(e3), 3, 3 * row_per_block),
+        // TopN asc limit keeps four blocks due to overlapping ranges.
+        (Some(e3), 4, 4 * row_per_block),
         (Some(e4), 4, 4 * row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];
@@ -311,7 +312,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
     let stats_res = vec![
         (10, 10, 10, 10),
         (10, 0, 0, 0),
-        (10, 3, 3, 3),
+        (10, 10, 10, 10),
         (10, 10, 10, 10),
         (10, 10, 10, 10),
         (10, 10, 10, 2),

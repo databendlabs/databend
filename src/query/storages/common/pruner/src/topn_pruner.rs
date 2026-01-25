@@ -615,6 +615,33 @@ mod tests {
         assert_eq!(result.len(), metas.len());
     }
 
+    #[test]
+    fn test_prune_topn_constant_ranges_prune_extra_blocks() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+        let metas = (0..5)
+            .map(|i| build_block(column_id, i, i as i64, i as i64, 10))
+            .collect::<Vec<_>>();
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            3,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
     fn build_block(
         column_id: ColumnId,
         block_id: usize,
