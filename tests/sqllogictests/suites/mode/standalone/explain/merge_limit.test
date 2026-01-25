@@ -143,20 +143,16 @@ RowFetch
     ├── limit: 5
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Filter
-        ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
-        ├── filters: [is_true(test_table.id (#0) > 100)]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.test_table
-            ├── scan id: 0
-            ├── output columns: [id (#0), _row_id (#3)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(test_table.id (#0) > 100)], limit: NONE]
-            └── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.test_table
+        ├── scan id: 0
+        ├── output columns: [id (#0), _row_id (#3)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(test_table.id (#0) > 100)], limit: 10]
+        └── estimated rows: 0.00
 
 statement ok
 DROP TABLE test_table;

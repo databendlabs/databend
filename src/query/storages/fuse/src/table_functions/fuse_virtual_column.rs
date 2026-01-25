@@ -98,9 +98,9 @@ impl FuseVirtualColumn {
         limit: Option<usize>,
     ) -> Result<DataBlock> {
         let Some(virtual_schema) = tbl.table_info.meta.virtual_schema.clone() else {
-            return Ok(DataBlock::empty_with_schema(Arc::new(
-                FuseVirtualColumn::schema().into(),
-            )));
+            return Ok(DataBlock::empty_with_schema(
+                &FuseVirtualColumn::schema().into(),
+            ));
         };
 
         let limit = limit.unwrap_or(usize::MAX);

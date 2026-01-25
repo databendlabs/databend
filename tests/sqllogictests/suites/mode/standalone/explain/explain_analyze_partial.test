@@ -25,14 +25,10 @@ HashJoin: INNER
 query T
 explain analyze partial select * from t1 where t1.a > 1;
 ----
-Filter
-├── filters: [t1.a (#0) > 1]
+TableScan
+├── table: default.default.t1
 ├── estimated rows: 8.00
-├── output rows: 8
-└── TableScan
-    ├── table: default.default.t1
-    ├── estimated rows: 10.00
-    └── output rows: 10
+└── output rows: 8
 
 query T
 explain analyze partial select * from t1 join t2 on t1.a = t2.b  union all select * from t2 join t1 on t1.a = t2.b;
@@ -70,22 +66,14 @@ explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 1;
 HashJoin: INNER
 ├── estimated rows: 8.00
 ├── output rows: 8
-├── Filter
-│   ├── filters: [t2.b (#1) > 1]
+├── TableScan
+│   ├── table: default.default.t2
 │   ├── estimated rows: 8.00
-│   ├── output rows: 8
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── estimated rows: 10.00
-│       └── output rows: 10
-└── Filter
-    ├── filters: [t1.a (#0) > 1]
+│   └── output rows: 8
+└── TableScan
+    ├── table: default.default.t1
     ├── estimated rows: 8.00
-    ├── output rows: 8
-    └── TableScan
-        ├── table: default.default.t1
-        ├── estimated rows: 10.00
-        └── output rows: 10
+    └── output rows: 8
 
 
 # if the output rows is zero, it will be hidden.
@@ -94,18 +82,12 @@ explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 10;
 ----
 HashJoin: INNER
 ├── estimated rows: 0.00
-├── Filter
-│   ├── filters: [t2.b (#1) > 10]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       └── estimated rows: 10.00
-└── Filter
-    ├── filters: [t1.a (#0) > 10]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        └── estimated rows: 10.00
+├── TableScan
+│   ├── table: default.default.t2
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    └── estimated rows: 0.00
 
 
 statement ok

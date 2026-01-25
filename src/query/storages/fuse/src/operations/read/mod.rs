@@ -21,6 +21,7 @@ mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_transform_reader;
 mod parquet_rows_fetcher;
+mod read_state;
 mod runtime_filter_wait;
 
 mod block_partition_meta;
@@ -33,5 +34,6 @@ pub use fuse_rows_fetcher::row_fetch_processor;
 pub use fuse_source::build_fuse_parquet_source_pipeline;
 pub use native_data_source_deserializer::NativeDeserializeDataTransform;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
+pub use read_state::ReadState;
 pub use runtime_filter_wait::TransformRuntimeFilterWait;
 pub use util::need_reserve_block_info;

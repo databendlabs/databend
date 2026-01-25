@@ -414,7 +414,7 @@ SELECT * FROM onecolumn JOIN (SELECT x + 2 AS x FROM onecolumn) USING(x)
 ----
 44
 
-query ????
+query IIII
 SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY x LIMIT 1
 ----
 42 53 53 53

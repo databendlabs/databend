@@ -27,14 +27,18 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 
-/// Input:  Limit
-///           \
-///          Scan
+/// Input:    Limit
+///             \
+///             Scan
 ///
-/// Output:
-///         Limit
-///           \
-///           Scan(padding limit)
+/// Output:   Limit
+///             \
+///             Scan(padding limit)
+///
+/// Note: This rule does NOT match plans with SecureFilter (from row access policy).
+/// When SecureFilter exists without user WHERE predicates, push_down_predicates is empty,
+/// and pushing limit would trigger early termination in storage layer, returning N rows
+/// before SecureFilter can filter them, causing fewer results than expected.
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -67,12 +71,13 @@ impl Rule for RulePushDownLimitScan {
         };
         count += limit.offset;
 
-        let child = s_expr.child(0)?;
-        let mut get: Scan = child.plan().clone().try_into()?;
-        get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        let scan_expr = s_expr.child(0)?;
+        let mut scan: Scan = scan_expr.plan().clone().try_into()?;
 
-        let mut result = s_expr.replace_children(vec![Arc::new(get)]);
+        scan.limit = Some(scan.limit.map_or(count, |c| cmp::max(c, count)));
+        let new_scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+
+        let mut result = s_expr.replace_children(vec![Arc::new(new_scan_expr)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

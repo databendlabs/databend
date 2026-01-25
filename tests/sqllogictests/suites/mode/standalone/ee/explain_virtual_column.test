@@ -199,7 +199,7 @@ EvalScalar
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
 
-query ??
+query TI
 select v['d']::string, v['d']::int from t2;
 ----
 20 20
@@ -586,24 +586,20 @@ EvalScalar
                                     │       ├── apply join filters: [#2, #3]
                                     │       ├── virtual columns: [content_object['event_date']]
                                     │       └── estimated rows: 1.00
-                                    └── Filter(Probe)
-                                        ├── output columns: [c.entity_id (#18), c.source_id (#19)]
-                                        ├── filters: [is_true(c.process_mode (#20) = 'standard_mode')]
-                                        ├── estimated rows: 1.00
-                                        └── TableScan
-                                            ├── table: default.test_virtual_db.config_table
-                                            ├── scan id: 2
-                                            ├── output columns: [entity_id (#18), source_id (#19), process_mode (#20)]
-                                            ├── read rows: 1
-                                            ├── read size: < 1 KiB
-                                            ├── partitions total: 1
-                                            ├── partitions scanned: 1
-                                            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-                                            ├── push downs: [filters: [is_true(config_table.process_mode (#20) = 'standard_mode')], limit: NONE]
-                                            ├── apply join filters: [#2, #3, #0, #1]
-                                            └── estimated rows: 1.00
+                                    └── TableScan(Probe)
+                                        ├── table: default.test_virtual_db.config_table
+                                        ├── scan id: 2
+                                        ├── output columns: [entity_id (#18), source_id (#19)]
+                                        ├── read rows: 1
+                                        ├── read size: < 1 KiB
+                                        ├── partitions total: 1
+                                        ├── partitions scanned: 1
+                                        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+                                        ├── push downs: [filters: [is_true(config_table.process_mode (#20) = 'standard_mode')], limit: NONE]
+                                        ├── apply join filters: [#2, #3, #0, #1]
+                                        └── estimated rows: 1.00
 
-query TTTTTT
+query TTTTT?
 WITH processed_dates AS (
     SELECT
         a.entity_id,

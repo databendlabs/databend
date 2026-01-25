@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -107,6 +108,7 @@ impl Binder {
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);
+
         Ok((new_expr, scalar))
     }
 
@@ -491,7 +493,7 @@ impl Binder {
         order_by: &[OrderItem],
         limit: usize,
     ) -> Result<()> {
-        // Only simple single table queries with limit are supported.
+        // Only simple queries with limit are supported.
         // e.g.
         // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
@@ -507,8 +509,7 @@ impl Binder {
         }
 
         let mut metadata = self.metadata.write();
-        if metadata.tables().len() != 1 {
-            // Only support single table query.
+        if metadata.tables().is_empty() {
             return Ok(());
         }
 
@@ -559,16 +560,14 @@ impl Binder {
             return Ok(());
         }
 
-        if !metadata
-            .table(0)
-            .table()
-            .supported_internal_column(ROW_ID_COLUMN_ID)
-        {
-            return Ok(());
-        }
-
-        if !metadata.table(0).table().supported_lazy_materialize() {
-            return Ok(());
+        if metadata.tables().len() != 1 {
+            let across_join_threshold =
+                self.ctx
+                    .get_settings()
+                    .get_lazy_read_across_join_threshold()? as usize;
+            if across_join_threshold == 0 || limit > across_join_threshold {
+                return Ok(());
+            }
         }
 
         let cols = metadata.columns();
@@ -627,19 +626,38 @@ impl Binder {
         // add previous(subquery) stored non_lazy_columns to non_lazy_cols
         non_lazy_cols.extend(metadata.non_lazy_columns());
 
-        let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
-        metadata.add_lazy_columns(lazy_cols);
+        let lazy_cols: ColumnSet = select_cols.difference(&non_lazy_cols).copied().collect();
+        let mut lazy_table_indexes = BTreeSet::new();
+        let mut supported_lazy_cols = ColumnSet::new();
+        for index in lazy_cols.iter() {
+            let table_index = match metadata.column(*index) {
+                ColumnEntry::BaseTableColumn(c) => c.table_index,
+                _ => continue,
+            };
+            let table = metadata.table(table_index).table();
+            if !table.supported_internal_column(ROW_ID_COLUMN_ID)
+                || !table.supported_lazy_materialize()
+            {
+                continue;
+            }
+            supported_lazy_cols.insert(*index);
+            lazy_table_indexes.insert(table_index);
+        }
 
-        // Single table, the table index is 0.
-        let table_index = 0;
-        if !metadata.lazy_columns().is_empty()
-            && metadata.row_id_index_by_table_index(table_index).is_none()
-        {
-            let internal_column = INTERNAL_COLUMN_FACTORY
-                .get_internal_column(ROW_ID_COL_NAME)
-                .unwrap();
-            let index = metadata.add_internal_column(table_index, internal_column);
-            metadata.set_table_row_id_index(table_index, index);
+        if supported_lazy_cols.is_empty() {
+            return Ok(());
+        }
+
+        metadata.add_lazy_columns(supported_lazy_cols);
+
+        for table_index in lazy_table_indexes {
+            if metadata.row_id_index_by_table_index(table_index).is_none() {
+                let internal_column = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(ROW_ID_COL_NAME)
+                    .unwrap();
+                let index = metadata.add_internal_column(table_index, internal_column);
+                metadata.set_table_row_id_index(table_index, index);
+            }
         }
 
         Ok(())

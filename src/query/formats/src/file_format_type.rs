@@ -17,6 +17,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_settings::Settings;
@@ -44,14 +45,19 @@ pub struct FileFormatOptionsExt {
     pub headers: usize,
     pub json_compact: bool,
     pub json_strings: bool,
-    pub disable_variant_check: bool,
-    pub timezone: Tz,
-    pub jiff_timezone: TimeZone,
+
     pub is_select: bool,
     pub is_clickhouse: bool,
+
+    // from copy options
+    pub disable_variant_check: bool,
+
+    // from settings
+    pub jiff_timezone: TimeZone,
     pub is_rounding_mode: bool,
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
+    pub binary_format: BinaryDisplayFormat,
 }
 
 impl FileFormatOptionsExt {
@@ -59,10 +65,10 @@ impl FileFormatOptionsExt {
         settings: &Settings,
         is_select: bool,
     ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let geometry_format = settings.get_geometry_output_format()?;
+        let binary_format = settings.get_binary_output_format()?;
         let numeric_cast_option = settings
             .get_numeric_cast_option()
             .unwrap_or("rounding".to_string());
@@ -74,13 +80,13 @@ impl FileFormatOptionsExt {
             json_compact: false,
             json_strings: false,
             disable_variant_check: false,
-            timezone,
             jiff_timezone,
             is_select,
             is_clickhouse: false,
             is_rounding_mode,
             geometry_format,
             enable_dst_hour_fix,
+            binary_format,
         };
         Ok(options)
     }
@@ -89,23 +95,23 @@ impl FileFormatOptionsExt {
         clickhouse_type: ClickhouseFormatType,
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
-        let timezone = parse_timezone(settings)?;
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let geometry_format = settings.get_geometry_output_format()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
+        let binary_format = settings.get_binary_output_format()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,
             json_strings: false,
             disable_variant_check: false,
-            timezone,
             jiff_timezone,
             is_select: false,
             is_clickhouse: true,
             is_rounding_mode: true,
             geometry_format,
             enable_dst_hour_fix,
+            binary_format,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

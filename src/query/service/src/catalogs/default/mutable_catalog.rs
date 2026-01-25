@@ -141,6 +141,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -195,9 +196,12 @@ impl MutableCatalog {
                 conf.meta.to_meta_grpc_client_conf(version.semver()),
             ));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -622,6 +626,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.mget_tables(table_names).await
     }
 
     #[async_backtrace::framed]

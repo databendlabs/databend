@@ -51,37 +51,29 @@ Exchange
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
-    │   └── Filter
-    │       ├── output columns: [table2.value (#1)]
-    │       ├── filters: [is_not_null(table2.value (#1))]
-    │       ├── estimated rows: 1000.00
-    │       └── TableScan
-    │           ├── table: default.default.table2
-    │           ├── scan id: 1
-    │           ├── output columns: [value (#1)]
-    │           ├── read rows: 1000
-    │           ├── read size: 2.31 KiB
-    │           ├── partitions total: 6
-    │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │           └── estimated rows: 4000.00
-    └── Filter(Probe)
-        ├── output columns: [table1.value (#0)]
-        ├── filters: [is_not_null(table1.value (#0))]
-        ├── estimated rows: 2000.00
-        └── TableScan
-            ├── table: default.default.table1
-            ├── scan id: 0
-            ├── output columns: [value (#0)]
-            ├── read rows: 2000
-            ├── read size: 3.95 KiB
-            ├── partitions total: 6
-            ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 4000.00
+    │   └── TableScan
+    │       ├── table: default.default.table2
+    │       ├── scan id: 1
+    │       ├── output columns: [value (#1)]
+    │       ├── read rows: 1000
+    │       ├── read size: 2.31 KiB
+    │       ├── partitions total: 6
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       └── estimated rows: 1000.00
+    └── TableScan(Probe)
+        ├── table: default.default.table1
+        ├── scan id: 0
+        ├── output columns: [value (#0)]
+        ├── read rows: 2000
+        ├── read size: 3.95 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 2000.00
 
 query T
 explain SELECT * FROM table1 INNER JOIN table2 INNER JOIN table3 ON table1.value = table2.value and table2.value = table3.value;
@@ -115,53 +107,41 @@ Exchange
     │       ├── Exchange(Build)
     │       │   ├── output columns: [table2.value (#1)]
     │       │   ├── exchange type: Broadcast
-    │       │   └── Filter
-    │       │       ├── output columns: [table2.value (#1)]
-    │       │       ├── filters: [is_not_null(table2.value (#1))]
-    │       │       ├── estimated rows: 1000.00
-    │       │       └── TableScan
-    │       │           ├── table: default.default.table2
-    │       │           ├── scan id: 1
-    │       │           ├── output columns: [value (#1)]
-    │       │           ├── read rows: 1000
-    │       │           ├── read size: 2.31 KiB
-    │       │           ├── partitions total: 6
-    │       │           ├── partitions scanned: 3
-    │       │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │       │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │       │           └── estimated rows: 4000.00
-    │       └── Filter(Probe)
-    │           ├── output columns: [table3.value (#2)]
-    │           ├── filters: [is_not_null(table3.value (#2))]
-    │           ├── estimated rows: 2000.00
-    │           └── TableScan
-    │               ├── table: default.default.table3
-    │               ├── scan id: 2
-    │               ├── output columns: [value (#2)]
-    │               ├── read rows: 2000
-    │               ├── read size: 3.95 KiB
-    │               ├── partitions total: 6
-    │               ├── partitions scanned: 3
-    │               ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │               ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
-    │               ├── apply join filters: [#0]
-    │               └── estimated rows: 4000.00
-    └── Filter(Probe)
-        ├── output columns: [table1.value (#0)]
-        ├── filters: [is_not_null(table1.value (#0))]
-        ├── estimated rows: 2000.00
-        └── TableScan
-            ├── table: default.default.table1
-            ├── scan id: 0
-            ├── output columns: [value (#0)]
-            ├── read rows: 2000
-            ├── read size: 3.95 KiB
-            ├── partitions total: 6
-            ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-            ├── apply join filters: [#1]
-            └── estimated rows: 4000.00
+    │       │   └── TableScan
+    │       │       ├── table: default.default.table2
+    │       │       ├── scan id: 1
+    │       │       ├── output columns: [value (#1)]
+    │       │       ├── read rows: 1000
+    │       │       ├── read size: 2.31 KiB
+    │       │       ├── partitions total: 6
+    │       │       ├── partitions scanned: 3
+    │       │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │       │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       │       └── estimated rows: 1000.00
+    │       └── TableScan(Probe)
+    │           ├── table: default.default.table3
+    │           ├── scan id: 2
+    │           ├── output columns: [value (#2)]
+    │           ├── read rows: 2000
+    │           ├── read size: 3.95 KiB
+    │           ├── partitions total: 6
+    │           ├── partitions scanned: 3
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │           ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
+    │           ├── apply join filters: [#0]
+    │           └── estimated rows: 2000.00
+    └── TableScan(Probe)
+        ├── table: default.default.table1
+        ├── scan id: 0
+        ├── output columns: [value (#0)]
+        ├── read rows: 2000
+        ├── read size: 3.95 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+        ├── apply join filters: [#1]
+        └── estimated rows: 2000.00
 
 
 query T
@@ -181,36 +161,28 @@ Exchange
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
-    │   └── Filter
-    │       ├── output columns: [table2.value (#1)]
-    │       ├── filters: [is_not_null(table2.value (#1))]
-    │       ├── estimated rows: 1000.00
-    │       └── TableScan
-    │           ├── table: default.default.table2
-    │           ├── scan id: 1
-    │           ├── output columns: [value (#1)]
-    │           ├── read rows: 1000
-    │           ├── read size: 2.31 KiB
-    │           ├── partitions total: 6
-    │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │           └── estimated rows: 4000.00
-    └── Filter(Probe)
-        ├── output columns: [table1.value (#0)]
-        ├── filters: [is_not_null(table1.value (#0))]
-        ├── estimated rows: 2000.00
-        └── TableScan
-            ├── table: default.default.table1
-            ├── scan id: 0
-            ├── output columns: [value (#0)]
-            ├── read rows: 2000
-            ├── read size: 3.95 KiB
-            ├── partitions total: 6
-            ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-            └── estimated rows: 4000.00
+    │   └── TableScan
+    │       ├── table: default.default.table2
+    │       ├── scan id: 1
+    │       ├── output columns: [value (#1)]
+    │       ├── read rows: 1000
+    │       ├── read size: 2.31 KiB
+    │       ├── partitions total: 6
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       └── estimated rows: 1000.00
+    └── TableScan(Probe)
+        ├── table: default.default.table1
+        ├── scan id: 0
+        ├── output columns: [value (#0)]
+        ├── read rows: 2000
+        ├── read size: 3.95 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 3
+        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+        └── estimated rows: 2000.00
 
 query T
 explain  SELECT * FROM table1 RIGHT SEMI JOIN table2 ON table1.value = table2.value;
@@ -231,40 +203,32 @@ Exchange
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Hash(table2.value (#1))
-    │   └── Filter
-    │       ├── output columns: [table2.value (#1)]
-    │       ├── filters: [is_not_null(table2.value (#1))]
-    │       ├── estimated rows: 1000.00
-    │       └── TableScan
-    │           ├── table: default.default.table2
-    │           ├── scan id: 1
-    │           ├── output columns: [value (#1)]
-    │           ├── read rows: 1000
-    │           ├── read size: 2.31 KiB
-    │           ├── partitions total: 6
-    │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
-    │           └── estimated rows: 4000.00
+    │   └── TableScan
+    │       ├── table: default.default.table2
+    │       ├── scan id: 1
+    │       ├── output columns: [value (#1)]
+    │       ├── read rows: 1000
+    │       ├── read size: 2.31 KiB
+    │       ├── partitions total: 6
+    │       ├── partitions scanned: 3
+    │       ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       └── estimated rows: 1000.00
     └── Exchange(Probe)
         ├── output columns: [table1.value (#0)]
         ├── exchange type: Hash(table1.value (#0))
-        └── Filter
-            ├── output columns: [table1.value (#0)]
-            ├── filters: [is_not_null(table1.value (#0))]
-            ├── estimated rows: 2000.00
-            └── TableScan
-                ├── table: default.default.table1
-                ├── scan id: 0
-                ├── output columns: [value (#0)]
-                ├── read rows: 2000
-                ├── read size: 3.95 KiB
-                ├── partitions total: 6
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-                ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
-                ├── apply join filters: [#0]
-                └── estimated rows: 4000.00
+        └── TableScan
+            ├── table: default.default.table1
+            ├── scan id: 0
+            ├── output columns: [value (#0)]
+            ├── read rows: 2000
+            ├── read size: 3.95 KiB
+            ├── partitions total: 6
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 2000.00
 
 statement ok
 drop table table1;

@@ -1,0 +1,18 @@
+[package]
+name = "databend-meta-runtime"
+description = "Runtime adapter for meta-service using databend-common-base"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
+databend-common-tracing = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+
+[lints]
+workspace = true

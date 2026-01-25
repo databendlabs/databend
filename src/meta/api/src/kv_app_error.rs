@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::any::type_name;
+use std::io;
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
-use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaAPIError;
@@ -85,8 +85,8 @@ impl From<Status> for KVAppError {
     }
 }
 
-impl From<MetaStorageError> for KVAppError {
-    fn from(e: MetaStorageError) -> Self {
+impl From<io::Error> for KVAppError {
+    fn from(e: io::Error) -> Self {
         let meta_err = MetaError::from(e);
         Self::MetaError(meta_err)
     }

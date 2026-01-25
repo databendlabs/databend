@@ -20,8 +20,12 @@ use databend_common_exception::ErrorCode;
 use decimal::DecimalType;
 use geometry::GeometryType;
 
+use crate::types::date::CoreDate;
+use crate::types::interval::CoreInterval;
 use crate::types::opaque::OpaqueColumn;
 use crate::types::simple_type::SimpleType;
+use crate::types::timestamp::CoreTimestamp;
+use crate::types::timestamp_tz::CoreTimestampTz;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
 use crate::*;
@@ -195,6 +199,39 @@ pub trait ValueVisitor: Sized {
             Column::Geography(column) => visitor.visit_geography(column),
             Column::Vector(column) => visitor.visit_vector(column),
             Column::Opaque(column) => visitor.visit_opaque(column),
+        }
+    }
+
+    fn visit_column_use_simple_type<V: ValueVisitor>(
+        column: Column,
+        visitor: &mut V,
+    ) -> Result<V::U, V::Error> {
+        match column {
+            Column::Date(buffer) => visitor.visit_simple_type::<CoreDate>(buffer, &DataType::Date),
+            Column::Timestamp(buffer) => {
+                visitor.visit_simple_type::<CoreTimestamp>(buffer, &DataType::Timestamp)
+            }
+            Column::TimestampTz(buffer) => {
+                visitor.visit_simple_type::<CoreTimestampTz>(buffer, &DataType::TimestampTz)
+            }
+            Column::Interval(buffer) => {
+                visitor.visit_simple_type::<CoreInterval>(buffer, &DataType::Interval)
+            }
+            Column::Number(number) => {
+                with_number_mapped_type!(|NUM_TYPE| match number {
+                    NumberColumn::NUM_TYPE(b) => visitor.visit_simple_type::<CoreNumber<NUM_TYPE>>(
+                        b,
+                        &DataType::Number(NUM_TYPE::data_type())
+                    ),
+                })
+            }
+            Column::Decimal(decimal) => {
+                with_decimal_mapped_type!(|DECIMAL| match decimal {
+                    DecimalColumn::DECIMAL(b, size) => visitor
+                        .visit_simple_type::<CoreDecimal<DECIMAL>>(b, &DataType::Decimal(size)),
+                })
+            }
+            _ => Self::default_visit_column(column, visitor),
         }
     }
 

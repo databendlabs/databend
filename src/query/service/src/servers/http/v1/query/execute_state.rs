@@ -408,9 +408,15 @@ impl ExecuteState {
             .get_geometry_output_format()
             .with_context(make_error)?
             .to_string();
+        let binary_output_format = settings
+            .get_binary_output_format()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
         let result_format_settings = Some(ResultFormatSettings {
             timezone,
             geometry_output_format,
+            binary_output_format,
         });
 
         let running_state = ExecuteRunning {
@@ -468,9 +474,13 @@ impl ExecuteState {
             .with_context(make_error)?;
         match data_stream.next().await {
             None => {
-                Self::send_data_block(&mut sender, &executor, DataBlock::empty_with_schema(schema))
-                    .await
-                    .with_context(make_error)?;
+                Self::send_data_block(
+                    &mut sender,
+                    &executor,
+                    DataBlock::empty_with_schema(&schema),
+                )
+                .await
+                .with_context(make_error)?;
                 Executor::stop::<()>(&executor, Ok(()));
                 sender.finish();
             }

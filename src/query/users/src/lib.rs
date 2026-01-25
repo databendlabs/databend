@@ -47,6 +47,10 @@ pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
 pub use visibility_checker::GrantObjectVisibilityChecker;
 pub use visibility_checker::Object;
+pub use visibility_checker::check_table_visibility_with_roles;
+pub use visibility_checker::has_table_name_grants;
+pub use visibility_checker::is_role_owner;
+pub use visibility_checker::is_table_visible_with_owner;
 
 /// Convert a meta service error to an ErrorCode.
 pub(crate) fn meta_service_error(

@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -34,6 +35,7 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
 use futures::FutureExt;
 use log::debug;
 use log::warn;
@@ -63,7 +65,7 @@ pub struct HeartbeatTask;
 
 impl HeartbeatTask {
     pub async fn new_task(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         meta_key: &str,
         node_id: &str,
         dead_in_secs: u64,
@@ -132,7 +134,7 @@ impl HeartbeatTask {
     }
 
     pub async fn heartbeat_loop(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         heartbeat_key: String,
         node_id: String,
         dead_in_secs: u64,
@@ -202,13 +204,13 @@ impl HeartbeatTask {
 
 /// Service for interacting with the meta store for persistent meta information
 pub struct HistoryMetaHandle {
-    meta_client: Arc<ClientHandle>,
+    meta_client: Arc<ClientHandle<DatabendRuntime>>,
     node_id: String,
 }
 
 impl HistoryMetaHandle {
     /// Creates a new instance of `HistoryMetaHandle`.
-    pub fn new(meta_client: Arc<ClientHandle>, node_id: String) -> Self {
+    pub fn new(meta_client: Arc<ClientHandle<DatabendRuntime>>, node_id: String) -> Self {
         Self {
             meta_client,
             node_id,
@@ -224,25 +226,28 @@ impl HistoryMetaHandle {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            self.meta_client.clone(),
-            meta_key,
-            1,
-            self.node_id.clone(),
-            Duration::from_secs(3),
-        ))
-        .await
-        .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
+
+        let acquired_guard = tracking_payload
+            .clone()
+            .tracking(Semaphore::new_acquired(
+                self.meta_client.clone(),
+                meta_key,
+                1,
+                self.node_id.clone(),
+                Duration::from_secs(3),
+            ))
+            .await
+            .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await
-        .map_err(meta_service_error)?
+        if match tracking_payload
+            .tracking(
+                self.meta_client
+                    .get_kv(&format!("{}/last_timestamp", meta_key)),
+            )
+            .await
+            .map_err(meta_service_error)?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
@@ -378,6 +383,7 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_store::MetaStore;
     use databend_common_meta_types::UpsertKV;
+    use databend_meta_runtime::DatabendRuntime;
 
     use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
@@ -385,7 +391,10 @@ mod tests {
     use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing(databend_common_version::BUILD_INFO.semver()).await
+        MetaStore::new_local_testing::<DatabendRuntime>(
+            databend_common_version::BUILD_INFO.semver(),
+        )
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]

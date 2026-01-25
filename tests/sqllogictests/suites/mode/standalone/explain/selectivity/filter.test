@@ -4,59 +4,47 @@ CREATE OR REPLACE TABLE t AS SELECT NUMBER FROM NUMBERS(738);
 query T
 EXPLAIN SELECT * FROM t WHERE number > 731;
 ----
-Filter
-├── output columns: [t.number (#0)]
-├── filters: [is_true(t.number (#0) > 731)]
-├── estimated rows: 6.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [number (#0)]
-    ├── read rows: 738
-    ├── read size: 1.10 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.number (#0) > 731)], limit: NONE]
-    └── estimated rows: 738.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [number (#0)]
+├── read rows: 738
+├── read size: 1.10 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.number (#0) > 731)], limit: NONE]
+└── estimated rows: 6.00
 
 query T
 EXPLAIN SELECT * FROM t WHERE number > 737;
 ----
-Filter
-├── output columns: [t.number (#0)]
-├── filters: [is_true(t.number (#0) > 737)]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [number (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.number (#0) > 737)], limit: NONE]
-    └── estimated rows: 738.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [number (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.number (#0) > 737)], limit: NONE]
+└── estimated rows: 0.00
 
 query T
 EXPLAIN SELECT * FROM t WHERE number > 700;
 ----
-Filter
-├── output columns: [t.number (#0)]
-├── filters: [is_true(t.number (#0) > 700)]
-├── estimated rows: 37.00
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [number (#0)]
-    ├── read rows: 738
-    ├── read size: 1.10 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.number (#0) > 700)], limit: NONE]
-    └── estimated rows: 738.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [number (#0)]
+├── read rows: 738
+├── read size: 1.10 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.number (#0) > 700)], limit: NONE]
+└── estimated rows: 37.00
 
 statement ok
 DROP TABLE IF EXISTS t;

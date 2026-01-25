@@ -40,6 +40,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
@@ -142,7 +143,7 @@ pub async fn verify_query_license(cfg: &InnerConfig, version: BuildInfoRef) -> R
 /// {"xx": "bb"}\n
 /// ```
 pub async fn load_databend_meta() -> Result<(
-    Arc<ClientHandle>,
+    Arc<ClientHandle<DatabendRuntime>>,
     impl TryStream<Ok = Bytes, Error = anyhow::Error>,
 )> {
     let cfg = GlobalConfig::instance();

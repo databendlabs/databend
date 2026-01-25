@@ -1,0 +1,40 @@
+statement ok
+drop database if exists test_spatial_index
+
+statement ok
+create database test_spatial_index
+
+statement ok
+use test_spatial_index
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geog Geography, SPATIAL INDEX idx (geom, geog)) Engine = Fuse
+
+query TT
+SHOW CREATE TABLE t
+----
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx (geom, geog) ) ENGINE=FUSE
+
+statement ok
+DROP SPATIAL INDEX idx ON t;
+
+statement error
+CREATE SPATIAL INDEX idx2 ON t(id);
+
+statement ok
+CREATE SPATIAL INDEX idx2 ON t(geom, geog);
+
+query TT
+SHOW CREATE TABLE t
+----
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx2 (geom, geog) ) ENGINE=FUSE
+
+statement error
+DROP INVERTED INDEX idx2 ON t;
+
+statement ok
+use default
+
+statement ok
+drop database test_spatial_index
+

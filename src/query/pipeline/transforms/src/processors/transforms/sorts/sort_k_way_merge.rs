@@ -307,7 +307,7 @@ where A: SortAlgorithm
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     stream_size: usize,
-    schema: DataSchemaRef,
+    _schema: DataSchemaRef,
     batch_rows: usize,
     remove_order_col: bool,
 
@@ -333,7 +333,7 @@ where A: SortAlgorithm
             output,
             output_data: VecDeque::new(),
             stream_size,
-            schema,
+            _schema: schema,
             batch_rows,
             remove_order_col,
             buffer: Vec::new(),
@@ -461,8 +461,7 @@ where A: SortAlgorithm + 'static
         debug_assert!(self.ready());
         let task = self.task.take().unwrap();
 
-        let mut merger = Merger::<A, _>::create(
-            self.schema.clone(),
+        let mut merger = Merger::<A, _>::new(
             self.streams(),
             if task.total > self.batch_rows {
                 task.total / (task.total / self.batch_rows)

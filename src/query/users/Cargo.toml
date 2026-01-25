@@ -28,6 +28,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-meta-runtime = { workspace = true }
 enumflags2 = { workspace = true }
 itertools = { workspace = true }
 jwt-simple = { workspace = true }

@@ -147,31 +147,25 @@ EXPLAIN ANALYZE SELECT * FROM article where article_id < 3;
 Exchange
 ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
 ├── exchange type: Merge
-└── Filter
+└── TableScan
     ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
     ├── output rows: 4
     ├── output bytes: 80.00 B
-    ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
-    ├── filters: [is_true(article.article_id (#0) < 3)]
-    ├── estimated rows: 3.00
-    └── TableScan
-        ├── cpu time: <slt:ignore>
-        ├── wait time: <slt:ignore>
-        ├── output rows: 4
-        ├── output bytes: 80.00 B
-        ├── bytes scanned: 80.00 B
-        ├── read from remote: <slt:ignore>
-        ├── runtime filter inlist/min-max time: <slt:ignore>
-        ├── table: default.default.article
-        ├── scan id: 0
-        ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
-        ├── read rows: 4
-        ├── read size: < 1 KiB
-        ├── partitions total: 6
-        ├── partitions scanned: 4
-        ├── pruning stats: [segments: <range pruning: 6 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── bytes scanned: 80.00 B
+    ├── read from remote: 448.00 B
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.article
+    ├── scan id: 0
+    ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 6
+    ├── partitions scanned: 4
+    ├── pruning stats: [segments: <range pruning: 6 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
+    └── estimated rows: 3.00
 
 query T
 EXPLAIN ANALYZE SELECT * FROM article,author WHERE article.author_id = author.id and author.name = 'mark4';
@@ -184,7 +178,7 @@ Exchange
     ├── wait time: <slt:ignore>
     ├── exchange bytes: 1.09 KiB
     ├── output rows: 1
-    ├── output bytes: <slt:ignore>
+    ├── output bytes: 42.00 B
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
     ├── join type: INNER
     ├── build keys: [author.id (#4)]
@@ -197,38 +191,33 @@ Exchange
     ├── Exchange(Build)
     │   ├── output columns: [author.id (#4), author.name (#5)]
     │   ├── exchange type: Broadcast
-    │   └── Filter
+    │   └── TableScan
     │       ├── cpu time: <slt:ignore>
+    │       ├── wait time: <slt:ignore>
     │       ├── output rows: 1
-    │       ├── output bytes: <slt:ignore>
-    │       ├── output columns: [author.id (#4), author.name (#5)]
-    │       ├── filters: [is_true(author.name (#5) = 'mark4')]
-    │       ├── estimated rows: 1.25
-    │       └── TableScan
-    │           ├── cpu time: <slt:ignore>
-    │           ├── wait time: <slt:ignore>
-    │           ├── output rows: 1
-    │           ├── output bytes: <slt:ignore>
-    │           ├── bytes scanned: <slt:ignore>
-    │           ├── read from remote: <slt:ignore>
-    │           ├── runtime filter inlist/min-max time: <slt:ignore>
-    │           ├── table: default.default.author
-    │           ├── scan id: 1
-    │           ├── output columns: [id (#4), name (#5)]
-    │           ├── read rows: 1
-    │           ├── read size: < 1 KiB
-    │           ├── partitions total: 5
-    │           ├── partitions scanned: 1
-    │           ├── pruning stats: [segments: <range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
-    │           └── estimated rows: 5.00
+    │       ├── output bytes: 31.00 B
+    │       ├── bytes scanned: 31.00 B
+    │       ├── read from remote: 61.00 B
+    │       ├── runtime filter bloom time: <slt:ignore>
+    │       ├── runtime filter inlist/min-max time: <slt:ignore>
+    │       ├── table: default.default.author
+    │       ├── scan id: 1
+    │       ├── output columns: [id (#4), name (#5)]
+    │       ├── read rows: 1
+    │       ├── read size: < 1 KiB
+    │       ├── partitions total: 5
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
+    │       └── estimated rows: 1.25
     └── TableScan(Probe)
         ├── cpu time: <slt:ignore>
         ├── wait time: <slt:ignore>
         ├── output rows: 6
         ├── output bytes: 120.00 B
         ├── bytes scanned: 120.00 B
-        ├── read from remote: <slt:ignore>
+        ├── read from remote: 672.00 B
+        ├── runtime filter bloom time: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0

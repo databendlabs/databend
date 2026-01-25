@@ -19,6 +19,7 @@ mod kvapi;
 
 use databend_common_base::mem_allocator::DefaultGlobalAllocator;
 use databend_meta::configs::Config;
+use databend_meta_runtime::DatabendRuntime;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: DefaultGlobalAllocator = DefaultGlobalAllocator::create();
@@ -27,5 +28,5 @@ pub static GLOBAL_ALLOCATOR: DefaultGlobalAllocator = DefaultGlobalAllocator::cr
 async fn main() -> anyhow::Result<()> {
     let conf = Config::load()?;
     conf.validate()?;
-    entry::entry(conf).await
+    entry::entry::<DatabendRuntime>(conf).await
 }

@@ -25,6 +25,7 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -82,8 +83,9 @@ impl Interpreter for ReportIssueInterpreter {
             report_context.logs.clone(),
         ));
 
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.detection_error(&mut report_context)).await?;
+        tracking_payload
+            .tracking(self.detection_error(&mut report_context))
+            .await?;
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(vec![format!("{}", report_context)]),
@@ -345,6 +347,7 @@ impl ReportContext {
         let settings = ShowCreateQuerySettings {
             sql_dialect: Default::default(),
             force_quoted_ident: false,
+            unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: false,
             hide_options_in_show_create_table: true,
         };

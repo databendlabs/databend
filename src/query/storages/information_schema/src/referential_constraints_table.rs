@@ -24,7 +24,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::ViewTable;
-use databend_common_storages_system::generate_catalog_meta;
+use databend_common_storages_system::generate_default_catalog_meta;
 
 /// A minimal INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS table.
 /// It exposes the correct column layout but contains no rows.
@@ -60,7 +60,7 @@ impl ReferentialConstraintsTable {
             },
             catalog_info: Arc::new(CatalogInfo {
                 name_ident: CatalogNameIdent::new(Tenant::new_literal("dummy"), ctl_name).into(),
-                meta: generate_catalog_meta(ctl_name),
+                meta: generate_default_catalog_meta(),
                 ..Default::default()
             }),
             ..Default::default()

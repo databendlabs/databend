@@ -22,9 +22,10 @@ test = true
 
 [dependencies]
 async-trait = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-meta-client = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-meta-runtime = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 sub-cache = { workspace = true }

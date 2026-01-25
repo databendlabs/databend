@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_meta_runtime::DatabendRuntime;
 use display_more::DisplayOptionExt;
 use futures::FutureExt;
 use futures::Stream;
@@ -37,7 +38,7 @@ use crate::meta_event_subscriber::processor::Processor;
 pub(crate) struct MetaEventSubscriber {
     pub(crate) left: String,
     pub(crate) right: String,
-    pub(crate) meta_client: Arc<ClientHandle>,
+    pub(crate) meta_client: Arc<ClientHandle<DatabendRuntime>>,
 
     /// The duration after which the permit entry will be removed from meta-service.
     pub(crate) permit_ttl: Duration,
