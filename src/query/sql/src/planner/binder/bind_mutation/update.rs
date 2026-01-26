@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MutationUpdateExpr;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::Result;
@@ -66,13 +67,16 @@ impl Binder {
         self.init_cte(bind_context, with)?;
 
         let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, table_alias);
+            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
-            catalog: catalog.clone(),
-            database: database.clone(),
-            table: table.clone(),
+            table: TableRef {
+                catalog: catalog.clone(),
+                database: database.clone(),
+                table: table.clone(),
+                branch: None,
+            },
             alias: table_alias.clone(),
             temporal: None,
             with_options: None,

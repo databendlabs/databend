@@ -21,7 +21,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_catalog::cluster_info::Cluster;
@@ -456,7 +456,7 @@ async fn optimize_plan(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_optimizer() -> Result<()> {
+async fn test_optimizer() -> anyhow::Result<()> {
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
     let subdir = std::env::var("TEST_SUBDIR").ok();
@@ -473,7 +473,7 @@ async fn test_optimizer() -> Result<()> {
     let mut root_mint = Mint::new(&results_dir);
     let mut subdir_mints: HashMap<String, Mint> = HashMap::new();
 
-    let local_id = GlobalUniqName::unique();
+    let local_id = GlobalUniq::unique();
     let standalone_cluster = Cluster::create(vec![create_node(&local_id)], local_id);
 
     for case in cases {
@@ -487,10 +487,10 @@ async fn test_optimizer() -> Result<()> {
         if let Some(nodes) = case.node_num {
             let mut nodes_info = Vec::with_capacity(nodes as usize);
             for _ in 0..nodes - 1 {
-                nodes_info.push(create_node(&GlobalUniqName::unique()));
+                nodes_info.push(create_node(&GlobalUniq::unique()));
             }
 
-            let local_id = GlobalUniqName::unique();
+            let local_id = GlobalUniq::unique();
             nodes_info.push(create_node(&local_id));
             ctx.set_cluster(Cluster::create(nodes_info, local_id))
         }

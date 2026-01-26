@@ -1,44 +1,44 @@
-query T
+query ?
 select check_json(null)
 ----
 NULL
 
-query T
+query ?
 select check_json('null')
 ----
 NULL
 
-query T
+query ?
 select check_json('true')
 ----
 NULL
 
-query T
+query ?
 select check_json('-17')
 ----
 NULL
 
-query T
+query ?
 select check_json('123.12')
 ----
 NULL
 
-query T
+query ?
 select check_json('1.912e2')
 ----
 NULL
 
-query T
+query ?
 select check_json('"Om ara pa ca na dhih"  ')
 ----
 NULL
 
-query T
+query ?
 select check_json('[-1, 12, 289, 2188, false]')
 ----
 NULL
 
-query T
+query ?
 select check_json('{ "x" : "abc", "y" : false, "z": 10} ')
 ----
 NULL

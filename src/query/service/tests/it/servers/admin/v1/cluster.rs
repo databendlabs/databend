@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_query::servers::admin::v1::cluster::*;
 use databend_query::test_kits::*;
@@ -28,7 +26,7 @@ use poem::get;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_cluster() -> Result<()> {
+async fn test_cluster() -> anyhow::Result<()> {
     // Setup.
     let _fixture = TestFixture::setup().await?;
 

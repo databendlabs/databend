@@ -31,11 +31,10 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
+        RuleID::NormalizeScalarFilter,
         RuleID::FilterNulls,
-        RuleID::FilterFlattenOr,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
-        RuleID::NormalizeScalarFilter,
         RuleID::PushDownFilterUnion,
         RuleID::PushDownFilterAggregate,
         RuleID::PushDownFilterWindow,
@@ -100,7 +99,6 @@ pub enum RuleID {
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     FilterNulls,
-    FilterFlattenOr,
     PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
@@ -134,6 +132,7 @@ pub enum RuleID {
     FoldCountAggregate,
     PushDownPrewhere,
     TryApplyAggIndex,
+    EliminateSelfJoin,
     CommuteJoin,
 
     // Exploration rules
@@ -149,7 +148,6 @@ impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             RuleID::FilterNulls => write!(f, "FilterNulls"),
-            RuleID::FilterFlattenOr => write!(f, "FilterFlattenOr"),
             RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
@@ -184,6 +182,7 @@ impl Display for RuleID {
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
+            RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),

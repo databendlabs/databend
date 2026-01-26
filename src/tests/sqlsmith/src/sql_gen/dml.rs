@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
@@ -35,6 +34,7 @@ use databend_common_ast::ast::MutationSource;
 use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateStmt;
@@ -83,9 +83,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 // TODO
                 hints: None,
                 with: None,
-                catalog: None,
-                database: table.db_name.clone(),
-                table: table.name.clone(),
+                table: TableRef {
+                    catalog: None,
+                    database: table.db_name.clone(),
+                    table: table.name.clone(),
+                    // TODO
+                    branch: None,
+                },
                 // TODO
                 columns: vec![],
                 source,
@@ -128,12 +132,17 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
     fn gen_delete(&mut self) -> DeleteStmt {
         let hints = self.gen_hints();
-        let (_table, table_reference) = self.random_select_table();
+        let (table, _) = self.random_select_table();
         let selection = Some(self.gen_expr(&DataType::Boolean));
 
         DeleteStmt {
             hints,
-            table: table_reference,
+            catalog: None,
+            database: table
+                .db_name
+                .map(|name| Identifier::from_name(None, name.name)),
+            table: Identifier::from_name(None, table.name.name.clone()),
+            table_alias: None,
             selection,
             with: None,
         }
@@ -337,9 +346,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
         let table_reference = TableReference::Table {
             span: Span::default(),
-            catalog: None,
-            database: table.db_name.clone(),
-            table: table.name.clone(),
+            table: TableRef {
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                branch: None,
+            },
             alias: None,
             temporal: None,
             with_options: None,
@@ -528,9 +540,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 // TODO
                 hints: None,
                 with: None,
-                catalog: None,
-                database: table.db_name.clone(),
-                table: table.name.clone(),
+                table: TableRef {
+                    catalog: None,
+                    database: table.db_name.clone(),
+                    table: table.name.clone(),
+                    branch: None,
+                },
                 columns,
                 source,
                 overwrite: false,
@@ -541,9 +556,12 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
         let table_reference = TableReference::Table {
             span: Span::default(),
-            catalog: None,
-            database: table.db_name.clone(),
-            table: table.name.clone(),
+            table: TableRef {
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                branch: None,
+            },
             alias: None,
             temporal: None,
             with_options: None,
@@ -574,12 +592,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                        timezone: Tz::UTC,
                         jiff_timezone: TimeZone::UTC,
                         binary_format: Default::default(),
                         geometry_format: Default::default(),
                     },
-                    quote_char: b'\'',
+                    escape_char: b'\\',
+                    quote_char: b'"',
+                    binary_format: Default::default(),
                 };
 
                 for i in 0..row_count {
@@ -617,7 +636,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {
-                                encoder.write_field(column, i, &mut buf, true);
+                                encoder
+                                    .write_field(column, i, &mut buf, true)
+                                    .expect("failed to encode column value");
                             }
                         }
                     }

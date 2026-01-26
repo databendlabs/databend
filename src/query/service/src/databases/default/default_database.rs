@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_app::app_error::AppError;
@@ -46,11 +48,13 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::meta_service_error;
 
 #[derive(Clone)]
 pub struct DefaultDatabase {
@@ -122,7 +126,12 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let name_ident = DBIdTableName::new(self.get_db_info().database_id.db_id, table_name);
-        let table_niv = self.ctx.meta.get_table_in_db(&name_ident).await?;
+        let table_niv = self
+            .ctx
+            .meta
+            .get_table_in_db(&name_ident)
+            .await
+            .map_err(meta_service_error)?;
 
         let Some(table_niv) = table_niv else {
             return Err(AppError::from(UnknownTable::new(
@@ -160,7 +169,8 @@ impl Database for DefaultDatabase {
                 database_id: self.db_info.database_id.db_id,
                 table_name: table_name.to_string(),
             })
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         let table_infos: Vec<Arc<TableInfo>> = metas
             .into_iter()
@@ -190,6 +200,21 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_table_infos().await?;
+        self.load_tables(table_infos)
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        let db_id = self.db_info.database_id.db_id;
+        let db_name = self.get_db_name();
+
+        // Batch get table infos from meta
+        let table_infos = self
+            .ctx
+            .meta
+            .mget_tables(db_id, db_name, table_names)
+            .await?;
+
         self.load_tables(table_infos)
     }
 
@@ -269,6 +294,21 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn update_options(
+        &self,
+        expected_meta_seq: u64,
+        options: BTreeMap<String, String>,
+    ) -> Result<()> {
+        let req = UpdateDatabaseOptionsReq {
+            db_id: self.db_info.database_id.db_id,
+            expected_meta_seq,
+            options,
+        };
+        self.ctx.meta.update_database_options(req).await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
@@ -296,7 +336,12 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
-        let res = self.ctx.meta.list_table_copied_file_info(table_id).await?;
+        let res = self
+            .ctx
+            .meta
+            .list_table_copied_file_info(table_id)
+            .await
+            .map_err(meta_service_error)?;
         Ok(res)
     }
 

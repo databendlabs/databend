@@ -256,9 +256,31 @@ impl Partitions {
     }
 
     pub fn compute_sha256(&self) -> Result<String> {
-        let buf = serde_json::to_vec(&self.partitions)?;
+        // Convert to serde_json::Value first, then sort all object keys recursively
+        // to ensure deterministic serialization (HashMap key order is not guaranteed).
+        let value = serde_json::to_value(&self.partitions)?;
+        let sorted_value = Self::sort_json_keys(value);
+        let buf = serde_json::to_vec(&sorted_value)?;
         let sha = sha2::Sha256::digest(buf);
         Ok(format!("{:x}", sha))
+    }
+
+    /// Recursively sort all object keys in a JSON value to ensure deterministic serialization.
+    fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
+        use serde_json::Value;
+        match value {
+            Value::Object(map) => {
+                let sorted: serde_json::Map<String, Value> = map
+                    .into_iter()
+                    .map(|(k, v)| (k, Self::sort_json_keys(v)))
+                    .collect::<std::collections::BTreeMap<_, _>>()
+                    .into_iter()
+                    .collect();
+                Value::Object(sorted)
+            }
+            Value::Array(arr) => Value::Array(arr.into_iter().map(Self::sort_json_keys).collect()),
+            other => other,
+        }
     }
 
     /// Get the partition type.

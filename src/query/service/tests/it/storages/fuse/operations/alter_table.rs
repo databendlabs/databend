@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -130,7 +129,7 @@ async fn check_segment_column_ids(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_table_optimize_alter_table() -> Result<()> {
+async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 

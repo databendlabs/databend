@@ -22,7 +22,7 @@ use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -92,8 +92,9 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version))
-            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_client =
+            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.semver()))
+                .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(
@@ -208,8 +209,9 @@ impl GlobalHistoryLog {
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
+        tracking_payload
+            .tracking(self.do_execute(sql, query_id))
+            .await?;
         Ok(())
     }
 

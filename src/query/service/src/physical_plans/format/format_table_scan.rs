@@ -57,7 +57,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             ),
             Some(table_index) => {
                 let table = ctx.metadata.table(table_index).clone();
-                format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+                table.qualified_name()
             }
         };
         let filters = self
@@ -139,7 +139,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         if let Some(agg_index) = agg_index {
             let (_, agg_index_sql, _) = ctx
                 .metadata
-                .get_agg_indexes(&table_name)
+                .get_agg_indices(&table_name)
                 .unwrap()
                 .iter()
                 .find(|(index, _, _)| *index == agg_index.index_id)
@@ -200,8 +200,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             )),
             Some(table_index) => {
                 let table = ctx.metadata.table(table_index).clone();
-                let table_name =
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+                let table_name = table.qualified_name();
 
                 Ok(FormatTreeNode::with_children(
                     format!(
@@ -227,7 +226,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             ),
             Some(table_index) => {
                 let table = ctx.metadata.table(table_index).clone();
-                format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+                table.qualified_name()
             }
         };
         let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];

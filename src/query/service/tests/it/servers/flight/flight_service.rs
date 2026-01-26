@@ -18,9 +18,7 @@ use std::str::FromStr;
 
 use arrow_flight::Empty;
 use arrow_flight::flight_service_client::FlightServiceClient;
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
@@ -33,7 +31,7 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_tls_rpc_server() -> Result<()> {
+async fn test_tls_rpc_server() -> anyhow::Result<()> {
     // Set default crypto provider to use
     // See: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -71,7 +69,7 @@ async fn test_tls_rpc_server() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
+async fn test_tls_rpc_server_invalid_server_config() -> anyhow::Result<()> {
     // setup, invalid cert locations
     let mut srv = FlightService {
         config: ConfigBuilder::create()
@@ -90,7 +88,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
+async fn test_tls_rpc_server_invalid_client_config() -> anyhow::Result<()> {
     // setup, invalid cert locations
     let client_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/nowhere.pem".to_string(),
@@ -110,7 +108,7 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_rpc_server_port_used() -> Result<()> {
+async fn test_rpc_server_port_used() -> anyhow::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:0").unwrap();
     let local_socket = listener.local_addr().unwrap();
 

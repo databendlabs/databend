@@ -425,7 +425,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("force_eager_aggregate", DefaultSettingValue { 
+                ("force_eager_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Force apply rule eager aggregate.",
                     mode: SettingMode::Both,
@@ -512,6 +512,13 @@ impl DefaultSettings {
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("nested_loop_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -751,6 +758,13 @@ impl DefaultSettings {
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("lazy_read_across_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Sets the maximum LIMIT in a query to enable lazy read across joins. Setting it to 0 disables the optimization.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -1244,6 +1258,34 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("binary_output_format", DefaultSettingValue {
+                    value: UserSettingValue::String("hex".to_owned()),
+                    desc: "Controls how BINARY columns are rendered (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                        "utf8".into(),
+                        "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
+                    ])),
+                }),
+                ("binary_input_format", DefaultSettingValue {
+                    value: UserSettingValue::String("utf-8".to_owned()),
+                    desc: "Controls how string literals are interpreted when inserted into BINARY columns (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "hex".into(),
+                        "base64".into(),
+                        "utf-8".into(),
+                        "utf8".into(),
+                        "utf-8-lossy".into(),
+                        "utf8-lossy".into(),
+                    ])),
+                }),
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",
@@ -1462,13 +1504,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_binary_to_utf8_lossy", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable binary-to-UTF8 lossy conversion, default is 0, 1 for enable",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("queries_queue_retry_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5 * 60),
                     desc: "The retry interval for query queue timeout. 0 if never retry.",
@@ -1506,6 +1541,27 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("max_hash_join_spill_level", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maximum recursion depth for the hash join spill. Each recursion level repartition data into 16 smaller parts to ensure it fits in memory.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("enable_experimental_table_ref", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting enable table ref(disable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_aggregate_shuffle_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

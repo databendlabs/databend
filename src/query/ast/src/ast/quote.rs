@@ -67,6 +67,22 @@ pub fn display_ident(
     }
 }
 
+pub fn ident_opt_quote(
+    name: &str,
+    force_quoted_ident: bool,
+    quoted_ident_case_sensitive: bool,
+    dialect: Dialect,
+) -> Option<char> {
+    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
+        || ident_needs_quote(name)
+        || force_quoted_ident
+    {
+        Some(dialect.default_ident_quote())
+    } else {
+        None
+    }
+}
+
 pub struct QuotedIdent<T: AsRef<str>>(pub T, pub char);
 
 impl FromStr for QuotedIdent<String> {
@@ -274,26 +290,6 @@ impl<T: AsRef<str>> Display for AtString<T> {
                 c => write!(f, "{}", c)?,
             }
         }
-        Ok(())
-    }
-}
-
-/// Escape the specified `char`s in a string.
-pub struct EscapedString<T: AsRef<str>>(pub T, pub &'static [u8]);
-
-impl<T: AsRef<str>> Display for EscapedString<T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let EscapedString(s, chars) = self;
-        let s = s.as_ref();
-
-        for c in s.chars() {
-            if chars.iter().any(|&x| x as char == c) {
-                write!(f, "%{:02x}", c as u8)?;
-            } else {
-                write!(f, "{}", c)?;
-            }
-        }
-
         Ok(())
     }
 }

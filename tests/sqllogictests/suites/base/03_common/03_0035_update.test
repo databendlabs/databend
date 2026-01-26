@@ -22,7 +22,7 @@ UPDATE t1 SET b = last(to_date(911310)) OVER (PARTITION BY 'PdGqi', 'GJJ8R' ORDE
 statement ok
 UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 
-query IT
+query I?
 SELECT * FROM t1 ORDER BY b
 ----
 1 2022-12-30
@@ -31,7 +31,7 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 UPDATE t1 SET a = 2, b = '2022-12-31' WHERE b > '2022-12-31'
 
-query IT
+query I?
 SELECT * FROM t1 ORDER BY b
 ----
 1 2022-12-30
@@ -40,7 +40,7 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 UPDATE t1 SET a = 3 WHERE false
 
-query T
+query B
 select count(*) = 0 from t1 WHERE a = 3
 ----
 1
@@ -48,7 +48,7 @@ select count(*) = 0 from t1 WHERE a = 3
 statement ok
 UPDATE t1 SET a = 3 WHERE true
 
-query T
+query B
 select count(*) = 2 from t1 WHERE a = 3
 ----
 1
@@ -193,13 +193,13 @@ select * from t1 order by id1;
 2 10
 
 onlyif mysql
-query T
+query B
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'created_lock_nums_total'
 ----
 1
 
 onlyif mysql
-query T
+query B
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'acquired_lock_nums_total'
 ----
 1

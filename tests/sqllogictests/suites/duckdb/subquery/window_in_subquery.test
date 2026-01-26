@@ -56,7 +56,7 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-query IR
+query II
 SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;
 ----
 1 1
@@ -64,7 +64,7 @@ SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM inte
 3 3
 NULL NULL
 
-query IR
+query II
 SELECT i, (SELECT SUM(s1.i) OVER (ORDER BY s1.i) FROM integers s1, integers s2 WHERE i1.i=s1.i LIMIT 1) FROM integers i1 ORDER BY i;
 ----
 1 4

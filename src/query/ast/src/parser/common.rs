@@ -49,7 +49,6 @@ use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
-use crate::parser::query::with_options;
 use crate::parser::token::*;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
@@ -245,21 +244,6 @@ pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
     .parse(i)
 }
 
-pub fn table_ref(i: Input) -> IResult<TableRef> {
-    map(
-        rule! {
-           #dot_separated_idents_1_to_3 ~ #with_options?
-        },
-        |((catalog, database, table), with_options)| TableRef {
-            catalog,
-            database,
-            table,
-            with_options,
-        },
-    )
-    .parse(i)
-}
-
 pub fn set_type(i: Input) -> IResult<SetType> {
     map(
         rule! {
@@ -285,9 +269,12 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
         }),
         |(span, (catalog, database, table))| TableReference::Table {
             span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
+            table: TableRef {
+                catalog,
+                database,
+                table,
+                branch: None,
+            },
             alias: None,
             temporal: None,
             with_options: None,
@@ -308,9 +295,12 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
             (
                 TableReference::Table {
                     span: transform_span(span.tokens),
-                    catalog,
-                    database,
-                    table,
+                    table: TableRef {
+                        catalog,
+                        database,
+                        table,
+                        branch: None,
+                    },
                     alias: None,
                     temporal: None,
                     with_options: None,
@@ -379,6 +369,51 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
         |res| match res {
             (ident1, None) => (None, ident1),
             (ident0, Some((_, ident1))) => (Some(ident0), ident1),
+        },
+    )
+    .parse(i)
+}
+
+/// Parse one to three idents separated by dots, with optional "/ref" at the end.
+///
+/// Compatible with `dot_separated_idents_1_to_3`.
+///
+/// Examples:
+/// - `table`
+/// - `db.table`
+/// - `catalog.db.table`
+/// - `table/branch`
+/// - `db.table/branch`
+/// - `catalog.db.table/tag_v1`
+pub fn table_ref(i: Input) -> IResult<TableRef> {
+    map(
+        rule! {
+            // 1~3 dot-separated identifiers
+            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )? ~ ( "/" ~ #ident )?
+        },
+        |res| match res {
+            (ident2, None, opt_ref) => TableRef {
+                catalog: None,
+                database: None,
+                table: ident2,
+                branch: opt_ref.map(|(_, r)| r),
+            },
+
+            // db.table / db.table@ref
+            (ident1, Some((_, ident2, None)), opt_ref) => TableRef {
+                catalog: None,
+                database: Some(ident1),
+                table: ident2,
+                branch: opt_ref.map(|(_, r)| r),
+            },
+
+            // catalog.db.table / catalog.db.table@ref
+            (ident0, Some((_, ident1, Some((_, ident2)))), opt_ref) => TableRef {
+                catalog: Some(ident0),
+                database: Some(ident1),
+                table: ident2,
+                branch: opt_ref.map(|(_, r)| r),
+            },
         },
     )
     .parse(i)

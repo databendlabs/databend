@@ -19,10 +19,9 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,6 +47,7 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::Rng as _;
 use rand::thread_rng;
+use tokio::io::AsyncWrite;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
@@ -227,49 +227,50 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id_str.clone());
         tracking_payload.mem_stat = Some(MemStat::create(query_id_str.to_string()));
-        let _guard = ThreadTracker::tracking(tracking_payload);
 
-        ThreadTracker::tracking_future(async {
-            if self.base.session.is_aborting() {
-                writer
-                    .error(
-                        ErrorKind::ER_ABORTING_CONNECTION,
-                        "Aborting this connection. because we are try aborting server.".as_bytes(),
-                    )
-                    .await?;
+        tracking_payload
+            .tracking(async {
+                if self.base.session.is_aborting() {
+                    writer
+                        .error(
+                            ErrorKind::ER_ABORTING_CONNECTION,
+                            "Aborting this connection. because we are try aborting server."
+                                .as_bytes(),
+                        )
+                        .await?;
 
-                return Err(ErrorCode::AbortedSession(
-                    "Aborting this connection. because we are try aborting server.",
-                ));
-            }
+                    return Err(ErrorCode::AbortedSession(
+                        "Aborting this connection. because we are try aborting server.",
+                    ));
+                }
 
-            let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
-            if !self.keep_alive_task_started {
-                self.start_keep_alive().await
-            }
+                let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
+                if !self.keep_alive_task_started {
+                    self.start_keep_alive().await
+                }
 
-            let instant = Instant::now();
-            let query_result = self
-                .base
-                .do_query(query_id_str, query)
-                .await
-                .map_err(|err| err.display_with_sql(query));
+                let instant = Instant::now();
+                let query_result = self
+                    .base
+                    .do_query(query_id_str, query)
+                    .await
+                    .map_err(|err| err.display_with_sql(query));
 
-            let format = self.base.session.get_format_settings();
+                let format = self.base.session.get_format_settings();
 
-            let mut write_result = writer.write(query_result, &format).await;
+                let mut write_result = writer.write(query_result, &format).await;
 
-            if let Err(cause) = write_result {
-                self.base.session.txn_mgr().lock().set_fail();
-                let suffix = format!("(while in query {})", query);
-                write_result = Err(cause.add_message_back(suffix));
-            }
-            observe_mysql_process_request_duration(instant.elapsed());
+                if let Err(cause) = write_result {
+                    self.base.session.txn_mgr().lock().set_fail();
+                    let suffix = format!("(while in query {})", query);
+                    write_result = Err(cause.add_message_back(suffix));
+                }
+                observe_mysql_process_request_duration(instant.elapsed());
 
-            write_result
-        })
-        .in_span(root)
-        .await
+                write_result
+            })
+            .in_span(root)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -459,27 +460,24 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn(
-            {
-                let ctx = context.clone();
-                async move {
-                    let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                    observe_mysql_interpreter_used_time(instant.elapsed());
+        let query_result = context.try_spawn({
+            let ctx = context.clone();
+            async move {
+                let mut data_stream = interpreter.execute(ctx.clone()).await?;
+                observe_mysql_interpreter_used_time(instant.elapsed());
 
-                    // Wrap the data stream, log finish event at the end of stream
-                    let intercepted_stream = async_stream::stream! {
+                // Wrap the data stream, log finish event at the end of stream
+                let intercepted_stream = async_stream::stream! {
 
-                        while let Some(item) = data_stream.next().await {
-                            yield item
-                        };
+                    while let Some(item) = data_stream.next().await {
+                        yield item
                     };
+                };
 
-                    Ok::<_, ErrorCode>(intercepted_stream.boxed())
-                }
-                .in_span(Span::enter_with_local_parent(func_path!()))
-            },
-            None,
-        )?;
+                Ok::<_, ErrorCode>(intercepted_stream.boxed())
+            }
+            .in_span(Span::enter_with_local_parent(func_path!()))
+        })?;
 
         let query_result = query_result.await.map_err_to_code(
             ErrorCode::TokioError,
@@ -502,9 +500,10 @@ impl InteractiveWorkerBase {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
-        let _guard = ThreadTracker::tracking(tracking_payload);
 
-        let do_query = ThreadTracker::tracking_future(self.do_query(query_id, &init_query)).await;
+        let do_query = tracking_payload
+            .tracking(self.do_query(query_id, &init_query))
+            .await;
         match do_query {
             Ok((_, _)) => Ok(()),
             Err(error_code) => Err(error_code),

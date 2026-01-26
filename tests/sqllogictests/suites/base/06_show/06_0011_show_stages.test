@@ -1,23 +1,48 @@
 statement ok
-DROP STAGE if exists test_stage
+CREATE OR REPLACE STAGE test_stage file_format=(type=csv field_delimiter='|')
 
 statement ok
-CREATE STAGE test_stage
+CREATE OR REPLACE STAGE test_stage_external url='s3://test-stage-bucket/demo/' connection=(aws_key_id='ak' aws_secret_key='my_secret_key' endpoint_url='https://s3.eu-central-1.amazonaws.com')
 
-statement ok
-SHOW STAGES
+query TTTTTBBTTT?TT
+DESC STAGE test_stage_external
+----
+test_stage_external External s3 s3://test-stage-bucket/demo/ https://s3.eu-central-1.amazonaws.com 1 0 {"access_key_id":"ak","bucket":"test-stage-bucket","enable_virtual_host_style":false,"endpoint_url":"https://s3.eu-central-1.amazonaws.com","external_id":"","master_key":"","network_config":null,"region":"eu-central-1","role_arn":"","root":"/demo/","secret_access_key":"******key","security_token":"","storage_class":"Standard","type":"S3"} {"compression":"Zstd","missing_field_as":"Error","null_if":[],"type":"Parquet","use_logic_type":true} 'root'@'%' <slt:ignore> (empty) account_admin
 
-statement ok
+query TTTTTBBTTT?TT
 SHOW STAGES like 'test_stage'
+----
+test_stage Internal NULL NULL NULL 0 0 NULL {"allow_quoted_nulls":false,"binary_format":"Hex","compression":"None","empty_field_as":"Null","error_on_column_count_mismatch":true,"escape":"","field_delimiter":"|","geometry_format":"EWKT","headers":0,"nan_display":"NaN","null_display":"\\N","output_header":false,"quote":"\"","quoted_empty_field_as":"String","record_delimiter":"\n","type":"Csv"} 'root'@'%' <slt:ignore> (empty) account_admin
+
+query TT
+SELECT name, file_format_options:type
+FROM system.stages WHERE name IN ('test_stage', 'test_stage_external') ORDER BY name;
+----
+test_stage "Csv"
+test_stage_external "Parquet"
+
+query TTTTTBB
+SELECT name, stage_type, storage_type, url, endpoint, has_credentials, has_encryption_key
+FROM system.stages WHERE name IN ('test_stage', 'test_stage_external') ORDER BY name;
+----
+test_stage Internal NULL NULL NULL 0 0
+test_stage_external External s3 s3://test-stage-bucket/demo/ https://s3.eu-central-1.amazonaws.com 1 0
+
+
+query T
+select storage_params from system.stages
+where name = 'test_stage_external'
+----
+{"access_key_id":"ak","bucket":"test-stage-bucket","enable_virtual_host_style":false,"endpoint_url":"https://s3.eu-central-1.amazonaws.com","external_id":"","master_key":"","network_config":null,"region":"eu-central-1","role_arn":"","root":"/demo/","secret_access_key":"******key","security_token":"","storage_class":"Standard","type":"S3"}
+
+query TTTT
+SELECT storage_params:type, storage_params:bucket, storage_params:root, storage_params:secret_access_key
+FROM system.stages WHERE name = 'test_stage_external';
+----
+"S3" "test-stage-bucket" "/demo/" "******key"
 
 statement ok
-SHOW STAGES like 'test_stage'
-
-statement ok
-SHOW STAGES where name='test_stage'
-
-statement ok
-DESC STAGE test_stage
+DROP STAGE test_stage_external
 
 statement ok
 DROP STAGE test_stage

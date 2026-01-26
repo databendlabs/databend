@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::Int32Type;
@@ -48,7 +46,7 @@ use databend_storages_common_cache::TempDirManager;
 ///       v
 ///   next spill -> Location::Remote(...)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
+async fn test_spill_fallback_to_remote_when_local_full() -> anyhow::Result<()> {
     let config = config_with_spill();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;

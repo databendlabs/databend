@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::GlobalUniqName;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::SpillConfig;
@@ -58,7 +58,7 @@ ADDRESS = 'https://databend.com';"
         conf.query.builtin = BuiltInConfig { users, udfs };
 
         // set node_id to a unique value
-        conf.query.node_id = GlobalUniqName::unique();
+        conf.query.node_id = GlobalUniq::unique();
 
         // set storage to fs for tests; individual tests may override this
         let tmp_dir = TempDir::new().expect("create tmp dir failed");

@@ -25,6 +25,25 @@ desc stage test_stage_internal
 statement ok
 SHOW STAGES
 
+query III
+copy into @test_stage_internal from (select 1) file_format=(type=csv)
+----
+1 2 2
+
+query I
+select count(*) from  list_stage(location=>'@test_stage_internal')
+----
+1
+
+
+statement ok
+create or replace stage test_stage_internal
+
+# files should be removed
+query TITTT
+list @test_stage_internal
+----
+
 statement ok
 DROP STAGE test_stage
 
@@ -82,3 +101,54 @@ DROP STAGE s;
 
 statement ok
 drop table t;
+
+statement ok
+CREATE STAGE alter_stage_internal;
+
+statement ok
+ALTER STAGE alter_stage_internal SET FILE_FORMAT = (TYPE = CSV), COMMENT = 'altered';
+
+query T
+SELECT comment FROM system.stages WHERE name = 'alter_stage_internal';
+----
+altered
+
+query B
+SELECT json_extract_path_text(to_string(file_format_options), 'type') = 'Csv'
+FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+statement ok
+ALTER STAGE alter_stage_internal UNSET COMMENT, FILE_FORMAT;
+
+query B
+SELECT comment = '' FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+query B
+SELECT json_extract_path_text(to_string(file_format_options), 'type') = 'Parquet'
+FROM system.stages WHERE name = 'alter_stage_internal';
+----
+1
+
+statement ok
+CREATE STAGE alter_stage_external url='fs:///';
+
+statement ok
+ALTER STAGE alter_stage_external SET URL = 'fs:///tmp/';
+
+query T
+SELECT url FROM system.stages WHERE name = 'alter_stage_external';
+----
+fs:///tmp/
+
+statement ok
+ALTER STAGE IF EXISTS missing_stage SET COMMENT = 'noop';
+
+statement ok
+DROP STAGE alter_stage_internal;
+
+statement ok
+DROP STAGE alter_stage_external;

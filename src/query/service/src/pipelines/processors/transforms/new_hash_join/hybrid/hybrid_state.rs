@@ -12,9 +12,74 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
-#[allow(dead_code)]
-pub struct HybridState {
-    grace_state: GraceHashJoinState,
+use concurrent_queue::ConcurrentQueue;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_sql::plans::JoinType;
+
+use crate::pipelines::processors::transforms::HashJoinFactory;
+use crate::pipelines::processors::transforms::HybridHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use crate::sessions::QueryContext;
+
+pub struct HybridHashJoinState {
+    pub ctx: Arc<QueryContext>,
+
+    // Current recursion level (0 = initial)
+    pub level: usize,
+    // Maximum allowed spill level
+    pub max_level: usize,
+
+    // Factory for creating new join states
+    pub factory: Arc<HashJoinFactory>,
+
+    // Flag indicating whether spill has been triggered (for multi-thread sync)
+    pub spilled: AtomicBool,
+
+    pub transition_queue: ConcurrentQueue<DataBlock>,
+}
+
+impl HybridHashJoinState {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        level: usize,
+        factory: Arc<HashJoinFactory>,
+    ) -> Result<Arc<HybridHashJoinState>> {
+        let settings = ctx.get_settings();
+        let max_level = settings.get_max_hash_join_spill_level()? as usize;
+
+        Ok(Arc::new(HybridHashJoinState {
+            ctx,
+            level,
+            max_level,
+            factory,
+            spilled: AtomicBool::new(false),
+            transition_queue: ConcurrentQueue::unbounded(),
+        }))
+    }
+
+    pub fn can_next_layer_join(&self) -> bool {
+        self.level < self.max_level
+    }
+
+    pub fn check_spilled(&self) -> bool {
+        self.spilled.load(Ordering::Relaxed)
+    }
+
+    pub fn set_spilled(&self) -> bool {
+        !self.spilled.swap(true, Ordering::AcqRel)
+    }
+
+    pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {
+        self.factory.create_grace_state(self.level + 1)
+    }
+
+    pub fn create_hybrid_join(&self, typ: JoinType) -> Result<HybridHashJoin> {
+        self.factory.create_hybrid_join(typ, self.level + 1)
+    }
 }

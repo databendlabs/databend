@@ -258,21 +258,17 @@ AggregateFinal
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── Filter
+    └── TableScan
+        ├── table: default.default.t
+        ├── scan id: 0
         ├── output columns: []
-        ├── filters: [is_true(t.b (#1) = 2)]
-        ├── estimated rows: 1.00
-        └── TableScan
-            ├── table: default.default.t
-            ├── scan id: 0
-            ├── output columns: [b (#1)]
-            ├── read rows: 2
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [is_true(t.b (#1) = 2)], limit: NONE]
-            └── estimated rows: 2.00
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_true(t.b (#1) = 2)], limit: NONE]
+        └── estimated rows: 1.00
 
 statement ok
 drop table t

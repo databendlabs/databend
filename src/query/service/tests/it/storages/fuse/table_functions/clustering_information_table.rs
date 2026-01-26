@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -20,7 +19,7 @@ use databend_query::test_kits::*;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_clustering_information_table_read() -> Result<()> {
+async fn test_clustering_information_table_read() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();

@@ -25,6 +25,9 @@ use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
+
+use crate::meta_service_error;
 
 /// refer to [crate::history_tables::meta::PermitGuard]
 pub struct PermitGuard {
@@ -56,19 +59,19 @@ impl Drop for PermitGuard {
 
 /// refer to [crate::history_tables::meta::HistoryMetaHandle]
 pub struct TaskMetaHandle {
-    meta_client: Arc<ClientHandle>,
+    meta_client: Arc<ClientHandle<DatabendRuntime>>,
     node_id: String,
 }
 
 impl TaskMetaHandle {
-    pub fn new(meta_client: Arc<ClientHandle>, node_id: String) -> Self {
+    pub fn new(meta_client: Arc<ClientHandle<DatabendRuntime>>, node_id: String) -> Self {
         Self {
             meta_client,
             node_id,
         }
     }
 
-    pub fn meta_client(&self) -> &Arc<ClientHandle> {
+    pub fn meta_client(&self) -> &Arc<ClientHandle<DatabendRuntime>> {
         &self.meta_client
     }
 
@@ -88,7 +91,8 @@ impl TaskMetaHandle {
         if match self
             .meta_client
             .get_kv(&format!("{}/last_timestamp", meta_key))
-            .await?
+            .await
+            .map_err(meta_service_error)?
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
@@ -132,7 +136,8 @@ impl TaskMetaHandle {
                 Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
                 None,
             ))
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         Ok(())
     }
 }

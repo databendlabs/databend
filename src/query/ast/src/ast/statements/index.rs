@@ -44,6 +44,7 @@ pub enum TableIndexType {
     Inverted,
     Ngram,
     Vector,
+    Spatial,
 }
 
 impl Display for TableIndexType {
@@ -60,6 +61,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Vector => {
                 write!(f, "VECTOR")
+            }
+            TableIndexType::Spatial => {
+                write!(f, "SPATIAL")
             }
         }
     }

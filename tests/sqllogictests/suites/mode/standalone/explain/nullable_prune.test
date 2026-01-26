@@ -31,40 +31,32 @@ TableScan
 query T
 explain select * from t_nullable_prune where a is not null
 ----
-Filter
-├── output columns: [t_nullable_prune.a (#0)]
-├── filters: [is_not_null(t_nullable_prune.a (#0))]
-├── estimated rows: 3.00
-└── TableScan
-    ├── table: default.default.t_nullable_prune
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-    └── estimated rows: 6.00
+TableScan
+├── table: default.default.t_nullable_prune
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
+└── estimated rows: 3.00
 
 query T
 explain select * from t_nullable_prune where a is null
 ----
-Filter
-├── output columns: [t_nullable_prune.a (#0)]
-├── filters: [NOT is_not_null(t_nullable_prune.a (#0))]
-├── estimated rows: 3.00
-└── TableScan
-    ├── table: default.default.t_nullable_prune
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-    └── estimated rows: 6.00
+TableScan
+├── table: default.default.t_nullable_prune
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
+└── estimated rows: 3.00
 
 statement ok
 DROP TABLE default.default.t_nullable_prune

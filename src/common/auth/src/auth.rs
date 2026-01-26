@@ -22,8 +22,8 @@ use base64::prelude::*;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_base::base::tokio::sync::RwLock;
 use http::HeaderValue;
+use tokio::sync::RwLock;
 
 // Token file reference.
 #[derive(Debug)]

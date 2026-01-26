@@ -8,9 +8,9 @@ SELECT '1'::string from numbers(3)
 query T
 SELECT {'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232} from numbers(3);
 ----
-{'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232}
-{'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232}
-{'w1vY1t5':-15239676694.972677,'6UfU721':-4905646705.765232}
+{"w1vY1t5":-15239676694.972677,"6UfU721":-4905646705.765232}
+{"w1vY1t5":-15239676694.972677,"6UfU721":-4905646705.765232}
+{"w1vY1t5":-15239676694.972677,"6UfU721":-4905646705.765232}
 
 
 # String concatenation
@@ -19,18 +19,18 @@ SELECT 'hello' || ' ' || 'world' FROM numbers(1);
 ----
 hello world
 
-query T
+query TTT
 SELECT '!@#$%^&*()'::string, '你好'::string, '🌟'::string;
 ----
 !@#$%^&*() 你好 🌟
 
 # String with escape sequences
-query T
+query TT
 SELECT 'line1-line2'::string, 'tab\there'::string;
 ----
 line1-line2 tab	here
 
-query T
+query TTI
 SELECT UPPER('hello'), LOWER('WORLD'), LENGTH('databend') FROM numbers(1);
 ----
 HELLO world 8
@@ -39,15 +39,15 @@ HELLO world 8
 query T
 SELECT {'key': 'value'::string, 'numbers': 123::string} FROM numbers(2);
 ----
-{'key':'value','numbers':'123'}
-{'key':'value','numbers':'123'}
+{"key":"value","numbers":"123"}
+{"key":"value","numbers":"123"}
 
 
 # String with scientific notation
 query T
 SELECT {'scientific': 1.23e-4, 'regular': 123.456} FROM numbers(1);
 ----
-{'scientific':0.000123,'regular':123.456000}
+{"scientific":0.000123,"regular":123.456000}
 
 
 # String with very long content
@@ -57,13 +57,13 @@ SELECT repeat('a', 100)::string FROM numbers(1);
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 # String with whitespace handling
-query T
+query TTT
 SELECT TRIM('  spaced  ')::string, LTRIM('  left')::string, RTRIM('right  ')::string;
 ----
 spaced	left	right
 
 # String with NULL values
-query T
+query TT
 SELECT NULL::string, COALESCE(NULL::string, 'default') FROM numbers(1);
 ----
 NULL	default

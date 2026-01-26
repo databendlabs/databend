@@ -32,7 +32,6 @@ use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -56,13 +55,13 @@ use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MetaError;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -74,6 +73,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
+use crate::meta_client_error;
+use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::task::meta::TaskMetaHandle;
@@ -155,12 +156,13 @@ impl TaskService {
 
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(&BUILD_INFO))
-            .create_meta_store()
-            .await
-            .map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?;
+        let meta_store =
+            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()))
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?;
         let meta_client = meta_store.deref().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(
@@ -176,25 +178,22 @@ impl TaskService {
         };
         GlobalInstance::set(Arc::new(instance));
 
-        runtime.clone().try_spawn(
-            async move {
-                let task_service = TaskService::instance();
-                loop {
-                    if !task_service.initialized.load(Ordering::SeqCst) {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    } else {
-                        break;
-                    }
+        runtime.clone().spawn(async move {
+            let task_service = TaskService::instance();
+            loop {
+                if !task_service.initialized.load(Ordering::SeqCst) {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                } else {
+                    break;
                 }
-                if let Err(err) = task_service.prepare().await {
-                    error!("prepare failed due to {}", err);
-                }
-                if let Err(err) = task_service.work(&tenant, runtime).await {
-                    error!("prepare failed due to {}", err);
-                }
-            },
-            None,
-        )?;
+            }
+            if let Err(err) = task_service.prepare().await {
+                error!("prepare failed due to {}", err);
+            }
+            if let Err(err) = task_service.work(&tenant, runtime).await {
+                error!("prepare failed due to {}", err);
+            }
+        });
         Ok(())
     }
 
@@ -296,7 +295,7 @@ impl TaskService {
                                                             continue;
                                                         }
                                                         fn_new_task_run(&task_service, &task).await?;
-                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
@@ -344,7 +343,7 @@ impl TaskService {
                                                             continue;
                                                         }
                                                         fn_new_task_run(&task_service, &task).await?;
-                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await.map_err(meta_service_error)?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
@@ -363,7 +362,11 @@ impl TaskService {
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
-                    if !task_mgr.accept(&task_key).await? {
+                    if !task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         continue;
                     }
                     let task_name = task.task_name.clone();
@@ -390,80 +393,75 @@ impl TaskService {
                     let tenant = tenant.clone();
                     let owner = Self::get_task_owner(&task, &tenant).await?;
 
-                    runtime.try_spawn(
-                        async move {
-                            let mut fn_work = async move || {
-                                while task_run.attempt_number >= 0 {
-                                    let task_result =
-                                        Self::spawn_task(task.clone(), owner.clone()).await;
+                    runtime.spawn(async move {
+                        let mut fn_work = async move || {
+                            while task_run.attempt_number >= 0 {
+                                let task_result =
+                                    Self::spawn_task(task.clone(), owner.clone()).await;
 
-                                    match task_result {
-                                        Ok(()) => {
-                                            task_run.state = State::Succeeded;
-                                            task_run.completed_at = Some(Utc::now());
-                                            task_service
-                                                .update_or_create_task_run(&task_run)
-                                                .await?;
+                                match task_result {
+                                    Ok(()) => {
+                                        task_run.state = State::Succeeded;
+                                        task_run.completed_at = Some(Utc::now());
+                                        task_service.update_or_create_task_run(&task_run).await?;
 
-                                            let mut stream =
-                                                Box::pin(task_service.check_next_tasks(&task_name));
+                                        let mut stream =
+                                            Box::pin(task_service.check_next_tasks(&task_name));
 
-                                            while let Some(next_task) = stream.next().await {
-                                                let next_task = next_task?;
-                                                let next_task = task_mgr
-                                                    .describe_task(&next_task)
-                                                    .await??
-                                                    .ok_or_else(|| {
-                                                        ErrorCode::UnknownTask(next_task)
-                                                    })?;
-                                                let next_owner =
-                                                    Self::get_task_owner(&next_task, &tenant)
-                                                        .await?;
-                                                if Self::check_when(
-                                                    &next_task,
-                                                    &next_owner,
-                                                    &task_service,
-                                                )
-                                                .await?
-                                                {
-                                                    task_mgr
-                                                        .send(TaskMessage::ExecuteTask(next_task))
-                                                        .await?;
-                                                }
+                                        while let Some(next_task) = stream.next().await {
+                                            let next_task = next_task?;
+                                            let next_task = task_mgr
+                                                .describe_task(&next_task)
+                                                .await??
+                                                .ok_or_else(|| ErrorCode::UnknownTask(next_task))?;
+                                            let next_owner =
+                                                Self::get_task_owner(&next_task, &tenant).await?;
+                                            if Self::check_when(
+                                                &next_task,
+                                                &next_owner,
+                                                &task_service,
+                                            )
+                                            .await?
+                                            {
+                                                task_mgr
+                                                    .send(TaskMessage::ExecuteTask(next_task))
+                                                    .await
+                                                    .map_err(meta_service_error)?;
                                             }
-                                            break;
                                         }
-                                        Err(err) => {
-                                            task_run.state = State::Failed;
-                                            task_run.completed_at = Some(Utc::now());
-                                            task_run.attempt_number -= 1;
-                                            task_run.error_code = err.code() as i64;
-                                            task_run.error_message = Some(err.message());
-                                            task_service
-                                                .update_or_create_task_run(&task_run)
-                                                .await?;
-                                            task_run.run_id = Self::make_run_id();
-                                        }
+                                        break;
                                     }
-                                    task_mgr
-                                        .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
-                                        .await??;
+                                    Err(err) => {
+                                        task_run.state = State::Failed;
+                                        task_run.completed_at = Some(Utc::now());
+                                        task_run.attempt_number -= 1;
+                                        task_run.error_code = err.code() as i64;
+                                        task_run.error_message = Some(err.message());
+                                        task_service.update_or_create_task_run(&task_run).await?;
+                                        task_run.run_id = Self::make_run_id();
+                                    }
                                 }
-
-                                Result::Ok(())
-                            };
-                            if let Err(err) = fn_work().await {
-                                error!("execute failed due to {}", err);
+                                task_mgr
+                                    .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
+                                    .await??;
                             }
-                        },
-                        None,
-                    )?;
+
+                            Result::Ok(())
+                        };
+                        if let Err(err) = fn_work().await {
+                            error!("execute failed due to {}", err);
+                        }
+                    });
                 }
                 TaskMessage::DeleteTask(task_name, _) => {
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
                     }
-                    if task_mgr.accept(&task_key).await? {
+                    if task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         self.clean_task_afters(&task_name).await?;
                     }
                     task_mgr
@@ -471,10 +469,15 @@ impl TaskService {
                             tenant,
                             TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
                         ))
-                        .await?;
+                        .await
+                        .map_err(meta_service_error)?;
                 }
                 TaskMessage::AfterTask(task) => {
-                    if !task_mgr.accept(&task_key).await? {
+                    if !task_mgr
+                        .accept(&task_key)
+                        .await
+                        .map_err(meta_service_error)?
+                    {
                         continue;
                     }
                     match task.status {
@@ -498,7 +501,8 @@ impl TaskService {
             .meta_handle
             .meta_client()
             .watch_with_initialization(watch)
-            .await?;
+            .await
+            .map_err(meta_client_error)?;
 
         Ok(Box::pin(stream.filter_map(|result| {
             result
@@ -514,7 +518,7 @@ impl TaskService {
             return Ok(None);
         };
         let message = decode_seqv::<TaskMessage>(value, || format!("decode value of {}", key))
-            .map_err(MetaError::from)?;
+            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
 
         Ok(Some((key, TaskMessage::clone(message.deref()))))
     }

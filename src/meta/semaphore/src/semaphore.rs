@@ -18,8 +18,9 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_meta_runtime::DatabendRuntime;
 use futures::FutureExt;
 use log::info;
 use tokio::sync::mpsc;
@@ -52,7 +53,7 @@ pub struct Semaphore {
     seq_policy: SeqPolicy,
 
     /// The metadata client to interact with the remote meta-service.
-    meta_client: Arc<ClientHandle>,
+    meta_client: Arc<ClientHandle<DatabendRuntime>>,
 
     /// Duration for automatic permit lease expiration.
     ///
@@ -100,7 +101,7 @@ impl Semaphore {
     /// is dropped, the semaphore will be released.
     /// It is also a [`Future`] that will be resolved when the semaphore is removed from meta-service.
     pub async fn new_acquired(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
         capacity: u64,
         id: impl ToString,
@@ -118,7 +119,7 @@ impl Semaphore {
     /// # Parameters
     /// * `seq_timestamp` - Optional timestamp to use as sequence number. If `None`, uses current time.
     pub async fn new_acquired_by_time(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
         capacity: u64,
         id: impl ToString,
@@ -144,7 +145,7 @@ impl Semaphore {
     /// This method spawns a background task to subscribe to the meta-service key value change events.
     /// The task will be notified to quit when this instance is dropped.
     pub async fn new(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
         capacity: u64,
         permit_ttl: Duration,
@@ -313,7 +314,7 @@ impl Semaphore {
         let task_name = self.to_string();
         let fu = subscriber.subscribe_kv_changes(cancel_rx.map(|_| ()));
 
-        let handle = spawn_named(fu, task_name);
+        let handle = DatabendRuntime::spawn(fu, Some(task_name));
         self.subscriber_task_handle = Some(handle);
     }
 

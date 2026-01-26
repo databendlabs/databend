@@ -136,7 +136,12 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
-        let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
+        let table_args = bind_table_args(
+            &mut scalar_binder,
+            params,
+            named_params,
+            &self.subquery_executor,
+        )?;
 
         let tenant = self.ctx.get_tenant();
         let udtf_result = databend_common_base::runtime::block_on(async {
@@ -297,6 +302,7 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.as_table(),
+            None,
             table_alias_name,
             false,
             false,
@@ -358,6 +364,7 @@ impl Binder {
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
                 table.clone(),
+                None,
                 table_alias_name,
                 false,
                 false,
@@ -571,8 +578,7 @@ impl Binder {
                     Err(ErrorCode::InvalidArgument(format!(
                         "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
-                    ))
-                    .set_span(*span))
+                    )).set_span(*span))
                 }
             }
             _ => unreachable!(),

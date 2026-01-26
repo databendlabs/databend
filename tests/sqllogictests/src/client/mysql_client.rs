@@ -81,12 +81,21 @@ impl MySQLClient {
                 .map(|c| {
                     use mysql_async::consts::ColumnType::*;
                     match c.column_type() {
-                        MYSQL_TYPE_TINY => ColumnType::Any,
-                        MYSQL_TYPE_SHORT | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG
-                        | MYSQL_TYPE_INT24 => ColumnType::Integer,
-                        MYSQL_TYPE_FLOAT | MYSQL_TYPE_DOUBLE | MYSQL_TYPE_DECIMAL => {
-                            ColumnType::FloatingPoint
+                        MYSQL_TYPE_TINY => ColumnType::Integer,
+                        MYSQL_TYPE_SHORT => {
+                            if c.column_length() == 1 {
+                                ColumnType::Bool
+                            } else {
+                                ColumnType::Integer
+                            }
                         }
+                        MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG | MYSQL_TYPE_INT24 => {
+                            ColumnType::Integer
+                        }
+                        MYSQL_TYPE_FLOAT
+                        | MYSQL_TYPE_DOUBLE
+                        | MYSQL_TYPE_DECIMAL
+                        | MYSQL_TYPE_NEWDECIMAL => ColumnType::FloatingPoint,
                         MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_STRING | MYSQL_TYPE_VARCHAR => {
                             ColumnType::Text
                         }

@@ -28,12 +28,12 @@ select h3_get_resolution(644325524701193974)
 ----
 15
 
-query F
+query R
 select h3_edge_length_m(1)
 ----
 483056.8390711111
 
-query F
+query R
 select h3_edge_length_km(1)
 ----
 483.0568390711111
@@ -96,7 +96,7 @@ CREATE TABLE t2 (res UInt8) ENGINE=Memory
 statement ok
 INSERT INTO t2 VALUES(1), (2), (3), (4)
 
-query F
+query R
 select h3_edge_length_m(res) as m from t2 order by m
 ----
 26071.75968017739
@@ -104,7 +104,7 @@ select h3_edge_length_m(res) as m from t2 order by m
 182512.95648916735
 483056.8390711111
 
-query F
+query R
 select h3_edge_length_km(res) as km from t2 order by km
 ----
 26.07175968017739
@@ -117,12 +117,12 @@ select h3_get_base_cell(644325524701193974)
 ----
 8
 
-query F
+query R
 select h3_hex_area_m2(1)
 ----
-6.097884417941339e11
+609788441794.1339
 
-query F
+query R
 select h3_hex_area_km2(1)
 ----
 609788.4417941332
@@ -150,15 +150,15 @@ select h3_get_base_cell(h3) from t1
 8
 8
 
-query F
+query R
 select h3_hex_area_m2(res) as m2 from t2 order by m2
 ----
 1770347654.491309
-1.239343465508818e10
-8.680178039899731e10
-6.097884417941339e11
+12393434655.08818
+86801780398.99731
+609788441794.1339
 
-query F
+query R
 select h3_hex_area_km2(res) as km2 from t2 order by km2
 ----
 1770.347654491307
@@ -221,12 +221,12 @@ select h3_get_faces(599119489002373119)
 ----
 [0,1,2,3,4]
 
-query F
+query R
 select h3_cell_area_m2(599119489002373119)
 ----
 127785582.60810876
 
-query F
+query R
 select h3_cell_area_rads2(599119489002373119)
 ----
 3.1482243104279148e-6
@@ -270,13 +270,13 @@ select h3_get_faces(h3) from t4
 [0,1,2,3,4]
 [7]
 
-query F
+query R
 select h3_cell_area_m2(h3) from t4
 ----
 127785582.60810876
 265092558.12825438
 
-query F
+query R
 select h3_cell_area_rads2(h3) from t4
 ----
 3.1482243104279148e-6
@@ -288,18 +288,18 @@ select h3_to_center_child(599119489002373119, 15)
 644155484202336256
 
 
-query F
+query R
 select h3_exact_edge_length_m(1319695429381652479)
 ----
 8267.32683264678
 
 
-query F
+query R
 select h3_exact_edge_length_km(1319695429381652479)
 ----
 8.26732683264678
 
-query F
+query R
 select h3_exact_edge_length_rads(1319695429381652479)
 ----
 0.0012976483306137042
@@ -348,19 +348,19 @@ select h3_to_center_child(h3, res) as child from t5 order by child
 639651884574965767
 644155484202336256
 
-query F
+query R
 select h3_exact_edge_length_m(h3_edge) as length from t5 order by length
 ----
 8267.32683264537
 8267.32683264678
 
-query F
+query R
 select h3_exact_edge_length_km(h3_edge) as length from t5 order by length
 ----
 8.26732683264537
 8.26732683264678
 
-query F
+query R
 select h3_exact_edge_length_rads(h3_edge) as rads from t5 order by rads
 ----
 0.0012976483306134828
@@ -427,7 +427,7 @@ select h3_get_unidirectional_edge_boundary(1248204388774707199)
 ----
 [(37.42012867767778,-122.03773496427027),(37.33755608435298,-122.09042892904397)]
 
-query F
+query R
 select h3_edge_angle(10)
 ----
 0.0006822586214153981
@@ -481,7 +481,7 @@ select h3_get_unidirectional_edge_boundary(h3) from t6
 [(37.42012867767778,-122.03773496427027),(37.33755608435298,-122.09042892904397)]
 [(64.63797480284363,10.54810038686438),(64.6660424094383,10.646556995237557),(64.6856139801596,10.677842260934424)]
 
-query F
+query R
 select h3_edge_angle(res) as angle from t6 order by angle
 ----
 5.2535487801633385e-6

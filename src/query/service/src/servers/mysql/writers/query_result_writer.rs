@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::io::AsyncWrite;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column as ExprColumn;
@@ -30,6 +29,7 @@ use databend_common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
 use log::error;
 use opensrv_mysql::*;
+use tokio::io::AsyncWrite;
 
 use crate::sessions::Session;
 /// Reports progress information as string, intend to be put into the mysql Ok packet.
@@ -81,7 +81,7 @@ fn write_field<W: AsyncWrite + Unpin>(
     row_index: usize,
 ) -> Result<()> {
     buf.clear();
-    encoder.write_field(column, row_index, buf, false);
+    encoder.write_field(column, row_index, buf, false)?;
     row_writer.write_col(&buf[..])?;
     Ok(())
 }
@@ -259,7 +259,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             schema.fields().iter().map(make_column_from_field).collect()
         }
 
-        let _tz = format.timezone;
         match convert_schema(&query_result.schema) {
             Err(error) => self.err(&error, dataset_writer).await,
             Ok(columns) => {
@@ -283,11 +282,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     };
 
                     let num_rows = block.num_rows();
-                    let encoder = FieldEncoderValues::create_for_mysql_handler(
-                        format.jiff_timezone.clone(),
-                        format.timezone,
-                        format.geometry_format,
-                    );
+                    let encoder = FieldEncoderValues::create_for_mysql_handler(format);
                     let mut buf = Vec::<u8>::new();
 
                     let columns = block

@@ -246,7 +246,11 @@ impl JoinEquiCondition {
         left.into_iter()
             .zip(right)
             .enumerate()
-            .map(|(index, (l, r))| JoinEquiCondition::new(l, r, is_null_equal.contains(&index)))
+            .map(|(index, (left, right))| Self {
+                left,
+                right,
+                is_null_equal: is_null_equal.contains(&index),
+            })
             .collect()
     }
 }
@@ -793,17 +797,28 @@ impl Operator for Join {
 
         let settings = ctx.get_settings();
         if !matches!(self.join_type, JoinType::Cross) && !settings.get_enforce_broadcast_join()? {
-            // (Hash, Hash)
-            children_required.extend(self.equi_conditions.iter().map(|condition| {
-                vec![
+            // (Hash, Hash) – use full equi-join key set to avoid single-column hash shuffle
+            let left_keys: Vec<_> = self
+                .equi_conditions
+                .iter()
+                .map(|condition| condition.left.clone())
+                .collect();
+            let right_keys: Vec<_> = self
+                .equi_conditions
+                .iter()
+                .map(|condition| condition.right.clone())
+                .collect();
+
+            if !left_keys.is_empty() {
+                children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(vec![condition.left.clone()]),
+                        distribution: Distribution::NodeToNodeHash(left_keys),
                     },
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(vec![condition.right.clone()]),
+                        distribution: Distribution::NodeToNodeHash(right_keys),
                     },
-                ]
-            }));
+                ]);
+            }
         }
 
         if !matches!(

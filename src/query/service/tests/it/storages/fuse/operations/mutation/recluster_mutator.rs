@@ -17,10 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -55,7 +53,7 @@ use crate::storages::fuse::operations::mutation::verify_compact_tasks;
 use crate::storages::fuse::utils::new_empty_snapshot;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_block_select() -> Result<()> {
+async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
@@ -136,7 +134,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
     // unused snapshot.
-    let snapshot = new_empty_snapshot(schema.as_ref().clone(), None);
+    let snapshot = new_empty_snapshot(schema.as_ref().clone());
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
@@ -167,7 +165,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let need_recluster = !parts.is_empty();
     assert!(need_recluster);
     let ReclusterParts::Recluster { tasks, .. } = parts else {
-        return Err(ErrorCode::Internal("Logical error, it's a bug"));
+        anyhow::bail!("Logical error, it's a bug");
     };
     assert_eq!(tasks.len(), 1);
     let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
@@ -177,7 +175,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_safety_for_recluster() -> Result<()> {
+async fn test_safety_for_recluster() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_application_level_data_operator()?.operator();

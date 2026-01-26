@@ -28,7 +28,7 @@ insert into t1 values(1,'b1','c1'),(2,'b2','c2');
 statement ok
 insert into t1 values(2,'b3','c3'),(3,'b4','c4');
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c1
@@ -42,7 +42,7 @@ insert into t2 values(1,'b_5','c_5'),(3,'b_6','c_6');
 statement ok
 insert into t2 values(2,'b_7','c_7');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 1 b_5 c_5
@@ -58,12 +58,12 @@ merge into t1 using (select * from t2 ) on t1.a = t2.a  when matched then update
 statement error 1006
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
 
-query T
+query I
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c;
 ----
 4
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -74,7 +74,7 @@ select * from t1 order by a,b,c;
 statement ok
 insert into t2 values(4,'b_8','c_8');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 1 b_5 c_5
@@ -82,12 +82,12 @@ select * from t2 order by a,b,c;
 3 b_6 c_6
 4 b_8 c_8
 
-query TT
+query II
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
 ----
 1 4
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -102,7 +102,7 @@ insert into t2 values(1,'b_9','c_9');
 statement error 4001
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -114,7 +114,7 @@ select * from t1 order by a,b,c;
 statement ok
 delete from t2 where a = 1;
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 2 b_7 c_7
@@ -124,7 +124,7 @@ select * from t2 order by a,b,c;
 statement ok
 insert into t2 values(5,'b_9','c_9');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 2 b_7 c_7
@@ -132,7 +132,7 @@ select * from t2 order by a,b,c;
 4 b_8 c_8
 5 b_9 c_9
 
-query TT
+query I
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete;
 ----
 4
@@ -146,7 +146,7 @@ select * from t1 order by a,b,c;
 statement ok
 insert into t1 values(2,'b_1','c_1'),(3,'b_2','c_2');
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -156,35 +156,35 @@ select * from t1 order by a,b,c;
 statement error 1005
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
-query TTT
+query III
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched and t1.b = 'b_1' then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 ----
 1 1 1
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
 3 b_2 c_6
 4 b_8 c_8
 
-query TT
+query II
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 ----
 1 2
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
 5 b_9 c_9
 
-query T
+query I
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b) when not matched and t2.c = 'c_7' then insert (a,c) values(t2.a,t2.c);
 ----
 2
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -195,7 +195,7 @@ select * from t1 order by a,b,c;
 statement ok
 insert into t2 values(5,'b_10','c_10');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 2 b_7 c_7
@@ -208,12 +208,12 @@ statement error 4001
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched and t2.c = 'c_9' then update set t1.b = 'b_11' when matched and t2.c = 'c_10' then delete;
 
 ## idempotent delete test
-query T
+query I
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched then delete;
 ----
 3
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
@@ -238,7 +238,7 @@ select count(*) from t2;
 statement ok
 insert into t1 values(1,'b1','c1'),(2,'b2','c2');
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b1 c1
@@ -247,7 +247,7 @@ select * from t1 order by a,b,c;
 statement ok
 insert into t2 values(1,'b3','c3'),(3,'b4','c4');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 1 b3 c3
@@ -257,13 +257,13 @@ select * from t2 order by a,b,c;
 statement error 1065
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched then insert values(t2.a,t2.c);
 
-query TT
+query II
 merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update *  when not matched then insert *;
 ----
 1 1
 
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b3 c3
@@ -290,7 +290,7 @@ create table target_table(a int,b string,c string) cluster by(a,b);
 statement ok
 insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
 
-query TTT
+query ITT
 select * from target_table order by a,b,c;
 ----
 1 a_1 b_1
@@ -302,7 +302,7 @@ create table test_stage(a int,b string,c string) cluster by(a,b);
 statement ok
 insert into test_stage values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
 
-query TTT
+query ITT
 select * from test_stage order by a,b,c;
 ----
 1 a1 b1
@@ -332,12 +332,12 @@ select $1,$2,$3 from @s6_merge_into order by $1,$2,$3;
 3 a3 b3
 
 ## test CSV
-query TT
+query II
 merge into target_table using (select $1,$2,$3 from @s6_merge_into) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
 ----
 1 2
 
-query TTT
+query ITT
 select * from target_table order by a,b,c;
 ----
 3 a3 b3
@@ -360,7 +360,7 @@ remove @s7_merge_into;
 statement ok
 copy into @s7_merge_into from (select a,b,c from test_stage order by a,b,c);
 
-query TTT
+query ITT
 select a,b,c from @s7_merge_into order by a,b,c;
 ----
 1 a1 b1
@@ -370,18 +370,18 @@ select a,b,c from @s7_merge_into order by a,b,c;
 statement ok
 insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
 
-query TTT
+query ITT
 select * from target_table order by a,b,c;
 ----
 1 a_1 b_1
 2 a_2 b_2
 
-query TT
+query II
 merge into target_table using (select a,b,c from @s7_merge_into) as cdc on cdc.a = target_table.a when matched then delete when not matched then insert values(cdc.a,cdc.b,cdc.c);
 ----
 1 2
 
-query TTT
+query ITT
 select * from target_table order by a,b,c;
 ----
 3 a3 b3
@@ -407,7 +407,7 @@ select count(*) from t2;
 statement ok
 insert into t1 values(NULL,'b_1','c_1');
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 NULL b_1 c_1
@@ -415,19 +415,19 @@ NULL b_1 c_1
 statement ok
 insert into t2 values(1,'b_4','c_4'),(2,'b_2','c_2'),(NULL,'b_3','c_3');
 
-query TTT
+query ITT
 select * from t2 order by a,b,c;
 ----
 1 b_4 c_4
 2 b_2 c_2
 NULL b_3 c_3
 
-query TT
+query II
 merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete when not matched then insert *;
 ----
 3 0
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 b_4 c_4
@@ -435,12 +435,12 @@ select * from t1 order by a,b,c;
 NULL b_1 c_1
 NULL b_3 c_3
 
-query T
+query I
 merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete;
 ----
 2
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 NULL b_1 c_1
@@ -466,12 +466,12 @@ select count(*) from t2;
 statement ok
 insert into t2 values(1,'a1','b1');
 
-query TT
+query I
 merge into t1 as t3 using (select * from t2 ) as t2 on t3.a = t2.a  when not matched  then insert (a,b,c) values(t2.a,t2.b,t2.c);
 ----
 1
 
-query TTT
+query ITT
 select * from t1 order by a,b,c;
 ----
 1 a1 b1
@@ -497,12 +497,12 @@ INSERT INTO employees VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', '
 statement ok
 INSERT INTO salaries VALUES(1, 50000.00),(2, 60000.00);
 
-query TT
+query II
 MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
 ----
 2 2
 
-query TTT
+query IR
 select * from salaries order by employee_id;
 ----
 1 51000.00
@@ -535,12 +535,12 @@ insert into t1_target values(1);
 statement ok
 insert into t2_source values(1),(2);
 
-query TT
+query II
 merge into t1_target using (select * from t2_source) as t2_source on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
 ----
 1 1
 
-query T
+query I
 select * from t1_target order by a;
 ----
 1
@@ -575,12 +575,12 @@ merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1
 statement error 1006
 merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set t2.a = t2.a;
 
-query TT
+query I
 merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
 ----
 5
 
-query TTT
+query ITI
 select * from cluster_target order by a, b;
 ----
 1 a 2
@@ -627,13 +627,13 @@ remove @source_parquet_http2;
 statement ok
 copy into @source_parquet_http2 from (select * from source_test);
 
-query TTT
+query III
 merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet_http2 (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
 when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
 ----
 1 1 2
 
-query TT
+query IT
 select * from target_test order by a;
 ----
 3 f
@@ -690,12 +690,12 @@ create table tt1 (a int, b int) cluster by(a,b);
 statement error 1065
 merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
 
-query TT
+query I
 merge into tt1 using(select 10 as a, 20 as b) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
 ----
 0
 
-query T
+query I
 select count(*) from tt1;
 ----
 0
@@ -710,16 +710,16 @@ create table tt2(a bool, b variant, c map(string, string)) cluster by(a);
 statement ok
 insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
 
-query T
+query I
 merge into tt2 using(select true as x) as t on (x and tt2.a) when matched and tt2.a then update set tt2.b = parse_json('30');
 ----
 1
 
-query TTT
+query BTT
 select a, b, c from tt2 order by b;
 ----
-0 20 {'k2':'v2'}
-1 30 {'k1':'v1'}
+0 20 {"k2":"v2"}
+1 30 {"k1":"v1"}
 
 ## add test: source is table
 statement ok
@@ -740,12 +740,12 @@ insert into t1 values(1);
 statement ok
 insert into t2 values(1),(2);
 
-query TT
+query II
 merge into t1 using t2 on t1.a = t2.a when matched then delete when not matched then insert *;
 ----
 1 1
 
-query T
+query I
 select * from t1;
 ----
 2
@@ -790,36 +790,36 @@ insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
 statement ok
 insert into t2 values(1,'b1',true),(2,'b2',false),(3,'b3',true);
 
-query TTT
+query ITB
 select * from t1;
 ----
 1 a1 1
 2 a2 0
 3 a3 1
 
-query TTT
+query ITB
 select * from t2;
 ----
 1 b1 1
 2 b2 0
 3 b3 1
 
-query TT
+query II
 merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 1 then delete when matched and t1.a = 2 then update * when matched and t1.a = 3 then delete;
 ----
 1 2
 
-query TTT
+query ITB
 select * from t1;
 ----
 2 b2 0
 
-query T
+query I
 merge into t1 using t2 on t1.a = t2.a when matched then delete;
 ----
 1
 
-query T
+query I
 select count(*) from t1;
 ----
 0
@@ -827,12 +827,12 @@ select count(*) from t1;
 statement ok
 insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
 
-query TT
+query II
 merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 2 then update * when matched and t1.a = 1 then delete when matched and t1.a = 3 then update *;
 ----
 2 1
 
-query TTT
+query ITB
 select * from t1;
 ----
 2 b2 0
@@ -848,12 +848,12 @@ create table tt1(a bool, b int) cluster by(a,b);
 statement ok
 insert into tt1 values (true, 1), (false, 2);
 
-query T
+query I
 merge into tt1 using (select 1 as x) as tt2 on (2 > 1) when matched and a then delete;
 ----
 1
 
-query TT
+query BI
 select * from tt1;
 ----
 0 2
@@ -877,12 +877,12 @@ insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
 statement ok
 insert into t12 values (1, 10),(2, 20),(3, 30),(4, 40);
 
-query T
+query I
 MERGE INTO t11 USING(SELECT NULL AS c0 FROM t12) AS t12 ON (t11.a OR TRUE) WHEN MATCHED AND TRUE THEN DELETE;
 ----
 4
 
-query T
+query I
 select count(*) from t11;
 ----
 0
@@ -1043,7 +1043,7 @@ insert into orders values(200007,7,'buy','BTC',4.81412194,48.14121943,'completed
 (200098,98,'buy','BTC',1.37252960,13.72529599,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
 (200102,102,'buy','BTC',1.53596481,15.35964815,'completed',to_date('2021-01-01'),to_date('2021-01-01'));
 
-query T
+query I
 MERGE INTO orders USING (
     SELECT o.order_id, o.user_id, o.order_type, o.asset_type, o.quantity + a.avg_quantity AS new_quantity, o.price, o.status, o.created_at, o.updated_at
     FROM orders o
@@ -1058,7 +1058,7 @@ MERGE INTO orders USING (
 ----
 10
 
-query TTTT
+query RRRR
 SELECT SUM(quantity) AS total_quantity,
        AVG(quantity) AS average_quantity,
        MIN(quantity) AS min_quantity,
@@ -1076,12 +1076,12 @@ create table tmp_01 like tb_01;
 statement ok
 insert into tmp_01 values(1,'abc',to_date('2023-11-29'),parse_json('{"a":1}'));
 
-query TT
+query II
 merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
 ----
 1 0
 
-query TTT
+query IT?T
 select id,c1,to_date(c2),c3 from tb_01;
 ----
 1 abc 2023-11-29 {"a":1}
@@ -1112,13 +1112,13 @@ when not matched then insert (b) values(null_source.b);
 statement ok
 delete from null_source where a = 3;
 
-query TT
+query II
 merge into null_target using null_source on null_target.a = null_source.a when matched then update *
 when not matched then insert (b) values(null_source.b);
 ----
 0 1
 
-query TT
+query IT
 select * from null_target order by a,b;
 ----
 1 a3
@@ -1131,7 +1131,7 @@ create table tt1_(a bool not null, b int not null, c int not null);
 statement ok
 insert into tt1_ values(true, 10, 11),(false, 20, 21);
 
-query TT
+query III
 MERGE INTO tt1_ USING
      (SELECT
          657 AS cc0,
@@ -1146,7 +1146,7 @@ MERGE INTO tt1_ USING
 ----
 0 0 1
 
-query TTT
+query BII
 select * from tt1_;
 ----
 0 20 21
@@ -1155,12 +1155,12 @@ select * from tt1_;
 statement ok
 create table target_tt1 (a bool not null default true, b int not null default 1);
 
-query T
+query I
 merge into target_tt1 using(select false, 10) as tt2(a, b) on (target_tt1.b = 1) when not matched then insert (b) values (20);
 ----
 1
 
-query TT
+query BI
 select * from target_tt1;
 ----
 1 20
@@ -1190,14 +1190,14 @@ insert into source_default_values values(2,'e');
 statement ok
 insert into source_default_values values(4,'f');
 
-query TTT
+query III
 merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a'
 then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched
 then insert(b) values(t2.b);
 ----
 2 1 1
 
-query TT
+query IT
 select * from target_default_values order by a,b;
 ----
 1 c
@@ -1230,7 +1230,7 @@ insert into column_only_optimization_target values(5,'a5'),(6,'a6');
 statement ok
 insert into column_only_optimization_target values(7,'a7'),(8,'a8');
 
-query TT
+query IT
 select * from column_only_optimization_target order by a,b;
 ----
 1 a1
@@ -1248,7 +1248,7 @@ insert into column_only_optimization_source values(1,'b1'),(2,'b2');
 statement ok
 insert into column_only_optimization_source values(3,'b3'),(4,'b4');
 
-query TT
+query IT
 select * from column_only_optimization_source order by a,b;
 ----
 1 b1
@@ -1256,13 +1256,13 @@ select * from column_only_optimization_source order by a,b;
 3 b3
 4 b4
 
-query TT
+query II
 merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
 t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
 ----
 0 4
 
-query TT
+query IT
 select * from column_only_optimization_target order by a,b;
 ----
 1 b1
@@ -1360,7 +1360,7 @@ insert into lineitem_target_origin_400_blocks1 select * from lineitem_random lim
 statement ok
 insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
 
-query T
+query I
 select count(*) from lineitem_target_origin_400_blocks1;
 ----
 40000
@@ -1368,7 +1368,7 @@ select count(*) from lineitem_target_origin_400_blocks1;
 statement ok
 insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
 
-query T
+query I
 select count(*) from lineitem_target_origin_200_blocks1;
 ----
 40000
@@ -1376,13 +1376,13 @@ select count(*) from lineitem_target_origin_200_blocks1;
 statement ok
 insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
 
-query T
+query I
 select count(*) from lineitem_target_origin_400_blocks1;
 ----
 45000
 
 ## it maybe flaky test, but in most times, it's normal.
-query TT
+query II
 MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on
 t1.l_orderkey = t2.l_orderkey and
 t1.l_partkey = t2.l_partkey

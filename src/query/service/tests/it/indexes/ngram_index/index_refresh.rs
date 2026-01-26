@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
@@ -21,7 +20,7 @@ use databend_query::test_kits::TestFixture;
 use futures_util::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
+async fn test_fuse_do_refresh_ngram_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture
         .default_session()

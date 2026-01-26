@@ -19,6 +19,7 @@
 // Memory storage
 mod memory_part;
 mod memory_table;
+mod recursive_cte_memory_table;
 
 // Null storage
 pub mod null;
@@ -38,6 +39,7 @@ pub use memory_table::MemoryTable;
 pub use null::NullTable;
 // Random storage exports
 pub use random::{RandomPartInfo, RandomTable};
+pub use recursive_cte_memory_table::RecursiveCteMemoryTable;
 // Result cache storage exports
 pub use result_cache::{
     ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
@@ -45,3 +47,10 @@ pub use result_cache::{
 };
 // View storage exports
 pub use view::view_table;
+
+/// Convert a meta service error to an ErrorCode.
+pub(crate) fn meta_service_error(
+    e: databend_common_meta_types::MetaError,
+) -> databend_common_exception::ErrorCode {
+    databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
+}

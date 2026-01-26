@@ -130,7 +130,7 @@ SHOW CREATE TABLE `05_0003_at_t6`;
 05_0003_at_t6 CREATE TABLE "05_0003_at_t6" ( b VARCHAR NULL, c INT NULL ) ENGINE=FUSE APPROX_DISTINCT_COLUMNS='b' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
 
 statement error 1301
-ALTER TABLE `05_0003_at_t6` MODIFY COLUMN b binary; 
+ALTER TABLE `05_0003_at_t6` MODIFY COLUMN b binary;
 
 statement ok
 ALTER TABLE `05_0003_at_t6` drop column b;
@@ -160,7 +160,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2')
+a b ["c1","c2"] ("d1","d2")
 
 statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN a binary not null
@@ -179,7 +179,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 ----
 05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY NULL) NULL, d TUPLE(1 BINARY NULL, 2 BINARY NULL) NULL ) ENGINE=FUSE
 
-query
+query ????
 SELECT * FROM `05_0003_at_t4`
 ----
 61 62 [6331,6332] (6431,6432)
@@ -204,7 +204,7 @@ SHOW CREATE TABLE `05_0003_at_t4`
 query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2',NULL)
+a b ["c1","c2"] ("d1","d2",NULL)
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t4`
@@ -219,8 +219,8 @@ query IT
 SELECT * FROM `05_0003_at_t5`
 ----
 1 NULL
-2 [(1,2,'x'),(3,4,'y')]
-3 [(5,NULL,NULL),(6,NULL,'z')]
+2 [(1,2,"x"),(3,4,"y")]
+3 [(5,NULL,NULL),(6,NULL,"z")]
 
 statement ok
 ALTER TABLE `05_0003_at_t5` MODIFY COLUMN b array(tuple(int, float64, string, string));
@@ -229,8 +229,8 @@ query IT
 SELECT * FROM `05_0003_at_t5`
 ----
 1 NULL
-2 [(1,2.0,'x',NULL),(3,4.0,'y',NULL)]
-3 [(5,NULL,NULL,NULL),(6,NULL,'z',NULL)]
+2 [(1,2.0,"x",NULL),(3,4.0,"y",NULL)]
+3 [(5,NULL,NULL,NULL),(6,NULL,"z",NULL)]
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t5`
@@ -244,7 +244,7 @@ create table t(c1 int, c2 int);
 statement ok
 alter table t modify c1 varchar, c2 varchar;
 
-query TT
+query TTTTT
 DESC t;
 ----
 c1 VARCHAR YES NULL (empty)

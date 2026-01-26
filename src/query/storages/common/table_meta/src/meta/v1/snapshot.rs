@@ -14,10 +14,10 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_datavalues as dv;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 use super::super::v0::statistics::Statistics;
 use crate::meta::ClusterKey;

@@ -271,7 +271,7 @@ insert into t select number from numbers(50);
 statement ok
 insert into t1 select number from numbers(10) where number >4;
 
-query I
+query T
 explain select t1.a, t2.action as action from (select a,'INSERT' as action from t where a>1) t2 left join t1 on t2.a=t1.a where action != 'INSERT';
 ----
 HashJoin

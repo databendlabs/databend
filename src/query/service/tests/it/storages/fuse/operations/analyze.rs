@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::*;
@@ -23,7 +21,7 @@ use databend_query::test_kits::*;
 use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze() -> Result<()> {
+async fn test_fuse_snapshot_analyze() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -40,7 +38,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, true, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
 
@@ -48,7 +46,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
+async fn test_fuse_snapshot_analyze_and_truncate() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -89,7 +87,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
+async fn test_fuse_snapshot_analyze_purge() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -110,7 +108,7 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, true, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 2, 2, 2, 2, Some(()), Some(())).await?;
 

@@ -88,12 +88,13 @@ impl StageFileInfo {
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
         // External S3 stages disallow the ambient credential chain by default.
-        // `role_arn` opts into using the credential chain as the source credential.
+        // The S3 operator builder will re-enable it automatically when a role_arn is present.
+        // This hook only needs to force-enable the chain for cases like system history tables.
         let storage = match stage_info.stage_params.storage.clone() {
             StorageParams::S3(mut cfg) => {
-                let allow_credential_chain =
-                    stage_info.allow_credential_chain || !cfg.role_arn.is_empty();
-                cfg.allow_credential_chain = Some(allow_credential_chain);
+                if stage_info.allow_credential_chain {
+                    cfg.allow_credential_chain = Some(true);
+                }
                 StorageParams::S3(cfg)
             }
             v => v,
@@ -227,10 +228,9 @@ impl StageFilesInfo {
         pattern: Option<Regex>,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
-        Self::list_files_stream_with_pattern(operator, path, pattern, Some(max_files))
-            .await?
-            .try_collect::<Vec<_>>()
-            .await
+        let strm =
+            Self::list_files_stream_with_pattern(operator, path, pattern, Some(max_files)).await?;
+        strm.try_collect::<Vec<_>>().await
     }
 
     #[async_backtrace::framed]

@@ -54,13 +54,12 @@ pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()>;
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()>;
     fn batch_add(
         &mut self,
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        skip_null: bool,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>>;
@@ -154,7 +153,7 @@ where
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let view = A::downcast_column(&columns);
         let v = unsafe { view.index_unchecked(row) };
         let key: <A::Access as AccessType>::Scalar = A::Access::to_owned_scalar(v);
@@ -167,7 +166,6 @@ where
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _skip_null: bool,
     ) -> Result<()> {
         let view = A::downcast_column(&columns);
         match validity {
@@ -269,15 +267,11 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let values = columns
             .iter()
             .map(|entry| unsafe { entry.index_unchecked(row) }.to_owned())
             .collect::<Vec<_>>();
-
-        if skip_null && values.iter().all(Scalar::is_null) {
-            return Ok(());
-        }
 
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
         values.serialize(&mut buffer)?;
@@ -290,7 +284,6 @@ impl DistinctStateFunc for AggregateDistinctState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        skip_null: bool,
     ) -> Result<()> {
         match validity {
             Some(validity) => {
@@ -298,12 +291,12 @@ impl DistinctStateFunc for AggregateDistinctState {
                     if !b {
                         continue;
                     }
-                    self.add(columns, row, skip_null)?;
+                    self.add(columns, row)?;
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    self.add(columns, row, skip_null)?;
+                    self.add(columns, row)?;
                 }
             }
         }
@@ -392,7 +385,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
@@ -404,7 +397,6 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
@@ -499,7 +491,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
@@ -514,7 +506,6 @@ impl DistinctStateFunc for AggregateUniqStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {

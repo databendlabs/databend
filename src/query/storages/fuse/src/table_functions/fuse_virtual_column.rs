@@ -98,9 +98,9 @@ impl FuseVirtualColumn {
         limit: Option<usize>,
     ) -> Result<DataBlock> {
         let Some(virtual_schema) = tbl.table_info.meta.virtual_schema.clone() else {
-            return Ok(DataBlock::empty_with_schema(Arc::new(
-                FuseVirtualColumn::schema().into(),
-            )));
+            return Ok(DataBlock::empty_with_schema(
+                &FuseVirtualColumn::schema().into(),
+            ));
         };
 
         let limit = limit.unwrap_or(usize::MAX);
@@ -127,8 +127,9 @@ impl FuseVirtualColumn {
         let schema = tbl.schema();
         let projection = HashSet::new();
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
+            let chunk_refs: Vec<&_> = chunk.iter().collect();
             let segments = segments_io
-                .generic_read_compact_segments::<R>(chunk, true, &projection)
+                .generic_read_compact_segments::<R>(&chunk_refs, true, &projection)
                 .await?;
             for segment in segments {
                 let segment = segment?;

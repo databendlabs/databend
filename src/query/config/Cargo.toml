@@ -18,6 +18,7 @@ ignored = ["strum"]
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+databend-base = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
@@ -25,6 +26,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_with = { workspace = true }
@@ -32,8 +34,6 @@ serfig = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

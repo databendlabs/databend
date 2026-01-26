@@ -19,6 +19,8 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
@@ -588,11 +590,35 @@ impl SubqueryDecorrelatorOptimizer {
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
-                let Ok(const_scalar) = ConstantExpr::try_from(eval.items[0].scalar.clone()) else {
-                    return Ok(None);
+                let scalar_expr = &eval.items[0].scalar;
+                let mut constant_scalar = None;
+                if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
+                    let func_ctx = self.ctx.get_function_context()?;
+                    let (folded, _) = ConstantFolder::fold(
+                        &scalar_expr.as_expr()?,
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    if let EExpr::Constant(constant) = folded {
+                        constant_scalar = Some(ScalarExpr::TypedConstantExpr(
+                            ConstantExpr {
+                                span: scalar_expr.span(),
+                                value: constant.scalar,
+                            },
+                            constant.data_type.wrap_nullable(),
+                        ));
+                    }
+                }
+
+                let scalar = if let Some(constant_scalar) = constant_scalar {
+                    constant_scalar
+                } else {
+                    let Ok(const_scalar) = ConstantExpr::try_from(scalar_expr.clone()) else {
+                        return Ok(None);
+                    };
+                    let scalar_data_type = scalar_expr.data_type()?.wrap_nullable();
+                    ScalarExpr::TypedConstantExpr(const_scalar, scalar_data_type)
                 };
-                let scalar_data_type = eval.items[0].scalar.data_type()?.wrap_nullable();
-                let scalar = ScalarExpr::TypedConstantExpr(const_scalar, scalar_data_type);
                 match (&subquery.child_expr, subquery.compare_op.clone()) {
                     (Some(child_expr), Some(compare_op)) => {
                         return Ok(Some(ScalarExpr::FunctionCall(compare_op.to_func_call(

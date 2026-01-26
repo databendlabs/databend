@@ -84,8 +84,8 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
-├── estimated rows: 0.60
+├── filters: [is_true(2 (#2)) or t.number (#0) > 1]
+├── estimated rows: 0.50
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -352,7 +352,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [and_filters(numbers.number (#1) = 0, numbers.number (#1) < 10)], limit: NONE]
+│       ├── push downs: [filters: [numbers.number (#1) = 0 and numbers.number (#1) < 10], limit: NONE]
 │       └── estimated rows: 1.00
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
@@ -612,21 +612,17 @@ EvalScalar
     │               ├── limit: 1
     │               ├── offset: 0
     │               ├── estimated rows: 0.00
-    │               └── Filter
+    │               └── TableScan
+    │                   ├── table: default.default.t
+    │                   ├── scan id: 1
     │                   ├── output columns: []
-    │                   ├── filters: [is_true(t.i (#1) > 10)]
-    │                   ├── estimated rows: 0.00
-    │                   └── TableScan
-    │                       ├── table: default.default.t
-    │                       ├── scan id: 1
-    │                       ├── output columns: [i (#1)]
-    │                       ├── read rows: 0
-    │                       ├── read size: 0
-    │                       ├── partitions total: 1
-    │                       ├── partitions scanned: 0
-    │                       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    │                       ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: NONE]
-    │                       └── estimated rows: 4.00
+    │                   ├── read rows: 0
+    │                   ├── read size: 0
+    │                   ├── partitions total: 1
+    │                   ├── partitions scanned: 0
+    │                   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    │                   ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: 1]
+    │                   └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t
         ├── scan id: 0
@@ -659,13 +655,11 @@ EvalScalar
     │           └── Limit
     │               ├── limit: [1]
     │               ├── offset: [0]
-    │               └── Filter
+    │               └── Scan
+    │                   ├── table: default.t (#1)
     │                   ├── filters: [gt(t.i (#1), 10)]
-    │                   └── Scan
-    │                       ├── table: default.t (#1)
-    │                       ├── filters: [gt(t.i (#1), 10)]
-    │                       ├── order by: []
-    │                       └── limit: NONE
+    │                   ├── order by: []
+    │                   └── limit: 1
     └── Scan
         ├── table: default.t (#0)
         ├── filters: []
@@ -728,8 +722,8 @@ explain select t.number from numbers(10) as t where t.number in (select * from u
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [(t.number (#0) = 1 OR t.number (#0) = 3)]
-├── estimated rows: 7.50
+├── filters: [t.number (#0) = 1 or t.number (#0) = 3]
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.system.numbers
     ├── scan id: 0
@@ -738,7 +732,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [(numbers.number (#0) = 1 OR numbers.number (#0) = 3)], limit: NONE]
+    ├── push downs: [filters: [numbers.number (#0) = 1 or numbers.number (#0) = 3], limit: NONE]
     └── estimated rows: 10.00
 
 query T
@@ -783,21 +777,17 @@ data%base
 query T
 explain select * from t where i like any (select 'data%');
 ----
-Filter
-├── output columns: [t.i (#0)]
-├── filters: [is_true(like(t.i (#0), 'data%'))]
-├── estimated rows: 0.60
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [i (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
+└── estimated rows: 0.60
 
 query T
 select * from t where i like any (SELECT c1 FROM (VALUES ('data%')) words(c1));
@@ -840,21 +830,17 @@ data%base
 query T
 explain select * from t where i like any (select 'data$%%') escape '$';
 ----
-Filter
-├── output columns: [t.i (#0)]
-├── filters: [is_true(like(t.i (#0), 'data$%%', '$'))]
-├── estimated rows: 0.60
-└── TableScan
-    ├── table: default.default.t
-    ├── scan id: 0
-    ├── output columns: [i (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like(t.i (#0), 'data$%%', '$'))], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.t
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like(t.i (#0), 'data$%%', '$'))], limit: NONE]
+└── estimated rows: 0.60
 
 query T
 select * from t where i like any (SELECT c1 FROM (VALUES ('data$%%')) words(c1)) escape '$';

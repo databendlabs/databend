@@ -17,10 +17,25 @@ abcde
 query T
 explain select * from t1 where s like '%';
 ----
-Filter
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
+└── estimated rows: 5.00
+
+query T
+explain select * from t1 where s like 'abcd%' order by s;
+----
+Sort(Single)
 ├── output columns: [t1.s (#0)]
-├── filters: [is_not_null(t1.s (#0))]
-├── estimated rows: 5.00
+├── sort keys: [s ASC NULLS LAST]
+├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t1
     ├── scan id: 0
@@ -30,31 +45,8 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
-    └── estimated rows: 5.00
-
-query T
-explain select * from t1 where s like 'abcd%' order by s;
-----
-Sort(Single)
-├── output columns: [t1.s (#0)]
-├── sort keys: [s ASC NULLS LAST]
-├── estimated rows: 1.00
-└── Filter
-    ├── output columns: [t1.s (#0)]
-    ├── filters: [is_true(t1.s (#0) >= 'abcd'), is_true(t1.s (#0) < 'abce')]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [s (#0)]
-        ├── read rows: 5
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [and_filters(t1.s (#0) >= 'abcd', t1.s (#0) < 'abce')], limit: NONE]
-        └── estimated rows: 5.00
+    ├── push downs: [filters: [t1.s (#0) >= 'abcd' and t1.s (#0) < 'abce'], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 select * from t1 where s like 'abcd' order by s;
@@ -68,21 +60,17 @@ Sort(Single)
 ├── output columns: [t1.s (#0)]
 ├── sort keys: [s ASC NULLS LAST]
 ├── estimated rows: 1.00
-└── Filter
-    ├── output columns: [t1.s (#0)]
-    ├── filters: [is_true(t1.s (#0) = 'abcd')]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [s (#0)]
-        ├── read rows: 5
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.s (#0) = 'abcd')], limit: NONE]
-        └── estimated rows: 5.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [s (#0)]
+    ├── read rows: 5
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.s (#0) = 'abcd')], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 select * from t1 where s like any ('abc%');
@@ -96,21 +84,17 @@ abcd
 query T
 explain select * from t1 where s like any ('abc%');
 ----
-Filter
-├── output columns: [t1.s (#0)]
-├── filters: [is_true(like_any(t1.s (#0), 'abc%'))]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [s (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like_any(t1.s (#0), 'abc%'))], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like_any(t1.s (#0), 'abc%'))], limit: NONE]
+└── estimated rows: 1.00
 
 query T
 select * from t1 where s like any ('abc%', '%bcd');
@@ -123,21 +107,17 @@ abcd
 query T
 explain select * from t1 where s like any ('abc%', '%bcd');
 ----
-Filter
-├── output columns: [t1.s (#0)]
-├── filters: [is_true(like_any(t1.s (#0), ('abc%', '%bcd')))]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [s (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like_any(t1.s (#0), ('abc%', '%bcd')))], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like_any(t1.s (#0), ('abc%', '%bcd')))], limit: NONE]
+└── estimated rows: 1.00
 
 query T
 select * from t1 where s like '%b$%c%' escape '$';
@@ -147,21 +127,17 @@ ab%cd
 query T
 explain select * from t1 where s like '%b$%c%' escape '$';
 ----
-Filter
-├── output columns: [t1.s (#0)]
-├── filters: [is_true(like(t1.s (#0), '%b$%c%', '$'))]
-├── estimated rows: 2.50
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [s (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
+└── estimated rows: 2.50
 
 query T
 select * from t1 where s like any ('%b$%c%') escape '$';
@@ -171,21 +147,17 @@ ab%cd
 query T
 explain select * from t1 where s like any ('%b$%c%') escape '$';
 ----
-Filter
-├── output columns: [t1.s (#0)]
-├── filters: [is_true(like_any(t1.s (#0), '%b$%c%', '$'))]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.t1
-    ├── scan id: 0
-    ├── output columns: [s (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(like_any(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(like_any(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
+└── estimated rows: 1.00
 
 
 statement ok

@@ -15,10 +15,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -34,7 +32,7 @@ use databend_common_version::BUILD_INFO;
 pub const CATALOG_DEFAULT: &str = "default";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_role_cache_mgr() -> Result<()> {
+async fn test_role_cache_mgr() -> anyhow::Result<()> {
     // Init.
     let thread_name = std::thread::current().name().unwrap().to_string();
     databend_common_base::base::GlobalInstance::init_testing(&thread_name);
@@ -43,7 +41,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     let tenant = Tenant::new_literal("tenant1");
 
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;
@@ -70,7 +68,7 @@ async fn test_role_cache_mgr() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_find_all_related_roles() -> Result<()> {
+async fn test_find_all_related_roles() -> anyhow::Result<()> {
     let roles = vec![
         RoleInfo::new("role1", None),
         RoleInfo::new("role2", None),

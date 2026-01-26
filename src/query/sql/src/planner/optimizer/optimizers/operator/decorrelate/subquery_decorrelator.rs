@@ -343,6 +343,7 @@ impl SubqueryDecorrelatorOptimizer {
 
     /// Try to extract subquery from a scalar expression. Returns replaced scalar expression
     /// and the outer s_expr.
+    #[recursive::recursive]
     fn try_rewrite_subquery(
         &mut self,
         scalar: &ScalarExpr,
@@ -692,20 +693,22 @@ impl SubqueryDecorrelatorOptimizer {
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
-                let left_condition = wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: subquery.span,
-                        column: ColumnBindingBuilder::new(
-                            column_name,
-                            output_column.index,
-                            output_column.data_type,
-                            Visibility::Visible,
-                        )
-                        .table_index(output_column.table_index)
-                        .build(),
-                    }),
-                    &subquery.data_type,
-                );
+                let left_condition_base = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: subquery.span,
+                    column: ColumnBindingBuilder::new(
+                        column_name,
+                        output_column.index,
+                        output_column.data_type,
+                        Visibility::Visible,
+                    )
+                    .table_index(output_column.table_index)
+                    .build(),
+                });
+                let left_condition = if left_condition_base.data_type()? == *subquery.data_type {
+                    left_condition_base
+                } else {
+                    wrap_cast(&left_condition_base, &subquery.data_type)
+                };
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =

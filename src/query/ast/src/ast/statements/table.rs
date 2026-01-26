@@ -435,6 +435,21 @@ impl Display for AlterTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum SnapshotRefType {
+    Branch,
+    Tag,
+}
+
+impl Display for SnapshotRefType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SnapshotRefType::Branch => write!(f, "BRANCH"),
+            SnapshotRefType::Tag => write!(f, "TAG"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
@@ -497,6 +512,17 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
+    CreateTableRef {
+        ref_type: SnapshotRefType,
+        ref_name: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+        #[drive(skip)]
+        retain: Option<Duration>,
+    },
+    DropTableRef {
+        ref_type: SnapshotRefType,
+        ref_name: Identifier,
+    },
 }
 
 impl Display for AlterTableAction {
@@ -507,7 +533,6 @@ impl Display for AlterTableAction {
                 write_comma_separated_string_map(f, set_options)?;
                 write!(f, ")")?;
             }
-
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
             }
@@ -593,6 +618,30 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
+            }
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point,
+                retain,
+            } => {
+                write!(f, "CREATE {ref_type} {ref_name}")?;
+                if let Some(travel_point) = travel_point {
+                    write!(f, " AT {travel_point}")?;
+                }
+                if let Some(retain) = retain {
+                    let days = Duration::from_secs(60 * 60 * 24);
+                    if retain >= &days {
+                        let days = retain.as_secs() / (60 * 60 * 24);
+                        write!(f, " RETAIN {days} DAYS ")?;
+                    } else {
+                        let seconds = retain.as_secs();
+                        write!(f, " RETAIN {seconds} SECONDS ")?;
+                    }
+                }
+            }
+            AlterTableAction::DropTableRef { ref_type, ref_name } => {
+                write!(f, "DROP {ref_type} {ref_name}")?;
             }
         };
         Ok(())
@@ -726,15 +775,15 @@ pub struct VacuumTemporaryFiles {
 
 impl Display for crate::ast::VacuumTemporaryFiles {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "VACUUM TEMPORARY FILES ")?;
+        write!(f, "VACUUM TEMPORARY FILES")?;
         if let Some(retain) = &self.retain {
             let days = Duration::from_secs(60 * 60 * 24);
             if retain >= &days {
                 let days = retain.as_secs() / (60 * 60 * 24);
-                write!(f, "RETAIN {days} DAYS ")?;
+                write!(f, " RETAIN {days} DAYS")?;
             } else {
                 let seconds = retain.as_secs();
-                write!(f, "RETAIN {seconds} SECONDS ")?;
+                write!(f, " RETAIN {seconds} SECONDS")?;
             }
         }
 

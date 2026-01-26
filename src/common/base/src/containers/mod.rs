@@ -13,11 +13,8 @@
 // limitations under the License.
 
 mod fixed_heap;
-mod pool;
 mod ttlhmap;
 
 pub use fixed_heap::FixedHeap;
-pub use pool::ItemManager;
-pub use pool::Pool;
 pub use ttlhmap::CleanPolicy;
 pub use ttlhmap::TtlHashMap;

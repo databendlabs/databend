@@ -25,9 +25,13 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnVec;
+use crate::ColumnView;
 use crate::DataBlock;
+use crate::RepeatIndex;
 use crate::Scalar;
+use crate::TakeIndex;
 use crate::Value;
+use crate::block_vec::DataBlockVec;
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -56,23 +60,18 @@ use crate::with_vector_number_type;
 
 // Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (u32, u32, usize);
+// // Block idx, row idx
+pub type BlockIndex = (u32, u32);
 
+// block_index, start, len
 pub type MergeSlice = (usize, usize, usize);
 
 impl DataBlock {
-    pub fn take_blocks(
-        blocks: &[DataBlock],
-        indices: &[BlockRowIndex],
-        result_size: usize,
-    ) -> Self {
+    pub fn take_blocks(blocks: &[DataBlock], indices: &[BlockIndex]) -> Self {
         debug_assert!(!blocks.is_empty());
 
         let num_columns = blocks[0].num_columns();
-        let result_size = if result_size > 0 {
-            result_size
-        } else {
-            indices.iter().map(|(_, _, c)| *c).sum()
-        };
+        let result_size = indices.len();
 
         let result_columns = (0..num_columns)
             .map(|index| {
@@ -86,7 +85,6 @@ impl DataBlock {
                     return BlockEntry::new_const_column(ty, Scalar::Null, result_size);
                 }
 
-                // if they are all same scalars
                 if let Some((scalar, data_type, _)) = entries[0].as_const() {
                     let all_same_scalar =
                         entries.iter().copied().map(BlockEntry::value).all_equal();
@@ -102,7 +100,7 @@ impl DataBlock {
                 let full_columns: Vec<_> =
                     entries.iter().copied().map(BlockEntry::to_column).collect();
 
-                Column::take_column_indices(&full_columns, indices, result_size).into()
+                Column::take_column_indices(&full_columns, indices).into()
             })
             .collect();
 
@@ -113,42 +111,16 @@ impl DataBlock {
         build_columns: &[ColumnVec],
         build_columns_data_type: &[DataType],
         indices: &[RowPtr],
-        result_size: usize,
     ) -> Self {
+        let result_size = indices.len();
         let result_entries =
             build_columns
                 .iter()
                 .zip(build_columns_data_type)
                 .map(|(columns, data_type)| {
-                    Column::take_column_vec_indices(
-                        columns,
-                        data_type.clone(),
-                        indices,
-                        result_size,
-                    )
-                    .into()
+                    Column::take_column_vec_indices(columns, data_type.clone(), indices).into()
                 });
         DataBlock::from_iter(result_entries, result_size)
-    }
-
-    pub fn take_by_slice_limit(
-        block: &DataBlock,
-        slice: (usize, usize),
-        limit: Option<usize>,
-    ) -> Self {
-        let (start, len) = slice;
-        let num_rows = limit.unwrap_or(usize::MAX).min(len);
-        let result_size = num_rows.min(block.num_rows());
-
-        let mut builders = Self::builders(block, num_rows);
-
-        let len = len.min(num_rows);
-        let block_columns = block.columns();
-        for (col_index, builder) in builders.iter_mut().enumerate() {
-            Self::push_to_builder(builder, start, len, &block_columns[col_index].value());
-        }
-
-        Self::build_block(builders, result_size)
     }
 
     pub fn take_by_slices_limit_from_blocks(
@@ -197,33 +169,6 @@ impl DataBlock {
         DataBlock::new(result_columns, num_rows)
     }
 
-    pub fn take_column_by_slices_limit(
-        columns: &[BlockEntry],
-        slices: &[MergeSlice],
-        limit: Option<usize>,
-    ) -> BlockEntry {
-        assert!(!columns.is_empty());
-        let ty = &columns[0].data_type();
-        let num_rows = limit
-            .unwrap_or(usize::MAX)
-            .min(slices.iter().map(|(_, _, c)| *c).sum());
-
-        let mut builder = ColumnBuilder::with_capacity(ty, num_rows);
-        let mut remain = num_rows;
-
-        for (index, start, len) in slices {
-            let len = (*len).min(remain);
-            remain -= len;
-
-            Self::push_to_builder(&mut builder, *start, len, &columns[*index].value());
-            if remain == 0 {
-                break;
-            }
-        }
-
-        builder.build().into()
-    }
-
     fn push_to_builder(
         builder: &mut ColumnBuilder,
         start: usize,
@@ -243,11 +188,8 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn take_column_indices(
-        columns: &[Column],
-        indices: &[BlockRowIndex],
-        result_size: usize,
-    ) -> Column {
+    pub fn take_column_indices(columns: &[Column], indices: &[BlockIndex]) -> Column {
+        let result_size = indices.len();
         let data_type = columns[0].data_type();
         match &columns[0] {
             Column::Null { .. } => Column::Null { len: result_size },
@@ -271,12 +213,10 @@ impl Column {
                         })
                         .collect_vec();
                     let mut builder = Vec::with_capacity(result_size);
-                    for &(block_index, row, times) in indices {
+                    for &(block_index, row) in indices {
                         let val =
                             unsafe { columns[block_index as usize].get_unchecked(row as usize) };
-                        for _ in 0..times {
-                            builder.push(*val);
-                        }
+                        builder.push(*val);
                     }
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
@@ -361,8 +301,8 @@ impl Column {
                     })
                     .collect::<Vec<_>>();
 
-                let inner_column = Self::take_column_indices(&inner_columns, indices, result_size);
-                let inner_bitmap = Self::take_column_indices(&inner_bitmaps, indices, result_size);
+                let inner_column = Self::take_column_indices(&inner_columns, indices);
+                let inner_bitmap = Self::take_column_indices(&inner_bitmaps, indices);
                 NullableColumn::new_column(
                     inner_column,
                     BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
@@ -375,7 +315,7 @@ impl Column {
                             .iter()
                             .map(|c| c.as_tuple().unwrap()[idx].clone())
                             .collect::<Vec<_>>();
-                        Self::take_column_indices(&sub_columns, indices, result_size)
+                        Self::take_column_indices(&sub_columns, indices)
                     })
                     .collect();
                 Column::Tuple(fields)
@@ -402,12 +342,10 @@ impl Column {
                         .map(|col| col.as_vector().unwrap())
                         .collect_vec();
 
-                    for &(block_index, row, times) in indices {
+                    for &(block_index, row) in indices {
                         let val =
                             unsafe { columns[block_index as usize].index_unchecked(row as usize) };
-                        for _ in 0..times {
-                            builder.push(&val);
-                        }
+                        builder.push(&val);
                     }
                     Column::Vector(builder.build())
                 }
@@ -678,55 +616,51 @@ impl Column {
         columns: &ColumnVec,
         data_type: DataType,
         indices: &[RowPtr],
-        result_size: usize,
     ) -> Column {
+        let result_size = indices.len();
         match &columns {
             ColumnVec::Null => Column::Null { len: result_size },
             ColumnVec::EmptyArray => Column::EmptyArray { len: result_size },
             ColumnVec::EmptyMap => Column::EmptyMap { len: result_size },
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
-                    let builder = Self::take_block_vec_primitive_types(columns, indices);
-                    NumberType::<NUM_TYPE>::upcast_column(NumberType::<NUM_TYPE>::column_from_vec(
-                        builder,
-                        &[],
-                    ))
+                    let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                    NumberType::<NUM_TYPE>::upcast_column(builder.into())
                 }
             }),
             ColumnVec::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumnVec::DECIMAL_TYPE(columns, size) => {
-                    let builder = Self::take_block_vec_primitive_types(columns, indices);
+                    let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
-            ColumnVec::Boolean(columns) => {
-                Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
-            }
-            ColumnVec::Binary(columns) => {
-                Column::Binary(Self::take_block_vec_binary_types(columns, indices))
-            }
-            ColumnVec::String(columns) => {
-                Column::String(Self::take_block_vec_string_types(columns, indices))
-            }
+            ColumnVec::Boolean(columns) => Column::Boolean(Self::take_block_vec_boolean_types(
+                columns.as_slice(),
+                indices,
+            )),
+            ColumnVec::Binary(columns) => Column::Binary(Self::take_block_vec_binary_types(
+                columns.as_slice(),
+                indices,
+            )),
+            ColumnVec::String(columns) => Column::String(Self::take_block_vec_string_types(
+                columns.as_slice(),
+                indices,
+            )),
             ColumnVec::Timestamp(columns) => {
-                let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = Int64Type::column_from_vec(builder, &[]);
-                Column::Timestamp(ts)
+                let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                Column::Timestamp(builder.into())
             }
             ColumnVec::TimestampTz(columns) => {
-                let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = TimestampTzType::column_from_vec(builder, &[]);
-                Column::TimestampTz(ts)
+                let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                Column::TimestampTz(builder.into())
             }
             ColumnVec::Date(columns) => {
-                let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let d = Int32Type::column_from_vec(builder, &[]);
-                Column::Date(d)
+                let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                Column::Date(builder.into())
             }
             ColumnVec::Interval(columns) => {
-                let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i = IntervalType::column_from_vec(builder, &[]);
-                Column::Interval(i)
+                let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                Column::Interval(builder.into())
             }
             ColumnVec::Array(columns) => {
                 let item_type = data_type.as_array().unwrap();
@@ -759,24 +693,19 @@ impl Column {
                     columns, builder, indices, &data_type,
                 )
             }
-            ColumnVec::Bitmap(columns) => {
-                BitmapType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
-            }
+            ColumnVec::Bitmap(columns) => BitmapType::upcast_column(
+                Self::take_block_vec_binary_types(columns.as_slice(), indices),
+            ),
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
                 let inner_column = Self::take_column_vec_indices(
                     &columns.column,
                     *inner_data_type.clone(),
                     indices,
-                    result_size,
                 );
 
-                let inner_bitmap = Self::take_column_vec_indices(
-                    &columns.validity,
-                    DataType::Boolean,
-                    indices,
-                    result_size,
-                );
+                let inner_bitmap =
+                    Self::take_column_vec_indices(&columns.validity, DataType::Boolean, indices);
 
                 NullableColumn::new_column(
                     inner_column,
@@ -789,27 +718,23 @@ impl Column {
                     .iter()
                     .enumerate()
                     .map(|(idx, ty)| {
-                        Self::take_column_vec_indices(
-                            &columns[idx],
-                            ty.clone(),
-                            indices,
-                            result_size,
-                        )
+                        Self::take_column_vec_indices(&columns[idx], ty.clone(), indices)
                     })
                     .collect();
 
                 Column::Tuple(fields)
             }
-            ColumnVec::Variant(columns) => {
-                VariantType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
-            }
-            ColumnVec::Geometry(columns) => {
-                GeometryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
-            }
+            ColumnVec::Variant(columns) => VariantType::upcast_column(
+                Self::take_block_vec_binary_types(columns.as_slice(), indices),
+            ),
+            ColumnVec::Geometry(columns) => GeometryType::upcast_column(
+                Self::take_block_vec_binary_types(columns.as_slice(), indices),
+            ),
             ColumnVec::Geography(columns) => {
                 let columns = columns.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
                 GeographyType::upcast_column(GeographyColumn(Self::take_block_vec_binary_types(
-                    &columns, indices,
+                    columns.as_slice(),
+                    indices,
                 )))
             }
             ColumnVec::Vector(columns) => with_vector_number_type!(|NUM_TYPE| match columns {
@@ -833,39 +758,46 @@ impl Column {
             ColumnVec::Opaque(columns) => {
                 with_opaque_mapped_type!(|T| match columns {
                     OpaqueColumnVec::T(columns) => {
-                        let builder = Self::take_block_vec_primitive_types(columns, indices);
-                        OpaqueType::<T>::upcast_column_with_type(builder.into(), &data_type)
+                        let builder =
+                            Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                        OpaqueType::<T>::upcast_column(builder.into())
                     }
                 })
             }
         }
     }
 
-    pub fn take_block_vec_primitive_types<T>(col: &[Buffer<T>], indices: &[RowPtr]) -> Vec<T>
-    where T: Copy {
+    fn take_block_vec_primitive_types<L, T>(col: &L, indices: &[RowPtr]) -> Vec<T>
+    where
+        L: ItemList<Buffer<T>> + ?Sized,
+        T: Copy,
+    {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        builder.extend(indices.iter().map(|row_ptr| unsafe {
-            col.get_unchecked(row_ptr.chunk_index as usize)[row_ptr.row_index as usize]
-        }));
+        builder.extend(
+            indices
+                .iter()
+                .map(|row_ptr| col[row_ptr.chunk_index as usize][row_ptr.row_index as usize]),
+        );
         builder
     }
 
     // TODO: reuse the buffer by `SELECTIVITY_THRESHOLD`
-    pub fn take_block_vec_binary_types(col: &[BinaryColumn], indices: &[RowPtr]) -> BinaryColumn {
+    fn take_block_vec_binary_types<L>(col: &L, indices: &[RowPtr]) -> BinaryColumn
+    where L: ItemList<BinaryColumn> + ?Sized {
         let mut builder = BinaryColumnBuilder::with_capacity(indices.len(), 0);
         for row_ptr in indices {
-            unsafe {
-                builder.put_slice(
-                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize),
-                );
-                builder.commit_row();
-            }
+            let item = unsafe {
+                col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize)
+            };
+            builder.put_slice(item);
+            builder.commit_row();
         }
         builder.build()
     }
 
-    pub fn take_block_vec_string_types(col: &[StringColumn], indices: &[RowPtr]) -> StringColumn {
+    fn take_block_vec_string_types<L>(col: &L, indices: &[RowPtr]) -> StringColumn
+    where L: ItemList<StringColumn> + ?Sized {
         let mut builder = StringColumnBuilder::with_capacity(indices.len());
         for row_ptr in indices {
             unsafe {
@@ -877,7 +809,8 @@ impl Column {
         builder.build()
     }
 
-    pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {
+    fn take_block_vec_boolean_types<L>(col: &L, indices: &[RowPtr]) -> Bitmap
+    where L: ItemList<Bitmap> + ?Sized {
         let num_rows = indices.len();
         // Fast path: avoid iterating column to generate a new bitmap.
         // If all [`Bitmap`] are all_true or all_false and `num_rows <= bitmap.len()`,
@@ -950,19 +883,343 @@ impl Column {
         columns: &[Column],
         data_type: &DataType,
         mut builder: T::ColumnBuilder,
-        indices: &[BlockRowIndex],
+        indices: &[BlockIndex],
     ) -> Column {
         let columns = columns
             .iter()
             .map(|col| T::try_downcast_column(col).unwrap())
             .collect_vec();
-        for &(block_index, row, times) in indices {
+        for &(block_index, row) in indices {
             let val =
                 unsafe { T::index_column_unchecked(&columns[block_index as usize], row as usize) };
-            for _ in 0..times {
-                T::push_item(&mut builder, val.clone())
-            }
+            T::push_item(&mut builder, val.clone());
         }
         T::upcast_column_with_type(T::build_column(builder), data_type)
+    }
+}
+
+pub trait ItemList<T>: std::ops::Index<usize, Output = T> {
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
+    where T: 'a;
+    fn len(&self) -> usize;
+}
+
+impl<T> ItemList<T> for [T] {
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
+    where T: 'a {
+        self.iter()
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ChunkIndexItem {
+    Single { block: u32, n: u32 },
+    Repeat { block: u32, count: u32 },
+    Range { block: u32, len: u32 },
+}
+
+impl ChunkIndexItem {
+    pub fn block(&self) -> u32 {
+        match *self {
+            ChunkIndexItem::Single { block, .. } => block,
+            ChunkIndexItem::Repeat { block, .. } => block,
+            ChunkIndexItem::Range { block, .. } => block,
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        match *self {
+            ChunkIndexItem::Single { n, .. } => n,
+            ChunkIndexItem::Repeat { count, .. } => count,
+            ChunkIndexItem::Range { len, .. } => len,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ChunkIndex {
+    rows: Vec<u32>,
+    chunks: Vec<ChunkIndexItem>,
+    total: u32,
+}
+
+impl ChunkIndex {
+    pub fn push_single(&mut self, block: u32, row: u32) {
+        self.rows.push(row);
+        self.chunks.push(ChunkIndexItem::Single { block, n: 1 });
+        self.total += 1;
+    }
+
+    pub fn push_range(&mut self, block: u32, row: u32, len: u32) {
+        debug_assert!(len > 0);
+        self.rows.push(row);
+        self.chunks.push(ChunkIndexItem::Range { block, len });
+        self.total += len;
+    }
+
+    pub fn push_merge_range(&mut self, block: u32, row: u32, len: u32) {
+        if len == 1 {
+            self.push_merge(block, row);
+            return;
+        }
+
+        match self.chunks.last_mut() {
+            Some(ChunkIndexItem::Range {
+                block: pre_block,
+                len: pre_len,
+            }) if *pre_block == block && *self.rows.last().unwrap() + *pre_len == row => {
+                self.total += len;
+                *pre_len += len;
+            }
+            Some(
+                item @ &mut ChunkIndexItem::Single {
+                    block: pre_block,
+                    n: 1,
+                },
+            ) if pre_block == block && *self.rows.last().unwrap() + 1 == row => {
+                self.total += len;
+                *item = ChunkIndexItem::Range {
+                    block,
+                    len: len + 1,
+                }
+            }
+            _ => self.push_range(block, row, len),
+        }
+    }
+
+    pub fn push_repeat(&mut self, block: u32, row: u32, count: u32) {
+        self.rows.push(row);
+        self.chunks.push(ChunkIndexItem::Repeat { block, count });
+        self.total += count;
+    }
+
+    pub fn push_merge(&mut self, block: u32, row: u32) {
+        let new_block = block;
+        let new_row = row;
+        self.total += 1;
+        match self.chunks.last_mut() {
+            Some(ChunkIndexItem::Repeat { block, count })
+                if *block == new_block && *self.rows.last().unwrap() == new_row =>
+            {
+                *count += 1;
+            }
+            Some(ChunkIndexItem::Range { block, len })
+                if *block == new_block && *self.rows.last().unwrap() + *len == new_row =>
+            {
+                *len += 1;
+            }
+            Some(item @ &mut ChunkIndexItem::Single { block, n: 1 })
+                if block == new_block && *self.rows.last().unwrap() == new_row =>
+            {
+                *item = ChunkIndexItem::Repeat { block, count: 2 }
+            }
+            Some(item @ &mut ChunkIndexItem::Single { block, n: 1 })
+                if block == new_block && new_row == *self.rows.last().unwrap() + 1 =>
+            {
+                *item = ChunkIndexItem::Range { block, len: 2 }
+            }
+            Some(ChunkIndexItem::Single { block, n }) if *block == new_block => {
+                self.rows.push(new_row);
+                *n += 1;
+            }
+            _ => {
+                self.rows.push(row);
+                self.chunks.push(ChunkIndexItem::Single {
+                    block: new_block,
+                    n: 1,
+                });
+            }
+        }
+    }
+
+    pub fn iter_chunk(&self) -> ChunkIndexIter<'_> {
+        ChunkIndexIter {
+            rows: &self.rows,
+            row_pos: 0,
+            chunks: &self.chunks,
+            chunk_pos: 0,
+        }
+    }
+
+    pub fn num_rows(&self) -> usize {
+        self.total as _
+    }
+
+    pub fn clear(&mut self) {
+        self.rows.clear();
+        self.chunks.clear();
+        self.total = 0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    pub fn check_valid(&self) -> bool {
+        if self.chunks.iter().any(|item| item.size() == 0) {
+            return false;
+        }
+        self.chunks.iter().map(|item| item.size()).sum::<u32>() == self.total
+    }
+}
+
+pub enum Chunk<'a> {
+    Single { block: u32, rows: &'a [u32] },
+    Repeat { block: u32, rows: RepeatIndex },
+    Range { block: u32, row: u32, len: u32 },
+}
+
+impl Chunk<'_> {
+    pub fn block(&self) -> u32 {
+        match *self {
+            Chunk::Single { block, .. } => block,
+            Chunk::Repeat { block, .. } => block,
+            Chunk::Range { block, .. } => block,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Chunk::Single { rows, .. } => rows.len(),
+            Chunk::Repeat { rows, .. } => rows.len(),
+            Chunk::Range { len, .. } => *len as _,
+        }
+    }
+
+    pub fn max_row(&self) -> u32 {
+        match self {
+            Chunk::Single { rows, .. } => rows.iter().copied().max().unwrap(),
+            Chunk::Repeat { rows, .. } => rows.row,
+            Chunk::Range { row, len, .. } => row + len,
+        }
+    }
+}
+
+pub struct ChunkIndexIter<'a> {
+    rows: &'a [u32],
+    row_pos: usize,
+    chunks: &'a [ChunkIndexItem],
+    chunk_pos: usize,
+}
+
+impl<'a> Iterator for ChunkIndexIter<'a> {
+    type Item = Chunk<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.chunks.get(self.chunk_pos)?;
+        self.chunk_pos += 1;
+
+        match item {
+            ChunkIndexItem::Single { block, n } => {
+                let start = self.row_pos;
+                let end = start + (*n as usize);
+                self.row_pos = end;
+                Some(Chunk::Single {
+                    block: *block,
+                    rows: &self.rows[start..end],
+                })
+            }
+            ChunkIndexItem::Repeat { block, count } => {
+                let row = self.rows[self.row_pos];
+                self.row_pos += 1;
+                Some(Chunk::Repeat {
+                    block: *block,
+                    rows: RepeatIndex { row, count: *count },
+                })
+            }
+            ChunkIndexItem::Range { block, len } => {
+                let row = self.rows[self.row_pos];
+                self.row_pos += 1;
+                Some(Chunk::Range {
+                    block: *block,
+                    row,
+                    len: *len,
+                })
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flatten_index(index: &ChunkIndex) -> Vec<(u32, u32)> {
+        let mut flattened = Vec::with_capacity(index.total as _);
+        for chunk in index.iter_chunk() {
+            match chunk {
+                Chunk::Single { block, rows } => {
+                    flattened.extend(rows.iter().map(|row| (block, *row)));
+                }
+                Chunk::Repeat {
+                    block,
+                    rows: RepeatIndex { row, count },
+                } => {
+                    flattened.extend(std::iter::repeat_n((block, row), count as _));
+                }
+                Chunk::Range { block, row, len } => {
+                    flattened.extend((0..len).map(|delta| (block, row + delta)));
+                }
+            }
+        }
+        flattened
+    }
+
+    #[test]
+    fn test_chunk_index_push_merge() {
+        let mut index = ChunkIndex::default();
+
+        let input = vec![
+            (0, 0),
+            (0, 1),
+            (0, 1),
+            (0, 2),
+            (1, 10),
+            (1, 11),
+            (1, 12),
+            (1, 12),
+            (2, 20),
+            (3, 30),
+            (3, 30),
+            (3, 30),
+            (4, 100),
+            (4, 102),
+        ];
+
+        for &(block, row) in &input {
+            index.push_merge(block, row);
+            assert!(index.check_valid());
+        }
+
+        assert_eq!(index.total as usize, input.len());
+        let flattened = flatten_index(&index);
+        assert_eq!(flattened, input);
+    }
+
+    #[test]
+    fn test_chunk_index_push_merge_range() {
+        let mut index = ChunkIndex::default();
+
+        index.push_merge_range(0, 3, 1);
+        index.push_merge_range(0, 4, 1);
+        index.push_merge_range(0, 5, 2);
+        index.push_merge_range(0, 3, 1);
+        index.push_merge_range(0, 3, 1);
+
+        assert!(index.check_valid());
+
+        let flattened = flatten_index(&index);
+        assert_eq!(flattened, vec![
+            (0, 3),
+            (0, 4),
+            (0, 5),
+            (0, 6),
+            (0, 3),
+            (0, 3),
+        ])
     }
 }

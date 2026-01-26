@@ -85,7 +85,6 @@ impl SeparatedTextDecoder {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
-                timezone: options_ext.timezone,
                 jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
@@ -102,7 +101,6 @@ impl SeparatedTextDecoder {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                timezone: options_ext.timezone,
                 jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
@@ -117,7 +115,12 @@ impl SeparatedTextDecoder {
         &self.common_settings
     }
 
-    pub fn read_field(&self, column: &mut ColumnBuilder, data: &[u8]) -> Result<()> {
+    pub fn read_field(
+        &self,
+        column: &mut ColumnBuilder,
+        data: &[u8],
+        allow_null: bool,
+    ) -> Result<()> {
         match column {
             ColumnBuilder::Null { len } => {
                 *len += 1;
@@ -134,7 +137,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::Boolean(c) => self.read_bool(c, data),
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, data),
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, data, allow_null),
             ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumnBuilder::NUM_TYPE(c) => {
                     if NUM_TYPE::FLOATING {
@@ -191,14 +194,17 @@ impl SeparatedTextDecoder {
         &self,
         column: &mut NullableColumnBuilder<AnyType>,
         data: &[u8],
+        allow_null: bool,
     ) -> Result<()> {
-        for null in &self.common_settings().null_if {
-            if data == null {
-                column.push_null();
-                return Ok(());
+        if allow_null {
+            for null in &self.common_settings().null_if {
+                if data == null {
+                    column.push_null();
+                    return Ok(());
+                }
             }
         }
-        self.read_field(&mut column.builder, data)?;
+        self.read_field(&mut column.builder, data, false)?;
         column.validity.push(true);
         Ok(())
     }

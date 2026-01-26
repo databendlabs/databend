@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::RepeatIndex;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::NumberScalar;
@@ -67,6 +68,8 @@ impl RangeJoinState {
             if i == left_len {
                 break;
             }
+            debug_assert!(left_join_key_col.index(i).is_some());
+            debug_assert!(right_join_key_col.index(j).is_some());
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
             let right_scalar = unsafe { right_join_key_col.index_unchecked(j) };
             if compare_scalar(
@@ -80,10 +83,10 @@ impl RangeJoinState {
                     unsafe { left_idx_col.index_unchecked(i) }
                 {
                     left_result_block = left_table[left_idx].take_compacted_indices(
-                        &[(
-                            ((left - 1) as usize - left_offset) as u32,
-                            (right_len - j) as u32,
-                        )],
+                        &[RepeatIndex {
+                            row: ((left - 1) as usize - left_offset) as u32,
+                            count: (right_len - j) as u32,
+                        }],
                         right_len - j,
                     )?;
                 }
@@ -91,19 +94,12 @@ impl RangeJoinState {
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         unsafe { right_idx_col.index_unchecked(k) }
                     {
-                        right_buffer.push((-right - 1) as usize - right_offset);
+                        right_buffer.push(((-right - 1) as usize - right_offset) as u32);
                     }
                 }
                 if !left_result_block.is_empty() {
-                    let mut indices = Vec::with_capacity(right_buffer.len());
-                    for res in right_buffer.iter() {
-                        indices.push((0u32, *res as u32, 1usize));
-                    }
-                    let right_result_block = DataBlock::take_blocks(
-                        &right_table[right_idx..right_idx + 1],
-                        &indices,
-                        indices.len(),
-                    );
+                    let right_result_block =
+                        right_table[right_idx].take(right_buffer.as_slice())?;
                     // Merge left_result_block and right_result_block
                     left_result_block.merge_block(right_result_block);
                     for filter in self.other_conditions.iter() {

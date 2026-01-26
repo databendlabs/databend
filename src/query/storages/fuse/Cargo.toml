@@ -74,12 +74,12 @@ tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
-tempfile = { workspace = true }
 
 [[bench]]
 name = "bench"

@@ -8,7 +8,7 @@ SELECT UPPER('Здравствуйте')
 ----
 ЗДРАВСТВУЙТЕ
 
-query T
+query ?
 SELECT UPPER(NULL)
 ----
 NULL

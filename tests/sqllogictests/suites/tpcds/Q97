@@ -36,5 +36,3 @@ FULL OUTER JOIN csci ON (ssci.customer_sk=csci.customer_sk
 LIMIT 100;
 ----
 540709 286686 171
-
-

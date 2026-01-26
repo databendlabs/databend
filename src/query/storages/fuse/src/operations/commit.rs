@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use chrono::Utc;
@@ -149,8 +148,11 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
-        let snapshot_location = location_generator
-            .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        let snapshot_location = location_generator.gen_snapshot_location(
+            self.get_branch_id(),
+            &snapshot.snapshot_id,
+            TableSnapshot::VERSION,
+        )?;
         let need_to_save_statistics =
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
@@ -200,35 +202,46 @@ impl FuseTable {
     }
 
     pub fn build_new_table_meta(
+        &self,
         old_meta: &TableMeta,
         new_snapshot_location: &str,
         new_snapshot: &TableSnapshot,
     ) -> Result<TableMeta> {
         let mut new_table_meta = old_meta.clone();
-        // 1.1 set new snapshot location
-        new_table_meta.options.insert(
-            OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-            new_snapshot_location.to_owned(),
-        );
-        // remove legacy options
-        Self::remove_legacy_options(&mut new_table_meta.options);
+        if let Some(branch_name) = self.get_branch_name() {
+            let Some(branch_ref) = new_table_meta.refs.get_mut(branch_name) else {
+                return Err(ErrorCode::UnknownReference(format!(
+                    "Unknown branch '{}'",
+                    branch_name
+                )));
+            };
+            branch_ref.loc = new_snapshot_location.to_owned();
+        } else {
+            // 1.1 set new snapshot location
+            new_table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+                new_snapshot_location.to_owned(),
+            );
+            // remove legacy options
+            Self::remove_legacy_options(&mut new_table_meta.options);
 
-        // 1.2 setup table statistics
-        let stats = &new_snapshot.summary;
-        // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: stats.row_count,
-            data_bytes: stats.uncompressed_byte_size,
-            compressed_data_bytes: stats.compressed_byte_size,
-            index_data_bytes: stats.index_size,
-            bloom_index_size: stats.bloom_index_size,
-            ngram_index_size: stats.ngram_index_size,
-            inverted_index_size: stats.inverted_index_size,
-            vector_index_size: stats.vector_index_size,
-            virtual_column_size: stats.virtual_column_size,
-            number_of_segments: Some(new_snapshot.segments.len() as u64),
-            number_of_blocks: Some(stats.block_count),
-        };
+            // 1.2 setup table statistics
+            let stats = &new_snapshot.summary;
+            // update statistics
+            new_table_meta.statistics = TableStatistics {
+                number_of_rows: stats.row_count,
+                data_bytes: stats.uncompressed_byte_size,
+                compressed_data_bytes: stats.compressed_byte_size,
+                index_data_bytes: stats.index_size,
+                bloom_index_size: stats.bloom_index_size,
+                ngram_index_size: stats.ngram_index_size,
+                inverted_index_size: stats.inverted_index_size,
+                vector_index_size: stats.vector_index_size,
+                virtual_column_size: stats.virtual_column_size,
+                number_of_segments: Some(new_snapshot.segments.len() as u64),
+                number_of_blocks: Some(stats.block_count),
+            };
+        }
         new_table_meta.updated_on = Utc::now();
         Ok(new_table_meta)
     }
@@ -249,8 +262,9 @@ impl FuseTable {
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
+        let should_write_hint = self.table_branch.is_none();
         let new_table_meta =
-            Self::build_new_table_meta(&table_info.meta, &snapshot_location, &snapshot)?;
+            self.build_new_table_meta(&table_info.meta, &snapshot_location, &snapshot)?;
         // 2. prepare the request
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
@@ -275,6 +289,7 @@ impl FuseTable {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
                 base_snapshot_location: self.snapshot_loc(),
+                lvt_check: None,
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
@@ -293,14 +308,16 @@ impl FuseTable {
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().insert(snapshot_location.clone(), snapshot);
-        Self::write_last_snapshot_hint(
-            ctx,
-            operator,
-            location_generator,
-            &snapshot_location,
-            &new_table_meta,
-        )
-        .await;
+        if should_write_hint {
+            Self::write_last_snapshot_hint(
+                ctx,
+                operator,
+                location_generator,
+                &snapshot_location,
+                &new_table_meta,
+            )
+            .await;
+        }
 
         Ok(())
     }
@@ -328,10 +345,9 @@ impl FuseTable {
         base_segments: &[Location],
         base_summary: Statistics,
         table_meta_timestamps: TableMetaTimestamps,
-        max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
-        let mut backoff = set_backoff(None, None, max_retry_elapsed);
+        let mut backoff = set_backoff(None, None, None);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
@@ -407,7 +423,7 @@ impl FuseTable {
                                 self.table_info.ident
                             );
 
-                            databend_common_base::base::tokio::time::sleep(d).await;
+                            tokio::time::sleep(d).await;
                             latest_table_ref = self.refresh(ctx.as_ref()).await?;
                             let latest_fuse_table =
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;
@@ -560,11 +576,11 @@ impl FuseTable {
                     let prev_stats = reader.read(&load_params).await?;
                     if prev_stats.row_count == 0 {
                         // Fallback to snapshot for real row count
-                        let snapshot_loc =
-                            self.meta_location_generator().snapshot_location_from_uuid(
-                                &prev_stats.snapshot_id,
-                                TableSnapshot::VERSION,
-                            )?;
+                        let snapshot_loc = self.meta_location_generator().gen_snapshot_location(
+                            self.get_branch_id(),
+                            &prev_stats.snapshot_id,
+                            TableSnapshot::VERSION,
+                        )?;
                         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
                         let prev_snapshot = FuseTable::read_table_snapshot_with_reader(
                             reader,

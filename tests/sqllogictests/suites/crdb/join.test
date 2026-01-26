@@ -204,7 +204,7 @@ SELECT * FROM empty AS a(x) JOIN onecolumn AS b(y) ON a.x = b.y
 statement ok
 SELECT * FROM empty AS a JOIN onecolumn AS b USING(x)
 
-query IT
+query II
 SELECT * FROM onecolumn AS a(x) LEFT OUTER JOIN empty AS b(y) ON a.x = b.y ORDER BY a.x
 ----
 42 NULL
@@ -288,7 +288,7 @@ SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND t.y=53)
 ----
 42 53
 
-query IT
+query II
 SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.y=53) order by o.x
 ----
 42 53
@@ -330,27 +330,27 @@ CREATE TABLE b (i int, b bool)
 statement ok
 INSERT INTO b VALUES (2, true), (3, true), (4, false)
 
-query III
+query IIB
 SELECT * FROM a INNER JOIN b ON a.i = b.i
 ----
 2 2 1
 3 3 1
 
-query ITT
+query IIB
 SELECT * FROM a LEFT OUTER JOIN b ON a.i = b.i
 ----
 1 NULL NULL
 2 2 1
 3 3 1
 
-query III
+query IIB
 SELECT * FROM a RIGHT OUTER JOIN b ON a.i = b.i order by b
 ----
 2 2 1
 3 3 1
 NULL 4 0
 
-query III
+query IIB
 SELECT * FROM a FULL OUTER JOIN b ON a.i = b.i order by b
 ----
 1 NULL NULL
@@ -358,7 +358,7 @@ SELECT * FROM a FULL OUTER JOIN b ON a.i = b.i order by b
 3 3 1
 NULL 4 0
 
-query III
+query IIB
 SELECT * FROM a FULL OUTER JOIN b ON (a.i = b.i and a.i>2) ORDER BY a.i, b.i
 ----
 1 NULL NULL
@@ -371,7 +371,7 @@ NULL 4 0
 statement ok
 INSERT INTO b VALUES (3, false)
 
-query III
+query IIB
 SELECT * FROM a RIGHT OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b
 ----
 2 2 1
@@ -379,7 +379,7 @@ SELECT * FROM a RIGHT OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b
 3 3 1
 NULL 4 0
 
-query III
+query IIB
 SELECT * FROM a FULL OUTER JOIN b ON a.i=b.i ORDER BY b.i, b.b
 ----
 1 NULL NULL
@@ -411,7 +411,7 @@ SELECT * FROM onecolumn JOIN (SELECT x + 2 AS x FROM onecolumn) USING(x)
 ----
 44
 
-query IIIII
+query IIII
 SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c USING(x)) ORDER BY x LIMIT 1
 ----
 42 53 53 53
@@ -545,7 +545,7 @@ SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq WHER
 1 3 2 4
 3 6 3 9
 
-query IITT
+query IIII
 SELECT *  FROM (SELECT * FROM pairs LEFT JOIN square ON b = sq AND a > 1 AND n < 6) WHERE b > 1 AND (n IS NULL OR n > 1) AND (n IS NULL OR a  < sq)
 ----
 1 2 NULL NULL
@@ -769,7 +769,7 @@ SELECT * FROM xyu INNER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 
 ----
 1 1 1 1 1 1
 
-query IIITTT
+query IIIIII
 SELECT * FROM xyu LEFT OUTER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10
 ----
 0 0 0 NULL NULL NULL
@@ -804,7 +804,7 @@ NULL 5 5 55
 # query
 # SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu FULL OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2
 
-query IIITTT
+query IIIIII
 SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu LEFT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10
 ----
 0 0 0 NULL NULL NULL
@@ -878,70 +878,70 @@ CREATE TABLE bar (  a INT,  b FLOAT,  c FLOAT,  d INT)
 statement ok
 INSERT INTO bar VALUES  (1, 1, 1, 1),  (2, 2, 2, 2),  (3, 3, 3, 3)
 
-query II??
+query IIRR
 SELECT * FROM foo NATURAL JOIN bar
 ----
 1 1 1.0 1.0
 2 2 2.0 2.0
 3 3 3.0 3.0
 
-query II??I?I
+query IIRRIRI
 SELECT * FROM foo JOIN bar USING (b)
 ----
 1 1 1.0 1.0 1 1.0 1
 2 2 2.0 2.0 2 2.0 2
 3 3 3.0 3.0 3 3.0 3
 
-query II???I
+query IIRRRI
 SELECT * FROM foo JOIN bar USING (a, b)
 ----
 1 1 1.0 1.0 1.0 1
 2 2 2.0 2.0 2.0 2
 3 3 3.0 3.0 3.0 3
 
-query II??I
+query IIRRI
 SELECT * FROM foo JOIN bar USING (a, b, c)
 ----
 1 1 1.0 1.0 1
 2 2 2.0 2.0 2
 3 3 3.0 3.0 3
 
-query II??I??I
+query IIRRIRRI
 SELECT * FROM foo JOIN bar ON foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query II??I??I
+query IIRRIRRI
 SELECT * FROM foo JOIN bar ON foo.a = bar.a AND foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query II??I??I
+query IIRRIRRI
 SELECT * FROM foo, bar WHERE foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query II??I??I
+query IIRRIRRI
 SELECT * FROM foo, bar WHERE foo.a = bar.a AND foo.b = bar.b
 ----
 1 1 1.0 1.0 1 1.0 1.0 1
 2 2 2.0 2.0 2 2.0 2.0 2
 3 3 3.0 3.0 3 3.0 3.0 3
 
-query II???I
+query IIRRRI
 SELECT * FROM foo JOIN bar USING (a, b) WHERE foo.c = bar.c AND foo.d = bar.d
 ----
 1 1 1.0 1.0 1.0 1
 2 2 2.0 2.0 2.0 2
 3 3 3.0 3.0 3.0 3
 
-query TII
+query III
 SELECT * FROM onecolumn AS a(x) RIGHT JOIN twocolumn ON false order by y
 ----
 NULL 42 53

@@ -32,6 +32,7 @@ use databend_common_storages_system::PrivateTasksTable;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::task::TaskInterpreter;
+use crate::meta_service_error;
 use crate::sessions::QueryContext;
 
 pub(crate) struct PrivateTaskInterpreter;
@@ -111,7 +112,8 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         UserApiProvider::instance()
             .task_api(&plan.tenant)
             .drop_task(&plan.task_name)
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(())
     }
@@ -124,7 +126,8 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         let tasks = UserApiProvider::instance()
             .task_api(&plan.tenant)
             .list_task()
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         tasks
             .into_iter()

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
@@ -254,7 +253,7 @@ async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, Result<u64>)> {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
             info!("fuse_time_travel_size will read: {}", snapshot_location);
-            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator).await;
+            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator, true).await;
             info!("read_snapshot cost: {:?}", start.elapsed());
             snapshot.map(|(snapshot, _)| {
                 snapshot.summary.compressed_byte_size + snapshot.summary.index_size

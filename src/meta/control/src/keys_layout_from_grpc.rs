@@ -17,9 +17,10 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf;
+use databend_meta_runtime::DatabendRuntime;
+use semver::Version;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 
@@ -28,7 +29,7 @@ use crate::args::KeysLayoutArgs;
 /// Get snapshot keys layout from a running meta-service node
 pub async fn keys_layout_from_running_node(
     args: &KeysLayoutArgs,
-    version: BuildInfoRef,
+    version: Version,
 ) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Keys Layout:");
@@ -64,9 +65,9 @@ async fn get_available_socket_addr(endpoint: &str) -> Result<SocketAddr, anyhow:
 pub async fn keys_layout_from_grpc(
     addr: &str,
     depth: Option<u32>,
-    version: BuildInfoRef,
+    version: Version,
 ) -> anyhow::Result<()> {
-    let client = MetaGrpcClient::try_create(
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
         vec![addr.to_string()],
         version,
         "root",

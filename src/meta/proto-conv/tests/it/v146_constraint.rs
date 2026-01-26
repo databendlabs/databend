@@ -74,6 +74,7 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
             "constraint_1".to_string() => Constraint::Check("c1 > 10".to_string()),
             "constraint_2".to_string() => Constraint::Check("c1 != 0".to_string()),
         },
+        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v142.as_slice(), 146, want())?;

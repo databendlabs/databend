@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::BuildInfoRef;
 pub use resources_management_kubernetes::KubernetesResourcesManagement;
 pub use resources_management_self_managed::SelfManagedResourcesManagement;
@@ -50,8 +51,11 @@ pub async fn init_resources_management(cfg: &InnerConfig, version: BuildInfoRef)
                 "kubernetes_managed" => KubernetesResourcesManagement::create(),
                 "system_managed" => {
                     let meta_api_provider =
-                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
-                    match meta_api_provider.create_meta_store().await {
+                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
+                    match meta_api_provider
+                        .create_meta_store::<DatabendRuntime>()
+                        .await
+                    {
                         Err(cause) => {
                             let err = ErrorCode::MetaServiceError(format!(
                                 "Failed to create meta store: {}",

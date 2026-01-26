@@ -29,36 +29,28 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2)]
-│   ├── filters: [is_true(t2.a (#2) > 3)]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 1
-│       ├── partitions scanned: 0
-│       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 3)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0)]
-    ├── filters: [is_true(t1.a (#0) > 3)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 3)], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
+    └── estimated rows: 0.00
 
 # left anti, can propagate t1.a > 3
 query T
@@ -72,36 +64,28 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
-├── Filter(Build)
-│   ├── output columns: [t2.a (#2)]
-│   ├── filters: [is_true(t2.a (#2) > 3)]
-│   ├── estimated rows: 0.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── scan id: 1
-│       ├── output columns: [a (#2)]
-│       ├── read rows: 0
-│       ├── read size: 0
-│       ├── partitions total: 1
-│       ├── partitions scanned: 0
-│       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(t2.a (#2) > 3)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter(Probe)
-    ├── output columns: [t1.a (#0)]
-    ├── filters: [is_true(t1.a (#0) > 3)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
-        └── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── scan id: 1
+│   ├── output columns: [a (#2)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(t2.a (#2) > 3)], limit: NONE]
+│   └── estimated rows: 0.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
+    └── estimated rows: 0.00
 
 statement ok
 drop table if exists t1;

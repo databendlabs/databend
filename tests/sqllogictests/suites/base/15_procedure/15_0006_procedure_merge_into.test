@@ -67,7 +67,7 @@ select count(*) from fuse_snapshot('test_procedure_merge_into','salaries');
 ----
 1
 
-query IF
+query IR
 SELECT employee_id, salary FROM salaries order by employee_id;
 ----
 1   51000.00
@@ -88,7 +88,7 @@ select count(*) from fuse_snapshot('test_procedure_merge_into','employees');
 ----
 1
 
-query IF
+query IR
 SELECT employee_id, salary FROM salaries order by employee_id;
 ----
 1   51000.00
@@ -159,7 +159,7 @@ BEGIN TRANSACTION;
 statement ok
 call procedure test_merge_operations_v2();
 
-query IF
+query IR
 SELECT employee_id, salary FROM salaries order by employee_id;
 ----
 1   51000.00
@@ -170,7 +170,7 @@ SELECT employee_id, salary FROM salaries order by employee_id;
 statement ok
 COMMIT;
 
-query IF
+query IR
 SELECT employee_id, salary FROM salaries order by employee_id;
 ----
 1   51000.00

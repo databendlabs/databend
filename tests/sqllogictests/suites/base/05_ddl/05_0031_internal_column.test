@@ -26,7 +26,7 @@ SELECT _row_id FROM `05_0031_t` where b > 0 order by _row_id
 18446735277616529409
 18446739675663040512
 
-query II
+query III
 SELECT b,_row_id,a FROM `05_0031_t` order by _row_id
 ----
 2 18446735277616529408 1
@@ -87,7 +87,7 @@ select a, _row_id from t_11126 order by a desc limit 5;
 
 # issue 17327
 
-query IF
+query IR
 with tt as (select sum(a) as a from t_11126) select t_11126._row_id, t_11126.a/tt.a from t_11126, tt limit 5;
 ----
 18446739675663040512 0.0
@@ -96,7 +96,7 @@ with tt as (select sum(a) as a from t_11126) select t_11126._row_id, t_11126.a/t
 18446739675663040515 0.0006060606060606061
 18446739675663040516 0.0008080808080808081
 
-query IF
+query IR
 with tt as (select sum(a) as a from t_11126) select t_11126._row_id, t_11126.a/tt.a from tt, t_11126 limit 5;
 ----
 18446739675663040512 0.0

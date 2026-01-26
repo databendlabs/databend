@@ -1,0 +1,73 @@
+statement ok
+drop table if exists fmt_bin
+
+statement ok
+create table fmt_bin(id int, v binary)
+
+statement ok
+insert into fmt_bin values
+(1, to_binary('hello')),
+(2, from_hex('776f726c64')),
+(3, from_base64('aGVsbG8gdW5pY29kZQ=='))
+
+statement ok
+set binary_output_format = 'hex'
+
+query IT
+select v from fmt_bin order by id
+----
+68656C6C6F
+776F726C64
+68656C6C6F20756E69636F6465
+
+statement ok
+set binary_output_format = 'base64'
+
+onlyif http
+query IT
+select v from fmt_bin order by id
+----
+aGVsbG8=
+d29ybGQ=
+aGVsbG8gdW5pY29kZQ==
+
+statement ok
+set binary_output_format = 'utf-8'
+
+onlyif http
+query IT
+select v from fmt_bin order by id
+----
+hello
+world
+hello unicode
+
+statement ok
+set binary_output_format = 'hex'
+
+statement ok
+set binary_input_format = 'hex'
+
+statement ok
+insert into fmt_bin values (4, '616263')
+
+statement ok
+set binary_input_format = 'base64'
+
+statement ok
+insert into fmt_bin values (5, 'YWJjZA==')
+
+statement ok
+set binary_input_format = 'utf-8'
+
+query IT
+select id, to_hex(v) from fmt_bin where id in (4,5) order by id
+----
+4 616263
+5 61626364
+
+statement ok
+set binary_output_format = 'hex'
+
+statement ok
+drop table fmt_bin

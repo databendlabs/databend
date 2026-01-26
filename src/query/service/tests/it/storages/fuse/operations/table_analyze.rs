@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
@@ -42,7 +41,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV3;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_table_modify_column_ndv_statistics() -> Result<()> {
+async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -100,7 +99,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_table_update_analyze_statistics() -> Result<()> {
+async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -200,7 +199,7 @@ async fn check_column_ndv_statistics(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
+async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -222,8 +221,11 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
-    let snapshot_loc_1 = location_gen
-        .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
+    let snapshot_loc_1 = location_gen.gen_snapshot_location(
+        None,
+        &snapshot_1.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     snapshot_1.write_meta(&operator, &snapshot_loc_1).await?;
 
     // generate table statistics.

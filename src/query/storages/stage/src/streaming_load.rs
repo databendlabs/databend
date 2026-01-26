@@ -16,7 +16,6 @@ use std::mem;
 use std::sync::Arc;
 
 use databend_common_ast::ast::OnErrorMode;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -40,6 +39,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_storages_parquet::InmMemoryFile;
 use parking_lot::Mutex;
+use tokio::sync::mpsc::Receiver;
 
 use crate::BytesBatch;
 use crate::compression::get_compression_with_path;

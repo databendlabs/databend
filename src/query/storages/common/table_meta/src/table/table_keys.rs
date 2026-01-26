@@ -19,6 +19,7 @@ use std::sync::LazyLock;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
+pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
@@ -69,6 +70,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_RECURSIVE_CTE);
     r
 });
 
@@ -80,6 +82,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_ENGINE_META);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
+    r.insert(OPT_KEY_RECURSIVE_CTE);
     r
 });
 

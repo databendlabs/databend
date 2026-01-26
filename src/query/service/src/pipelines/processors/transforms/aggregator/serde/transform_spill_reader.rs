@@ -163,7 +163,7 @@ impl Processor for TransformSpillReader {
                     }
 
                     self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data, None));
+                        Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
                 AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::NewSpilled(_) => unreachable!(),
@@ -301,7 +301,7 @@ impl Processor for TransformSpillReader {
 
                     if processed_count != 0 {
                         info!(
-                            "Read aggregate finished: (bucket: {}, total read count: {}, total bytes: {}, total elapsed: {:?})",
+                            "Read aggregate finished: (bucket: {:?}, total read count: {}, total bytes: {}, total elapsed: {:?})",
                             bucket,
                             processed_count,
                             processed_bytes,

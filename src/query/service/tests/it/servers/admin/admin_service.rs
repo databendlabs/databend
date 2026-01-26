@@ -16,8 +16,6 @@ use std::fs::File;
 use std::io::Read;
 
 use databend_common_base::base::get_free_tcp_port;
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_query::servers::Server;
 use databend_query::servers::admin::AdminService;
 use databend_query::test_kits::*;
@@ -26,7 +24,7 @@ use crate::tests::tls_constants::*;
 
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_http_service_tls_server() -> Result<()> {
+async fn test_http_service_tls_server() -> anyhow::Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = AdminService::create(
         &ConfigBuilder::create()
@@ -62,7 +60,7 @@ async fn test_http_service_tls_server() -> Result<()> {
 
 // client cannot communicate with server without ca certificate
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
+async fn test_http_service_tls_server_failed_case_1() -> anyhow::Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut http_service = AdminService::create(
         &ConfigBuilder::create()
@@ -84,7 +82,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
 
 #[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
+async fn test_http_service_tls_server_mutual_tls() -> anyhow::Result<()> {
     let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = AdminService::create(
         &ConfigBuilder::create()
@@ -123,7 +121,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 // cannot connect with server unless it have CA signed identity
 #[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
+async fn test_http_service_tls_server_mutual_tls_failed() -> anyhow::Result<()> {
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = AdminService::create(
         &ConfigBuilder::create()

@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 
 use databend_common_catalog::plan::Projection;
-use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -23,7 +22,7 @@ use databend_common_expression::types::NumberDataType;
 use parquet::arrow::ArrowSchemaConverter;
 
 #[test]
-fn test_to_projection_mask() -> Result<()> {
+fn test_to_projection_mask() -> anyhow::Result<()> {
     // Test schema (6 physical columns):
     // a: Int32,            (leave id: 0, path: [0])
     // b: Tuple (
@@ -116,6 +115,111 @@ fn test_to_projection_mask() -> Result<()> {
             );
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_projection_from_column_names() -> anyhow::Result<()> {
+    let schema = TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::Tuple {
+            fields_name: vec!["c".to_string(), "d".to_string(), "g".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::Int32),
+                TableDataType::Tuple {
+                    fields_name: vec!["e".to_string(), "f".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::Int32),
+                        TableDataType::String,
+                    ],
+                },
+                TableDataType::String,
+            ],
+        }),
+        TableField::new("h", TableDataType::String),
+    ]);
+
+    let projection = Projection::from_column_names(&schema, &["h", "a", "h"])?;
+    assert_eq!(projection, Projection::Columns(vec![0, 2]));
+    Ok(())
+}
+
+#[test]
+fn test_projection_from_column_names_inner_columns() -> anyhow::Result<()> {
+    let schema = TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::Tuple {
+            fields_name: vec!["c".to_string(), "d".to_string(), "g".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::Int32),
+                TableDataType::Tuple {
+                    fields_name: vec!["e".to_string(), "f".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::Int32),
+                        TableDataType::String,
+                    ],
+                },
+                TableDataType::String,
+            ],
+        }),
+        TableField::new("h", TableDataType::String),
+    ]);
+
+    let projection = Projection::from_column_names(&schema, &["b:c", "h", "b:d:e", "h"])?;
+    assert_eq!(
+        projection,
+        Projection::InnerColumns(BTreeMap::from([
+            (0, vec![1, 0]),
+            (1, vec![2]),
+            (2, vec![1, 1, 0]),
+        ]))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_projection_merge() -> anyhow::Result<()> {
+    // Columns + Columns
+    let mut p = Projection::Columns(vec![2, 1, 1]);
+    p.merge(&Projection::Columns(vec![3, 1]));
+    assert_eq!(p, Projection::Columns(vec![1, 2, 3]));
+
+    // InnerColumns + InnerColumns (dedup by path)
+    let mut p = Projection::InnerColumns(BTreeMap::from([(10, vec![1, 0]), (20, vec![2])]));
+    p.merge(&Projection::InnerColumns(BTreeMap::from([
+        (0, vec![1, 0]),
+        (1, vec![1, 1, 0]),
+    ])));
+    assert_eq!(
+        p,
+        Projection::InnerColumns(BTreeMap::from([
+            (10, vec![1, 0]),
+            (20, vec![2]),
+            (21, vec![1, 1, 0]),
+        ]))
+    );
+
+    // InnerColumns + Columns
+    let mut p = Projection::InnerColumns(BTreeMap::from([(5, vec![1, 0])])); // b:c
+    p.merge(&Projection::Columns(vec![2, 0])); // h, a
+    assert_eq!(
+        p,
+        Projection::InnerColumns(BTreeMap::from([
+            (5, vec![1, 0]),
+            (6, vec![0]),
+            (7, vec![2]),
+        ]))
+    );
+
+    // Columns + InnerColumns => promote to InnerColumns
+    let mut p = Projection::Columns(vec![2]); // h
+    p.merge(&Projection::InnerColumns(BTreeMap::from([(0, vec![1, 0])])));
+    assert_eq!(
+        p,
+        Projection::InnerColumns(BTreeMap::from([(0, vec![2]), (1, vec![1, 0])]))
+    );
 
     Ok(())
 }

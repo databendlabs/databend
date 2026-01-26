@@ -674,7 +674,7 @@ impl SelectRewriter {
         match table_ref {
             TableReference::Table { table, alias, .. } => {
                 alias.clone().unwrap_or_else(|| TableAlias {
-                    name: table.clone(),
+                    name: table.table.clone(),
                     columns: vec![],
                     keep_database_name: true,
                 })
@@ -709,8 +709,6 @@ impl SelectRewriter {
                 match from_item {
                     TableReference::Table {
                         span: _,
-                        catalog,
-                        database,
                         table,
                         alias,
                         temporal,
@@ -719,15 +717,19 @@ impl SelectRewriter {
                         unpivot,
                         sample,
                     } => {
-                        if let Some(catalog) = catalog {
+                        if let Some(catalog) = &table.catalog {
                             source_query.push_str(&catalog.name);
                             source_query.push('.');
                         }
-                        if let Some(database) = database {
+                        if let Some(database) = &table.database {
                             source_query.push_str(&database.name);
                             source_query.push('.');
                         }
-                        source_query.push_str(&table.name);
+                        source_query.push_str(&table.table.name);
+                        if let Some(branch) = &table.branch {
+                            source_query.push('/');
+                            source_query.push_str(&branch.name);
+                        }
 
                         if let Some(temporal) = temporal {
                             source_query.push(' ');

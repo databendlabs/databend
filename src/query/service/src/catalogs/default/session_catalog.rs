@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -388,6 +389,50 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
+    }
+
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let mut temp_tables = HashMap::new();
+        let mut non_temp_names = Vec::new();
+        {
+            let temp_tbl_mgr = self.temp_tbl_mgr.lock();
+            for table_name in table_names {
+                match temp_tbl_mgr.get_table(db_name, table_name)? {
+                    Some(table_info) => {
+                        let table = self.get_table_by_info(&table_info)?;
+                        temp_tables.insert(table_name.clone(), table);
+                    }
+                    None => non_temp_names.push(table_name.clone()),
+                }
+            }
+        }
+
+        let non_temp_tables = if non_temp_names.is_empty() {
+            Vec::new()
+        } else {
+            self.inner
+                .mget_tables(tenant, db_name, &non_temp_names)
+                .await?
+        };
+        let mut non_temp_map = HashMap::new();
+        for table in non_temp_tables {
+            non_temp_map.insert(table.name().to_string(), table);
+        }
+
+        let mut result = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Some(table) = temp_tables.get(table_name) {
+                result.push(table.clone());
+            } else if let Some(table) = non_temp_map.get(table_name) {
+                result.push(table.clone());
+            }
+        }
+        Ok(result)
     }
 
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -789,6 +834,13 @@ impl Catalog for SessionCatalog {
         value: &LeastVisibleTime,
     ) -> Result<LeastVisibleTime> {
         self.inner.set_table_lvt(name_ident, value).await
+    }
+
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>> {
+        self.inner.get_table_lvt(name_ident).await
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {

@@ -18,12 +18,9 @@ mod executor_stats;
 mod ext;
 mod fixed_heap;
 mod metrics;
-mod pool;
-mod pool_retry;
 mod progress;
 mod range_merger;
 mod runtime;
-mod stoppable;
 mod string;
 mod time_series;
 

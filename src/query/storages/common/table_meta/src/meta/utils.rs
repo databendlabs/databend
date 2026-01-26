@@ -23,23 +23,23 @@ use chrono::Duration;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
-use databend_common_base::base::uuid;
-use databend_common_base::base::uuid::NoContext;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use uuid;
+use uuid::NoContext;
+use uuid::Uuid;
 
+use crate::meta::TableSnapshot;
+use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::OPT_KEY_DATABASE_ID;
 use crate::table::OPT_KEY_STORAGE_PREFIX;
 use crate::table::OPT_KEY_TEMP_PREFIX;
 use crate::table::table_storage_prefix;
 
 pub const TEMP_TABLE_STORAGE_PREFIX: &str = "_tmp_tbl";
-use crate::meta::TableSnapshot;
-use crate::readers::snapshot_reader::TableSnapshotAccessor;
 pub const VACUUM2_OBJECT_KEY_PREFIX: &str = "h";
 
-pub fn trim_timestamp_to_milli_second(ts: DateTime<Utc>) -> DateTime<Utc> {
+pub(crate) fn trim_timestamp_to_milli_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
         ts.month(),
@@ -53,7 +53,7 @@ pub fn trim_timestamp_to_milli_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     .unwrap()
 }
 
-pub fn monotonically_increased_timestamp(
+pub(crate) fn monotonically_increased_timestamp(
     timestamp: DateTime<Utc>,
     previous_timestamp: &Option<DateTime<Utc>>,
 ) -> DateTime<Utc> {
@@ -186,7 +186,7 @@ pub fn trim_object_prefix(key: &str) -> &str {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use chrono::Duration;
-    use databend_common_base::base::uuid::Uuid;
+    use uuid::Uuid;
 
     use crate::meta::VACUUM2_OBJECT_KEY_PREFIX;
     use crate::meta::trim_object_prefix;

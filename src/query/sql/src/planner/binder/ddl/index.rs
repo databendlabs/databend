@@ -191,7 +191,7 @@ impl Binder {
                 let full_table_name = format!("{catalog}.{database}.{table_name}");
                 metadata
                     .write()
-                    .add_agg_indexes(full_table_name, agg_indexes);
+                    .add_agg_indices(full_table_name, agg_indexes);
             }
         }
 
@@ -410,9 +410,9 @@ impl Binder {
 
     fn rewrite_query_with_database(query: &mut Query, name: &str) {
         if let SetExpr::Select(stmt) = &mut query.body {
-            if let TableReference::Table { database, .. } = &mut stmt.from[0] {
-                if database.is_none() {
-                    *database = Some(Identifier::from_name(query.span, name));
+            if let TableReference::Table { table, .. } = &mut stmt.from[0] {
+                if table.database.is_none() {
+                    table.database = Some(Identifier::from_name(query.span, name));
                 }
             }
         }
@@ -482,6 +482,12 @@ impl Binder {
                     self.validate_vector_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_vector_index_options(index_options)?;
                 (column_ids, index_options, TableIndexType::Vector)
+            }
+            AstTableIndexType::Spatial => {
+                let column_ids =
+                    self.validate_spatial_index_columns(table_schema.clone(), columns)?;
+                let index_options = self.validate_spatial_index_options(index_options)?;
+                (column_ids, index_options, TableIndexType::Spatial)
             }
             AstTableIndexType::Aggregating => unreachable!(),
         };
@@ -828,6 +834,52 @@ impl Binder {
                     .to_string(),
             ));
         }
+        Ok(options)
+    }
+
+    pub(in crate::planner::binder) fn validate_spatial_index_columns(
+        &self,
+        table_schema: TableSchemaRef,
+        columns: &[Identifier],
+    ) -> Result<Vec<ColumnId>> {
+        let mut column_set = BTreeSet::new();
+        for column in columns {
+            match table_schema.field_with_name(&column.name) {
+                Ok(field) => {
+                    if !matches!(
+                        field.data_type.remove_nullable(),
+                        TableDataType::Geometry | TableDataType::Geography
+                    ) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Spatial index only support Geometry and Geography type, but the type of column {} is {}",
+                            column, field.data_type
+                        )));
+                    }
+                    if column_set.contains(&field.column_id) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Spatial index column must be unique, but column {} is duplicate",
+                            column.name
+                        )));
+                    }
+                    column_set.insert(field.column_id);
+                }
+                Err(_) => {
+                    return Err(ErrorCode::UnsupportedIndex(format!(
+                        "Table does not have column {}",
+                        column
+                    )));
+                }
+            }
+        }
+        Ok(Vec::from_iter(column_set))
+    }
+
+    pub(in crate::planner::binder) fn validate_spatial_index_options(
+        &self,
+        _index_options: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, String>> {
+        let options = BTreeMap::new();
+        // todo
         Ok(options)
     }
 

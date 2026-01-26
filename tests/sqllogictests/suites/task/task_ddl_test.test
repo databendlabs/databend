@@ -20,12 +20,12 @@ CREATE TASK task_with_bad_set
   settings_not_found = '123'
   AS SELECT 1;
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.tasks where name = 'mytask'
 ----
 mytask mywh CRON 0 0 0 1 1 ? 2100 SELECT 1
 
-query S
+query T
 select state from system.tasks where name = 'mytask'
 ----
 Suspended
@@ -33,7 +33,7 @@ Suspended
 statement ok
 ALTER TASK mytask RESUME
 
-query S
+query T
 select state from system.tasks where name = 'mytask'
 ----
 Started
@@ -41,7 +41,7 @@ Started
 statement ok
 ALTER TASK mytask SUSPEND
 
-query S
+query T
 select state from system.tasks where name = 'mytask'
 ----
 Suspended
@@ -49,7 +49,7 @@ Suspended
 statement ok
 ALTER TASK mytask MODIFY AS SELECT 2023
 
-query S
+query T
 select definition from system.tasks where name = 'mytask'
 ----
 SELECT 2023
@@ -57,7 +57,7 @@ SELECT 2023
 statement ok
 ALTER TASK mytask SET warehouse = 'warehouse2'
 
-query S
+query T
 select warehouse from system.tasks where name = 'mytask'
 ----
 warehouse2
@@ -65,7 +65,7 @@ warehouse2
 statement ok
 ALTER TASK mytask SET schedule = 100 MINUTE
 
-query S
+query T
 select schedule from system.tasks where name = 'mytask'
 ----
 INTERVAL 6000 SECOND
@@ -81,12 +81,12 @@ select suspend_task_after_num_failures from system.tasks where name = 'mytask'
 statement ok
 ALTER TASK mytask SET COMMENT = 'test comment'
 
-query S
+query T
 select comment from system.tasks where name = 'mytask'
 ----
 test comment
 
-query SSSSSIS
+query TTTTTIT
 select name, state, warehouse, definition, schedule, suspend_task_after_num_failures, comment from system.tasks where name = 'mytask'
 ----
 mytask Suspended warehouse2 SELECT 2023 INTERVAL 6000 SECOND 199 test comment
@@ -94,12 +94,12 @@ mytask Suspended warehouse2 SELECT 2023 INTERVAL 6000 SECOND 199 test comment
 statement ok
 EXECUTE TASK mytask
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.task_history where name = 'mytask'
 ----
 mytask warehouse2 INTERVAL 6000 SECOND SELECT 2023
 
-query S
+query T
 select state from system.task_history where name = 'mytask'
 ----
 SUCCEEDED
@@ -110,7 +110,7 @@ CREATE TASK sessionTask
   SCHEDULE = USING CRON '0 0 0 1 1 ? 2100' 'America/Los_Angeles'
   AS SELECT 1;
 
-query SSS
+query TT?
 select name, state, session_parameters from system.tasks where name = 'sessionTask'
 ----
 sessionTask Suspended {}
@@ -118,7 +118,7 @@ sessionTask Suspended {}
 statement ok
 EXECUTE TASK sessionTask
 
-query SSSS
+query T?
 select name, session_parameters from system.task_history where name = 'sessionTask'
 ----
 sessionTask {}
@@ -128,12 +128,12 @@ ALTER TASK sessionTask
   SET
   DATABASE = 'db2', TIMEZONE = 'Pacific/Honolulu'
 
-query SSS
+query TT?
 select name, state, session_parameters from system.tasks where name = 'sessionTask'
 ----
 sessionTask Suspended {}
 
-query I
+query T
 select run_id from system.task_history where name = 'MockTask' limit 6;
 ----
 1ftx0
@@ -143,7 +143,7 @@ select run_id from system.task_history where name = 'MockTask' limit 6;
 1ftx4
 1ftx5
 
-query I
+query T
 select run_id from task_history(task_name => 'MockTask', result_limit => 6);
 ----
 1ftx0

@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_sql::parse_exprs;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_query_overflow() -> Result<()> {
+async fn test_query_overflow() -> anyhow::Result<()> {
     // Construct the SQL query with many OR conditions
     let mut query = String::from("1 = 1 AND (");
     let condition = "(timestamp = '2024-05-05 18:05:20' AND type = '1' AND id = 'xx')";

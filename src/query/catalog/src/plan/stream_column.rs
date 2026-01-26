@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -39,6 +38,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
+use uuid::Uuid;
 
 use crate::plan::PartInfo;
 use crate::plan::PartInfoPtr;

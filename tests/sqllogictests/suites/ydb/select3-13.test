@@ -209,7 +209,7 @@ from t1
 where b>c
 order by col4,col1,col5,col2,col3
 
-query TTIITIT
+query IRIIIII
 select case when c>avg_c then a*2 else b*10 end as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222
@@ -257,7 +257,7 @@ NULL NULL 555 NULL NULL 207 NULL
 358 NULL 555 179 4 NULL 1057
 486 NULL 222 243 3 NULL 1455
 
-query TTIITIT
+query IRIIIII
 select case when c>avg_c then a*2 else b*10 end as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222

@@ -277,8 +277,15 @@ pub enum Statement {
     DropRowAccessPolicy(DropRowAccessPolicyStmt),
     DescRowAccessPolicy(DescRowAccessPolicyStmt),
 
+    // Tags
+    CreateTag(CreateTagStmt),
+    DropTag(DropTagStmt),
+    ShowTags(ShowTagsStmt),
+    AlterObjectTag(AlterObjectTagStmt),
+
     // Stages
     CreateStage(CreateStageStmt),
+    AlterStage(AlterStageStmt),
     ShowStages {
         show_options: Option<ShowOptions>,
     },
@@ -422,6 +429,15 @@ impl Statement {
                 }
                 format!("{}", Statement::CreateStage(stage_clone))
             }
+            Statement::AlterStage(stage) => {
+                let mut stage_clone = stage.clone();
+                if let AlterStageAction::Set(options) = &mut stage_clone.action
+                    && let Some(location) = &mut options.location
+                {
+                    location.connection = location.connection.mask();
+                }
+                format!("{}", Statement::AlterStage(stage_clone))
+            }
             Statement::AttachTable(attach) => {
                 let mut attach_clone = attach.clone();
                 attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
@@ -499,6 +515,7 @@ impl Statement {
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
             | Statement::ShowGrantsOfRole(..)
+            | Statement::ShowTags(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -536,11 +553,13 @@ impl Statement {
             | Statement::CreateView(..)
             | Statement::CreateIndex(..)
             | Statement::CreateStage(..)
+            | Statement::AlterStage(..)
             | Statement::CreateSequence(..)
             | Statement::CreateDictionary(..)
             | Statement::CreateConnection(..)
             | Statement::CreatePipe(..)
             | Statement::AlterTable(..)
+            | Statement::AlterObjectTag(..)
             | Statement::AlterView(..)
             | Statement::AlterUser(..)
             | Statement::AlterDatabase(..)
@@ -573,6 +592,8 @@ impl Statement {
             | Statement::AlterUDF(..)
             | Statement::CreateRowAccessPolicy(..)
             | Statement::DropRowAccessPolicy(..)
+            | Statement::CreateTag(..)
+            | Statement::DropTag(..)
             | Statement::DropStage { .. }
             | Statement::DropConnection(..)
             | Statement::CreateFileFormat { .. }
@@ -941,6 +962,10 @@ impl Display for Statement {
             Statement::CreateRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTag(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTag(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowTags(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterObjectTag(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {
@@ -964,6 +989,7 @@ impl Display for Statement {
                 write!(f, " {stage_name}")?;
             }
             Statement::CreateStage(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterStage(stmt) => write!(f, "{stmt}")?,
             Statement::RemoveStage { location, pattern } => {
                 write!(f, "REMOVE @{location}")?;
                 if !pattern.is_empty() {

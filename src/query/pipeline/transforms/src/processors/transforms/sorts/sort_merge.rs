@@ -42,7 +42,7 @@ use super::utils::has_order_field;
 ///
 /// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct TransformSortMerge<R: Rows> {
-    schema: DataSchemaRef,
+    _schema: DataSchemaRef,
     enable_loser_tree: bool,
     limit: Option<usize>,
     block_size: usize,
@@ -65,7 +65,7 @@ impl<R: Rows> TransformSortMerge<R> {
         limit: Option<usize>,
     ) -> Self {
         TransformSortMerge {
-            schema,
+            _schema: schema,
             enable_loser_tree,
             limit,
             block_size,
@@ -171,8 +171,7 @@ impl<R: Rows> TransformSortMerge<R> {
         let streams = self.buffer.drain(..).collect::<Vec<BlockStream>>();
         let mut result = Vec::with_capacity(size_hint);
 
-        let mut merger =
-            Merger::<A, _>::create(self.schema.clone(), streams, batch_size, self.limit);
+        let mut merger = Merger::<A, _>::new(streams, batch_size, self.limit);
 
         while let Some(block) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {

@@ -18,10 +18,7 @@ use std::time::Duration;
 
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
-use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -31,6 +28,8 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;

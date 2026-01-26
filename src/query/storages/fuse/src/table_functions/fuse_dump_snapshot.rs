@@ -30,6 +30,7 @@ use databend_common_expression::types::VariantType;
 
 use crate::FuseTable;
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
@@ -104,11 +105,11 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
             let format_version =
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
 
-            use crate::io::read::SnapshotHistoryReader;
             let lite_snapshot_stream = table_snapshot_reader.snapshot_history(
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),
+                table.get_branch_id(),
             );
 
             let mut snapshot_ids: Vec<String> = Vec::with_capacity(limit);
@@ -131,9 +132,7 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
 
             return Ok(Some(block));
         }
-        Ok(Some(DataBlock::empty_with_schema(Arc::new(
-            self.schema().into(),
-        ))))
+        Ok(Some(DataBlock::empty_with_schema(&self.schema().into())))
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>

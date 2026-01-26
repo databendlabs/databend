@@ -1,14 +1,14 @@
-query T
+query ?
 SELECT SUBSTRING('12345', null)
 ----
 NULL
 
-query T
+query ?
 SELECT SUBSTRING(null, 2)
 ----
 NULL
 
-query T
+query ?
 SELECT SUBSTRING(null, null)
 ----
 NULL

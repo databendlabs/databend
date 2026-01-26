@@ -24,7 +24,7 @@ set join_spilling_buffer_threshold_per_proc_mb = 1;
 include ./queries.test
 
 # CROSS JOIN
-query I
+query II
 SELECT    count(*),
           sum(p_size) -- cross join may have different order
 FROM      (
@@ -38,7 +38,7 @@ FROM      (
 
 
 # INNER JOIN
-query I
+query TII?RR
 SELECT    c_name,
           c_custkey,
           o_orderkey,
@@ -124,7 +124,7 @@ Customer#000088703 88703 2995076 1994-01-30 363812.12 302.00
 
 
 # LEFT OUTER JOIN
-query I
+query II
 SELECT
   c_count,
   count(*) AS custdist
@@ -248,7 +248,7 @@ where lineitem.l_receiptdate > lineitem.l_commitdate and
 
 
 # RIGHT OUTER JOIN
-query I
+query II
 SELECT
   c_count,
   count(*) AS custdist
@@ -315,7 +315,7 @@ ORDER BY
 
 
 # RIGHT SEMI JOIN
-query I
+query R
 select
   sum(numwait)
 from
@@ -355,7 +355,7 @@ from
 
 
 # RIGHT ANTI JOIN
-query I
+query R
 select
   sum(numwait)
 from
@@ -415,7 +415,7 @@ where
 
 
 # FULL OUTER JOIN
-query I
+query II
 SELECT    c_count,
           count(*) AS custdist
 FROM      (

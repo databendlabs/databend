@@ -20,6 +20,7 @@ use pretty_assertions::assert_eq;
 use crate::ParseError;
 use crate::Range;
 use crate::Result;
+use crate::ast::DatabaseRef;
 use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -27,11 +28,14 @@ use crate::ast::Literal;
 use crate::ast::SelectTarget;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
+use crate::ast::TableRef;
 use crate::parser::Backtrace;
 use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
+use crate::parser::common::database_ref;
 use crate::parser::common::ident;
+use crate::parser::common::table_ref;
 use crate::parser::common::transform_span;
 use crate::parser::error::display_parser_error;
 use crate::parser::expr::expr;
@@ -66,6 +70,20 @@ pub fn parse_expr(tokens: &[Token], dialect: Dialect) -> Result<Expr> {
     run_parser(tokens, dialect, ParseMode::Default, false, expr)
 }
 
+/// Parse a table reference string like "table", "db.table", or "catalog.db.table".
+/// Correctly handles quoted identifiers like `"my.weird.table"`.
+pub fn parse_table_ref(sql: &str, dialect: Dialect) -> Result<TableRef> {
+    let tokens = tokenize_sql(sql)?;
+    run_parser(&tokens, dialect, ParseMode::Default, false, table_ref)
+}
+
+/// Parse a database reference string like "db" or "catalog.db".
+/// Correctly handles quoted identifiers.
+pub fn parse_database_ref(sql: &str, dialect: Dialect) -> Result<DatabaseRef> {
+    let tokens = tokenize_sql(sql)?;
+    run_parser(&tokens, dialect, ParseMode::Default, false, database_ref)
+}
+
 pub fn parse_comma_separated_exprs(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
     run_parser(tokens, dialect, ParseMode::Default, true, |i| {
         comma_separated_list0(expr)(i)
@@ -80,6 +98,21 @@ pub fn parse_comma_separated_idents(tokens: &[Token], dialect: Dialect) -> Resul
 
 pub fn parse_values(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
     run_parser(tokens, dialect, ParseMode::Default, false, values)
+}
+
+pub fn parse_cluster_key_exprs(cluster_key: &str) -> Result<Vec<Expr>> {
+    // `cluster_key` is persisted in table metadata and may be created/rewritten under a
+    // different session dialect. Parse it with a dialect that accepts both identifier
+    // quote styles to keep ALTER behavior stable across sessions.
+    let tokens = tokenize_sql(cluster_key)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, Dialect::default())?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1
+        && let Expr::Tuple { exprs, .. } = &ast_exprs[0]
+    {
+        ast_exprs = exprs.clone();
+    }
+    Ok(ast_exprs)
 }
 
 pub fn parse_raw_insert_stmt(

@@ -247,6 +247,7 @@ pub(crate) async fn commit_table_meta(
             seq: MatchSeq::Exact(table_version),
             new_table_meta: new_table_meta.clone(),
             base_snapshot_location: fuse_tbl.snapshot_loc(),
+            lvt_check: None,
         };
 
         catalog.update_single_table_meta(req, table_info).await?;
@@ -265,7 +266,7 @@ pub(crate) async fn commit_table_meta(
     Ok(())
 }
 
-pub(crate) async fn generate_new_snapshot(
+async fn generate_new_snapshot(
     ctx: &dyn TableContext,
     fuse_table: &FuseTable,
     new_table_schema: &TableSchema,
@@ -281,9 +282,11 @@ pub(crate) async fn generate_new_snapshot(
         new_snapshot.schema = new_table_schema.clone();
 
         // write down new snapshot
-        let new_snapshot_location = fuse_table
-            .meta_location_generator()
-            .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        let new_snapshot_location = fuse_table.meta_location_generator().gen_snapshot_location(
+            None,
+            &new_snapshot.snapshot_id,
+            TableSnapshot::VERSION,
+        )?;
 
         let data = new_snapshot.to_bytes()?;
         fuse_table

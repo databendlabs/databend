@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_query::test_kits::*;
@@ -30,7 +28,7 @@ use uuid::Uuid;
 use crate::storages::fuse::operations::mutation::compact_segment;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_normal_case() -> Result<()> {
+async fn test_fuse_purge_normal_case() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -44,10 +42,9 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot_files = fuse_table.list_snapshot_files().await?;
-    let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
 
     let expected_num_of_snapshot = 1;
@@ -69,7 +66,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
+async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
@@ -88,8 +85,11 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
-        let orphan_snapshot_location = location_gen
-            .snapshot_location_from_uuid(&orphan_snapshot_id, TableSnapshot::VERSION)?;
+        let orphan_snapshot_location = location_gen.gen_snapshot_location(
+            None,
+            &orphan_snapshot_id,
+            TableSnapshot::VERSION,
+        )?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::try_from_previous(
@@ -103,11 +103,10 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     }
 
     // do_gc
-    let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
 
     // expects two snapshot there
@@ -132,7 +131,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_orphan_retention() -> Result<()> {
+async fn test_fuse_purge_orphan_retention() -> anyhow::Result<()> {
     // verifies that:
     //
     // - snapshots that beyond retention period shall be collected, but
@@ -241,11 +240,10 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     }
 
     // do_gc
-    let keep_last_snapshot = true;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
 
     let expected_num_of_snapshot = 2;
@@ -271,7 +269,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_purge_older_version() -> Result<()> {
+async fn test_fuse_purge_older_version() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
@@ -291,9 +289,8 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let table = fuse_table
             .navigate_to_time_point(&table_ctx, snapshot_loc, time_point)
             .await?;
-        let keep_last_snapshot = true;
         table
-            .do_purge(&table_ctx, snapshot_files, None, keep_last_snapshot, false)
+            .do_purge(&table_ctx, snapshot_files, None, false)
             .await?;
 
         let expected_num_of_snapshot = 2;
@@ -332,7 +329,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     {
         let snapshot_files = fuse_table.list_snapshot_files().await?;
         fuse_table
-            .do_purge(&table_ctx, snapshot_files, None, true, false)
+            .do_purge(&table_ctx, snapshot_files, None, false)
             .await?;
 
         let expected_num_of_snapshot = 1;
@@ -343,32 +340,6 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         check_data_dir(
             &fixture,
             "do_gc: with older version",
-            expected_num_of_snapshot,
-            0,
-            expected_num_of_segment,
-            expected_num_of_blocks,
-            expected_num_of_index,
-            expected_num_of_segment_stats,
-            Some(()),
-            None,
-        )
-        .await?;
-    }
-
-    // keep_last_snapshot is false. All of snapshots will be purged.
-    {
-        let snapshot_files = fuse_table.list_snapshot_files().await?;
-        fuse_table
-            .do_purge(&table_ctx, snapshot_files, None, false, false)
-            .await?;
-        let expected_num_of_snapshot = 0;
-        let expected_num_of_segment = 0;
-        let expected_num_of_blocks = 0;
-        let expected_num_of_index = expected_num_of_blocks;
-        let expected_num_of_segment_stats = expected_num_of_segment;
-        check_data_dir(
-            &fixture,
-            "do_gc: purge last snapshot",
             expected_num_of_snapshot,
             0,
             expected_num_of_segment,

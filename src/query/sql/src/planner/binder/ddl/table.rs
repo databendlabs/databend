@@ -62,9 +62,7 @@ use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
@@ -108,8 +106,10 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
+use uuid::Uuid;
 
 use crate::BindContext;
+use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
@@ -122,7 +122,8 @@ use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
-use crate::planner::semantic::IdentifierNormalizer;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::plans::AddColumnOption;
@@ -132,12 +133,14 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableRefPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
@@ -548,7 +551,59 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
+        let mut options: BTreeMap<String, String> = BTreeMap::new();
+
+        // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+
+        // Construct a UriLocation from database defaults if table doesn't have explicit location
+        let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
+            && matches!(engine, Engine::Fuse)
+        {
+            if let Ok(database_info) = catalog
+                .get_database(&self.ctx.get_tenant(), &database)
+                .await
+            {
+                // Extract database-level default connection options
+                let default_connection_name =
+                    database_info.options().get(DEFAULT_STORAGE_CONNECTION);
+                let default_path = database_info.options().get(DEFAULT_STORAGE_PATH);
+
+                // If both database defaults exist, construct UriLocation
+                if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
+                {
+                    // Get the connection object to access its storage_params
+                    match self.ctx.get_connection(connection_name).await {
+                        Ok(connection) => {
+                            // Construct UriLocation using the database defaults
+                            match UriLocation::from_uri(path.clone(), connection.storage_params) {
+                                Ok(uri) => Some(uri),
+                                Err(e) => {
+                                    return Err(ErrorCode::BadArguments(format!(
+                                        "Failed to parse database default storage path '{}': {}",
+                                        path, e
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Database default connection '{}' does not exist: {}",
+                                connection_name, e
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            // Use the provided uri_location by cloning it
+            uri_location.clone()
+        };
+
         if catalog.support_partition() != (engine == Engine::Iceberg) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "Catalog '{}' engine type is {:?} but table {} engine type is {}",
@@ -559,8 +614,8 @@ impl Binder {
             )));
         }
 
-        let mut options: BTreeMap<String, String> = BTreeMap::new();
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
+        // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -591,7 +646,7 @@ impl Binder {
                 .collect::<Vec<String>>()
         });
 
-        let mut storage_params = match (uri_location, engine) {
+        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -675,20 +730,18 @@ impl Binder {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
-                let fields = bind_context
-                    .columns
-                    .iter()
-                    .map(|column_binding| {
-                        Ok(TableField::new(
-                            &column_binding.column_name,
-                            create_as_select_infer_schema_type(
-                                &column_binding.data_type,
-                                self.is_column_not_null(),
-                            )?,
-                        ))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let schema = TableSchemaRefExt::create(fields);
+                let mut schema = bind_context.output_table_schema(self.metadata.clone())?;
+                let mut fields = schema.fields().clone();
+                for field in fields.iter_mut() {
+                    if field.data_type == TableDataType::Null {
+                        field.data_type = TableDataType::String.wrap_nullable();
+                    } else if !field.data_type().is_nullable_or_null() && !self.is_column_not_null()
+                    {
+                        field.data_type = field.data_type().clone().wrap_nullable();
+                    }
+                }
+                schema = TableSchemaRefExt::create(fields);
+
                 Self::validate_create_table_schema(&schema)?;
                 (
                     AnalyzeCreateTableResult {
@@ -1028,14 +1081,11 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table) = if let TableReference::Table {
-            catalog,
-            database,
-            table,
-            ..
-        } = table_reference
+        let (catalog, database, table) = if let TableReference::Table { table, .. } =
+            table_reference
         {
-            self.normalize_object_identifier_triple(catalog, database, table)
+            debug_assert!(table.branch.is_none());
+            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
         } else {
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
@@ -1412,6 +1462,40 @@ impl Binder {
                         table,
                     },
                 )))
+            }
+            AlterTableAction::CreateTableRef {
+                ref_type,
+                ref_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableRef { ref_type, ref_name } => {
+                let ref_name = self.normalize_identifier(ref_name).name;
+                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    ref_type: ref_type.into(),
+                    ref_name,
+                })))
             }
         }
     }
@@ -1997,6 +2081,15 @@ impl Binder {
                         self.validate_vector_index_options(&table_index_def.index_options)?;
                     (TableIndexType::Vector, column_ids, options)
                 }
+                AstTableIndexType::Spatial => {
+                    let column_ids = self.validate_spatial_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_spatial_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Spatial, column_ids, options)
+                }
                 AstTableIndexType::Aggregating => unreachable!(),
             };
 
@@ -2187,6 +2280,12 @@ impl Binder {
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
 
+        let mut normalizer = ClusterKeyNormalizer {
+            force_quoted_ident: false,
+            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
+            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
+            sql_dialect: self.dialect,
+        };
         let mut cluster_keys = Vec::with_capacity(expr_len);
         for cluster_expr in cluster_exprs.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_expr)?;
@@ -2214,7 +2313,6 @@ impl Binder {
             }
 
             let mut cluster_expr = cluster_expr.clone();
-            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
             cluster_expr.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_expr));
         }
@@ -2251,7 +2349,7 @@ const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
 //
 // The permission check might fail for reasons other than the permissions themselves,
 // such as network communication issues.
-async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+pub async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     let verification_task = async move {
         // verify privilege to put
         let mut errors = Vec::new();
@@ -2296,18 +2394,4 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         .spawn(verification_task)
         .await
         .expect("join must succeed")
-}
-
-fn create_as_select_infer_schema_type(
-    data_type: &DataType,
-    not_null: bool,
-) -> Result<TableDataType> {
-    use DataType::*;
-
-    match (data_type, not_null) {
-        (Null, _) => Ok(TableDataType::Nullable(Box::new(TableDataType::String))),
-        (dt, true) => infer_schema_type(dt),
-        (Nullable(_), false) => infer_schema_type(data_type),
-        (dt, false) => infer_schema_type(&Nullable(Box::new(dt.clone()))),
-    }
 }

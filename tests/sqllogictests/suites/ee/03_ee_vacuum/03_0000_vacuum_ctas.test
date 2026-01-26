@@ -60,7 +60,7 @@ create stage ctas_stage url='fs:///tmp/ctas/';
 # except for the verification key '_v_d77aa11285c22e0e1d4593a035c98c0d',
 # which is 1 byte in size.
 
-query TT
+query TI
 SELECT name, size FROM LIST_STAGE(location => '@ctas_stage')
 ----
 _v_d77aa11285c22e0e1d4593a035c98c0d 1

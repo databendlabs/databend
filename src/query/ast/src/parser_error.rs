@@ -36,3 +36,5 @@ impl Display for ParseError {
         write!(f, "{}", self.1)
     }
 }
+
+impl std::error::Error for ParseError {}

@@ -86,7 +86,7 @@ ALTER TABLE t6 ADD CONSTRAINT invalid_1 CHECK (b != 1);
 statement ok
 CREATE OR REPLACE TABLE t7 (c0 int, c1 int CHECK (c1 > 10), CHECK (c1 != 11));
 
-query TTTTTTTTT
+query TTTTTTT
 select name, type, expression, constraint_column_indexes, constraint_column_names, database, table from system.constraints;
 ----
 t1_b_check check b > 0 1 b default t1

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_native::read as nread;
@@ -90,9 +88,7 @@ impl AggIndexReader {
             all_columns_arrays.push(arrays);
         }
         if all_columns_arrays.is_empty() {
-            return Ok(DataBlock::empty_with_schema(Arc::new(
-                self.reader.data_schema(),
-            )));
+            return Ok(DataBlock::empty_with_schema(&self.reader.data_schema()));
         }
         debug_assert!(
             all_columns_arrays

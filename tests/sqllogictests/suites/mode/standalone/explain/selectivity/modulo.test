@@ -14,21 +14,17 @@ AggregateFinal
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── Filter
+    └── TableScan
+        ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: []
-        ├── filters: [t1.number (#0) % 10 = 11]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [number (#0)]
-            ├── read rows: 1000
-            ├── read size: 1.41 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [t1.number (#0) % 10 = 11], limit: NONE]
-            └── estimated rows: 1000.00
+        ├── read rows: 1000
+        ├── read size: 1.41 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [t1.number (#0) % 10 = 11], limit: NONE]
+        └── estimated rows: 0.00
 
 # selectivity == 0.1
 query T
@@ -43,21 +39,17 @@ AggregateFinal
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── Filter
+    └── TableScan
+        ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: []
-        ├── filters: [t1.number (#0) % 10 = 2]
-        ├── estimated rows: 100.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [number (#0)]
-            ├── read rows: 1000
-            ├── read size: 1.41 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [t1.number (#0) % 10 = 2], limit: NONE]
-            └── estimated rows: 1000.00
+        ├── read rows: 1000
+        ├── read size: 1.41 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [t1.number (#0) % 10 = 2], limit: NONE]
+        └── estimated rows: 100.00
 
 statement ok
 drop table t1;

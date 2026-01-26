@@ -4,18 +4,18 @@ drop table if exists wrong_ndjson
 statement ok
 CREATE TABLE wrong_ndjson (a Boolean, b Int, c Float, d String, e Date, f Timestamp, g Array(Int), h Tuple(Int, String), i Variant )
 
-query 
+query ?????
 copy /*+ set_var(max_threads=1) */ into wrong_ndjson from @data/ndjson/ pattern = 'wrong_sample.*[.]ndjson' file_format = (type = NDJSON) ON_ERROR=continue
 ----
 ndjson/wrong_sample.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample.ndjson', next byte is 'h' 2
 ndjson/wrong_sample2.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample2.ndjson', next byte is 'h' 2
 
-query 
+query ?????????
 select * from wrong_ndjson order by a
 ----
-0 3 3.3 ef 2022-01-01 2022-01-01 00:00:00.000000 [7,8,9] (2,'c') "xyz"
-0 4 4.4 gh 2023-01-01 2023-01-01 00:00:00.000000 [10,11] (3,'d') [1,2]
-0 3 3.3 ef 2022-01-01 2022-01-01 00:00:00.000000 [7,8,9] (2,'c') "xyz"
-0 4 4.4 gh 2023-01-01 2023-01-01 00:00:00.000000 [10,11] (3,'d') [1,2]
-1 1 1.1 ab 2020-01-01 2020-01-01 00:00:00.000000 [1,2,3] (0,'a') {"k":"v"}
-1 1 1.1 ab 2020-01-01 2020-01-01 00:00:00.000000 [1,2,3] (0,'a') {"k":"v"}
+0 3 3.3 ef 2022-01-01 2022-01-01 00:00:00.000000 [7,8,9] (2,"c") "xyz"
+0 4 4.4 gh 2023-01-01 2023-01-01 00:00:00.000000 [10,11] (3,"d") [1,2]
+0 3 3.3 ef 2022-01-01 2022-01-01 00:00:00.000000 [7,8,9] (2,"c") "xyz"
+0 4 4.4 gh 2023-01-01 2023-01-01 00:00:00.000000 [10,11] (3,"d") [1,2]
+1 1 1.1 ab 2020-01-01 2020-01-01 00:00:00.000000 [1,2,3] (0,"a") {"k":"v"}
+1 1 1.1 ab 2020-01-01 2020-01-01 00:00:00.000000 [1,2,3] (0,"a") {"k":"v"}

@@ -27,6 +27,7 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::SnapshotRefType as AstSnapshotRefType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -185,6 +186,75 @@ pub struct TableMeta {
     pub row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
+
+    pub refs: BTreeMap<String, SnapshotRef>,
+}
+
+// Inspired by iceberg(https://github.com/apache/iceberg-rust/blob/main/crates/iceberg/src/spec/snapshot.rs#L443-L449)
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotRef {
+    /// The unique id of the reference.
+    /// It is allocated from a global sequence and is unique cluster-wide.
+    pub id: u64,
+    /// After this timestamp, the reference becomes inactive.
+    pub expire_at: Option<DateTime<Utc>>,
+    /// The type of the reference.
+    pub typ: SnapshotRefType,
+    /// The location of the snapshot that this reference points to.
+    pub loc: String,
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+    Hash,
+)]
+pub enum SnapshotRefType {
+    Branch = 0,
+    Tag = 1,
+}
+
+impl From<&AstSnapshotRefType> for SnapshotRefType {
+    fn from(v: &AstSnapshotRefType) -> Self {
+        match v {
+            AstSnapshotRefType::Branch => SnapshotRefType::Branch,
+            AstSnapshotRefType::Tag => SnapshotRefType::Tag,
+        }
+    }
+}
+
+impl Display for SnapshotRefType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SnapshotRefType::Branch => write!(f, "BRANCH"),
+            SnapshotRefType::Tag => write!(f, "TAG"),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct BranchInfo {
+    pub name: String,
+    pub info: SnapshotRef,
+}
+
+impl BranchInfo {
+    pub fn branch_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn branch_id(&self) -> u64 {
+        self.info.id
+    }
+
+    pub fn branch_type(&self) -> SnapshotRefType {
+        self.info.typ.clone()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -216,6 +286,7 @@ pub enum TableIndexType {
     Inverted = 0,
     Ngram = 1,
     Vector = 2,
+    Spatial = 3,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -324,6 +395,48 @@ impl TableInfo {
             .and_then(|s| s.parse::<T>().ok())
             .unwrap_or(default)
     }
+
+    pub fn get_table_ref(&self, typ: Option<&SnapshotRefType>, name: &str) -> Result<&SnapshotRef> {
+        let Some(table_ref) = self.meta.refs.get(name) else {
+            return Err(ErrorCode::UnknownReference(format!(
+                "Unknown reference '{}' in table {}",
+                name, self.desc
+            )));
+        };
+        let ref_type = &table_ref.typ;
+        if let Some(typ) = typ {
+            if ref_type != typ {
+                return Err(ErrorCode::MismatchedReferenceType(format!(
+                    "'{}' is a {} reference, please use 'AT({} => {})' instead.",
+                    name, ref_type, ref_type, name,
+                )));
+            }
+        }
+        if table_ref.expire_at.is_some_and(|v| v < Utc::now()) {
+            return Err(ErrorCode::ReferenceExpired(format!(
+                "{} '{}' in table {} is expired",
+                ref_type, name, self.desc,
+            )));
+        }
+        Ok(table_ref)
+    }
+
+    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
+        self.meta
+            .refs
+            .iter()
+            .find(|(_, r)| r.id == id)
+            .map(|(name, info)| BranchInfo {
+                name: name.clone(),
+                info: info.clone(),
+            })
+            .ok_or_else(|| {
+                ErrorCode::UnknownReference(format!(
+                    "Unknown reference '{}' in table {}",
+                    id, self.desc
+                ))
+            })
+    }
 }
 
 impl Default for TablePartition {
@@ -367,6 +480,7 @@ impl Default for TableMeta {
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
+            refs: BTreeMap::new(),
         }
     }
 }
@@ -409,6 +523,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Vector => {
                 write!(f, "VECTOR")
+            }
+            TableIndexType::Spatial => {
+                write!(f, "SPATIAL")
             }
         }
     }
@@ -740,6 +857,14 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub base_snapshot_location: Option<String>,
+    /// Optional optimistic LVT check.
+    pub lvt_check: Option<TableLvtCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableLvtCheck {
+    pub tenant: Tenant,
+    pub time: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

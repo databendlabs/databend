@@ -4,7 +4,7 @@ create or replace table t1 (a variant);
 statement error
 select $1 from  @data/parquet/tuple.parquet (file_format=>'avro')
 
-query ??
+query TIITI
 copy into t1 from @data/parquet/tuple.parquet file_format = (type=avro) on_error = continue
 ----
 parquet/tuple.parquet 0 1 Not a AVRO file (wrong magic in header) 1

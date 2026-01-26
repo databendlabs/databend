@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::PoisonError;
 
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -37,6 +38,9 @@ pub struct BasicHashJoinState {
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
+    pub scan_map: CStyleCell<Vec<Vec<u8>>>,
+    pub scan_queue: CStyleCell<VecDeque<usize>>,
+
     level: usize,
     factory: Arc<HashJoinFactory>,
 }
@@ -55,7 +59,33 @@ impl BasicHashJoinState {
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
             packets: CStyleCell::new(Vec::new()),
+            scan_map: CStyleCell::new(Vec::new()),
+            scan_queue: CStyleCell::new(VecDeque::new()),
         }
+    }
+
+    pub(super) fn push_chunk(&self, chunk: DataBlock) {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        *self.build_rows.as_mut() += chunk.num_rows();
+        let chunk_index = self.chunks.len();
+        self.chunks.as_mut().push(chunk);
+        self.build_queue.as_mut().push_back(chunk_index);
+        self.scan_map.as_mut().push(vec![]);
+        self.scan_queue.as_mut().push_back(chunk_index);
+    }
+
+    pub fn steal_scan_chunk_index(&self) -> Option<(usize, usize)> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.scan_queue.as_mut().pop_front().map(|x| (x, 0))
+    }
+
+    pub fn steal_chunk_index(&self) -> Option<usize> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.build_queue.as_mut().pop_front()
     }
 }
 

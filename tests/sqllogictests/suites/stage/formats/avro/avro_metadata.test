@@ -1,4 +1,4 @@
-query
+query ???
 SELECT metadata$filename, metadata$file_row_number, $1 FROM '@data_s3/avro/' ( FILES => ('map.avro', 'number.avro', 'array.avro', 'nested_record.avro'), FILE_FORMAT => 'avro') order by metadata$filename, metadata$file_row_number
 ----
 testbucket/data/avro/array.avro 0 {"tags":["tall","rich","handsome"]}
@@ -7,8 +7,8 @@ testbucket/data/avro/map.avro 0 {"scores":{"math":100}}
 testbucket/data/avro/map.avro 1 {"scores":{}}
 testbucket/data/avro/nested_record.avro 0 {"id":0,"info":{"contact":{"email":"yang@m","phone":"911"},"name":"yang"}}
 testbucket/data/avro/nested_record.avro 1 {"id":1,"info":{"contact":{"email":"wang@m","phone":null},"name":"wang"}}
-testbucket/data/avro/number.avro 0 {"c_double":1.7976931348623157e308,"c_float":3.4028234663852886e38,"c_int":2147483647,"c_long":9223372036854775807}
-testbucket/data/avro/number.avro 1 {"c_double":-1.7976931348623157e308,"c_float":-3.4028234663852886e38,"c_int":-2147483648,"c_long":-9223372036854775808}
+testbucket/data/avro/number.avro 0 {"c_double":1.7976931348623157e+308,"c_float":3.4028234663852886e+38,"c_int":2147483647,"c_long":9223372036854775807}
+testbucket/data/avro/number.avro 1 {"c_double":-1.7976931348623157e+308,"c_float":-3.4028234663852886e+38,"c_int":-2147483648,"c_long":-9223372036854775808}
 
 statement ok
 create or replace table t(scores variant, filename string, file_row_number int)
@@ -16,7 +16,7 @@ create or replace table t(scores variant, filename string, file_row_number int)
 statement ok
 copy into t from (SELECT $1, metadata$filename, metadata$file_row_number FROM '@data_s3/avro/map.avro') file_format=(type=avro)
 
-query
+query ???
 select * from t order by filename,file_row_number
 ----
 {"scores":{"math":100}} testbucket/data/avro/map.avro 0

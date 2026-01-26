@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -33,7 +32,7 @@ use goldenfile::Mint;
 use super::eliminate_cast::parse_expr;
 
 #[test]
-fn test_range_index() -> Result<()> {
+fn test_range_index() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_range_indies.txt").unwrap();
 
@@ -89,7 +88,7 @@ fn test_range_index() -> Result<()> {
 }
 
 #[test]
-fn test_range_index_dates() -> Result<()> {
+fn test_range_index_dates() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_range_index_dates.txt").unwrap();
 
@@ -164,7 +163,7 @@ fn test_range_index_dates() -> Result<()> {
 }
 
 #[test]
-fn test_range_index_strings() -> Result<()> {
+fn test_range_index_strings() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_range_index_strings.txt").unwrap();
 

@@ -37,6 +37,7 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -94,9 +95,9 @@ pub struct Binder {
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
-    /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
-    /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
-    pub bind_recursive_cte: bool,
+    /// Name of the recursive CTE whose recursive branch is currently being bound.
+    /// Only that CTE should treat self references as `RecursiveCteScan`.
+    pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
 
     pub enable_result_cache: bool,
@@ -123,7 +124,7 @@ impl Binder {
             name_resolution_ctx,
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
-            bind_recursive_cte: false,
+            bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
@@ -426,11 +427,16 @@ impl Binder {
                 }))
             }
 
+            Statement::CreateTag(stmt) => self.bind_create_tag(stmt).await?,
+            Statement::DropTag(stmt) => self.bind_drop_tag(stmt).await?,
+            Statement::ShowTags(stmt) => self.bind_show_tags(bind_context, stmt).await?,
+            Statement::AlterObjectTag(stmt) => self.bind_alter_object_tag(stmt).await?,
+
             // Stages
             Statement::ShowStages { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM default.system.stages {} ORDER BY name {}",
+                    "SELECT * FROM default.system.stages {} ORDER BY name {}",
                     show_limit, limit_str,
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
@@ -460,6 +466,7 @@ impl Binder {
                 .await?
             }
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
+            Statement::AlterStage(stmt) => self.bind_alter_stage(stmt).await?,
             Statement::DropStage {
                 stage_name,
                 if_exists,
@@ -934,8 +941,20 @@ impl Binder {
             .set_batch_settings(&hint_settings, true)
     }
 
-    pub fn set_bind_recursive_cte(&mut self, val: bool) {
+    pub fn set_bind_recursive_cte(&mut self, val: Option<String>) {
         self.bind_recursive_cte = val;
+    }
+
+    pub fn recursive_cte_column_type(data_type: &DataType) -> DataType {
+        match data_type {
+            DataType::Number(NumberDataType::UInt8)
+            | DataType::Number(NumberDataType::UInt16)
+            | DataType::Number(NumberDataType::UInt32) => DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::Int8)
+            | DataType::Number(NumberDataType::Int16)
+            | DataType::Number(NumberDataType::Int32) => DataType::Number(NumberDataType::Int64),
+            _ => data_type.clone(),
+        }
     }
 
     #[async_backtrace::framed]

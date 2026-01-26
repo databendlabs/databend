@@ -63,6 +63,8 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 use itertools::Itertools;
 
+use crate::meta_service_error;
+
 const SHOW_GRANTS: &str = "show_grants";
 
 pub struct ShowGrants {
@@ -558,7 +560,8 @@ async fn show_account_grants(
                 GrantObject::Procedure(procedure_id) => {
                     if let Some(p) = procedure_api
                         .get_procedure_name_by_id(*procedure_id)
-                        .await?
+                        .await
+                        .map_err(meta_service_error)?
                     {
                         object_name.push(p);
                         object_id.push(Some(procedure_id.to_string()));
@@ -570,7 +573,8 @@ async fn show_account_grants(
                     let meta_api = UserApiProvider::instance().get_meta_store_client();
                     if let Some(policy_name) = meta_api
                         .get_data_mask_name_by_id(&ctx.get_tenant(), *policy_id)
-                        .await?
+                        .await
+                        .map_err(meta_service_error)?
                     {
                         object_name.push(policy_name);
                         object_id.push(Some(policy_id.to_string()));
@@ -582,7 +586,8 @@ async fn show_account_grants(
                     let meta_api = UserApiProvider::instance().get_meta_store_client();
                     if let Some(policy_name) = meta_api
                         .get_row_access_policy_name_by_id(&ctx.get_tenant(), *policy_id)
-                        .await?
+                        .await
+                        .map_err(meta_service_error)?
                     {
                         object_name.push(policy_name);
                         object_id.push(Some(policy_id.to_string()));
@@ -702,8 +707,10 @@ async fn show_account_grants(
                             ));
                         }
                         OwnershipObject::Procedure { procedure_id } => {
-                            if let Some(p) =
-                                procedure_api.get_procedure_name_by_id(procedure_id).await?
+                            if let Some(p) = procedure_api
+                                .get_procedure_name_by_id(procedure_id)
+                                .await
+                                .map_err(meta_service_error)?
                             {
                                 object_name.push(p.to_string());
                                 object_id.push(Some(procedure_id.to_string()));
@@ -718,7 +725,8 @@ async fn show_account_grants(
                             let meta_api = UserApiProvider::instance().get_meta_store_client();
                             if let Some(policy_name) = meta_api
                                 .get_data_mask_name_by_id(&ctx.get_tenant(), policy_id)
-                                .await?
+                                .await
+                                .map_err(meta_service_error)?
                             {
                                 object_name.push(policy_name.clone());
                                 object_id.push(Some(policy_id.to_string()));
@@ -733,7 +741,8 @@ async fn show_account_grants(
                             let meta_api = UserApiProvider::instance().get_meta_store_client();
                             if let Some(policy_name) = meta_api
                                 .get_row_access_policy_name_by_id(&ctx.get_tenant(), policy_id)
-                                .await?
+                                .await
+                                .map_err(meta_service_error)?
                             {
                                 object_name.push(policy_name.clone());
                                 object_id.push(Some(policy_id.to_string()));
@@ -1013,7 +1022,8 @@ async fn show_object_grant(
             if let Some(p) = UserApiProvider::instance()
                 .procedure_api(&tenant)
                 .get_procedure_name_by_id(procedure_id)
-                .await?
+                .await
+                .map_err(meta_service_error)?
             {
                 (
                     GrantObject::Procedure(procedure_id),
@@ -1039,7 +1049,8 @@ async fn show_object_grant(
             let meta_api = UserApiProvider::instance().get_meta_store_client();
             if let Some(policy_name) = meta_api
                 .get_data_mask_name_by_id(&ctx.get_tenant(), policy_id)
-                .await?
+                .await
+                .map_err(meta_service_error)?
             {
                 (
                     GrantObject::MaskingPolicy(policy_id),
@@ -1069,7 +1080,8 @@ async fn show_object_grant(
             let meta_api = UserApiProvider::instance().get_meta_store_client();
             if let Some(policy_name) = meta_api
                 .get_row_access_policy_name_by_id(&ctx.get_tenant(), policy_id)
-                .await?
+                .await
+                .map_err(meta_service_error)?
             {
                 (
                     GrantObject::RowAccessPolicy(policy_id),

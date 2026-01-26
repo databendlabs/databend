@@ -23,23 +23,19 @@ EvalScalar
         ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
         ├── estimated rows: 1.80
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
-        └── Filter
-            ├── output columns: [products.name (#0), products.details (#1)]
-            ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(json_path_query_first(products.details (#1), '$.features.*') = '"16GB"')]
-            ├── estimated rows: 0.60
-            └── TableScan
-                ├── table: default.default.products
-                ├── scan id: 0
-                ├── output columns: [name (#0), details (#1)]
-                ├── read rows: 3
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', json_path_query_first(products.details (#1), '$.features.*') = '"16GB"')], limit: NONE]
-                └── estimated rows: 3.00
+        └── TableScan
+            ├── table: default.default.products
+            ├── scan id: 0
+            ├── output columns: [name (#0), details (#1)]
+            ├── read rows: 3
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
+            └── estimated rows: 0.60
 
-query T
+query TTT
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
 ----
 Laptop "512GB" "16GB"
@@ -55,23 +51,19 @@ EvalScalar
     ├── output columns: [products.name (#0), products.details (#1), json_path_query(products.details (#1), '$.features.*') (#2)]
     ├── estimated rows: 1.80
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
-    └── Filter
-        ├── output columns: [products.name (#0), products.details (#1)]
-        ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(json_path_query_first(products.details (#1), '$.features.*') = '"16GB"')]
-        ├── estimated rows: 0.60
-        └── TableScan
-            ├── table: default.default.products
-            ├── scan id: 0
-            ├── output columns: [name (#0), details (#1)]
-            ├── read rows: 3
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-            ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', json_path_query_first(products.details (#1), '$.features.*') = '"16GB"')], limit: NONE]
-            └── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.default.products
+        ├── scan id: 0
+        ├── output columns: [name (#0), details (#1)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
+        └── estimated rows: 0.60
 
-query T
+query TTT
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';
 ----
 Laptop "16GB" "16GB"

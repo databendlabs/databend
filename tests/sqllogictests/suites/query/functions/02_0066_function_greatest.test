@@ -16,7 +16,7 @@ CREATE TABLE products (id INT, name VARCHAR, category INT, price DECIMAL(10, 2),
 statement ok
 INSERT INTO products VALUES(1, 'Product 1', 0, 100.00,  90.00, 3),(2, 'Product 2', 1, 150.00, 120.00, 4),(3, 'Product 3', 0, 200.00, 190.00, 5),(4, 'Product 4', 2, 250.00, 210.00, 2),(5, 'Product 5', 1, 300.00, 150.00, 1)
 
-query T
+query R
 SELECT GREATEST(price,member_price) FROM products
 ----
 100.00
@@ -25,7 +25,7 @@ SELECT GREATEST(price,member_price) FROM products
 250.00
 300.00
 
-query T
+query R
 SELECT LEAST(price,member_price) FROM products
 ----
 90.00
@@ -34,7 +34,7 @@ SELECT LEAST(price,member_price) FROM products
 210.00
 150.00
 
-query ITITITT
+query ITIRIRIRRR
 SELECT id, name, category, price, rating,
        CASE
          WHEN rating = 1 THEN 0.02
@@ -66,7 +66,7 @@ SELECT GREATEST(1,2)
 ----
 2
 
-query ?
+query R
 SELECT GREATEST(1.0,2.0)
 ----
 2.0
@@ -76,7 +76,7 @@ SELECT LEAST(1,2)
 ----
 1
 
-query ?
+query R
 SELECT LEAST(1.0,2.0)
 ----
 1.0

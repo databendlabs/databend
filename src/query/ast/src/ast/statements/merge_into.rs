@@ -23,6 +23,7 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
+use crate::ast::TableRef;
 use crate::ast::TableReference;
 use crate::ast::WithOptions;
 use crate::ast::write_comma_separated_list;
@@ -202,9 +203,12 @@ impl MutationSource {
                 alias,
             } => TableReference::Table {
                 span: None,
-                catalog: catalog.clone(),
-                database: database.clone(),
-                table: table.clone(),
+                table: TableRef {
+                    catalog: catalog.clone(),
+                    database: database.clone(),
+                    table: table.clone(),
+                    branch: None,
+                },
                 alias: alias.clone(),
                 temporal: None,
                 with_options: with_options.clone(),

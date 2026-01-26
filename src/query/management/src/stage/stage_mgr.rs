@@ -34,6 +34,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -42,6 +43,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 
+use crate::errors::meta_service_error;
 use crate::serde::deserialize_struct;
 use crate::serde::serialize_struct;
 use crate::stage::StageApi;
@@ -86,7 +88,11 @@ impl StageApi for StageMgr {
         let seq = MatchSeq::from(*create_option);
         let upsert = UpsertPB::update(ident, info.clone()).with(seq);
 
-        let res = self.kv_api.upsert_pb(&upsert).await?;
+        let res = self
+            .kv_api
+            .upsert_pb(&upsert)
+            .await
+            .map_err(meta_service_error)?;
 
         if let CreateOption::Create = create_option {
             if res.prev.is_some() {
@@ -102,13 +108,17 @@ impl StageApi for StageMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_stage(&self, name: &str) -> Result<StageInfo> {
+    async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)> {
         let ident = self.stage_ident(name);
-        let res = self.kv_api.get_pb(&ident).await?;
+        let res = self
+            .kv_api
+            .get_pb(&ident)
+            .await
+            .map_err(meta_service_error)?;
         let seq_value = res
             .ok_or_else(|| ErrorCode::UnknownStage(format!("Stage '{}' does not exist.", name)))?;
 
-        Ok(seq_value.data)
+        Ok((seq_value.seq, seq_value.data))
     }
 
     #[async_backtrace::framed]
@@ -116,8 +126,12 @@ impl StageApi for StageMgr {
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let dir_name = DirName::new(self.stage_ident("dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let stages = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let stages = values.try_collect().await.map_err(meta_service_error)?;
 
         Ok(stages)
     }
@@ -132,13 +146,22 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let stage_seq = match self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
+            let stage_seq = match self
+                .kv_api
+                .get_kv(&stage_ident.to_string_key())
+                .await
+                .map_err(meta_service_error)?
+            {
                 Some(seq_v) => seq_v.seq,
                 None => return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
             };
 
             // list all stage file keys, and delete them
-            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix).await?;
+            let file_keys = self
+                .kv_api
+                .list_kv_collect(ListOptions::unlimited(&file_key_prefix))
+                .await
+                .map_err(meta_service_error)?;
             let mut dels: Vec<TxnOp> = file_keys
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))
@@ -152,7 +175,11 @@ impl StageApi for StageMgr {
                 ],
                 dels,
             );
-            let tx_reply = self.kv_api.transaction(txn_req).await?;
+            let tx_reply = self
+                .kv_api
+                .transaction(txn_req)
+                .await
+                .map_err(meta_service_error)?;
             let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
@@ -167,6 +194,31 @@ impl StageApi for StageMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
+    async fn update_stage(&self, stage: StageInfo, seq: u64) -> Result<()> {
+        let ident = self.stage_ident(&stage.stage_name);
+        let txn_req = TxnRequest::new(vec![txn_cond_eq_seq(&ident, seq)], vec![txn_op_put(
+            &ident,
+            serialize_struct(&stage, ErrorCode::IllegalUserStageFormat, || "")?,
+        )]);
+        let tx_reply = self
+            .kv_api
+            .transaction(txn_req)
+            .await
+            .map_err(meta_service_error)?;
+        let (succ, _) = unpack_txn_reply(tx_reply);
+
+        if succ {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownStage(format!(
+                "Stage '{}' was modified concurrently, please retry.",
+                stage.stage_name
+            )))
+        }
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     async fn add_file(&self, name: &str, file: StageFile) -> Result<u64> {
         let stage_ident = self.stage_ident(name);
         let file_ident = self.stage_file_ident(name, &file.path);
@@ -175,24 +227,33 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            if let Some(_v) = self.kv_api.get_kv(&file_ident.to_string_key()).await? {
+            if let Some(_v) = self
+                .kv_api
+                .get_kv(&file_ident.to_string_key())
+                .await
+                .map_err(meta_service_error)?
+            {
                 return Err(ErrorCode::StageAlreadyExists(format!(
                     "Stage '{}' already exists.",
                     name,
                 )));
             }
-            let (stage_seq, mut old_stage): (_, StageInfo) =
-                if let Some(seq_v) = self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
-                    (
-                        seq_v.seq,
-                        deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
-                    )
-                } else {
-                    return Err(ErrorCode::UnknownStage(format!(
-                        "Stage '{}' does not exist.",
-                        name
-                    )));
-                };
+            let (stage_seq, mut old_stage): (_, StageInfo) = if let Some(seq_v) = self
+                .kv_api
+                .get_kv(&stage_ident.to_string_key())
+                .await
+                .map_err(meta_service_error)?
+            {
+                (
+                    seq_v.seq,
+                    deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
+                )
+            } else {
+                return Err(ErrorCode::UnknownStage(format!(
+                    "Stage '{}' does not exist.",
+                    name
+                )));
+            };
             old_stage.number_of_files += 1;
 
             let txn_req = TxnRequest::new(
@@ -214,7 +275,11 @@ impl StageApi for StageMgr {
                 ],
             );
 
-            let tx_reply = self.kv_api.transaction(txn_req).await?;
+            let tx_reply = self
+                .kv_api
+                .transaction(txn_req)
+                .await
+                .map_err(meta_service_error)?;
             let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
@@ -232,8 +297,12 @@ impl StageApi for StageMgr {
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
 
-        let values = self.kv_api.list_pb_values(&dir_name).await?;
-        let files = values.try_collect().await?;
+        let values = self
+            .kv_api
+            .list_pb_values(ListOptions::unlimited(&dir_name))
+            .await
+            .map_err(meta_service_error)?;
+        let files = values.try_collect().await.map_err(meta_service_error)?;
 
         Ok(files)
     }
@@ -247,15 +316,19 @@ impl StageApi for StageMgr {
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
 
-            let (stage_seq, mut old_stage): (_, StageInfo) =
-                if let Some(seq_v) = self.kv_api.get_kv(&stage_ident.to_string_key()).await? {
-                    (
-                        seq_v.seq,
-                        deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
-                    )
-                } else {
-                    return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
-                };
+            let (stage_seq, mut old_stage): (_, StageInfo) = if let Some(seq_v) = self
+                .kv_api
+                .get_kv(&stage_ident.to_string_key())
+                .await
+                .map_err(meta_service_error)?
+            {
+                (
+                    seq_v.seq,
+                    deserialize_struct(&seq_v.data, ErrorCode::IllegalUserStageFormat, || "")?,
+                )
+            } else {
+                return Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)));
+            };
 
             let mut if_then = Vec::with_capacity(paths.len());
             for path in &paths {
@@ -275,7 +348,11 @@ impl StageApi for StageMgr {
                 ],
                 if_then,
             );
-            let tx_reply = self.kv_api.transaction(txn_req).await?;
+            let tx_reply = self
+                .kv_api
+                .transaction(txn_req)
+                .await
+                .map_err(meta_service_error)?;
             let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {

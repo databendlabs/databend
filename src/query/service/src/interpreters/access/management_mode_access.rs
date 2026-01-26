@@ -63,7 +63,8 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::Call
                             | RewriteKind::ShowRoles
                             | RewriteKind::ShowLocks
-                            | RewriteKind::ShowStreams(_)),
+                            | RewriteKind::ShowStreams(_)
+                            | RewriteKind::ShowTags),
                             _ => false
                         }
                 },
@@ -106,6 +107,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::RevokeRole(_)
                 // Stage.
                 | Plan::CreateStage(_)
+                | Plan::AlterStage(_)
                 | Plan::DropStage(_)
                 // Network policy.
                 | Plan::CreateNetworkPolicy(_)
@@ -120,6 +122,8 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateUDF(_)
                 | Plan::AlterUDF(_)
                 | Plan::DropUDF(_)
+                | Plan::SetObjectTags(_)
+                | Plan::UnsetObjectTags(_)
                 | Plan::UseDatabase(_) => true,
                 Plan::DescribeTable(plan) => {
                     let catalog = &plan.catalog;

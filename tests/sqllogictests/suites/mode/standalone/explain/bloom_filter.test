@@ -21,23 +21,19 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.50
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_t.c1 (#0) = 5)]
-    ├── estimated rows: 1.50
-    └── TableScan
-        ├── table: default.default.bloom_test_t
-        ├── scan id: 0
-        ├── output columns: [c1 (#0)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 2
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.50
 
-query T
+query I
 select 1 from bloom_test_t where c1 = 5
 ----
 1
@@ -64,26 +60,26 @@ select 1 from bloom_test_t where c1 = 5
 # 1. filter using another column (c2), of the same block, where there is one row matched
 
 # 1.1 check that filtering on column c2 does work as expected
-query T
+query I
 select 1 from bloom_test_t where c2 = 6
 ----
 1
 
 # 1.2 check that if incorrect filtering is applied, an empty result set will be returned
-query T
+query I
 select count(*) from bloom_test_t where c1 = 6
 ----
 0
 
 # 2. filtering on column c2, of the same block, where there is no row matched
 # 2.1 check that an empty result set returned
-query T
+query I
 select count(*) from bloom_test_t where c2 = 5
 ----
 0
 
 # 2.2 check that if incorrect filtering is applied, a non-empty result set will be returned
-query T
+query I
 select count(*) from bloom_test_t where c1 = 5
 ----
 1
@@ -108,21 +104,17 @@ EvalScalar
 ├── output columns: [1 (#3)]
 ├── expressions: [1]
 ├── estimated rows: 0.00
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_t.c2 (#1) = 0)]
-    ├── estimated rows: 0.00
-    └── TableScan
-        ├── table: default.default.bloom_test_t
-        ├── scan id: 0
-        ├── output columns: [c2 (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 3
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
-        └── estimated rows: 8.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 3
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select 1 from bloom_test_t where c2=3;
@@ -131,21 +123,17 @@ EvalScalar
 ├── output columns: [1 (#3)]
 ├── expressions: [1]
 ├── estimated rows: 4.00
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_t.c2 (#1) = 3)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.bloom_test_t
-        ├── scan id: 0
-        ├── output columns: [c2 (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 3
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 3)], limit: NONE]
-        └── estimated rows: 8.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 3
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 3)], limit: NONE]
+    └── estimated rows: 4.00
 
 query T
 explain select 1 from bloom_test_t where c3=12345;
@@ -154,21 +142,17 @@ EvalScalar
 ├── output columns: [1 (#3)]
 ├── expressions: [1]
 ├── estimated rows: 4.00
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_t.c3 (#2) = 12345)]
-    ├── estimated rows: 4.00
-    └── TableScan
-        ├── table: default.default.bloom_test_t
-        ├── scan id: 0
-        ├── output columns: [c3 (#2)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 3
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_t.c3 (#2) = 12345)], limit: NONE]
-        └── estimated rows: 8.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 3
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_t.c3 (#2) = 12345)], limit: NONE]
+    └── estimated rows: 4.00
 
 statement ok
 drop table bloom_test_t
@@ -197,21 +181,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.50
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_alter_t1
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)]
-    ├── estimated rows: 1.50
-    └── TableScan
-        ├── table: default.default.bloom_test_alter_t1
-        ├── scan id: 0
-        ├── output columns: [c1 (#0)]
-        ├── read rows: 6
-        ├── read size: < 1 KiB
-        ├── partitions total: 2
-        ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.50
 
 statement ok
 drop table bloom_test_alter_t1
@@ -232,21 +212,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.50
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_alter_t2
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)]
-    ├── estimated rows: 1.50
-    └── TableScan
-        ├── table: default.default.bloom_test_alter_t2
-        ├── scan id: 0
-        ├── output columns: [c1 (#0)]
-        ├── read rows: 6
-        ├── read size: < 1 KiB
-        ├── partitions total: 2
-        ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.50
 
 # alter bloom_index_columns
 statement ok
@@ -264,21 +240,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.80
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_alter_t2
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)]
-    ├── estimated rows: 1.80
-    └── TableScan
-        ├── table: default.default.bloom_test_alter_t2
-        ├── scan id: 0
-        ├── output columns: [c1 (#0)]
-        ├── read rows: 6
-        ├── read size: < 1 KiB
-        ├── partitions total: 3
-        ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 2 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
-        └── estimated rows: 9.00
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 3
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 2 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.80
 
 # drop bloom_index_columns
 statement ok
@@ -291,21 +263,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.80
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_alter_t2
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)]
-    ├── estimated rows: 1.80
-    └── TableScan
-        ├── table: default.default.bloom_test_alter_t2
-        ├── scan id: 0
-        ├── output columns: [c1 (#0)]
-        ├── read rows: 9
-        ├── read size: < 1 KiB
-        ├── partitions total: 3
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)], limit: NONE]
-        └── estimated rows: 9.00
+    ├── read rows: 9
+    ├── read size: < 1 KiB
+    ├── partitions total: 3
+    ├── partitions scanned: 3
+    ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)], limit: NONE]
+    └── estimated rows: 1.80
 
 statement ok
 drop table bloom_test_alter_t2
@@ -329,21 +297,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.50
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_nullable_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_nullable_t.c1 (#0) = 5), is_true(bloom_test_nullable_t.c2 (#1) > 1)]
-    ├── estimated rows: 1.50
-    └── TableScan
-        ├── table: default.default.bloom_test_nullable_t
-        ├── scan id: 0
-        ├── output columns: [c1 (#0), c2 (#1)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 2
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [bloom_test_nullable_t.c1 (#0) = 5 and bloom_test_nullable_t.c2 (#1) > 1], limit: NONE]
+    └── estimated rows: 1.50
 
 query T
 explain select 1 from bloom_test_nullable_t where c2 = 12345;
@@ -352,21 +316,17 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.20
-└── Filter
+└── TableScan
+    ├── table: default.default.bloom_test_nullable_t
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(bloom_test_nullable_t.c2 (#1) = 12345)]
-    ├── estimated rows: 1.20
-    └── TableScan
-        ├── table: default.default.bloom_test_nullable_t
-        ├── scan id: 0
-        ├── output columns: [c2 (#1)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 2
-        ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(bloom_test_nullable_t.c2 (#1) = 12345)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 2
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(bloom_test_nullable_t.c2 (#1) = 12345)], limit: NONE]
+    └── estimated rows: 1.20
 
 # fix https://github.com/datafuselabs/databend/issues/15570
 # fix https://github.com/datafuselabs/databend/issues/15572
@@ -383,37 +343,29 @@ insert into bloom_test_nullable_t2 values(false, 1, 'a'), (true, 5, null)
 query T
 explain select * from bloom_test_nullable_t2 where ((c2) in ('1') is null);
 ----
-Filter
-├── output columns: [bloom_test_nullable_t2.c0 (#0), bloom_test_nullable_t2.c1 (#1), bloom_test_nullable_t2.c2 (#2)]
-├── filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')]
-├── estimated rows: 1.60
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t2
-    ├── scan id: 0
-    ├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.bloom_test_nullable_t2
+├── scan id: 0
+├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
+└── estimated rows: 0.40
 
 query T
 explain select * from bloom_test_nullable_t2 where (not (not c0))
 ----
-Filter
-├── output columns: [bloom_test_nullable_t2.c0 (#0), bloom_test_nullable_t2.c1 (#1), bloom_test_nullable_t2.c2 (#2)]
-├── filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t2
-    ├── scan id: 0
-    ├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.bloom_test_nullable_t2
+├── scan id: 0
+├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(bloom_test_nullable_t2.c0 (#0))], limit: NONE]
+└── estimated rows: 1.00

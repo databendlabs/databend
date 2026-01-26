@@ -21,6 +21,7 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
@@ -421,6 +422,10 @@ impl Settings {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
     }
 
+    pub fn get_nested_loop_join_threshold(&self) -> Result<u64> {
+        self.try_get_u64("nested_loop_join_threshold")
+    }
+
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_bloom_runtime_filter")? != 0)
     }
@@ -580,6 +585,10 @@ impl Settings {
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_read_threshold")
+    }
+
+    pub fn get_lazy_read_across_join_threshold(&self) -> Result<u64> {
+        self.try_get_u64("lazy_read_across_join_threshold")
     }
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
@@ -875,6 +884,16 @@ impl Settings {
         v.parse()
     }
 
+    pub fn get_binary_output_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_output_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
+    pub fn get_binary_input_format(&self) -> Result<BinaryDisplayFormat> {
+        let v = self.try_get_string("binary_input_format")?;
+        BinaryDisplayFormat::parse(&v)
+    }
+
     pub fn get_script_max_steps(&self) -> Result<u64> {
         self.try_get_u64("script_max_steps")
     }
@@ -1102,10 +1121,6 @@ impl Settings {
         Ok(self.try_get_u64("enforce_local")? == 1)
     }
 
-    pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
-    }
-
     pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
     }
@@ -1138,5 +1153,17 @@ impl Settings {
 
     pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_spill_level")
+    }
+
+    pub fn get_max_hash_join_spill_level(&self) -> Result<u64> {
+        self.try_get_u64("max_hash_join_spill_level")
+    }
+
+    pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
+    }
+
+    pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
+        self.try_get_string("force_aggregate_shuffle_mode")
     }
 }

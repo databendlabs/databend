@@ -109,9 +109,16 @@ impl Planner {
                 let metadata = metadata.read();
                 if visitor.schema_snapshots.iter().all(|ss| {
                     metadata.tables().iter().any(|table| {
-                        !table.table().is_temp()
-                            && table.table().options().get(OPT_KEY_SNAPSHOT_LOCATION) == Some(&ss.1)
-                            && table.table().schema().eq(&ss.0)
+                        let tbl = table.table();
+                        if tbl.is_temp() || tbl.schema().ne(&ss.0) {
+                            return false;
+                        }
+                        let snapshot = if let Some(branch) = table.branch() {
+                            tbl.get_table_info().meta.refs.get(branch).map(|v| &v.loc)
+                        } else {
+                            tbl.options().get(OPT_KEY_SNAPSHOT_LOCATION)
+                        };
+                        snapshot == Some(&ss.1)
                     })
                 }) {
                     return (!visitor.cache_miss, Some(plan_item.as_ref().clone()));
@@ -172,8 +179,6 @@ impl TableRefVisitor {
             return;
         }
         if let TableReference::Table {
-            catalog,
-            database,
             table,
             temporal,
             with_options,
@@ -185,13 +190,13 @@ impl TableRefVisitor {
                 return;
             }
 
-            let catalog = catalog.to_owned().unwrap_or(Identifier {
+            let catalog = table.catalog.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_catalog(),
                 quote: None,
                 ident_type: IdentifierType::None,
             });
-            let database = database.to_owned().unwrap_or(Identifier {
+            let database = table.database.to_owned().unwrap_or(Identifier {
                 span: None,
                 name: self.ctx.get_current_database(),
                 quote: None,
@@ -200,22 +205,42 @@ impl TableRefVisitor {
 
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
-            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+            let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
+            let branch = table
+                .branch
+                .as_ref()
+                .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
                     .ctx
-                    .get_table(&catalog_name, &database_name, &table_name)
+                    .get_table_with_batch(
+                        &catalog_name,
+                        &database_name,
+                        &table_name,
+                        branch.as_deref(),
+                        None,
+                    )
                     .await
                 {
                     if !table_meta.is_temp()
                         && !table_meta.is_stage_table()
                         && !table_meta.is_stream()
-                        && let Some(sn) = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION)
                     {
-                        self.schema_snapshots
-                            .push((table_meta.schema(), sn.clone()));
-                        return;
+                        let snapshot = if let Some(branch) = &branch {
+                            table_meta
+                                .get_table_info()
+                                .meta
+                                .refs
+                                .get(branch)
+                                .map(|v| v.loc.clone())
+                        } else {
+                            table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
+                        };
+                        if let Some(sn) = snapshot {
+                            self.schema_snapshots.push((table_meta.schema(), sn));
+                            return;
+                        }
                     }
                 }
                 self.cache_miss = true;

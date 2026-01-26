@@ -17,6 +17,9 @@ use std::collections::BTreeMap;
 use nom::Parser;
 use nom_rule::rule;
 
+use crate::ast::AlterStageAction;
+use crate::ast::AlterStageSetOptions;
+use crate::ast::AlterStageUnsetTarget;
 use crate::ast::FileFormatOptions;
 use crate::ast::FileFormatValue;
 use crate::ast::FileLocation;
@@ -117,7 +120,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
     );
 
     let ident_options = map(
-        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
+        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS | QUOTED_EMPTY_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
         |(k, _, v)| {
             (
                 k.text().to_string(),
@@ -153,7 +156,10 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
 
     let bool_options = map(
         rule! {
-            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER | USE_LOGIC_TYPE) ~ ^"=" ~ ^#literal_bool
+            (ERROR_ON_COLUMN_COUNT_MISMATCH
+                | OUTPUT_HEADER
+                | USE_LOGIC_TYPE
+                | ALLOW_QUOTED_NULLS) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), FileFormatValue::Bool(v)),
     );
@@ -207,6 +213,73 @@ pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
         |(_, _, _, opts, _)| opts,
     )
     .parse(i)
+}
+
+enum AlterStageSetOptionItem {
+    Location(UriLocation),
+    FileFormat(FileFormatOptions),
+    Comment(String),
+}
+
+fn alter_stage_set_option(i: Input) -> IResult<AlterStageSetOptionItem> {
+    let location = map(rule! { (URL ~ ^"=")? ~ #uri_location }, |(_, location)| {
+        AlterStageSetOptionItem::Location(location)
+    });
+    let file_format = map(rule! { #file_format_clause }, |opts| {
+        AlterStageSetOptionItem::FileFormat(opts)
+    });
+    let comment = map(
+        rule! { (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string },
+        |(_, _, comment)| AlterStageSetOptionItem::Comment(comment),
+    );
+
+    rule!(
+        #location
+        | #file_format
+        | #comment
+    )
+    .parse(i)
+}
+
+pub fn alter_stage_set_options(i: Input) -> IResult<AlterStageSetOptions> {
+    map(rule! { ( #alter_stage_set_option ~ ","? )+ }, |opts| {
+        let mut set_opts = AlterStageSetOptions::default();
+        for (item, _) in opts {
+            match item {
+                AlterStageSetOptionItem::Location(loc) => set_opts.location = Some(loc),
+                AlterStageSetOptionItem::FileFormat(fmt) => set_opts.file_format = Some(fmt),
+                AlterStageSetOptionItem::Comment(comment) => set_opts.comment = Some(comment),
+            }
+        }
+        set_opts
+    })
+    .parse(i)
+}
+
+fn alter_stage_unset_target(i: Input) -> IResult<AlterStageUnsetTarget> {
+    let file_format = map(rule! { FILE_FORMAT }, |_| AlterStageUnsetTarget::FileFormat);
+    let comment = map(rule! { COMMENT | COMMENTS }, |_| {
+        AlterStageUnsetTarget::Comment
+    });
+    rule!(#file_format | #comment).parse(i)
+}
+
+pub fn alter_stage_unset_targets(i: Input) -> IResult<Vec<AlterStageUnsetTarget>> {
+    map(rule! { ( #alter_stage_unset_target ~ ","? )+ }, |targets| {
+        targets.into_iter().map(|(t, _)| t).collect()
+    })
+    .parse(i)
+}
+
+pub fn alter_stage_action(i: Input) -> IResult<AlterStageAction> {
+    let set_action = map(rule! { SET ~ #alter_stage_set_options }, |(_, opts)| {
+        AlterStageAction::Set(opts)
+    });
+    let unset_action = map(
+        rule! { UNSET ~ #alter_stage_unset_targets },
+        |(_, targets)| AlterStageAction::Unset(targets),
+    );
+    rule!(#set_action | #unset_action).parse(i)
 }
 
 pub fn file_location(i: Input) -> IResult<FileLocation> {

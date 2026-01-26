@@ -15,6 +15,7 @@
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::span::merge_span;
@@ -85,17 +86,34 @@ pub struct TableIdentifier {
     catalog: Identifier,
     database: Identifier,
     table: Identifier,
+    branch: Option<Identifier>,
     table_alias: Option<TableAlias>,
     dialect: Dialect,
     name_resolution_ctx: NameResolutionContext,
 }
 
 impl TableIdentifier {
+    pub fn new_with_ref(
+        binder: &Binder,
+        table_ref: &TableRef,
+        table_alias: &Option<TableAlias>,
+    ) -> TableIdentifier {
+        Self::new(
+            binder,
+            &table_ref.catalog,
+            &table_ref.database,
+            &table_ref.table,
+            &table_ref.branch,
+            table_alias,
+        )
+    }
+
     pub fn new(
         binder: &Binder,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
+        branch: &Option<Identifier>,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
         // Use the common normalization logic to handle MySQL-style identifiers.
@@ -152,6 +170,7 @@ impl TableIdentifier {
             catalog,
             database,
             table,
+            branch: branch.clone(),
             table_alias: table_alias.clone(),
             dialect: *dialect,
             name_resolution_ctx: name_resolution_ctx.clone(),
@@ -168,6 +187,12 @@ impl TableIdentifier {
 
     pub fn table_name(&self) -> String {
         normalize_identifier(&self.table, &self.name_resolution_ctx).name
+    }
+
+    pub fn branch_name(&self) -> Option<String> {
+        self.branch
+            .as_ref()
+            .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name)
     }
 
     pub fn table_name_alias(&self) -> Option<String> {

@@ -39,7 +39,7 @@ statement ok
 insert into range_test_t (a) select number from numbers(10000);
 
 
-query II
+query I
 select max(a) from range_test_t where a >= 4000 and a <= 5000;
 ----
 5000

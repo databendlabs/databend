@@ -13,7 +13,7 @@ set max_query_memory_usage = 100*1024*1024;
 statement ok
 set query_out_of_memory_behavior = 'spilling';
 
-# The io performance of the ci environment is very poor, especially in cluster mode, 
+# The io performance of the ci environment is very poor, especially in cluster mode,
 # resulting in too much time consuming to run the entire tpcds.
 
 include Q67

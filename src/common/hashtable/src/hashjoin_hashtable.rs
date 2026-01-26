@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Allocator;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::hints::assume;
-use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
@@ -29,15 +26,6 @@ use super::traits::Keyable;
 pub struct RowPtr {
     pub chunk_index: u32,
     pub row_index: u32,
-}
-
-impl RowPtr {
-    pub fn new(chunk_index: u32, row_index: u32) -> Self {
-        RowPtr {
-            chunk_index,
-            row_index,
-        }
-    }
 }
 
 impl PartialEq for RowPtr {
@@ -103,44 +91,25 @@ pub fn hash_bits() -> u32 {
     }
 }
 
-pub struct HashJoinHashTable<
-    K: Keyable,
-    const SKIP_DUPLICATES: bool = false,
-    A: Allocator + Clone = DefaultAllocator,
-> {
-    pub(crate) pointers: Box<[u64], A>,
+pub struct HashJoinHashTable<K: Keyable, const UNIQUE: bool = false> {
+    pub(crate) pointers: Box<[u64]>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) phantom: PhantomData<K>,
-    pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
-    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
-{
-}
+unsafe impl<K: Keyable + Send, const UNIQUE: bool> Send for HashJoinHashTable<K, UNIQUE> {}
 
-unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
-    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
-{
-}
+unsafe impl<K: Keyable + Sync, const UNIQUE: bool> Sync for HashJoinHashTable<K, UNIQUE> {}
 
-impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
-    HashJoinHashTable<K, SKIP_DUPLICATES, A>
-{
+impl<K: Keyable, const UNIQUE: bool> HashJoinHashTable<K, UNIQUE> {
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
-            pointers: unsafe {
-                Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
-            },
+            pointers: unsafe { Box::new_zeroed_slice(capacity).assume_init() },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
             phantom: PhantomData,
-            count: match SKIP_DUPLICATES {
-                true => Default::default(),
-                false => AtomicUsize::new(row_num),
-            },
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -156,12 +125,8 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if SKIP_DUPLICATES
-                && early_filtering(old_header, hash)
-                && self.next_contains(&key, remove_header_tag(old_header))
-            {
-                return;
-            }
+            // TODO: compact concurrent link list if unique
+
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
@@ -176,20 +141,11 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES
             };
         }
 
-        if SKIP_DUPLICATES {
-            self.count.fetch_add(1, Ordering::Relaxed);
-        }
-
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
 
-impl<K, A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
-    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
-where
-    K: Keyable,
-    A: Allocator + Clone + 'static,
-{
+impl<K: Keyable, const UNIQUE: bool> HashJoinHashtableLike for HashJoinHashTable<K, UNIQUE> {
     type Key = K;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
@@ -380,6 +336,11 @@ where
                     )
                 };
                 occupied += 1;
+
+                if UNIQUE {
+                    ptr = 0;
+                    break;
+                }
             }
             ptr = raw_entry.next;
         }
@@ -402,9 +363,5 @@ where
             ptr = raw_entry.next;
         }
         0
-    }
-
-    fn len(&self) -> usize {
-        self.count.load(Ordering::Relaxed)
     }
 }

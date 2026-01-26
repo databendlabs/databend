@@ -41,6 +41,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_enterprise_resources_management::DummyResourcesManagement;
+use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TempDirManager;
 
@@ -148,7 +149,7 @@ impl GlobalServices {
                 udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
-                config.meta.to_meta_grpc_client_conf(version),
+                config.meta.to_meta_grpc_client_conf(version.semver()),
                 &config.cache,
                 builtin,
                 &config.query.tenant_id,
@@ -205,8 +206,11 @@ impl GlobalServices {
 
     async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
         let meta_api_provider =
-            MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf(&BUILD_INFO));
-        let meta_store = match meta_api_provider.create_meta_store().await {
+            MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()));
+        let meta_store = match meta_api_provider
+            .create_meta_store::<DatabendRuntime>()
+            .await
+        {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
                 "Failed to create meta store: {}",

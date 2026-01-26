@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS t2 (b VARCHAR not null);
 statement ok
 INSERT INTO t2 VALUES ('a'), ('b'), ('c');
 
-query I
+query T
 SELECT * FROM t2 ORDER BY b;
 ----
 a
@@ -92,8 +92,6 @@ ReadQueryResultCache
 └── Result size: 180
 
 
-
-# Not cached
 query I
 SELECT count(*) FROM t1;
 ----
@@ -126,7 +124,6 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 b
 3 c
 
-# Not cached
 query I
 SELECT count(*) FROM t1;
 ----
@@ -142,6 +139,15 @@ select block_count as c from fuse_snapshot('db20_13','t1') order by c;
 
 statement ok
 INSERT INTO t1 VALUES (4), (5), (6);
+
+query T
+explain SELECT count(*) FROM t1;
+----
+EvalScalar
+   ├── output columns: [COUNT(*) (#1)]
+   ├── expressions: [6]
+   ├── estimated rows: 1.00
+   └── DummyTableScan
 
 # Not cached
 query I
@@ -285,6 +291,45 @@ DROP TABLE t1;
 statement ok
 DROP TABLE t2;
 
+# Test query result cache with scalar subqueries (DummyTableScan)
+# Scalar subqueries are transformed into DummyTableScan nodes that use system.one table.
+# The cache should work because system.one is a static virtual table.
+
+statement ok
+CREATE TABLE t_scalar_subquery (a INT, b INT);
+
+statement ok
+INSERT INTO t_scalar_subquery VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+SET enable_query_result_cache = 1;
+
+statement ok
+SET query_result_cache_min_execute_secs = 0;
+
+# Write cache
+query III
+SELECT *, (SELECT MIN(b) FROM t_scalar_subquery) as min_val FROM t_scalar_subquery ORDER BY a;
+----
+1 10 10
+2 20 10
+3 30 10
+
+# Read cache - should show ReadQueryResultCache
+query T
+EXPLAIN SELECT *, (SELECT MIN(b) FROM t_scalar_subquery) as min_val FROM t_scalar_subquery ORDER BY a;
+----
+ReadQueryResultCache
+├── SQL: SELECT *, (SELECT MIN(b) FROM t_scalar_subquery) AS min_val FROM t_scalar_subquery ORDER BY a
+├── Number of rows: 3
+└── Result size: 39
+
+statement ok
+DROP TABLE t_scalar_subquery;
+
+statement ok
+SET enable_query_result_cache = 0;
+
 # ISSUE 11870
 
 statement ok
@@ -305,7 +350,7 @@ SET enable_query_result_cache = 1;
 statement ok
 SET query_result_cache_min_execute_secs = 0;
 
-query I
+query IR
 select 3, a as price from a union all select a, b from ab order by price
 ----
 3 1.0
@@ -313,7 +358,7 @@ select 3, a as price from a union all select a, b from ab order by price
 1 2.3
 1 3.3
 
-query I
+query IR
 select 3, a as price from a union all select a, b from ab order by price
 ----
 3 1.0

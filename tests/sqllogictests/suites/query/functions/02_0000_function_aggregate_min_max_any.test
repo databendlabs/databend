@@ -27,7 +27,7 @@ select any(a), max(b), min(c) from t_min_max_any
 ----
 1 4 1
 
-query T
+query I
 select min(a) from t_min_max_any where c = 3
 ----
 NULL
@@ -41,7 +41,7 @@ select any(b), min(b), max(b), c from t_min_max_any group by c order by c
 
 #  group by test with all NULL rows in one group.
 
-query TTTI
+query IIII
 select any(a), min(a), max(a), c from t_min_max_any group by c order by c
 ----
 1 1 1 1
@@ -49,12 +49,12 @@ select any(a), min(a), max(a), c from t_min_max_any group by c order by c
 NULL NULL NULL 3
 
 
-query TT
+query ITT
 select c, min(h), max(h) from t_min_max_any group by c order by c
 ----
 1 (1460608685,NULL) (1460608685,NULL)
-2 (-698945516,'0DGdV') (-698945516,'0DGdV')
-3 (-468605495,'2s3RO') (460198171,'qcCz9')
+2 (-698945516,"0DGdV") (-698945516,"0DGdV")
+3 (-468605495,"2s3RO") (460198171,"qcCz9")
 
 
 statement ok
@@ -85,7 +85,7 @@ select any(salesperson), any_value(salesperson) from t_any_value_test where regi
 Alice Alice
 
 # Test ANY_VALUE with different data types
-query TIR
+query TRI
 select any_value(region), any_value(sales), any_value(15) from t_any_value_test
 ----
 North 15000.00 15

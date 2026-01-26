@@ -28,17 +28,17 @@ statement ok
 delete from t where id % 3 = 0 and id > 500;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_origin where id % 3 != 0 or id <= 500) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_origin where id % 3 != 0 or id <= 500) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_origin where id % 3 != 0 or id <= 500) = (select sum(c2) from t);
 ----
 1
@@ -52,17 +52,17 @@ statement ok
 delete from t where id <= 499;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_after_delete where id > 499) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_after_delete where id > 499) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_after_delete where id > 499) = (select sum(c2) from t);
 ----
 1
@@ -76,17 +76,17 @@ statement ok
 delete from t where id > 600 and id < 700;
 
 # check the sum of columns
-query I
+query B
 select (select sum(id) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(id) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c1) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c1) from t);
 ----
 1
 
-query I
+query B
 select (select sum(c2) from t_after_delete_2 where id <= 600 or id >= 700) = (select sum(c2) from t);
 ----
 1
@@ -114,15 +114,15 @@ delete from t where id in (select id from del_id);
 statement ok
 create view v_after_deletion as select number as id, number * 5 as c1, number * 7 as c2 from numbers(50) where id not in (select * from del_id);
 
-query III
+query 
 select * from v_after_deletion order by id except select * from t order by id;
 ----
 
-query III
+query 
 select * from t order by id except select * from v_after_deletion order by id;
 ----
 
-query I
+query B
 select (select count() from v_after_deletion) = (select count() from t);
 ----
 1

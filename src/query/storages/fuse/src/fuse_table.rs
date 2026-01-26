@@ -60,7 +60,9 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -109,6 +111,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
+use sha2::Digest;
 
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
@@ -157,6 +160,7 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+    pub(crate) table_branch: Option<BranchInfo>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -185,7 +189,7 @@ impl FuseTable {
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.cluster_key();
-        let (mut operator, table_type) = match table_info.db_type.clone() {
+        let (mut operator, table_type) = match table_info.db_type {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
@@ -286,6 +290,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            table_branch: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
@@ -436,6 +441,10 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
+        if let Some(branch) = self.table_branch.as_ref() {
+            return Some(branch.info.loc.clone());
+        }
+
         let options = self.table_info.options();
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -444,12 +453,35 @@ impl FuseTable {
             .cloned()
     }
 
+    /// Returns a stable identifier for query result cache invalidation.
+    ///
+    /// This ID changes whenever table data is mutated (INSERT, UPDATE, DELETE,
+    /// COMPACT, RECLUSTER, etc.), ensuring stale cache entries are invalidated.
+    ///
+    /// Returns a SHA256 hash of the snapshot location (or a sentinel for empty tables).
+    /// Using hash instead of raw path keeps the key short and avoids exposing internal paths.
+    pub fn query_result_cache_id(&self) -> String {
+        let raw = self
+            .snapshot_loc()
+            .unwrap_or_else(|| format!("fuse:empty:{}", self.get_table_info().ident.table_id));
+        let hash = sha2::Sha256::digest(raw.as_bytes());
+        format!("{:x}", hash)
+    }
+
     pub fn get_operator(&self) -> Operator {
         self.operator.clone()
     }
 
     pub fn get_operator_ref(&self) -> &Operator {
         &self.operator
+    }
+
+    pub fn get_branch_id(&self) -> Option<u64> {
+        self.table_branch.as_ref().map(|v| v.branch_id())
+    }
+
+    pub fn get_branch_name(&self) -> Option<&str> {
+        self.table_branch.as_ref().map(|v| v.branch_name())
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
@@ -482,7 +514,7 @@ impl FuseTable {
         }
 
         let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys(ctx.clone()).unwrap();
+        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
         let cluster_keys = exprs
             .iter()
@@ -513,7 +545,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some(ast_exprs) = self.resolve_cluster_keys(ctx.clone()) else {
+        let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
         let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
@@ -822,6 +854,10 @@ impl Table for FuseTable {
         &self.table_info
     }
 
+    fn get_table_branch(&self) -> Option<&BranchInfo> {
+        self.table_branch.as_ref()
+    }
+
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
         Some(self.data_metrics.clone())
     }
@@ -953,13 +989,12 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -1011,19 +1046,39 @@ impl Table for FuseTable {
                 }
             }
             _ => {
-                let s = &self.table_info.meta.statistics;
-                TableStatistics {
-                    num_rows: Some(s.number_of_rows),
-                    data_size: Some(s.data_bytes),
-                    data_size_compressed: Some(s.compressed_data_bytes),
-                    index_size: Some(s.index_data_bytes),
-                    bloom_index_size: s.bloom_index_size,
-                    ngram_index_size: s.ngram_index_size,
-                    inverted_index_size: s.inverted_index_size,
-                    vector_index_size: s.vector_index_size,
-                    virtual_column_size: s.virtual_column_size,
-                    number_of_blocks: s.number_of_blocks,
-                    number_of_segments: s.number_of_segments,
+                if self.table_branch.is_some() {
+                    let Some(ss) = self.read_table_snapshot().await? else {
+                        return Ok(None);
+                    };
+                    let stats = &ss.summary;
+                    TableStatistics {
+                        num_rows: Some(stats.row_count),
+                        data_size: Some(stats.uncompressed_byte_size),
+                        data_size_compressed: Some(stats.compressed_byte_size),
+                        index_size: Some(stats.index_size),
+                        bloom_index_size: stats.bloom_index_size,
+                        ngram_index_size: stats.ngram_index_size,
+                        inverted_index_size: stats.inverted_index_size,
+                        vector_index_size: stats.vector_index_size,
+                        virtual_column_size: stats.virtual_column_size,
+                        number_of_blocks: Some(stats.block_count),
+                        number_of_segments: Some(ss.segments.len() as u64),
+                    }
+                } else {
+                    let s = &self.table_info.meta.statistics;
+                    TableStatistics {
+                        num_rows: Some(s.number_of_rows),
+                        data_size: Some(s.data_bytes),
+                        data_size_compressed: Some(s.compressed_data_bytes),
+                        index_size: Some(s.index_data_bytes),
+                        bloom_index_size: s.bloom_index_size,
+                        ngram_index_size: s.ngram_index_size,
+                        inverted_index_size: s.inverted_index_size,
+                        vector_index_size: s.vector_index_size,
+                        virtual_column_size: s.virtual_column_size,
+                        number_of_blocks: s.number_of_blocks,
+                        number_of_segments: s.number_of_segments,
+                    }
                 }
             }
         };
@@ -1183,6 +1238,16 @@ impl Table for FuseTable {
         }
     }
 
+    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
+        let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
+        let mut new_table = self.clone();
+        new_table.table_branch = Some(BranchInfo {
+            name: branch_name.to_string(),
+            info: snapshot_ref.clone(),
+        });
+        Ok(Arc::new(new_table))
+    }
+
     #[async_backtrace::framed]
     async fn generate_changes_query(
         &self,
@@ -1272,7 +1337,7 @@ impl Table for FuseTable {
     }
 
     fn support_prewhere(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_index(&self) -> bool {
@@ -1298,7 +1363,10 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly()
+        self.table_branch
+            .as_ref()
+            .is_some_and(|v| v.branch_type() == SnapshotRefType::Tag)
+            || self.table_type.is_readonly()
     }
 
     fn use_own_sample_block(&self) -> bool {

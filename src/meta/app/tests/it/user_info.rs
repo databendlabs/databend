@@ -14,13 +14,12 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserInfo;
 
 #[test]
-fn test_user_info() -> Result<()> {
+fn test_user_info() -> anyhow::Result<()> {
     // This test will introduce a older UserInfo struct and a new UserInfo struct.
     // And check the serialize(old_userinfo) can be deserialized by the new UserInfo.
     #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

@@ -33,6 +33,8 @@ use databend_common_meta_types::SeqV;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandler;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandlerWrapper;
 
+use crate::meta_service_error;
+
 pub struct RealRowAccessPolicyHandler {}
 
 #[async_trait::async_trait]
@@ -70,7 +72,8 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         let name_ident = RowAccessPolicyNameIdent::new(tenant, name);
         let res = meta_api
             .get_row_access_policy(&name_ident)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get row policy")))?;
         Ok(res)
     }
@@ -83,7 +86,8 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
     ) -> Result<SeqV<RowAccessPolicyMeta>> {
         let res = meta_api
             .get_row_access_policy_by_id(tenant, policy_id)
-            .await?
+            .await
+            .map_err(meta_service_error)?
             .ok_or_else(|| {
                 databend_common_exception::ErrorCode::UnknownRowAccessPolicy(format!(
                     "Unknown row access policy {}",

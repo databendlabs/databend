@@ -26,6 +26,7 @@ use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseDumpSnapshotsFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
+use databend_common_storages_fuse::table_functions::FusePageFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
@@ -66,6 +67,7 @@ use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::system::TableStatisticsFunc;
+use crate::table_functions::tag_references::TagReferencesTable;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -184,6 +186,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_page".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FusePageFunc>::create),
             ),
         );
 
@@ -322,6 +332,11 @@ impl TableFunctionFactory {
         creators.insert(
             "policy_references".to_string(),
             (next_id(), Arc::new(PolicyReferencesTable::create)),
+        );
+
+        creators.insert(
+            "tag_references".to_string(),
+            (next_id(), Arc::new(TagReferencesTable::create)),
         );
 
         creators.insert(

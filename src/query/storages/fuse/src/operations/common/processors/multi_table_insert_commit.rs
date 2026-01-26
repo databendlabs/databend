@@ -195,7 +195,7 @@ impl AsyncSink for CommitMultiTableInsert {
                         duration.as_millis(),
                         retries,
                     );
-                    databend_common_base::base::tokio::time::sleep(duration).await;
+                    tokio::time::sleep(duration).await;
                     for (tid, seq, meta) in update_failed_tbls {
                         let table = self.tables.get_mut(&tid).unwrap();
                         *table = table
@@ -292,13 +292,18 @@ async fn build_update_table_meta_req(
     // write snapshot
     let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
-    let location = location_generator
-        .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    // TODO(zhyass): multi table insert don't support branch now.
+    debug_assert!(fuse_table.get_branch_id().is_none());
+    let location = location_generator.gen_snapshot_location(
+        None,
+        &snapshot.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     dal.write(&location, snapshot.to_bytes()?).await?;
 
     // build new table meta
     let new_table_meta =
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
+        fuse_table.build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot)?;
     let table_id = fuse_table.table_info.ident.table_id;
     let table_version = fuse_table.table_info.ident.seq;
 
@@ -307,6 +312,7 @@ async fn build_update_table_meta_req(
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
         base_snapshot_location: fuse_table.snapshot_loc(),
+        lvt_check: None,
     };
     Ok(req)
 }

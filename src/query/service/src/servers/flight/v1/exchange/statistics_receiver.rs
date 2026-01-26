@@ -17,14 +17,13 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
-use databend_common_base::base::tokio::sync::broadcast::Sender;
-use databend_common_base::base::tokio::sync::broadcast::channel;
 use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;
+use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::channel;
 
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -204,7 +203,7 @@ impl StatisticsReceiver {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                exchange_handler.await.flatten()?;
+                exchange_handler.await??;
             }
 
             Ok(())

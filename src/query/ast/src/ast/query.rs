@@ -29,6 +29,8 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
+use crate::ast::SnapshotRefType;
+use crate::ast::TableRef;
 use crate::ast::WindowDefinition;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
@@ -571,6 +573,10 @@ pub enum TimeTravelPoint {
         database: Option<Identifier>,
         name: Identifier,
     },
+    TableRef {
+        typ: SnapshotRefType,
+        name: Identifier,
+    },
 }
 
 impl Display for TimeTravelPoint {
@@ -596,6 +602,9 @@ impl Display for TimeTravelPoint {
                     catalog.iter().chain(database.iter()).chain(Some(name)),
                 )?;
                 write!(f, ")")?;
+            }
+            TimeTravelPoint::TableRef { typ, name } => {
+                write!(f, "({} => {})", typ, name)?;
             }
         }
 
@@ -842,9 +851,7 @@ pub enum TableReference {
     // Table name
     Table {
         span: Span,
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
+        table: TableRef,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         with_options: Option<WithOptions>,
@@ -923,8 +930,6 @@ impl Display for TableReference {
         match self {
             TableReference::Table {
                 span: _,
-                catalog,
-                database,
                 table,
                 alias,
                 temporal,
@@ -933,10 +938,7 @@ impl Display for TableReference {
                 unpivot,
                 sample,
             } => {
-                write_dot_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter()).chain(Some(table)),
-                )?;
+                write!(f, "{table}")?;
 
                 if let Some(temporal) = temporal {
                     write!(f, " {temporal}")?;

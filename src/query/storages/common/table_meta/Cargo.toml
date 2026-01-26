@@ -10,12 +10,10 @@ edition = { workspace = true }
 dev = ["snap"]
 
 [dependencies]
-
 arrow = { workspace = true }
 bincode_v1 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -33,6 +31,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
+uuid = { workspace = true }
 zstd = { workspace = true }
 
 [lints]

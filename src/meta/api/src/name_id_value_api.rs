@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
@@ -274,9 +275,9 @@ where
         self.get_id_and_value(key).await
     }
 
-    /// list by name prefix, returns a list of `(name, id, value)`
+    /// list by name prefix, returns a list of `(name, SeqV<id>, SeqV<value>)`
     ///
-    /// Returns an iterator of `(name, id, SeqV<value>)` tuples.
+    /// Returns an iterator of `(name, SeqV<id>, SeqV<value>)` tuples.
     /// This function list all the ids by a name prefix,
     /// then get the `id->value` mapping and finally zip these two together.
     // Using `async fn` does not allow using `impl Iterator` in the return type.
@@ -286,19 +287,18 @@ where
         prefix: &DirName<K>,
     ) -> impl Future<
         Output = Result<
-            impl Iterator<Item = (K, DataId<IdRsc>, SeqV<IdRsc::ValueType>)>,
+            impl Iterator<Item = (K, SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>,
             MetaError,
         >,
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(prefix).await?;
+            let strm = self.list_pb(ListOptions::unlimited(prefix)).await?;
             let name_ids = strm.try_collect::<Vec<_>>().await?;
 
-            let id_idents = name_ids.iter().map(|itm| {
-                let id = itm.seqv.data;
-                id.into_t_ident(tenant)
-            });
+            let id_idents = name_ids
+                .iter()
+                .map(|itm| itm.seqv.data.into_t_ident(tenant));
 
             let strm = self.get_pb_values(id_idents).await?;
             let seq_metas = strm.try_collect::<Vec<_>>().await?;
@@ -308,7 +308,7 @@ where
                     .into_iter()
                     .zip(seq_metas)
                     .filter_map(|(itm, opt_seq_meta)| {
-                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv.data, seq_meta))
+                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv, seq_meta))
                     });
 
             Ok(name_id_values)
@@ -407,6 +407,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
+    use databend_common_meta_kvapi::kvapi::ListOptions;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
@@ -416,6 +417,7 @@ mod tests {
     use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
+    use futures::stream::BoxStream;
     use prost::Message;
 
     use crate::name_id_value_api::NameIdValueApiCompat;
@@ -432,24 +434,26 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_kv_stream(
+        async fn get_many_kv(
             &self,
-            keys: &[String],
+            keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            let mut res = Vec::with_capacity(keys.len());
-            for key in keys.iter() {
-                let k = key.clone();
-                let v = self.kvs.get(key).cloned();
+            use databend_common_meta_kvapi::kvapi::fail_fast;
+            use futures::TryStreamExt;
 
-                let item = StreamItem::new(k, v.map(|v| v.into()));
-                res.push(Ok(item));
-            }
+            let kvs = self.kvs.clone();
 
-            let strm = futures::stream::iter(res);
+            let strm = fail_fast(keys).map_ok(move |key| {
+                let v = kvs.get(&key).cloned();
+                StreamItem::new(key, v.map(|v| v.into()))
+            });
             Ok(strm.boxed())
         }
 
-        async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        async fn list_kv(
+            &self,
+            _opts: ListOptions<'_, str>,
+        ) -> Result<KVStream<Self::Error>, Self::Error> {
             unimplemented!()
         }
 

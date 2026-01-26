@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::number::NumberScalar;
 use databend_storages_common_index::filters::Filter;
@@ -25,7 +24,7 @@ use rand::prelude::random;
 use rand::rngs::StdRng;
 
 #[test]
-fn test_xor_bitmap_u64() -> Result<()> {
+fn test_xor_bitmap_u64() -> anyhow::Result<()> {
     let seed: u64 = random();
     let numbers = 1_000_000;
 
@@ -60,7 +59,7 @@ fn test_xor_bitmap_u64() -> Result<()> {
 }
 
 #[test]
-fn test_xor_bitmap_bool() -> Result<()> {
+fn test_xor_bitmap_bool() -> anyhow::Result<()> {
     let seed: u64 = random();
     let numbers = 1_000_000;
 
@@ -95,7 +94,7 @@ fn test_xor_bitmap_bool() -> Result<()> {
 }
 
 #[test]
-fn test_xor_bitmap_string() -> Result<()> {
+fn test_xor_bitmap_string() -> anyhow::Result<()> {
     let seed: u64 = random();
     let numbers = 100_000;
 
@@ -144,7 +143,7 @@ fn test_xor_bitmap_string() -> Result<()> {
 }
 
 #[test]
-fn test_xor_bitmap_duplicate_string() -> Result<()> {
+fn test_xor_bitmap_duplicate_string() -> anyhow::Result<()> {
     let numbers = 100_000;
 
     let key = "123456789012345678901234567890";
@@ -178,7 +177,7 @@ fn test_xor_bitmap_duplicate_string() -> Result<()> {
 }
 
 #[test]
-fn test_xor_bitmap_data_block() -> Result<()> {
+fn test_xor_bitmap_data_block() -> anyhow::Result<()> {
     let seed: u64 = random();
     let numbers = 1_000_000;
     let size = 8 * numbers;
@@ -217,7 +216,7 @@ fn test_xor_bitmap_data_block() -> Result<()> {
 }
 
 #[test]
-fn test_xor_bitmap_from_digests() -> Result<()> {
+fn test_xor_bitmap_from_digests() -> anyhow::Result<()> {
     let numbers = 1_000_000;
 
     let size = 8 * numbers;

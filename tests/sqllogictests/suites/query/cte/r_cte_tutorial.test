@@ -54,7 +54,7 @@ statement ok
 INSERT INTO emp VALUES (7934, 'MILLER', 'CLERK', 7782, DATE '1982-01-23', 1300.00, NULL, 10);
 
 
-query II
+query IT
 WITH RECURSIVE ctename AS (
       SELECT empno, ename
       FROM emp
@@ -71,7 +71,7 @@ SELECT * FROM ctename;
 7902 FORD
 
 
-query III
+query ITI
 WITH RECURSIVE ctename AS (
       SELECT empno, ename,
              0 AS level
@@ -89,7 +89,7 @@ SELECT * FROM ctename;
 7566 JONES 0
 7902 FORD 1
 
-query III
+query IT
 WITH RECURSIVE ctename AS (
       SELECT empno, ename
       FROM emp
@@ -119,7 +119,7 @@ CREATE OR REPLACE VIEW ctenames AS (
   SELECT * FROM ctename
 );
 
-query III
+query IT
 SELECT * FROM ctenames;
 ----
 7369 SMITH

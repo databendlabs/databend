@@ -21,7 +21,6 @@ use std::time::Duration;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
-use databend_common_base::base::tokio;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
@@ -333,7 +332,7 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_simple_sql() -> Result<()> {
+async fn test_simple_sql() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "select * from system.tables limit 10";
@@ -400,7 +399,7 @@ async fn test_simple_sql() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_show_databases() -> Result<()> {
+async fn test_show_databases() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "show databases";
@@ -421,7 +420,7 @@ async fn test_show_databases() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_return_when_finish() -> Result<()> {
+async fn test_return_when_finish() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let wait_time_secs = 5;
@@ -456,7 +455,7 @@ async fn test_return_when_finish() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_client_query_id() -> Result<()> {
+async fn test_client_query_id() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let wait_time_secs = 5;
@@ -473,7 +472,7 @@ async fn test_client_query_id() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_client_compatible_query_id() -> Result<()> {
+async fn test_client_compatible_query_id() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let wait_time_secs = 5;
@@ -493,7 +492,7 @@ async fn test_client_compatible_query_id() -> Result<()> {
 // It could be uncommented when we remove SEE_YOU_AGAIN stmt
 
 // #[tokio::test(flavor = "current_thread")]
-// async fn test_bad_sql() -> Result<()> {
+// async fn test_bad_sql() -> anyhow::Result<()> {
 //     let sql = "bad sql";
 //     let ep = create_endpoint();
 //     let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
@@ -535,7 +534,7 @@ async fn test_client_compatible_query_id() -> Result<()> {
 // }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_active_sessions() -> Result<()> {
+async fn test_active_sessions() -> anyhow::Result<()> {
     let conf = ConfigBuilder::create()
         .max_active_sessions(2)
         .off_log()
@@ -562,7 +561,7 @@ async fn test_active_sessions() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_wait_time_secs() -> Result<()> {
+async fn test_wait_time_secs() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint()?;
@@ -613,7 +612,7 @@ async fn test_wait_time_secs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_buffer_size() -> Result<()> {
+async fn test_buffer_size() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let rows = 100;
@@ -636,7 +635,7 @@ async fn test_buffer_size() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_pagination() -> Result<()> {
+async fn test_pagination() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint()?;
@@ -683,7 +682,7 @@ async fn test_pagination() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
-async fn test_result_timeout() -> Result<()> {
+async fn test_result_timeout() -> anyhow::Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_result_timeout(5u64)
         .build();
@@ -708,7 +707,7 @@ async fn test_result_timeout() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_system_tables() -> Result<()> {
+async fn test_system_tables() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let ep = create_endpoint()?;
@@ -756,7 +755,7 @@ async fn test_system_tables() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_insert() -> Result<()> {
+async fn test_insert() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let route = create_endpoint()?;
@@ -785,7 +784,7 @@ async fn test_insert() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_catalog_apis() -> Result<()> {
+async fn test_catalog_apis() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
 
@@ -838,7 +837,7 @@ async fn test_catalog_apis() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_user_apis() -> Result<()> {
+async fn test_user_apis() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
 
@@ -873,7 +872,7 @@ async fn test_user_apis() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_role_apis() -> Result<()> {
+async fn test_role_apis() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
 
@@ -988,7 +987,7 @@ async fn post_json_to_endpoint(
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_auth_jwt() -> Result<()> {
+async fn test_auth_jwt() -> anyhow::Result<()> {
     let user_name = "test_user";
 
     let kid = "test_kid";
@@ -1174,7 +1173,7 @@ async fn assert_auth_current_role_with_role(
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_auth_jwt_with_create_user() -> Result<()> {
+async fn test_auth_jwt_with_create_user() -> anyhow::Result<()> {
     let user_name = "user1";
 
     let kid = "test_kid";
@@ -1235,7 +1234,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
 
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_handler_tls_server() -> Result<()> {
+async fn test_http_handler_tls_server() -> anyhow::Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_tls_server_key(TEST_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
@@ -1279,7 +1278,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
+async fn test_http_handler_tls_server_failed_case_1() -> anyhow::Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_tls_server_key(TEST_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
@@ -1306,7 +1305,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
 
 #[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
+async fn test_http_service_tls_server_mutual_tls() -> anyhow::Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
@@ -1357,7 +1356,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 // cannot connect with server unless it have CA signed identity
 #[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
+async fn test_http_service_tls_server_mutual_tls_failed() -> anyhow::Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
         .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
@@ -1390,7 +1389,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_func_object_keys() -> Result<()> {
+async fn test_func_object_keys() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
@@ -1421,7 +1420,7 @@ async fn test_func_object_keys() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_multi_partition() -> Result<()> {
+async fn test_multi_partition() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
@@ -1449,7 +1448,7 @@ async fn test_multi_partition() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_affect() -> Result<()> {
+async fn test_affect() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
@@ -1581,7 +1580,7 @@ async fn test_affect() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_session_secondary_roles() -> Result<()> {
+async fn test_session_secondary_roles() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let route = create_endpoint()?;
@@ -1611,7 +1610,7 @@ async fn test_session_secondary_roles() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_auth_configured_user() -> Result<()> {
+async fn test_auth_configured_user() -> anyhow::Result<()> {
     let user_name = "conf_user";
     let pass_word = "conf_user_pwd";
     let hash_method = PasswordHashMethod::DoubleSha1;
@@ -1646,7 +1645,7 @@ async fn test_auth_configured_user() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_txn_error() -> Result<()> {
+async fn test_txn_error() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let wait_time_secs = 5;
 
@@ -1695,7 +1694,7 @@ async fn test_txn_error() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_txn_timeout() -> Result<()> {
+async fn test_txn_timeout() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let wait_time_secs = 5;
 
@@ -1732,7 +1731,7 @@ async fn test_txn_timeout() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_has_result_set() -> Result<()> {
+async fn test_has_result_set() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
@@ -1760,7 +1759,7 @@ async fn test_has_result_set() -> Result<()> {
 // FIXME:
 #[ignore]
 #[tokio::test(flavor = "current_thread")]
-async fn test_max_size_per_page() -> Result<()> {
+async fn test_max_size_per_page() -> anyhow::Result<()> {
     let _fixture =
         TestFixture::setup_with_config(&ConfigBuilder::create().off_log().config()).await?;
 
@@ -1782,7 +1781,7 @@ async fn test_max_size_per_page() -> Result<()> {
 // FIXME:
 #[ignore]
 #[tokio::test(flavor = "current_thread")]
-async fn test_max_size_per_page_total_rows() -> Result<()> {
+async fn test_max_size_per_page_total_rows() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     // bytes_limit / rows_limit = 1024 * 1024 * 10 / 10000 = 1048.567
     let sql = "select repeat('1', 1050) as a from numbers(20000)";
@@ -1796,7 +1795,7 @@ async fn test_max_size_per_page_total_rows() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_null_response() -> Result<()> {
+async fn test_null_response() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     {

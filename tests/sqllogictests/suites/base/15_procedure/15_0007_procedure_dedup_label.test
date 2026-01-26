@@ -26,7 +26,7 @@ begin;
 statement ok
 call procedure test_dedup_operations();
 
-query II
+query IB
 SELECT * FROM t1;
 ----
 1 0
@@ -34,7 +34,7 @@ SELECT * FROM t1;
 statement ok
 commit;
 
-query II
+query IB
 SELECT * FROM t1;
 ----
 1 0
@@ -43,7 +43,7 @@ SELECT * FROM t1;
 statement ok
 REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
 
-query II
+query IB
 SELECT * FROM t1;
 ----
 1 0

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
@@ -42,21 +42,24 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
-        catalog: &Option<Identifier>,
-        database: &Option<Identifier>,
-        table: &Identifier,
+        table_ref: &TableRef,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
         with_options: &Option<WithOptions>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
-        let (catalog, database, table_name, table_name_alias) = (
-            table_identifier.catalog_name(),
-            table_identifier.database_name(),
-            table_identifier.table_name(),
-            table_identifier.table_name_alias(),
-        );
+        let TableRef {
+            catalog,
+            database,
+            table,
+            branch,
+        } = table_ref;
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
+        let catalog = table_identifier.catalog_name();
+        let database = table_identifier.database_name();
+        let table_name = table_identifier.table_name();
+        let branch_name = table_identifier.branch_name();
+        let table_name_alias = table_identifier.table_name_alias();
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if cte_name == &table_name {
@@ -105,7 +108,12 @@ impl Binder {
                     .set_span(*span));
                 }
                 return if cte_info.recursive {
-                    if self.bind_recursive_cte {
+                    if self
+                        .bind_recursive_cte
+                        .as_ref()
+                        .map(|name| name == &table_name)
+                        .unwrap_or(false)
+                    {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
                     } else {
                         self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
@@ -130,6 +138,7 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
+                branch_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
             ) {
@@ -173,6 +182,7 @@ impl Binder {
                     catalog,
                     database.clone(),
                     table_meta.clone(),
+                    branch_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
@@ -259,6 +269,7 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta,
+                        branch_name,
                         table_name_alias,
                         false,
                         false,
@@ -292,6 +303,7 @@ impl Binder {
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
+                    branch_name,
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,

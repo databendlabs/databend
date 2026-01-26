@@ -13,19 +13,19 @@ CREATE TABLE IF NOT EXISTS t1(id Int, t Tuple(Bool, Int64, Float64, String, Date
 statement ok
 INSERT INTO t1 (id, t) VALUES(1, (true, 100, 12.34, 'abc', '2020-01-01', '2020-01-01 00:00:00')),(2, (false, 200, -25.73, 'xyz', '2022-06-01', '2022-06-01 12:00:00'))
 
-query IT
+query I?
 select * from t1
 ----
-1 (1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000')
-2 (0,200,-25.73,'xyz','2022-06-01','2022-06-01 12:00:00.000000')
+1 (1,100,12.34,"abc","2020-01-01","2020-01-01 00:00:00.000000")
+2 (0,200,-25.73,"xyz","2022-06-01","2022-06-01 12:00:00.000000")
 
-query BIFTTT
+query BIRT??
 select t.1, t.2, t.3, t.4, t.5, t.6 from t1
 ----
 1 100 12.34 abc 2020-01-01 2020-01-01 00:00:00.000000
 0 200 -25.73 xyz 2022-06-01 2022-06-01 12:00:00.000000
 
-query IBIF
+query IBIR
 select * from (select id, t.1 as a, t.2 as b, t.3 as c from t1);
 ----
 1 1 100 12.34
@@ -43,13 +43,13 @@ CREATE TABLE IF NOT EXISTS t2(id Int, t Tuple(a Bool, b Int64, c Float64, d Stri
 statement ok
 INSERT INTO t2 (id, t) VALUES(1, (true, 10, 0.5, 'x', '2021-05-01', '2021-05-01 00:00:00')),(2, (false, -10, -0.9, 'y', '2022-10-01', '2022-10-01 12:00:00'))
 
-query IT
+query I?
 select * from t2
 ----
-1 (1,10,0.5,'x','2021-05-01','2021-05-01 00:00:00.000000')
-2 (0,-10,-0.9,'y','2022-10-01','2022-10-01 12:00:00.000000')
+1 (1,10,0.5,"x","2021-05-01","2021-05-01 00:00:00.000000")
+2 (0,-10,-0.9,"y","2022-10-01","2022-10-01 12:00:00.000000")
 
-query BIFTTT
+query BIRT??
 select t:a, t:b, t:c, t:d, t:e, t:f from t2
 ----
 1 10 0.5 x 2021-05-01 2021-05-01 00:00:00.000000
@@ -61,13 +61,13 @@ CREATE TABLE IF NOT EXISTS t3(id Int, t Tuple(a Tuple(m Int64, _n Int64), b Tupl
 statement ok
 INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, (('30', '31'), (40, 41)))
 
-query IT
+query I?
 select * from t3
 ----
 1 ((10,11),(20,21))
 2 ((30,31),(40,41))
 
-query IITIIT
+query II?II?
 select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from t3
 ----
 10 11 (10,11) 20 21 (20,21)
@@ -76,13 +76,13 @@ select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from t3
 statement ok
 CREATE VIEW v AS SELECT * FROM t3;
 
-query IT
+query I?
 select * from v
 ----
 1 ((10,11),(20,21))
 2 ((30,31),(40,41))
 
-query IITIIT
+query II?II?
 select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from v
 ----
 10 11 (10,11) 20 21 (20,21)
@@ -92,7 +92,7 @@ select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from v
 statement ok
 create table t4 (a Tuple(Int, Int) not null)
 
-query TTTT
+query TTTTT
 desc t4
 ----
 a TUPLE(1 INT32, 2 INT32) NO (NULL, NULL) (empty)
@@ -105,13 +105,13 @@ CREATE TABLE IF NOT EXISTS t5(id Int not null, t Tuple(a Tuple(m Int64, n Decima
 statement ok
 INSERT INTO t5 (id, t) VALUES(1, ((10, 11.888), (20.777, 21.666, 22.555, 23.444))), (2, ((20, 21.888), (30.777, 31.666, 32.555, 33.444)))
 
-query IT
+query I?
 select * from t5
 ----
 1 ((10,11.8880000),(20.7770000,21.6660000,22.5550000,23.4440000))
 2 ((20,21.8880000),(30.7770000,31.6660000,32.5550000,33.4440000))
 
-query IITIIIIT
+query IR?RRRR?
 select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from t5
 ----
 10 11.8880000 (10,11.8880000) 20.7770000 21.6660000 22.5550000 23.4440000 (20.7770000,21.6660000,22.5550000,23.4440000)
@@ -120,13 +120,13 @@ select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from t5
 statement ok
 CREATE VIEW v5 AS SELECT * FROM t5;
 
-query IT
+query I?
 select * from v5
 ----
 1 ((10,11.8880000),(20.7770000,21.6660000,22.5550000,23.4440000))
 2 ((20,21.8880000),(30.7770000,31.6660000,32.5550000,33.4440000))
 
-query IITIIIIT
+query IR?RRRR?
 select t:a:m, t:a:n, t:a, t:b:w, t:b:x, t:b:y, t:b:z, t:b from v5
 ----
 10 11.8880000 (10,11.8880000) 20.7770000 21.6660000 22.5550000 23.4440000 (20.7770000,21.6660000,22.5550000,23.4440000)

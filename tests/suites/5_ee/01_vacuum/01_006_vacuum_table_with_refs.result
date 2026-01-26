@@ -1,0 +1,24 @@
+>>>> create or replace database test_vacuum_orphan_refs
+>>>> create or replace table test_vacuum_orphan_refs.a(c int) 'fs:///tmp/test_vacuum_orphan_refs/'
+>>>> insert into test_vacuum_orphan_refs.a values (1),(2)
+2
+>>>> insert into test_vacuum_orphan_refs.a values (2),(3)
+2
+>>>> optimize table test_vacuum_orphan_refs.a compact
+before vacuum
+4
+4
+4
+2
+after vacuum
+4
+4
+4
+2
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b order by c
+1
+2
+after add pure orphan files
+4
+after vacuum
+2

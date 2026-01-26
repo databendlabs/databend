@@ -10,7 +10,7 @@ CREATE TASK mstask
   SCHEDULE = 500 MILLISECOND
   AS SELECT 1;
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.tasks where name = 'mstask'
 ----
 mstask mywh INTERVAL 0 SECOND 500 MILLISECOND SELECT 1
@@ -27,7 +27,7 @@ ALTER TASK mstask SET SCHEDULE = 1000 SECOND
 statement ok
 ALTER TASK mstask SET SCHEDULE = 501 MILLISECOND
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.tasks where name = 'mstask'
 ----
 mstask mywh INTERVAL 0 SECOND 501 MILLISECOND SELECT 1
@@ -35,7 +35,7 @@ mstask mywh INTERVAL 0 SECOND 501 MILLISECOND SELECT 1
 statement ok
 execute TASK mstask
 
-query SSSS
+query TTTT
 select name, warehouse, schedule, definition from system.task_history where name = 'mstask'
 ----
 mstask mywh INTERVAL 0 SECOND 501 MILLISECOND SELECT 1

@@ -22,21 +22,17 @@ explain select t1.a from t1 where a > 0;
 Exchange
 ├── output columns: [t1.a (#0)]
 ├── exchange type: Merge
-└── Filter
-    ├── output columns: [t1.a (#0)]
-    ├── filters: [t1.a (#0) > 0]
-    ├── estimated rows: 99.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 100
-        ├── read size: < 1 KiB
-        ├── partitions total: 3
-        ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
-        └── estimated rows: 100.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 100
+    ├── read size: < 1 KiB
+    ├── partitions total: 3
+    ├── partitions scanned: 3
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+    ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
+    └── estimated rows: 99.00
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
@@ -46,7 +42,7 @@ Exchange
 ├── exchange type: Merge
 └── Filter
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
-    ├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
+    ├── filters: [t1.a (#0) > 3 or t2.a (#2) > 5 and t1.a (#0) > 1]
     ├── estimated rows: 99.68
     └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
@@ -61,37 +57,29 @@ Exchange
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
         │   ├── exchange type: Broadcast
-        │   └── Filter
-        │       ├── output columns: [t2.a (#2), t2.b (#3)]
-        │       ├── filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)]
-        │       ├── estimated rows: 99.92
-        │       └── TableScan
-        │           ├── table: default.default.t2
-        │           ├── scan id: 1
-        │           ├── output columns: [a (#2), b (#3)]
-        │           ├── read rows: 100
-        │           ├── read size: < 1 KiB
-        │           ├── partitions total: 3
-        │           ├── partitions scanned: 3
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        │           ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
-        │           └── estimated rows: 100.00
-        └── Filter(Probe)
-            ├── output columns: [t1.a (#0), t1.b (#1)]
-            ├── filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)]
-            ├── estimated rows: 99.92
-            └── TableScan
-                ├── table: default.default.t1
-                ├── scan id: 0
-                ├── output columns: [a (#0), b (#1)]
-                ├── read rows: 100
-                ├── read size: < 1 KiB
-                ├── partitions total: 3
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-                ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
-                ├── apply join filters: [#0]
-                └── estimated rows: 100.00
+        │   └── TableScan
+        │       ├── table: default.default.t2
+        │       ├── scan id: 1
+        │       ├── output columns: [a (#2), b (#3)]
+        │       ├── read rows: 100
+        │       ├── read size: < 1 KiB
+        │       ├── partitions total: 3
+        │       ├── partitions scanned: 3
+        │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+        │       ├── push downs: [filters: [t2.a (#2) > 3 or t2.a (#2) > 1], limit: NONE]
+        │       └── estimated rows: 99.92
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── scan id: 0
+            ├── output columns: [a (#0), b (#1)]
+            ├── read rows: 100
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+            ├── push downs: [filters: [t1.a (#0) > 3 or t1.a (#0) > 1], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 99.92
 
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
@@ -559,18 +547,14 @@ Exchange
                         ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
                         ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]
                         ├── estimated rows: 0.00
-                        └── Filter
-                            ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
-                            ├── filters: [is_true(a00c.a0w (#19) = '汇缴')]
-                            ├── estimated rows: 0.00
-                            └── TableScan
-                                ├── table: default.default.a00c
-                                ├── scan id: 0
-                                ├── output columns: [a0f (#2), a0t (#16), a0w (#19)]
-                                ├── read rows: 0
-                                ├── read size: 0
-                                ├── partitions total: 0
-                                ├── partitions scanned: 0
-                                ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
-                                ├── apply join filters: [#0]
-                                └── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.default.a00c
+                            ├── scan id: 0
+                            ├── output columns: [a0f (#2), a0t (#16)]
+                            ├── read rows: 0
+                            ├── read size: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
+                            ├── apply join filters: [#0]
+                            └── estimated rows: 0.00

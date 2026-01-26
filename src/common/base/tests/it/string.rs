@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use databend_common_base::base::*;
-use databend_common_exception::Result;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[test]
-fn test_progress() -> Result<()> {
+fn test_progress() -> anyhow::Result<()> {
     let original_key = "databend/test_user123!!";
     let new_key = escape_for_key(original_key);
     assert_eq!(Ok("databend%2ftest_user123%21%21".to_string()), new_key);

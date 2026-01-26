@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
@@ -66,7 +65,7 @@ use opendal::Operator;
 use rand::Rng;
 
 #[test]
-fn test_ft_stats_block_stats() -> Result<()> {
+fn test_ft_stats_block_stats() -> anyhow::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::String),
@@ -90,7 +89,7 @@ fn test_ft_stats_block_stats() -> Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_with_column_distinct_count() -> Result<()> {
+fn test_ft_stats_block_stats_with_column_distinct_count() -> anyhow::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::Int32), 0),
         TableField::new_from_column_id("b", TableDataType::String, 1),
@@ -117,7 +116,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> Result<()> {
 }
 
 #[test]
-fn test_ft_tuple_stats_block_stats() -> Result<()> {
+fn test_ft_tuple_stats_block_stats() -> anyhow::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![TableField::new(
         "a",
         TableDataType::Tuple {
@@ -150,7 +149,7 @@ fn test_ft_tuple_stats_block_stats() -> Result<()> {
 }
 
 #[test]
-fn test_ft_stats_col_stats_reduce() -> Result<()> {
+fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
     let num_of_blocks = 10;
     let rows_per_block = 3;
     let val_start_with = 1;
@@ -196,7 +195,7 @@ fn test_ft_stats_col_stats_reduce() -> Result<()> {
 }
 
 #[test]
-fn test_reduce_block_statistics_in_memory_size() -> Result<()> {
+fn test_reduce_block_statistics_in_memory_size() -> anyhow::Result<()> {
     let iter = |mut idx| {
         std::iter::from_fn(move || {
             idx += 1;
@@ -227,7 +226,7 @@ fn test_reduce_block_statistics_in_memory_size() -> Result<()> {
 }
 
 #[test]
-fn test_generate_virtual_column_statistics_in_memory_size() -> Result<()> {
+fn test_generate_virtual_column_statistics_in_memory_size() -> anyhow::Result<()> {
     let iter = |mut idx, data_type: DataType, has_null: bool| {
         std::iter::from_fn(move || {
             idx += 1;
@@ -329,7 +328,7 @@ fn test_generate_virtual_column_statistics_in_memory_size() -> Result<()> {
 }
 
 #[test]
-fn test_reduce_virtual_column_statistics_in_memory_size() -> Result<()> {
+fn test_reduce_virtual_column_statistics_in_memory_size() -> anyhow::Result<()> {
     let iter = |mut idx, data_type: DataType, has_null: bool| {
         std::iter::from_fn(move || {
             idx += 1;
@@ -428,7 +427,7 @@ fn test_reduce_virtual_column_statistics_in_memory_size() -> Result<()> {
 }
 
 #[test]
-fn test_reduce_cluster_statistics() -> Result<()> {
+fn test_reduce_cluster_statistics() -> anyhow::Result<()> {
     let default_cluster_key_id = Some(0);
     let cluster_stats_0 = Some(ClusterStatistics::new(
         0,
@@ -521,7 +520,7 @@ fn test_reduce_cluster_statistics() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_accumulator() -> Result<()> {
+async fn test_accumulator() -> anyhow::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = RowOrientedSegmentBuilder::default();
 
@@ -548,7 +547,7 @@ async fn test_accumulator() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_ft_cluster_stats_with_stats() -> Result<()> {
+async fn test_ft_cluster_stats_with_stats() -> anyhow::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "a",
         DataType::Number(NumberDataType::Int32),
@@ -645,7 +644,7 @@ async fn test_ft_cluster_stats_with_stats() -> Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming() -> Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming() -> anyhow::Result<()> {
     let suite = || -> Result<()> {
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
@@ -698,7 +697,7 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> anyhow::Result<()> {
     // verifies (randomly) the following assumptions:
     //
     // https://github.com/datafuselabs/databend/issues/7829
@@ -805,7 +804,7 @@ fn char_len(value: &str) -> usize {
 }
 
 #[test]
-fn test_reduce_block_meta() -> Result<()> {
+fn test_reduce_block_meta() -> anyhow::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
     let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
@@ -862,7 +861,7 @@ fn test_reduce_block_meta() -> Result<()> {
 }
 
 #[test]
-fn test_encode_column_hll() -> Result<()> {
+fn test_encode_column_hll() -> anyhow::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::String),

@@ -62,13 +62,13 @@ use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
+use crate::operations::ConflictResolveContext;
 use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
-use crate::operations::vacuum::vacuum_table;
 use crate::statistics::TableStatsGenerator;
 
 enum State {
@@ -121,6 +121,10 @@ pub struct CommitSink<F: SnapshotGenerator> {
     deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
+    // Tracks whether the ongoing mutation produced no physical changes.
+    // We still need to read the previous snapshot before deciding to skip the commit,
+    // because new tables must record their first snapshot even for empty writes.
+    pending_noop_commit: bool,
 }
 
 #[derive(Debug)]
@@ -147,7 +151,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
-
         let vacuum_handler = if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
             .is_ok()
@@ -183,6 +186,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             deduplicated_label,
             table_meta_timestamps,
             vacuum_handler,
+            pending_noop_commit: false,
         })))
     }
 
@@ -287,21 +291,45 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.new_segment_locs = meta.new_segment_locs;
+        let CommitMeta {
+            conflict_resolve_context,
+            new_segment_locs,
+            virtual_schema,
+            hll,
+            ..
+        } = meta;
 
-        self.new_virtual_schema = meta.virtual_schema;
+        let has_new_segments = !new_segment_locs.is_empty();
+        let has_virtual_schema = virtual_schema.is_some();
+        let has_hll = !hll.is_empty();
 
-        if !meta.hll.is_empty() {
+        self.new_segment_locs = new_segment_locs;
+
+        self.new_virtual_schema = virtual_schema;
+
+        if has_hll {
             let binding = self.ctx.get_mutation_status();
             let status = binding.read();
             self.insert_rows = status.insert_rows + status.update_rows;
-            self.insert_hll = meta.hll;
+            self.insert_hll = hll;
         }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
+        // Decide whether this mutation ended up as a no-op. We postpone the actual
+        // "skip commit" decision until `State::FillDefault`, after we know whether
+        // the table already has a snapshot.
+        self.pending_noop_commit = Self::should_skip_commit(
+            &conflict_resolve_context,
+            has_new_segments,
+            has_virtual_schema,
+            has_hll,
+            self.allow_append_only_skip(),
+        );
+
         self.snapshot_gen
-            .set_conflict_resolve_context(meta.conflict_resolve_context);
+            .set_conflict_resolve_context(conflict_resolve_context);
+
         self.state = State::FillDefault;
 
         Ok(Event::Async)
@@ -318,6 +346,30 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .is_some_and(|generator| matches!(generator.mode(), TruncateMode::DropAll))
     }
 
+    fn should_skip_commit(
+        ctx: &ConflictResolveContext,
+        has_new_segments: bool,
+        has_virtual_schema: bool,
+        has_new_hll: bool,
+        allow_append_only_skip: bool,
+    ) -> bool {
+        if has_new_segments || has_virtual_schema || has_new_hll {
+            return false;
+        }
+
+        match ctx {
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => {
+                changes.appended_segments.is_empty()
+                    && changes.replaced_segments.is_empty()
+                    && changes.removed_segment_indexes.is_empty()
+            }
+            ConflictResolveContext::AppendOnly((merged, _)) => {
+                allow_append_only_skip && merged.merged_segments.is_empty()
+            }
+            _ => false,
+        }
+    }
+
     fn need_truncate(&self) -> bool {
         self.snapshot_gen
             .as_any()
@@ -330,6 +382,16 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .as_any()
             .downcast_ref::<AppendGenerator>()
             .is_some()
+    }
+
+    /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if nothing was
+    /// written. `INSERT OVERWRITE ...` still need a snapshot even when nothing was written, so we
+    /// disable skipping when `AppendGenerator` is in overwrite mode.
+    fn allow_append_only_skip(&self) -> bool {
+        self.snapshot_gen
+            .as_any()
+            .downcast_ref::<AppendGenerator>()
+            .is_some_and(|g| !g.is_overwrite())
     }
 
     async fn clean_history(&self, purge_mode: &PurgeMode) -> Result<()> {
@@ -346,7 +408,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         if let Some(vacuum_handler) = &self.vacuum_handler {
             let respect_flash_back = true;
-            vacuum_table(tbl, self.ctx.clone(), vacuum_handler, respect_flash_back).await;
+            tbl.vacuum_table(self.ctx.clone(), vacuum_handler, respect_flash_back)
+                .await;
         } else {
             info!("No vacuum handler available for auto vacuuming, please verify your license");
         }
@@ -443,11 +506,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
-                        set_compaction_num_block_hint(
-                            self.ctx.as_ref(),
-                            table_info.name.as_str(),
-                            &snapshot.summary,
-                        );
+                        // No need enable auto compaction for table branch.
+                        if self.table.get_table_branch().is_none() {
+                            set_compaction_num_block_hint(
+                                self.ctx.as_ref(),
+                                table_info.name.as_str(),
+                                &snapshot.summary,
+                            );
+                        }
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
@@ -496,6 +562,24 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // if table_id not match, update table meta will fail
                 let mut table_info = fuse_table.table_info.clone();
 
+                let require_initial_snapshot = self.table.is_temp();
+                // Only skip when both conditions hold:
+                // 1) the mutation touched nothing (`pending_noop_commit` is true).
+                // 2) the table already has a snapshot, or it's safe to skip the initial snapshot.
+                //    CTAS-created temporary tables must still commit even when the SELECT returns zero rows,
+                //    because `system.temporary_tables` currently depends on the committed table meta to show
+                //    correct statistics.
+                let skip_commit =
+                    self.pending_noop_commit && (previous.is_some() || !require_initial_snapshot);
+                // Reset the flag so subsequent mutations (or retries) re-evaluate their own no-op status.
+                self.pending_noop_commit = false;
+                if skip_commit {
+                    self.ctx
+                        .set_status_info("No table changes detected, skip commit");
+                    self.state = State::Finish;
+                    return Ok(());
+                }
+
                 // merge virtual schema
                 let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
                 let new_virtual_schema = std::mem::take(&mut self.new_virtual_schema);
@@ -537,9 +621,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 table_info,
             } => {
                 snapshot.ensure_segments_unique()?;
-                let location = self
-                    .location_gen
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+                let branch_id = self.table.get_table_branch().map(|b| b.branch_id());
+                let location = self.location_gen.gen_snapshot_location(
+                    branch_id,
+                    &snapshot.snapshot_id,
+                    TableSnapshot::VERSION,
+                )?;
                 self.dal.write(&location, data).await?;
 
                 // enable auto analyze.
@@ -652,7 +739,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                                     name.as_str(),
                                     table_info.ident
                                 );
-                                databend_common_base::base::tokio::time::sleep(d).await;
+                                tokio::time::sleep(d).await;
                                 self.retries += 1;
                                 self.state = State::RefreshTable;
                             }

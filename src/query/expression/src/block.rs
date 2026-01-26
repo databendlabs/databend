@@ -237,6 +237,18 @@ impl BlockEntry {
             BlockEntry::Column(column) => Ok(ColumnView::Column(T::try_downcast_column(column)?)),
         }
     }
+
+    pub fn into_nullable(self) -> BlockEntry {
+        match self {
+            BlockEntry::Const(scalar, data_type, n) if !data_type.is_nullable_or_null() => {
+                BlockEntry::Const(scalar, DataType::Nullable(Box::new(data_type)), n)
+            }
+            entry @ BlockEntry::Const(_, _, _)
+            | entry @ BlockEntry::Column(Column::Nullable(_))
+            | entry @ BlockEntry::Column(Column::Null { .. }) => entry,
+            BlockEntry::Column(column) => column.wrap_nullable(None).into(),
+        }
+    }
 }
 
 impl From<Column> for BlockEntry {
@@ -494,7 +506,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
+    pub fn empty_with_schema(schema: &DataSchema) -> Self {
         let columns = schema
             .fields()
             .iter()
@@ -902,10 +914,9 @@ impl DataBlock {
     pub fn project(mut self, projections: &ColumnSet) -> Self {
         let mut entries = Vec::with_capacity(projections.len());
         for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) {
-                continue;
+            if projections.contains(&index) {
+                entries.push(column);
             }
-            entries.push(column);
         }
         self.entries = entries;
         self

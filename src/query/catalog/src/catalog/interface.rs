@@ -296,6 +296,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    /// Get multiple tables by db and table names.
+    /// Returns tables in the same order as the input table_names.
+    /// If a table is not found, it will not be included in the result.
+    async fn mget_tables(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'mget_tables' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
     // Get one table identified as dropped by db and table name.
     async fn get_table_history(
         &self,
@@ -619,6 +634,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         _name_ident: &LeastVisibleTimeIdent,
         _value: &LeastVisibleTime,
     ) -> Result<LeastVisibleTime> {
+        unimplemented!()
+    }
+
+    async fn get_table_lvt(
+        &self,
+        _name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>> {
         unimplemented!()
     }
 

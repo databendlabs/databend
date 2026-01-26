@@ -14,8 +14,6 @@
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
-use databend_common_base::base::tokio;
-use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;
@@ -51,7 +49,7 @@ fn get_jwks_file_rs256(kid: &str) -> (RS256KeyPair, String) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
+async fn test_auth_mgr_with_jwt_multi_sources() -> anyhow::Result<()> {
     let (pair1, pbkey1) = get_jwks_file_rs256("test_kid");
     let (pair2, pbkey2) = get_jwks_file_rs256("second_kid");
     let (pair3, _) = get_jwks_file_rs256("illegal_kid");
@@ -214,7 +212,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_auth_mgr_with_jwt() -> Result<()> {
+async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
@@ -452,7 +450,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
+async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
     let kid = "test_kid";
     let key_pair = ES256KeyPair::generate().with_key_id(kid);
     let encoded_point =
@@ -690,7 +688,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_jwt_auth_mgr_with_management() -> Result<()> {
+async fn test_jwt_auth_mgr_with_management() -> anyhow::Result<()> {
     let kid = "test_kid";
     let user_name = "test";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
@@ -750,7 +748,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_auth_mgr_ensure_roles() -> Result<()> {
+async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();
@@ -843,7 +841,7 @@ async fn test_auth_mgr_ensure_roles() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_auth_mgr_ensure_default_role() -> Result<()> {
+async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
     let rsa_components = key_pair.public_key().to_components();

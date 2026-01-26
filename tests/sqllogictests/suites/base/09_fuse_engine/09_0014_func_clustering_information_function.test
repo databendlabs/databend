@@ -29,12 +29,12 @@ select min, max, level from clustering_statistics('default','t09_0014') order by
 [1, 2] [3, 1] 0
 [4, 4] [4, 4] 0
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014')
 ----
 (b, a) linear {"average_depth":1.6667,"average_overlaps":0.6667,"block_depth_histogram":{"00001":1,"00002":2},"constant_block_count":1,"total_block_count":3}
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014', '(a)')
 ----
 (a) linear {"average_depth":1.6667,"average_overlaps":0.6667,"block_depth_histogram":{"00001":1,"00002":2},"constant_block_count":1,"total_block_count":3}
@@ -48,7 +48,7 @@ select * from clustering_information('default','t09_0014')
 statement error 1118
 select * from clustering_statistics('default','t09_0014')
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014', '(b, a)')
 ----
 (b, a) linear {"average_depth":1.6667,"average_overlaps":0.6667,"block_depth_histogram":{"00001":1,"00002":2},"constant_block_count":1,"total_block_count":3}
@@ -65,22 +65,22 @@ insert into t09_0014_1 values ('abc'), ('abd')
 statement ok
 insert into t09_0014_1 values ('xyy'), ('xyz')
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(c)')
 ----
 (c) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":2},"constant_block_count":0,"total_block_count":2}
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1))')
 ----
 (SUBSTRING(c FROM 1)) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":2},"constant_block_count":0,"total_block_count":2}
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1,2))')
 ----
 (SUBSTRING(c FROM 1 FOR 2)) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":2},"constant_block_count":2,"total_block_count":2}
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,2,2))')
 ----
 (SUBSTRING(c FROM 2 FOR 2)) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":0,"total_block_count":2}
@@ -98,12 +98,12 @@ insert into t09_0014_2 values('abcde'),('bcdef')
 statement ok
 insert into t09_0014_2 values('bcdff'),('cdefg')
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_2')
 ----
 (SUBSTRING(c FROM 1 FOR 4)) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":2},"constant_block_count":0,"total_block_count":2}
 
-query TTIIFFT
+query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014_2', 'substr(c,2,4)')
 ----
 (SUBSTRING(c FROM 2 FOR 4)) linear {"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":0,"total_block_count":2}

@@ -18,7 +18,7 @@ statement ok
 INSERT INTO t2 VALUES (2), (NULL);
 
 
-query III rowsort
+query IBB rowsort
 SELECT t1.a, EXISTS(SELECT 1 FROM t2 WHERE t2.a = t1.a), not EXISTS(SELECT 1 FROM t2 WHERE t2.a = t1.a)  AS has_match
 FROM t1;
 ----
@@ -26,7 +26,7 @@ FROM t1;
 2 1 0
 NULL 0 1
 
-query III rowsort
+query IBB rowsort
 SELECT
       t1.a,
       t1.a IN (SELECT a FROM t2) AS in_match,
@@ -74,7 +74,7 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 4  TX
 6  FL
 
-query IT
+query ITIIT
 SELECT * FROM c, o WHERE c.c_id = o.c_id AND (EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) OR EXISTS(SELECT * FROM o where o.ship = c.bill)) ORDER BY c.c_id
 ----
 1  CA   10 1  CA
@@ -334,7 +334,7 @@ SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id 
 # Subquery in SELECT clause
 
 
-query IT
+query IB
 SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  1
@@ -345,7 +345,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 6  1
 
 
-query IT
+query IB
 SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
@@ -356,7 +356,7 @@ SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_i
 6  0
 
 
-query IT
+query IB
 SELECT
     c_id,
     EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
@@ -372,7 +372,7 @@ ORDER BY c_id
 6  1
 
 
-query IT
+query IB
 SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c ORDER BY c_id
 ----
 1  0
@@ -383,7 +383,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c 
 6  0
 
 
-query IT
+query IB
 SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
@@ -394,7 +394,7 @@ SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_
 6  0
 
 
-query IT
+query IB
 SELECT
     c_id,
     'CA' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
@@ -410,7 +410,7 @@ ORDER BY c_id
 6  0
 
 
-query IT
+query IB
 SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  1
@@ -421,7 +421,7 @@ SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 6  0
 
 
-query IT
+query IB
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
@@ -432,7 +432,7 @@ SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER B
 6  1
 
 
-query IT
+query IB
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL)
 FROM c
 ORDER BY c_id
@@ -445,7 +445,7 @@ ORDER BY c_id
 6  1
 
 
-query IT
+query IB
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL)
 FROM c
 ORDER BY c_id
@@ -458,7 +458,7 @@ ORDER BY c_id
 6  1
 
 
-query IT
+query IB
 SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
@@ -469,7 +469,7 @@ SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 6  1
 
 
-query IT
+query IB
 SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id
 ----
 1  0
@@ -480,7 +480,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 6  0
 
 
-query IT
+query IB
 SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id
 ----
 1  1
@@ -491,7 +491,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 6  1
 
 
-query IT
+query IB
 SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
@@ -502,7 +502,7 @@ SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 6  0
 
 
-query IT
+query IB
 SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id
 ----
 1  0
@@ -513,7 +513,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 6  0
 
 
-query IT
+query IB
 SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id
 ----
 1  1
@@ -524,7 +524,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 6  1
 
 
-query IT
+query IB
 SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c ORDER BY c_id
 ----
 1  1
@@ -535,7 +535,7 @@ SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c ORDER 
 6  0
 
 
-query IT
+query IB
 SELECT
     c_id,
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
@@ -551,7 +551,7 @@ ORDER BY c_id
 6  0
 
 
-query IT
+query IB
 SELECT
     c_id,
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
@@ -615,7 +615,7 @@ SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c
 3
 
 
-query IT
+query IB
 SELECT
     c.c_id,
     (SELECT ship FROM o WHERE o.c_id=c.c_id ORDER BY ship LIMIT 1) IS NOT NULL
@@ -680,12 +680,12 @@ select (select count() from numbers(10)) + (select count() from numbers(10))
 ----
 20
 
-query T
+query B
 select 1 < ANY(SELECT NULL)
 ----
 NULL
 
-query I
+query B
 select 1 < ANY(SELECT 1.0)
 ----
 0
@@ -711,7 +711,7 @@ create or replace table t2 (a int, b int);
 statement ok
 insert into t2 values(1, 1);
 
-query T
+query II
 select * from t2 where t2.b < ANY(select NULL from t1 where t1.a = t1.a)
 ----
 
@@ -798,13 +798,13 @@ create or replace table t4(id int, name string, payload json);
 statement ok
 insert into t4 values(1, 'test', '{"test":11,"test2":22}'),(2, 'test', '{"test":31,"test2":42}');
 
-query ITT
+query IT?
 SELECT * FROM t4 WHERE payload:test IN (SELECT payload:test FROM t4 where name = 'test');
 ----
 1 test {"test":11,"test2":22}
 2 test {"test":31,"test2":42}
 
-query ITT
+query IT?
 SELECT * FROM t4 WHERE payload:test IN (SELECT payload:test2 FROM t4 where name = 'test');
 ----
 
@@ -831,7 +831,7 @@ CREATE OR REPLACE TABLE transaction_history (
   property_id VARCHAR NULL
 ) ;
 
-query I
+query TT
 SELECT
   (
     SELECT
@@ -873,7 +873,7 @@ create or replace table t (i int);
 statement ok
 insert into t values(1), (2), (3), (null);
 
-query T
+query IB
 select i, exists(select * from t where i > 10) from t;
 ----
 1 0
@@ -900,7 +900,7 @@ create or replace TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query 
+query
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
@@ -929,7 +929,7 @@ create or replace table test_group (
 statement ok
 insert into test_group values ('2024-01-01', 100),('2024-01-01', 200),('2024-01-02', 400),('2024-01-02', 800);
 
-query TI
+query ?RR
 select input_date, sum(value),
 (select sum(value)
 	    from test_group b

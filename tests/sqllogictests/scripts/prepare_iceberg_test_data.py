@@ -1,4 +1,5 @@
 from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 spark = (
     SparkSession.builder.appName("CSV to Iceberg REST Catalog")
@@ -10,7 +11,7 @@ spark = (
     .config("spark.sql.catalog.iceberg.s3.access-key-id", "admin")
     .config("spark.sql.catalog.iceberg.s3.secret-access-key", "password")
     .config("spark.sql.catalog.iceberg.s3.path-style-access", "true")
-    .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9000")
+    .config("spark.sql.catalog.iceberg.s3.endpoint", "http://127.0.0.1:9002")
     .config("spark.sql.catalog.iceberg.client.region", "us-east-1")
     .config(
         "spark.jars.packages",
@@ -56,5 +57,55 @@ TBLPROPERTIES (
 spark.sql(
     f"""INSERT INTO iceberg.test.t1_orc VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);"""
 )
+
+# create nested table
+spark.sql("DROP TABLE IF EXISTS iceberg.test.t_nested")
+data = [
+    (1, ("Alice", 30), (("A1", 1), 10)),
+    (2, ("Bob", 25), (("B1", 2), 20)),
+    (3, ("Charlie", 35), (("C1", 3), 30)),
+    (4, None, None),
+]
+
+# Create DataFrame and write
+schema = StructType(
+    [
+        StructField("id", IntegerType(), True),
+        StructField(
+            "item",
+            StructType(
+                [
+                    StructField("name", StringType(), True),
+                    StructField("age", IntegerType(), True),
+                ]
+            ),
+            True,
+        ),
+        StructField(
+            "item_2",
+            StructType(
+                [
+                    StructField(
+                        "item",
+                        StructType(
+                            [
+                                StructField("name", StringType(), True),
+                                StructField("level", IntegerType(), True),
+                            ]
+                        ),
+                        True,
+                    ),
+                    StructField("level", IntegerType(), True),
+                ]
+            ),
+            True,
+        ),
+    ]
+)
+
+df = spark.createDataFrame(data, schema)
+df.writeTo("iceberg.test.t_nested").using("iceberg").createOrReplace()
+
+print("Table iceberg.test.t_nested created with sample data")
 
 spark.stop()

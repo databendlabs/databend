@@ -20,7 +20,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
@@ -35,12 +34,14 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
 use databend_query::sessions::QueueData;
 use databend_query::sessions::QueueManager;
 use databend_query::test_kits::TestFixture;
 use log::error;
+use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
 struct TestData<const PASSED: bool = false> {
@@ -117,7 +118,7 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_passed_acquire() -> Result<()> {
+async fn test_passed_acquire() -> anyhow::Result<()> {
     for is_global in [true, false] {
         let metastore = create_meta_store().await?;
         let test_count = (SystemTime::now()
@@ -162,7 +163,7 @@ async fn test_passed_acquire() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_serial_acquire() -> Result<()> {
+async fn test_serial_acquire() -> anyhow::Result<()> {
     for is_global in [true, false] {
         let metastore = create_meta_store().await?;
         let test_count = (SystemTime::now()
@@ -220,7 +221,7 @@ async fn test_serial_acquire() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_concurrent_acquire() -> Result<()> {
+async fn test_concurrent_acquire() -> anyhow::Result<()> {
     for is_global in [true, false] {
         let metastore = create_meta_store().await?;
         let test_count = (SystemTime::now()
@@ -290,7 +291,7 @@ async fn test_concurrent_acquire() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_list_acquire() -> Result<()> {
+async fn test_list_acquire() -> anyhow::Result<()> {
     for is_global in [true, false] {
         let metastore = create_meta_store().await?;
         let test_count = (SystemTime::now()
@@ -337,7 +338,7 @@ async fn test_list_acquire() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_heavy_actions() -> Result<()> {
+async fn test_heavy_actions() -> anyhow::Result<()> {
     struct Query {
         sql: &'static str,
         add_to_queue: bool,
@@ -487,7 +488,7 @@ async fn test_heavy_actions() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
+async fn test_watch_abort_notify_immediate_abort() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
 
@@ -512,7 +513,7 @@ async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
+async fn test_watch_abort_notify_abort_during_wait() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
 
@@ -543,7 +544,7 @@ async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_watch_abort_notify_race_condition() -> Result<()> {
+async fn test_watch_abort_notify_race_condition() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
 
@@ -579,7 +580,7 @@ async fn test_watch_abort_notify_race_condition() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
+async fn test_watch_abort_notify_multiple_waiters() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
 
@@ -627,7 +628,7 @@ async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
+async fn test_watch_abort_notify_timeout_vs_abort() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
 
@@ -660,16 +661,16 @@ async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    let conf = RpcClientConf::empty(&BUILD_INFO);
+    let conf = RpcClientConf::empty(BUILD_INFO.semver());
     Ok(MetaStoreProvider::new(conf)
-        .create_meta_store()
+        .create_meta_store::<DatabendRuntime>()
         .await
         .unwrap())
 }
 
 // Tests for workload group concurrency control functionality
 #[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_concurrency_control() -> Result<()> {
+async fn test_workload_group_concurrency_control() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(10, metastore, false);
 
@@ -726,7 +727,7 @@ async fn test_workload_group_concurrency_control() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_concurrent_queue_acquisition() -> Result<()> {
+async fn test_workload_group_concurrent_queue_acquisition() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(10, metastore, false);
 
@@ -789,7 +790,7 @@ async fn test_workload_group_concurrent_queue_acquisition() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_multilevel_queue_guards() -> Result<()> {
+async fn test_workload_group_multilevel_queue_guards() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(5, metastore, false);
 
@@ -841,7 +842,7 @@ async fn test_workload_group_multilevel_queue_guards() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_zero_concurrency() -> Result<()> {
+async fn test_workload_group_zero_concurrency() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(10, metastore, false);
 
@@ -890,7 +891,7 @@ async fn test_workload_group_zero_concurrency() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_with_timeout() -> Result<()> {
+async fn test_workload_group_with_timeout() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(10, metastore, false);
 

@@ -23,6 +23,7 @@ use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
+use crate::meta_service_error;
 use crate::pipelines::PipelineBuildResult;
 
 #[derive(Debug)]
@@ -55,7 +56,8 @@ impl Interpreter for DescProcedureInterpreter {
         let procedure = UserApiProvider::instance()
             .procedure_api(&tenant)
             .get_procedure(&req)
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         if let Some(procedure) = procedure {
             let script = format!("{}", procedure.procedure_meta.script);

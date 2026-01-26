@@ -149,7 +149,7 @@ where c>d
    and (e>a and e<b)
 order by col2,col1
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -185,7 +185,7 @@ NULL
 NULL
 NULL
 
-query F
+query R
 select (a+b+c+d+e)/5 as col1
 from t1
 order by col1
@@ -647,7 +647,7 @@ from t1
 where c between b-2 and d+2
 order by col5,col3,col6,col4,col2,col1
 
-query TTTIT
+query IRIII
 select a+b*2+c*3+d*4+e*5 as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -692,7 +692,7 @@ NULL NULL 4 243 486
 NULL NULL 1 NULL 1120
 NULL NULL 2 NULL NULL
 
-query IFIII
+query IRIII
 select a+b*2+c*3+d*4+e*5 as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -737,7 +737,7 @@ NULL NULL 2 NULL NULL
 NULL NULL NULL 104 NULL
 NULL NULL NULL 115 NULL
 
-query FII
+query RII
 select (a+b+c+d+e)/5 as col1,
        e as col2,
        c as col3
@@ -775,7 +775,7 @@ NULL NULL 150
 NULL NULL 208
 NULL NULL 244
 
-query FII
+query RII
 select (a+b+c+d+e)/5 as col1,
        e as col2,
        c as col3
@@ -1629,7 +1629,7 @@ where e+d between a+b-10 and c+130
    and c>d
 order by col1
 
-query TI
+query II
 select a+b*2+c*3+d*4 as col1,
        a as col2
 from t1
@@ -2101,7 +2101,7 @@ order by col4,col1,col2,col5,col6,col3
 444 NULL NULL NULL 115 NULL
 444 NULL -2 NULL NULL NULL
 
-query TI
+query II
 select a as col1,
        d as col2
 from t1
@@ -2130,7 +2130,7 @@ NULL 114
 159 NULL
 168 NULL
 
-query TI
+query II
 select a as col1,
        d as col2
 from t1
@@ -2159,7 +2159,7 @@ NULL 114
 159 NULL
 168 NULL
 
-query TI
+query II
 select a as col1,
        d as col2
 from t1
@@ -2188,7 +2188,7 @@ NULL 114
 159 NULL
 168 NULL
 
-query TI
+query II
 select a as col1,
        d as col2
 from t1
@@ -3041,7 +3041,7 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-query TI
+query II
 select e as col1,
        abs(a) as col2
 from t1
@@ -3078,7 +3078,7 @@ NULL 243
 110 NULL
 NULL NULL
 
-query TI
+query II
 select e as col1,
        abs(a) as col2
 from t1

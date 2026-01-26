@@ -64,19 +64,19 @@ select * exclude c1,  columns(* exclude c1) from db.t
 1 1
 
 
-query T
+query ?
 select * exclude (id) from db.t
 ----
 (0,0)
 
 
-query T
+query ?
 select t.* exclude (id) from db.t
 ----
 (0,0)
 
 
-query T
+query ?
 select db.t.* exclude (id) from db.t
 ----
 (0,0)
@@ -86,7 +86,7 @@ statement error 1065
 select db.t.* exclude (id, c1) from db.t
 
 
-query T
+query ?
 select c.* exclude (id) from db.t as c
 ----
 (0,0)
@@ -104,19 +104,19 @@ statement error 1065
 select t1.* exclude id from (select t.id as id, t.c1 as id from db.t) t1
 
 
-query ITITITIIT
+query I?I?I?II?
 select *, t.* exclude c1, t1.* exclude (c1), t2.* exclude id from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id
 ----
 1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
 
 
-query IT
+query I?
 select db.t.* exclude (c1), default.t1.* exclude id from db.t join default.t1
 ----
 1 (200,200)
 
 
-query TT
+query ??
 select * exclude id from default.t1 join db.t
 ----
 (200,200) (0,0)
@@ -151,19 +151,19 @@ select * exclude C1 from db.t
 1
 
 
-query T
+query ?
 select * exclude (ID) from db.t
 ----
 (0,0)
 
 
-query T
+query ?
 select t.* exclude (ID) from db.t
 ----
 (0,0)
 
 
-query T
+query ?
 select db.t.* exclude (ID) from db.t
 ----
 (0,0)
@@ -173,19 +173,19 @@ statement error 1065
 select db.t.* exclude (ID, C1) from db.t
 
 
-query T
+query ?
 select c.* exclude (ID) from db.t as c
 ----
 (0,0)
 
 
-query ITIT
+query I?
 select columns(* exclude c1), columns(* exclude id) from db.t
 ----
 1 (0,0)
 
 
-query ITIT
+query I?I?
 select columns(a -> length(a) = 2), columns('i.*'), columns(a -> a like '%c%') from db.t
 ----
 1 (0,0) 1 (0,0)
@@ -211,13 +211,13 @@ statement error 1065
 select t1.* exclude ID from (select t.id as id, t.c1 as id from db.t) t1
 
 
-query ITITITIIT
+query I?I?I?II?
 select *, t.* exclude C1, t1.* exclude (C1), t2.* exclude ID from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id
 ----
 1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
 
 
-query IT
+query I?
 select db.t.* exclude (C1), default.t1.* exclude ID from db.t join default.t1
 ----
 1 (200,200)

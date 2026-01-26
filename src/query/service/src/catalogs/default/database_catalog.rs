@@ -408,6 +408,26 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let res = self
+            .immutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            return Ok(tables);
+        }
+        self.mutable_catalog
+            .mget_tables(tenant, db_name, table_names)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn get_table_history(
         &self,
         tenant: &Tenant,
@@ -919,6 +939,13 @@ impl Catalog for DatabaseCatalog {
         value: &LeastVisibleTime,
     ) -> Result<LeastVisibleTime> {
         self.mutable_catalog.set_table_lvt(name_ident, value).await
+    }
+
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>> {
+        self.mutable_catalog.get_table_lvt(name_ident).await
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {

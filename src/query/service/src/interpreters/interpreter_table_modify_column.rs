@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -44,6 +46,7 @@ use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
+use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -63,7 +66,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::meta_service_error;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -106,7 +111,10 @@ impl ModifyTableColumnInterpreter {
 
         // Get mask policy ID from name using KV API
         let name_ident = DataMaskNameIdent::new(self.ctx.get_tenant(), mask_name.clone());
-        let mask_id_seq = meta_api.get_pb(&name_ident).await?;
+        let mask_id_seq = meta_api
+            .get_pb(&name_ident)
+            .await
+            .map_err(meta_service_error)?;
         let policy_id = match mask_id_seq {
             Some(seq_id) => seq_id.data,
             None => {
@@ -193,6 +201,7 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
+        let mut modified_cols = HashSet::with_capacity(field_and_comments.len());
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -216,6 +225,7 @@ impl ModifyTableColumnInterpreter {
                 }
 
                 if old_field.data_type != field.data_type {
+                    modified_cols.insert(field.name.clone());
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -229,6 +239,26 @@ impl ModifyTableColumnInterpreter {
                     "Cannot find column {}",
                     field.name
                 )));
+            }
+        }
+
+        if !modified_cols.is_empty() {
+            if let Some(cluster_key) = &table_info.meta.cluster_key {
+                let referenced = cluster_key_referenced_columns(cluster_key)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    let mut tmp_meta = table_info.meta.clone();
+                    tmp_meta.schema = Arc::new(new_schema.clone());
+                    let tmp_table = table
+                        .refresh_with_seq_meta(self.ctx.as_ref(), table_info.ident.seq, tmp_meta)
+                        .await?;
+                    if let Err(e) = analyze_cluster_keys(self.ctx.clone(), tmp_table, cluster_key) {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Cannot modify column data type, because it is referenced by cluster key {}: {}",
+                            cluster_key,
+                            e.message()
+                        )));
+                    }
+                }
             }
         }
 
@@ -679,6 +709,7 @@ impl ModifyTableColumnInterpreter {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            lvt_check: None,
         };
 
         let _resp = catalog.update_single_table_meta(req, table_info).await?;
@@ -834,7 +865,7 @@ pub(crate) async fn build_select_insert_plan(
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
         input: select_plan,
-        table_info: new_table.get_table_info().clone(),
+        table_info: TableInfoWithBranch::new(new_table.get_table_info()),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),

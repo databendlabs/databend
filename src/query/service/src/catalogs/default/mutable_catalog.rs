@@ -141,6 +141,7 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -149,6 +150,8 @@ use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
+use crate::meta_service_error;
+use crate::meta_txn_error;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
@@ -190,12 +193,15 @@ impl MutableCatalog {
     pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version),
+                conf.meta.to_meta_grpc_client_conf(version.semver()),
             ));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -302,7 +308,8 @@ impl Catalog for MutableCatalog {
                 },
                 false,
             )
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         dbs.iter()
             .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
@@ -326,7 +333,8 @@ impl Catalog for MutableCatalog {
             .list_databases(ListDatabaseReq {
                 tenant: tenant.clone(),
             })
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
 
         dbs.iter()
             .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
@@ -391,7 +399,12 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
-        let got = self.ctx.meta.get_index(&req.name_ident).await?;
+        let got = self
+            .ctx
+            .meta
+            .get_index(&req.name_ident)
+            .await
+            .map_err(meta_service_error)?;
         let got = got.ok_or_else(|| AppError::from(req.name_ident.unknown_error("get_index")))?;
         Ok(got)
     }
@@ -406,7 +419,8 @@ impl Catalog for MutableCatalog {
             .ctx
             .meta
             .list_marked_deleted_indexes(tenant, table_id)
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         Ok(res)
     }
 
@@ -420,7 +434,8 @@ impl Catalog for MutableCatalog {
             .ctx
             .meta
             .list_marked_deleted_table_indexes(tenant, table_id)
-            .await?)
+            .await
+            .map_err(meta_service_error)?)
     }
 
     #[async_backtrace::framed]
@@ -434,7 +449,8 @@ impl Catalog for MutableCatalog {
             .ctx
             .meta
             .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
-            .await?)
+            .await
+            .map_err(meta_txn_error)?)
     }
 
     #[async_backtrace::framed]
@@ -448,7 +464,8 @@ impl Catalog for MutableCatalog {
             .ctx
             .meta
             .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
-            .await?)
+            .await
+            .map_err(meta_txn_error)?)
     }
 
     #[async_backtrace::framed]
@@ -457,7 +474,12 @@ impl Catalog for MutableCatalog {
         let index_id = IndexId::new(req.index_id);
         let id_ident = IndexIdIdent::new_generic(tenant, index_id);
 
-        let change = self.ctx.meta.update_index(id_ident, req.index_meta).await?;
+        let change = self
+            .ctx
+            .meta
+            .update_index(id_ident, req.index_meta)
+            .await
+            .map_err(meta_service_error)?;
 
         if !change.is_changed() {
             Err(
@@ -517,7 +539,12 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        let res = self.ctx.meta.get_table_by_id(table_id).await?;
+        let res = self
+            .ctx
+            .meta
+            .get_table_by_id(table_id)
+            .await
+            .map_err(meta_service_error)?;
         Ok(res)
     }
 
@@ -551,7 +578,8 @@ impl Catalog for MutableCatalog {
             .ctx
             .meta
             .mget_id_value_compat(db_names.iter().cloned())
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         let dbs = res
             .map(|(name_ident, database_id, meta)| {
                 Arc::new(DatabaseInfo {
@@ -580,7 +608,12 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
-        let res = self.ctx.meta.get_table_name_by_id(table_id).await?;
+        let res = self
+            .ctx
+            .meta
+            .get_table_name_by_id(table_id)
+            .await
+            .map_err(meta_service_error)?;
         Ok(res)
     }
 
@@ -593,6 +626,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    #[async_backtrace::framed]
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.mget_tables(table_names).await
     }
 
     #[async_backtrace::framed]
@@ -885,7 +929,12 @@ impl Catalog for MutableCatalog {
             }
         }
 
-        let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
+        let seq_meta = self
+            .ctx
+            .meta
+            .get_sequence(&req.ident)
+            .await
+            .map_err(meta_service_error)?;
 
         let Some(seq_meta) = seq_meta else {
             return Err(KVAppError::AppError(AppError::SequenceError(
@@ -899,7 +948,12 @@ impl Catalog for MutableCatalog {
     }
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply> {
-        let info = self.ctx.meta.list_sequences(&req.tenant).await?;
+        let info = self
+            .ctx
+            .meta
+            .list_sequences(&req.tenant)
+            .await
+            .map_err(meta_service_error)?;
 
         Ok(ListSequencesReply { info })
     }
@@ -947,7 +1001,12 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn get_dictionary(&self, req: DictionaryNameIdent) -> Result<Option<GetDictionaryReply>> {
-        let reply = self.ctx.meta.get_dictionary(req.clone()).await?;
+        let reply = self
+            .ctx
+            .meta
+            .get_dictionary(req.clone())
+            .await
+            .map_err(meta_service_error)?;
         Ok(reply.map(|(seq_id, seq_meta)| GetDictionaryReply {
             dictionary_id: *seq_id.data,
             dictionary_meta: seq_meta.data,
@@ -969,6 +1028,13 @@ impl Catalog for MutableCatalog {
         value: &LeastVisibleTime,
     ) -> Result<LeastVisibleTime> {
         Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
+    }
+
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>> {
+        Ok(self.ctx.meta.get_table_lvt(name_ident).await?)
     }
 
     #[async_backtrace::framed]

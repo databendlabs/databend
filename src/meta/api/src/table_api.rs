@@ -32,6 +32,7 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
@@ -94,6 +95,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -126,6 +128,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_id_get_response;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
+use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
@@ -951,7 +954,7 @@ where
                 file: "dummy".to_string(),
             };
             let dir_name = DirName::new(copied_file_ident);
-            let copied_files = self.list_pb_vec(&dir_name).await?;
+            let copied_files = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
             let seq_2 = self.get_seq(&table_id).await?;
 
@@ -1201,19 +1204,19 @@ where
             })
             .collect::<Vec<_>>();
         let mut tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &tid_vec).await?;
-        for (req, (tb_meta_seq, table_meta)) in
+        for ((req, _), (tb_meta_seq, table_meta)) in
             update_table_metas.iter().zip(tb_meta_vec.iter_mut())
         {
-            let req_seq = req.0.seq;
+            let req_seq = req.seq;
 
             if *tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
                 mismatched_tbs.push((
-                    req.0.table_id,
+                    req.table_id,
                     *tb_meta_seq,
                     std::mem::take(table_meta).unwrap(),
                 ));
@@ -1225,27 +1228,53 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for (req, (tb_meta_seq, table_meta)) in
+        for ((req, _), (tb_meta_seq, table_meta)) in
             update_table_metas.iter_mut().zip(tb_meta_vec.iter())
         {
             let tbid = TableId {
-                table_id: req.0.table_id,
+                table_id: req.table_id,
             };
             // `update_table_meta` MUST NOT modify `shared_by` field
             let table_meta = table_meta.as_ref().unwrap();
 
-            let mut new_table_meta = req.0.new_table_meta.clone();
+            let mut new_table_meta = req.new_table_meta.clone();
             new_table_meta.shared_by = table_meta.shared_by.clone();
 
-            tbl_seqs.insert(req.0.table_id, *tb_meta_seq);
+            tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
+
+            // Add LVT check if provided
+            if let Some(check) = req.lvt_check.as_ref() {
+                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
+                let res = self.get_pb(&lvt_ident).await?;
+                let (seq, current_lvt) = match res {
+                    Some(v) => (v.seq, Some(v.data)),
+                    None => (0, None),
+                };
+                if let Some(current_lvt) = current_lvt {
+                    if current_lvt.time > check.time {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                req.table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check.time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                }
+                // no other one has updated LVT since we read it
+                txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
+            }
+
             txn.if_then
                 .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));
             txn.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
 
-            new_table_meta_map.insert(req.0.table_id, new_table_meta);
+            new_table_meta_map.insert(req.table_id, new_table_meta);
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`
@@ -1462,12 +1491,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let dbid_tbname = DBIdTableName {
             db_id: *seq_db_id.data,
@@ -1505,6 +1529,71 @@ where
         };
 
         return Ok(Arc::new(tb_info));
+    }
+
+    /// Get multiple tables by db_id and table names in batch.
+    /// Returns TableInfo for tables that exist, in the same order as input.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn mget_tables(
+        &self,
+        db_id: u64,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+        debug!(db_id = db_id, table_names :? = table_names; "TableApi: {}", func_name!());
+
+        // Build DBIdTableName keys for all table names
+        let dbid_tbnames: Vec<DBIdTableName> = table_names
+            .iter()
+            .map(|name| DBIdTableName::new(db_id, name))
+            .collect();
+
+        // Batch get table ids
+        let table_ids = mget_u64_values(self, &dbid_tbnames).await?;
+
+        // Collect valid table ids with their names
+        let mut valid_tables: Vec<(String, u64)> = Vec::with_capacity(table_names.len());
+        for (dbid_tbname, table_id_opt) in dbid_tbnames.into_iter().zip(table_ids.into_iter()) {
+            if let Some(table_id) = table_id_opt {
+                valid_tables.push((dbid_tbname.table_name, table_id));
+            }
+        }
+
+        if valid_tables.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Batch get table metas
+        let table_id_keys: Vec<TableId> = valid_tables
+            .iter()
+            .map(|(_, id)| TableId { table_id: *id })
+            .collect();
+        let seq_metas = self.get_pb_values_vec(table_id_keys).await?;
+
+        // Build TableInfo for valid tables
+        let db_type = DatabaseType::NormalDB;
+        let mut results = Vec::with_capacity(valid_tables.len());
+        for ((table_name, table_id), seq_meta_opt) in
+            valid_tables.into_iter().zip(seq_metas.into_iter())
+        {
+            if let Some(seq_meta) = seq_meta_opt {
+                let tb_info = TableInfo {
+                    ident: TableIdent {
+                        table_id,
+                        seq: seq_meta.seq,
+                    },
+                    desc: format!("'{}'.'{}'", db_name, table_name),
+                    name: table_name,
+                    meta: seq_meta.data,
+                    db_type: db_type.clone(),
+                    catalog_info: Default::default(),
+                };
+                results.push(Arc::new(tb_info));
+            }
+        }
+
+        Ok(results)
     }
 
     #[logcall::logcall]
@@ -1600,7 +1689,7 @@ where
 
         let dir_name = DirName::new(table_id_history_ident);
 
-        let ident_histories = self.list_pb_vec(&dir_name).await?;
+        let ident_histories = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
         let mut res = vec![];
         let now = Utc::now();
@@ -1735,7 +1824,9 @@ where
             file: "".to_string(),
         };
 
-        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let res = self
+            .list_pb_vec(ListOptions::unlimited(&DirName::new(key)))
+            .await?;
         let mut file_info = BTreeMap::new();
         for (name_key, seqv) in res {
             file_info.insert(name_key.file, seqv.data);
@@ -1845,12 +1936,7 @@ where
         )
         .await;
 
-        let (seq_db_id, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let (seq_db_id, _db_meta) = res?;
 
         let database_id = seq_db_id.data;
         let table_nivs = get_history_tables_for_gc(
@@ -1897,6 +1983,17 @@ where
             .await?;
 
         return Ok(transition.unwrap().result.into_value().unwrap_or_default());
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+        debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
+        let res = self.get_pb(name_ident).await?;
+        Ok(res.map(|v| v.data))
     }
 }
 

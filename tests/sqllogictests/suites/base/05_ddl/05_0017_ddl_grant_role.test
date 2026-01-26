@@ -22,7 +22,7 @@ GRANT ROLE test TO 'test-user'
 statement ok
 CREATE ROLE test
 
-query T
+query B
 select created_on=update_on from system.roles where name='test';
 ----
 1
@@ -33,7 +33,7 @@ GRANT ROLE test TO 'test-user'
 statement ok
 CREATE USER 'test-user' IDENTIFIED BY 'password'
 
-query T
+query B
 select created_on=update_on from system.users where name='test-user';
 ----
 1
@@ -41,7 +41,7 @@ select created_on=update_on from system.users where name='test-user';
 statement ok
 GRANT ROLE test TO 'test-user'
 
-query T
+query B
 select created_on=update_on from system.users where name='test-user';
 ----
 0
@@ -52,7 +52,7 @@ GRANT ROLE test TO ROLE `test-role`
 statement ok
 CREATE ROLE `test-role`
 
-query T
+query B
 select created_on=update_on from system.roles where name='test-role';
 ----
 1
@@ -60,7 +60,7 @@ select created_on=update_on from system.roles where name='test-role';
 statement ok
 GRANT ROLE test TO ROLE `test-role`
 
-query T
+query B
 select created_on=update_on from system.roles where name='test-role';
 ----
 0
@@ -83,7 +83,7 @@ GRANT ROLE role2 TO ROLE role3
 statement ok
 GRANT ROLE test TO ROLE role3
 
-query TTTT
+query TITBBT
 show roles
 ----
 account_admin 0 (empty) 1 1 (empty)
@@ -94,7 +94,7 @@ role3 2 role2, test 0 0 (empty)
 test 0 (empty) 0 0 (empty)
 test-role 1 test 0 0 (empty)
 
-query TTT
+query TIT
 select name, inherited_roles, inherited_roles_name from system.roles order by name;
 ----
 account_admin 0 (empty)
@@ -156,32 +156,32 @@ grant usage on udf  isnotempty to role role2;
 statement ok
 grant usage on udf  isnotempty to role role3;
 
-query TT
+query TTTTTT
 show grants on udf isnotempty;
 ----
 USAGE isnotempty NULL ROLE role2 (empty)
 USAGE isnotempty NULL ROLE role3 (empty)
 OWNERSHIP isnotempty NULL ROLE account_admin (empty)
 
-query TT
+query TTTTTT
 show grants on udf isnotempty where name!='role2' limit 1;
 ----
 USAGE isnotempty NULL ROLE role3 (empty)
 
-query TT
+query TTTTTT
 show grants on stage s1;
 ----
 Read s1 NULL ROLE role2 (empty)
 OWNERSHIP s1 NULL ROLE account_admin (empty)
 
-query TT
+query TTTTT
 select * EXCLUDE(object_id) from show_grants('database', 'db1', 'default');
 ----
 USAGE,CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
 USAGE,CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
 OWNERSHIP db1 ROLE account_admin (empty)
 
-query TT
+query TTTTT
 select * EXCLUDE(object_id) from show_grants('table', 't', 'default', 'default');
 ----
 SELECT t ROLE role3 (empty)
@@ -316,7 +316,7 @@ create role u1_b;
 statement ok
 grant role u1_b to role u1_a;
 
-query T
+query TTT
 show grants of role u1_b;
 ----
 u1_b ROLE u1_a
@@ -324,7 +324,7 @@ u1_b ROLE u1_a
 statement ok
 grant role u1_a to user u1;
 
-query T
+query TTT
 show grants of role u1_b;
 ----
 u1_b ROLE u1_a
@@ -332,7 +332,7 @@ u1_b ROLE u1_a
 statement ok
 grant role u1_b to user u1;
 
-query T
+query TTT
 show grants of role u1_b;
 ----
 u1_b USER u1

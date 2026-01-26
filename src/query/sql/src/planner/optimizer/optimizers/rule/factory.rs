@@ -23,9 +23,9 @@ use crate::optimizer::optimizers::rule::RuleDeduplicateSort;
 use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleEliminateEvalScalar;
 use crate::optimizer::optimizers::rule::RuleEliminateFilter;
+use crate::optimizer::optimizers::rule::RuleEliminateSelfJoin;
 use crate::optimizer::optimizers::rule::RuleEliminateSort;
 use crate::optimizer::optimizers::rule::RuleEliminateUnion;
-use crate::optimizer::optimizers::rule::RuleFilterFlattenOr;
 use crate::optimizer::optimizers::rule::RuleFilterNulls;
 use crate::optimizer::optimizers::rule::RuleFoldCountAggregate;
 use crate::optimizer::optimizers::rule::RuleGroupingSetsToUnion;
@@ -75,7 +75,6 @@ impl RuleFactory {
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
             ))),
-            RuleID::FilterFlattenOr => Ok(Box::new(RuleFilterFlattenOr::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
@@ -124,6 +123,7 @@ impl RuleFactory {
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::EliminateSelfJoin => Ok(Box::new(RuleEliminateSelfJoin::new(ctx))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::DeduplicateSort => Ok(Box::new(RuleDeduplicateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),

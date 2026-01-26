@@ -41,5 +41,8 @@ serde = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true }
+
 [lints]
 workspace = true

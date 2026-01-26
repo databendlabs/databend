@@ -28,7 +28,7 @@ insert into c values(3);
 statement ok
 commit;
 
-query T
+query I
 select * from c order by c;
 ----
 2

@@ -31,6 +31,7 @@ use databend_common_sql::plans::task_schema;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
+use crate::meta_service_error;
 use crate::parse_tasks_to_datablock;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -57,7 +58,8 @@ impl AsyncSystemTable for PrivateTasksTable {
         let tasks = UserApiProvider::instance()
             .task_api(&tenant)
             .list_task()
-            .await?;
+            .await
+            .map_err(meta_service_error)?;
         let tasks_len = tasks.len();
         let trans_tasks = tasks
             .into_iter()

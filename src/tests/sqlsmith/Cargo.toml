@@ -7,7 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-chrono-tz = { workspace = true }
 clap = { workspace = true }
 cookie = { workspace = true }
 databend-common-ast = { workspace = true }

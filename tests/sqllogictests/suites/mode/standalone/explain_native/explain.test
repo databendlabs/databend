@@ -30,7 +30,7 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
-├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
+├── filters: [t1.a (#0) > 3 or t2.a (#2) > 5 and t1.a (#0) > 1]
 ├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
@@ -51,7 +51,7 @@ Filter
     │   ├── partitions total: 1
     │   ├── partitions scanned: 0
     │   ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    │   ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
+    │   ├── push downs: [filters: [t1.a (#0) > 3 or t1.a (#0) > 1], limit: NONE]
     │   └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -62,7 +62,7 @@ Filter
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
+        ├── push downs: [filters: [t2.a (#2) > 3 or t2.a (#2) > 1], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 3.40
 
@@ -309,7 +309,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-├── filters: [((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
+├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
 ├── estimated rows: 3.52
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -328,7 +328,7 @@ Filter
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    │   ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)], limit: NONE]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -339,7 +339,7 @@ Filter
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
+        ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
         └── estimated rows: 4.40
 
 query T
@@ -347,7 +347,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-├── filters: [or_filters((t1.a (#0) > 1 AND t2.a (#2) > 2), (t1.b (#1) < 3 AND t2.b (#3) < 4), t1.a (#0) = 2)]
+├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4 or t1.a (#0) = 2]
 ├── estimated rows: 4.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -366,7 +366,7 @@ Filter
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    │   ├── push downs: [filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 3, t1.a (#0) = 2)], limit: NONE]
+    │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3 or t1.a (#0) = 2], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -395,7 +395,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── keys is null equal: []
-├── filters: [or_filters((t1.a (#0) > 1 AND t2.a (#2) > 2), (t1.b (#1) < 3 AND t2.b (#3) < 4), t3.a (#4) = 2)]
+├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4 or t3.a (#4) = 2]
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -452,7 +452,7 @@ HashJoin
 ├── estimated rows: 28.16
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-│   ├── filters: [((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
+│   ├── filters: [t1.a (#0) > 1 and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
 │   ├── estimated rows: 3.52
 │   └── HashJoin
 │       ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -471,7 +471,7 @@ HashJoin
 │       │   ├── partitions total: 1
 │       │   ├── partitions scanned: 1
 │       │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│       │   ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 3)], limit: NONE]
+│       │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 3], limit: NONE]
 │       │   └── estimated rows: 1.00
 │       └── TableScan(Probe)
 │           ├── table: default.default.t2
@@ -482,7 +482,7 @@ HashJoin
 │           ├── partitions total: 1
 │           ├── partitions scanned: 1
 │           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│           ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
+│           ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
 │           └── estimated rows: 4.40
 └── TableScan(Probe)
     ├── table: default.default.t3
@@ -510,7 +510,7 @@ Limit
     ├── estimated rows: 3.85
     └── Filter
         ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-        ├── filters: [(((t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4))]
+        ├── filters: [(t1.a (#0) > 1 or t1.b (#1) < 2) and t2.a (#2) > 2 or t1.b (#1) < 3 and t2.b (#3) < 4]
         ├── estimated rows: 3.85
         └── HashJoin
             ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -529,7 +529,7 @@ Limit
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
             │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            │   ├── push downs: [filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 2, t1.b (#1) < 3)], limit: NONE]
+            │   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2 or t1.b (#1) < 3], limit: NONE]
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
                 ├── table: default.default.t2
@@ -540,7 +540,7 @@ Limit
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [(t2.a (#2) > 2 OR t2.b (#3) < 4)], limit: NONE]
+                ├── push downs: [filters: [t2.a (#2) > 2 or t2.b (#3) < 4], limit: NONE]
                 └── estimated rows: 4.40
 
 query T
@@ -563,7 +563,7 @@ HashJoin
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   ├── push downs: [filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2)], limit: NONE]
+│   ├── push downs: [filters: [t1.a (#0) > 1 or t1.b (#1) < 2], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
@@ -609,6 +609,174 @@ AggregateFinal
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 1.00
+
+query T
+explain select count(distinct a, b) from t1;
+----
+AggregateFinal
+├── output columns: [count(_1) (#2)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── group by: [a, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [a, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── scan id: 0
+                ├── output columns: [a (#0), b (#1)]
+                ├── read rows: 1
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
+
+query T
+explain select 'test_str' as str, count(distinct a, b) from t1;
+----
+EvalScalar
+├── output columns: [count(DISTINCT a, b) (#2), str (#3)]
+├── expressions: ['test_str']
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── output columns: [count(DISTINCT a, b) (#2)]
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [t1.a (#0), t1.b (#1)]
+            ├── group by: [a, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a, b]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
+explain select count(distinct a + 1, b) as c from t1;
+----
+AggregateFinal
+├── output columns: [count(_1) (#4)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [a + 1 (#2), t1.b (#1)]
+        ├── group by: [a + 1, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [a + 1, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [t1.b (#1), a + 1 (#2)]
+                ├── expressions: [t1.a (#0) + 1]
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
+
+query T
+explain select a as g, count(distinct a, b) as c from t1 group by a;
+----
+AggregateFinal
+├── output columns: [count(DISTINCT a, b) (#2), t1.a (#0)]
+├── group by: [a]
+├── aggregate functions: [count_distinct(a, b)]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: [a]
+    ├── aggregate functions: [count_distinct(a, b)]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [a (#0), b (#1)]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1.00
+
+query T
+explain select count(distinct nullable_a, b) from (select nullif(a, 0) as nullable_a, b from t1) t;
+----
+AggregateFinal
+├── output columns: [count(_1) (#3)]
+├── group by: []
+├── aggregate functions: [count(_1)]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count(_1)]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [_1 (#2), t1.b (#1)]
+        ├── group by: [_1, b]
+        ├── aggregate functions: []
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [_1, b]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [t1.b (#1), _1 (#2)]
+                ├── expressions: [if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL))]
+                ├── estimated rows: 0.20
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 1
+                    ├── partitions scanned: 0
+                    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: 1 ms>]
+                    ├── push downs: [filters: [is_not_null(if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL)))], limit: NONE]
+                    └── estimated rows: 0.20
 
 query T
 explain select count_distinct(a) from t1;
@@ -694,7 +862,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+├── push downs: [filters: [t4.a (#0) = 1 and TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx'], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
@@ -757,7 +925,7 @@ INSERT INTO t1 VALUES (1, 2), (2, 3), (3, 4);
 statement ok
 INSERT INTO t2 VALUES (1, 10), (2, 20);
 
-query I
+query T
 EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
 Sort(Single)

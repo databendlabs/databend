@@ -47,7 +47,7 @@ select engine from table_statistics('table_statistics');
 FUSE
 FUSE
 
-query III
+query T
 select parse_json(statistics_json):summary:block_count from table_statistics('table_statistics');
 ----
 1

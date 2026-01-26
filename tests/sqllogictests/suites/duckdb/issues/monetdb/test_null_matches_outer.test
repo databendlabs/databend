@@ -31,7 +31,7 @@ insert into "I" values (4, 'quattro')
 statement error 1006
 insert into "I" values (null, 'this is not null')
 
-query ITTT
+query ITIT
 select * from "E" left outer join "I" on "E"."intCol" = "I"."intCol" or ("E"."intCol" is null and  "I"."intCol" is null) ORDER BY 1
 ----
 0 zero NULL NULL

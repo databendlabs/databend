@@ -69,6 +69,7 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_storages_fuse::FuseTable;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
@@ -522,15 +523,64 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
+    pub async fn build_dummy_table_scan(
+        &mut self,
+        dummy_scan: &databend_common_sql::plans::DummyTableScan,
+    ) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state()?)?
             .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 
-        if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
+        // Add cache invalidation keys for DummyTableScan's source tables.
+        //
+        // When DummyTableScan is created by optimizations like count(*) folding, we need to
+        // track which tables the result depends on for proper cache invalidation.
+        //
+        // Example problem without this fix:
+        //   SELECT * FROM t1 WHERE a > (SELECT COUNT(*) FROM t2)
+        //
+        //   1. t1 has data, t2 is empty:
+        //      - t1 (TableScan) adds t1's partition SHA
+        //      - t2 (DummyTableScan, empty table) adds nothing if we skip empty tables
+        //      - Cache writes: partitions_shas = [t1_sha]
+        //   2. After inserting data into t2:
+        //      - Cache check: [t1_sha] == [t1_sha] → cache hit → WRONG result!
+        //
+        // Solution: For FuseTables, use snapshot_location as the cache invalidation key.
+        //
+        // Why snapshot_location instead of partition SHA256?
+        // - Simpler: No need to call read_partitions() (async I/O) and compute SHA
+        // - Equivalent semantics: Any mutation (INSERT, UPDATE, DELETE, COMPACT, RECLUSTER)
+        //   creates a new snapshot, so snapshot_location uniquely identifies table state
+        // - snapshot_loc() is synchronous (reads from table metadata, no storage I/O)
+        //   vs read_table_snapshot() which would need to fetch and deserialize the snapshot file
+        let settings = self.ctx.get_settings();
+        if settings.get_enable_query_result_cache()? && !dummy_scan.source_table_indexes.is_empty()
+        {
+            let metadata = self.metadata.read();
+            for &idx in &dummy_scan.source_table_indexes {
+                let source_table = metadata.table(idx).table();
+
+                // Check if the source table supports result caching at all.
+                if !source_table.result_can_be_cached() {
+                    self.ctx.set_cacheable(false);
+                    break;
+                }
+
+                // Record a cache invalidation ID for DummyTableScan's source tables.
+                // Only FuseTable provides query_result_cache_id; for other table engines
+                // we conservatively disable caching to avoid returning stale results.
+                if let Ok(fuse_table) = FuseTable::try_from_table(source_table.as_ref()) {
+                    self.ctx
+                        .add_partitions_sha(fuse_table.query_result_cache_id());
+                } else {
+                    // Non-FuseTable (system table, memory table, etc.), disable caching.
+                    self.ctx.set_cacheable(false);
+                    break;
+                }
+            }
         }
 
         let source = table

@@ -1,4 +1,4 @@
-query TTT
+query T
 WITH my_data as (
         SELECT 'text1'::varchar(1000) as my_column union all
         SELECT 'text1'::varchar(1000) as my_column union all
@@ -9,7 +9,7 @@ WITH my_data as (
 ----
 text1, text1, text1
 
-query TTT
+query T
 WITH my_data as (
         SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all
         SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all

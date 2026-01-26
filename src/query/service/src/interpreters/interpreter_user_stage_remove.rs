@@ -24,6 +24,7 @@ use databend_storages_common_io::Files;
 use futures_util::StreamExt;
 use log::debug;
 use log::error;
+use opendal::Operator;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -38,6 +39,37 @@ pub struct RemoveUserStageInterpreter {
 impl RemoveUserStageInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: RemoveStagePlan) -> Result<Self> {
         Ok(RemoveUserStageInterpreter { ctx, plan })
+    }
+
+    pub async fn remove_all(
+        table_ctx: Arc<dyn TableContext>,
+        op: Operator,
+        files_info: StageFilesInfo,
+        error_on_failure: bool,
+    ) -> Result<()> {
+        let thread_num = table_ctx.get_settings().get_max_threads()? as usize;
+        let files = files_info.list_stream(&op, thread_num, None).await?;
+        let file_op = Files::create(table_ctx.clone(), op);
+
+        const REMOVE_BATCH: usize = 1000;
+        let mut chunks = files.chunks(REMOVE_BATCH);
+
+        // s3 can remove at most 1k files in one request
+        while let Some(chunk) = chunks.next().await {
+            let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
+            let chunk = chunk?.into_iter().map(|x| x.path).collect::<Vec<_>>();
+            if let Err(e) = file_op.remove_file_in_batch(&chunk).await {
+                if error_on_failure {
+                    return Err(e);
+                } else {
+                    error!("Failed to delete file: {:?}, error: {}", chunk, e);
+                }
+            }
+            if table_ctx.check_aborting().is_err() {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -56,8 +88,6 @@ impl Interpreter for RemoveUserStageInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
 
-        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
-
         let plan = self.plan.clone();
         let op = StageTable::get_op(&self.plan.stage)?;
         let pattern = if plan.pattern.is_empty() {
@@ -70,27 +100,9 @@ impl Interpreter for RemoveUserStageInterpreter {
             files: None,
             pattern,
         };
-        let files = files_info.list_stream(&op, thread_num, None).await?;
 
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let file_op = Files::create(table_ctx, op);
-
-        const REMOVE_BATCH: usize = 1000;
-        let mut chunks = files.chunks(REMOVE_BATCH);
-
-        // s3 can remove at most 1k files in one request
-        while let Some(chunk) = chunks.next().await {
-            let chunk: Result<Vec<StageFileInfo>> = chunk.into_iter().collect();
-            let chunk = chunk?.into_iter().map(|x| x.path).collect::<Vec<_>>();
-            if let Err(e) = file_op.remove_file_in_batch(&chunk).await {
-                error!("Failed to delete file: {:?}, error: {}", chunk, e);
-            }
-
-            if self.ctx.check_aborting().is_err() {
-                return Ok(PipelineBuildResult::create());
-            }
-        }
-
+        Self::remove_all(table_ctx, op, files_info, false).await?;
         Ok(PipelineBuildResult::create())
     }
 }

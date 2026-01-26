@@ -27,7 +27,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::sampler::FixedRateSampler;
 use rand::SeedableRng;
@@ -256,13 +255,8 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepCollect<A, S> {
         } else {
             // todo: using multi-threaded cascade two-way merge sorting algorithm to obtain the best performance
             // also see https://arxiv.org/pdf/1406.2628
-            let mut merger = create_memory_merger::<A>(
-                input_data,
-                base.schema.clone(),
-                base.sort_row_offset,
-                base.limit,
-                batch_rows,
-            );
+            let mut merger =
+                create_memory_merger::<A>(input_data, base.sort_row_offset, base.limit, batch_rows);
 
             let mut sorted = VecDeque::new();
             while let Some(data) = merger.next_block()? {
@@ -357,7 +351,7 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
             .drain(self.current.len() - num_merge..)
             .collect();
 
-        let mut merger = Merger::<A, _>::create(base.schema.clone(), streams, batch_rows, None);
+        let mut merger = Merger::<A, _>::new(streams, batch_rows, None);
 
         let mut sorted = VecDeque::new();
         while let Some(data) = merger.async_next_block().await? {
@@ -410,12 +404,7 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
                     .await?;
 
                 let streams = mem::take(&mut self.current);
-                let merger = Merger::<A, _>::create(
-                    base.schema.clone(),
-                    streams,
-                    self.params.batch_rows,
-                    None,
-                );
+                let merger = Merger::<A, _>::new(streams, self.params.batch_rows, None);
                 self.output_merger.insert(merger)
             }
         };
@@ -939,7 +928,6 @@ pub type MemoryMerger<A> = Merger<A, DataBlockStream>;
 
 pub fn create_memory_merger<A: SortAlgorithm>(
     blocks: Vec<DataBlock>,
-    schema: DataSchemaRef,
     sort_row_offset: usize,
     limit: Option<usize>,
     batch_rows: usize,
@@ -948,7 +936,7 @@ pub fn create_memory_merger<A: SortAlgorithm>(
         .into_iter()
         .map(|data| DataBlockStream::new(data, sort_row_offset))
         .collect();
-    Merger::<A, _>::create(schema, streams, batch_rows, limit)
+    Merger::<A, _>::new(streams, batch_rows, limit)
 }
 
 fn get_domain(col: &Column) -> Column {
@@ -973,9 +961,10 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
 
-    use databend_common_base::base::GlobalUniqName;
+    use databend_base::uniq_id::GlobalUniq;
     use databend_common_expression::Column;
     use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRef;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
     use databend_common_expression::SortColumnDescription;
@@ -1432,7 +1421,7 @@ mod tests {
     #[async_trait::async_trait]
     impl DataBlockSpill for MockSpiller {
         async fn spill(&self, data_block: DataBlock) -> Result<Location> {
-            let name = GlobalUniqName::unique();
+            let name = GlobalUniq::unique();
             self.map.lock().unwrap().insert(name.clone(), data_block);
             Ok(Location::Remote(name))
         }

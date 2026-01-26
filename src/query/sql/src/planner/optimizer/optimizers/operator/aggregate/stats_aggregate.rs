@@ -193,7 +193,12 @@ impl RuleStatsAggregateOptimizer {
                 };
 
                 if agg_results.is_empty() {
-                    let leaf = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
+                    // Track all tables that the aggregate originally depended on.
+                    // This ensures query result cache invalidation works even if the
+                    // aggregate is rewritten into a constant DummyTableScan.
+                    let source_table_indexes = DummyTableScan::collect_source_tables(child);
+                    let dummy_scan = DummyTableScan::with_source_tables(source_table_indexes);
+                    let leaf = SExpr::create_leaf(Arc::new(dummy_scan.into()));
                     return Ok(SExpr::create_unary(
                         Arc::new(eval_scalar.into()),
                         Arc::new(leaf),

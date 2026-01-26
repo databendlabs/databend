@@ -38,6 +38,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
+use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use parking_lot::RwLock;
 
@@ -91,12 +92,15 @@ impl CatalogManager {
     ) -> Result<Arc<CatalogManager>> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version),
+                conf.meta.to_meta_grpc_client_conf(version.semver()),
             ));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         let tenant = conf.query.tenant_id.clone();

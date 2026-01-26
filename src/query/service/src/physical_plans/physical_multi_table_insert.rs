@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -31,9 +32,13 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::DynTransformBuilder;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline_transforms::AsyncTransformer;
+use databend_common_pipeline_transforms::Transformer;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -51,6 +56,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
@@ -241,7 +247,7 @@ impl IPhysicalPlan for ChunkFilter {
                     projection.clone(),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
 
@@ -307,7 +313,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
                     Some(eval_scalar.projection.clone()),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
 
@@ -381,7 +387,7 @@ impl IPhysicalPlan for ChunkCastSchema {
                     cast_schema.target_schema.clone(),
                 )?));
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()));
             }
         }
         builder.main_pipeline.add_transforms_by_chunk(f)
@@ -392,6 +398,74 @@ impl IPhysicalPlan for ChunkCastSchema {
 pub struct CastSchema {
     pub source_schema: DataSchemaRef,
     pub target_schema: DataSchemaRef,
+}
+
+#[derive(Default)]
+struct ChunkFillPlan {
+    async_builder: Option<DynTransformBuilder>,
+    cast_builder: Option<DynTransformBuilder>,
+    resort_builder: Option<DynTransformBuilder>,
+    computed_builder: Option<DynTransformBuilder>,
+}
+
+impl ChunkFillPlan {
+    fn materialize_stage(
+        plans: &mut [Self],
+        builder: &mut PipelineBuilder,
+        exists: fn(&Self) -> bool,
+        take: fn(&mut Self) -> Option<DynTransformBuilder>,
+    ) -> Result<()> {
+        // Skip the stage entirely if no plan participates.
+        if !plans.iter().any(exists) {
+            return Ok(());
+        }
+
+        let mut builders = Vec::with_capacity(plans.len());
+        for plan in plans.iter_mut() {
+            builders
+                .push(take(plan).unwrap_or_else(|| Box::new(builder.dummy_transform_builder())));
+        }
+        builder.main_pipeline.add_transforms_by_chunk(builders)
+    }
+
+    fn materialize_chunk_fill_plans(
+        plans: &mut [Self],
+        builder: &mut PipelineBuilder,
+    ) -> Result<()> {
+        // 1. Async default expressions (AUTO_INCREMENT, async defaults).
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.async_builder.is_some(),
+            |p| p.async_builder.take(),
+        )?;
+
+        // 2. Cast after async defaults.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.cast_builder.is_some(),
+            |p| p.cast_builder.take(),
+        )?;
+
+        // 3. Reorder / fill missing columns.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.resort_builder.is_some(),
+            |p| p.resort_builder.take(),
+        )?;
+
+        // 4. Computed columns.
+        Self::materialize_stage(
+            plans,
+            builder,
+            |p| p.computed_builder.is_some(),
+            |p| p.computed_builder.take(),
+        )?;
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -446,22 +520,97 @@ impl IPhysicalPlan for ChunkFillAndReorder {
         if self.fill_and_reorders.iter().all(|x| x.is_none()) {
             return Ok(());
         }
-        let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(self.fill_and_reorders.len());
-        for fill_and_reorder in self.fill_and_reorders.iter() {
+
+        let mut plans = Vec::with_capacity(self.fill_and_reorders.len());
+
+        for fill_and_reorder in &self.fill_and_reorders {
             if let Some(fill_and_reorder) = fill_and_reorder {
-                let table = builder
-                    .ctx
-                    .build_table_by_table_info(&fill_and_reorder.target_table_info, None)?;
-                f.push(Box::new(builder.fill_and_reorder_transform_builder(
-                    table,
-                    fill_and_reorder.source_schema.clone(),
-                )?));
+                let table = builder.ctx.build_table_by_table_info(
+                    &fill_and_reorder.target_table_info,
+                    None,
+                    None,
+                )?;
+
+                let table_default_schema = &table.schema().remove_computed_fields();
+                let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+                let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+                let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+
+                let mut plan = ChunkFillPlan::default();
+
+                if fill_and_reorder.source_schema != default_schema {
+                    let mut binder = DefaultExprBinder::try_new(builder.ctx.clone())?
+                        .auto_increment_table_id(table.get_id());
+
+                    if let Some((async_funcs, new_default_schema, new_default_schema_no_cast)) =
+                        binder.split_async_default_exprs(
+                            fill_and_reorder.source_schema.clone(),
+                            default_schema.clone(),
+                        )?
+                    {
+                        let counters =
+                            TransformAsyncFunction::create_sequence_counters(async_funcs.len());
+                        let ctx = builder.ctx.clone();
+                        plan.async_builder = Some(Box::new(move |input, output| {
+                            Ok(ProcessorPtr::create(AsyncTransformer::create(
+                                input,
+                                output,
+                                TransformAsyncFunction::new(
+                                    ctx.clone(),
+                                    async_funcs.clone(),
+                                    BTreeMap::new(),
+                                    counters.clone(),
+                                ),
+                            )))
+                        }));
+
+                        if new_default_schema != new_default_schema_no_cast {
+                            plan.cast_builder =
+                                Some(Box::new(builder.cast_schema_transform_builder(
+                                    new_default_schema_no_cast.clone(),
+                                    new_default_schema.clone(),
+                                )?));
+                        }
+
+                        plan.resort_builder =
+                            Some(Box::new(builder.fill_and_reorder_transform_builder(
+                                table.clone(),
+                                new_default_schema.clone(),
+                                default_schema.clone(),
+                            )));
+                    } else {
+                        let source_schema = fill_and_reorder.source_schema.clone();
+                        plan.resort_builder =
+                            Some(Box::new(builder.fill_and_reorder_transform_builder(
+                                table.clone(),
+                                source_schema.clone(),
+                                default_schema.clone(),
+                            )));
+                    }
+                }
+
+                if default_schema != computed_schema {
+                    let ctx = builder.ctx.clone();
+                    plan.computed_builder = Some(Box::new(move |input, output| {
+                        Ok(ProcessorPtr::create(Transformer::create(
+                            input,
+                            output,
+                            TransformAddComputedColumns::try_new(
+                                ctx.clone(),
+                                default_schema.clone(),
+                                computed_schema.clone(),
+                            )?,
+                        )))
+                    }));
+                }
+
+                plans.push(plan);
             } else {
-                f.push(Box::new(builder.dummy_transform_builder()?));
+                plans.push(ChunkFillPlan::default());
             }
         }
 
-        builder.main_pipeline.add_transforms_by_chunk(f)
+        ChunkFillPlan::materialize_chunk_fill_plans(&mut plans, builder)
     }
 }
 
@@ -530,9 +679,11 @@ impl IPhysicalPlan for ChunkAppendData {
         let mut sort_num = 0;
 
         for append_data in self.target_tables.iter() {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&append_data.target_table_info, None)?;
+            let table = builder.ctx.build_table_by_table_info(
+                &append_data.target_table_info,
+                None,
+                None,
+            )?;
             let block_thresholds = table.get_block_thresholds();
             compact_task_builders.push(Box::new(
                 builder.block_compact_task_builder(block_thresholds)?,
@@ -562,7 +713,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 }));
                 eval_cluster_key_num += 1;
             } else {
-                eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()?));
+                eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             let cluster_keys = &cluster_stats_gen.cluster_key_index;
             if !cluster_keys.is_empty() {
@@ -587,7 +738,7 @@ impl IPhysicalPlan for ChunkAppendData {
                 ));
                 sort_num += 1;
             } else {
-                sort_builders.push(Box::new(builder.dummy_transform_builder()?));
+                sort_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             serialize_block_builders.push(Box::new(
                 builder.with_tid_serialize_block_transform_builder(
@@ -755,9 +906,10 @@ impl IPhysicalPlan for ChunkCommitInsert {
         let mut tables = HashMap::new();
 
         for target in &self.targets {
-            let table = builder
-                .ctx
-                .build_table_by_table_info(&target.target_table_info, None)?;
+            let table =
+                builder
+                    .ctx
+                    .build_table_by_table_info(&target.target_table_info, None, None)?;
             let block_thresholds = table.get_block_thresholds();
             serialize_segment_builders.push(Box::new(
                 builder.serialize_segment_transform_builder(

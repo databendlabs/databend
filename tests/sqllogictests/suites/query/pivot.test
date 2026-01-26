@@ -131,7 +131,7 @@ INSERT INTO pivot_db.pivot_fqn VALUES
     ('emea', 'Jan', 5),
     ('emea', 'Feb', 15);
 
-query III
+query TII
 SELECT pivot_db.pivot_fqn.region, JAN, FEB
     FROM pivot_db.pivot_fqn
         PIVOT(SUM(amount) FOR month IN ('Jan', 'Feb'))
@@ -167,7 +167,7 @@ CREATE OR REPLACE TABLE test_table ("DATA_TIME" timestamp, "METRIC_CODE" string,
 statement ok
 insert into test_table values ('2024-09-30 14:09:36.000', '0101', 3.5128);
 
-query TR
+query ?R
 SELECT * FROM test_table PIVOT(avg("VALUE") FOR "METRIC_CODE" IN ('0101'));
 ----
 2024-09-30 14:09:36.000000	3.5128
@@ -194,7 +194,7 @@ INSERT INTO test_tag_list VALUES
     ('material2', 'url2', 'cat2', '2024-02-01', '2024-02-28', 'theme', ['action'], '2024-02-01 00:00:00', '2024-02-01 00:00:00');
 
 # Test CTE with max_cost_source_url column - this was the original failing case
-query T?T
+query T???
 WITH cte_0 AS (
     SELECT
         max_cost_source_url,
@@ -207,11 +207,11 @@ SELECT * FROM cte_0 PIVOT (
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test CTE with material_name column - this was working case
-query T?T
+query T???
 WITH cte_0 AS (
     SELECT
         material_name,
@@ -224,8 +224,8 @@ SELECT * FROM cte_0 PIVOT (
 )
 ORDER BY material_name;
 ----
-material1 ['hero','villain'] ['outdoor','city'] NULL
-material2 ['monster'] NULL ['action']
+material1 ["hero","villain"] ["outdoor","city"] NULL
+material2 ["monster"] NULL ["action"]
 
 # Test materialized CTE (create table) - this was working case
 statement ok
@@ -236,17 +236,17 @@ SELECT
     tag_list
 FROM test_tag_list;
 
-query T?T
+query T???
 SELECT * FROM cte_0_materialized PIVOT (
     MAX(tag_list) FOR tag_category IN ('character', 'scene', 'theme')
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test multiple levels of CTE nesting
-query T?T
+query T???
 WITH cte_level1 AS (
     SELECT
         max_cost_source_url,
@@ -262,8 +262,8 @@ SELECT * FROM cte_level2 PIVOT (
 )
 ORDER BY max_cost_source_url;
 ----
-url1 ['hero','villain'] ['outdoor','city'] NULL
-url2 ['monster'] NULL ['action']
+url1 ["hero","villain"] ["outdoor","city"] NULL
+url2 ["monster"] NULL ["action"]
 
 # Test cases for PIVOT ANY ORDER BY functionality
 statement ok
@@ -351,7 +351,7 @@ ORDER BY empid;
 1 1000.00 1500.00 2000.00 1800.00
 2 2500.00 3000.00 2800.00 3200.00
 
-query IRRRR
+query IIIII
 SELECT * FROM quarterly_sales PIVOT (
     COUNT(amount) FOR quarter IN (ANY ORDER BY quarter)
 )
@@ -378,7 +378,7 @@ INSERT INTO test_null_pivot VALUES
     (2, NULL, 60);
 
 # Test ANY with NULL values - NULL should be included as a pivot value
-query IRRRR
+query III?
 SELECT * FROM test_null_pivot PIVOT (
     SUM(value) FOR category IN (ANY ORDER BY category)
 )
@@ -389,7 +389,7 @@ ORDER BY id;
 
 
 # Test the example from the task description - comprehensive test
-query IRRRR
+query TIRRRR
 SELECT 'Average sale amount' AS aggregate, *
   FROM quarterly_sales
     PIVOT(AVG(amount) FOR quarter IN (ANY ORDER BY quarter))
@@ -441,7 +441,7 @@ INSERT INTO test_string_pivot VALUES
     (2, 'South', 'Feb', 250);
 
 # Test ANY ORDER BY with string sorting
-query ITIII
+query ITITIII
 SELECT id, region, * FROM test_string_pivot PIVOT (
     SUM(sales) FOR month IN (ANY ORDER BY month)
 )
@@ -451,7 +451,7 @@ ORDER BY id, region;
 2 South 2 South 250 150 350
 
 # Test ANY ORDER BY with complex ORDER BY expression (multiple columns would be for future enhancement)
-query ITIII
+query ITITRRR
 SELECT id, region, * FROM test_string_pivot PIVOT (
     AVG(sales) FOR month IN (ANY ORDER BY month DESC)
 )

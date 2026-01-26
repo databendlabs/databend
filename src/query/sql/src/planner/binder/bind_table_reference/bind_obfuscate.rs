@@ -25,6 +25,7 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -59,7 +60,7 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
-        let mut named_args = bind_table_args(&mut scalar_binder, &[], named_params)?.named;
+        let mut named_args = bind_table_args(&mut scalar_binder, &[], named_params, &None)?.named;
         let seed = match named_args.remove("seed") {
             Some(v) => u64_value(&v).ok_or(ErrorCode::BadArguments("invalid seed"))?,
             None => {
@@ -102,7 +103,7 @@ impl Binder {
         table: &Identifier,
         seed: u64,
     ) -> Result<(SExpr, BindContext)> {
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None, &None);
 
         let catalog_name = table_identifier.catalog_name();
         let database_name = table_identifier.database_name();
@@ -114,6 +115,7 @@ impl Binder {
                 &catalog_name,
                 &database_name,
                 &table_name,
+                None,
                 None,
                 None,
             )?
@@ -186,9 +188,12 @@ fn build_subquery(
 
     let table = TableReference::Table {
         span: None,
-        catalog: None,
-        database: Some(database.clone()),
-        table: table_name.clone(),
+        table: TableRef {
+            catalog: None,
+            database: Some(database.clone()),
+            table: table_name.clone(),
+            branch: None,
+        },
         alias: None,
         temporal: None,
         with_options: None,

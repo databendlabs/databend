@@ -33,7 +33,7 @@ SELECT DISTINCT row_number() OVER (PARTITION BY number) FROM numbers(100)
 ----
 1
 
-query I
+query II
 select
     count(distinct case when t1.use_status = 1
                             and date_format(t1.use_time,'%Y-%m-%d') >= '2023-01-01'

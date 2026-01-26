@@ -168,6 +168,17 @@ impl Database for IcebergDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        let mut tables = vec![];
+        for table_name in table_names {
+            if let Ok(table) = self.get_table(table_name).await {
+                tables.push(table);
+            }
+        }
+        Ok(tables)
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_names(&self) -> Result<Vec<String>> {
         let table_names = self
             .ctl

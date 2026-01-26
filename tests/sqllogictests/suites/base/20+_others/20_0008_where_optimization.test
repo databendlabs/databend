@@ -30,7 +30,7 @@ select * from t_where_optimizer where a = b order by a
 
 # All rows are filtered out
 
-query ok
+query II
 select * from t_where_optimizer where a < 1
 
 
@@ -60,24 +60,24 @@ create table t_where_optimizer(id int, s tuple(a int, b int))
 statement ok
 insert into t_where_optimizer values(1, (1, 2)), (2, (3, 4)), (3, (5, 6))
 
-query IT
+query I?
 select * from t_where_optimizer
 ----
 1 (1,2)
 2 (3,4)
 3 (5,6)
 
-query IT
+query I?
 select * from t_where_optimizer where id = 1
 ----
 1 (1,2)
 
-query IT
+query I?
 select * from t_where_optimizer where s:a = 3
 ----
 2 (3,4)
 
-query IT
+query II
 select s:a, s:b from t_where_optimizer where id <= 3 and s:a > 3
 ----
 5 6

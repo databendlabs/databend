@@ -1,19 +1,19 @@
 statement ok
 set max_threads = 1;
 
-query TTT
+query IBR
 select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') order by id limit 2;
 ----
 0 1 0.0
 1 0 10.1
 
-query TTT
+query IBR
 select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') order by id desc limit 2;
 ----
 7 0 10.1
 6 1 0.0
 
-query TTT
+query BR
 select bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') order by id limit 2;
 ----
 1 0.0
@@ -21,25 +21,25 @@ select bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern =
 
 
 # TopK push down after prewhere push down
-query TTT
+query IBR
 select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') where bool_col = true order by id limit 2
 ----
 0 1 0.0
 2 1 0.0
 
-query TTT
+query BR
 select bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') where bool_col = true order by id limit 2
 ----
 1 0.0
 1 0.0
 
-query TTT
+query R
 select double_col from @data/parquet/alltypes_plain.parquet (pattern => '') where bool_col = true order by id limit 2
 ----
 0.0
 0.0
 
-query TTT
+query IBR
 select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (pattern => '') where id > 4 order by id limit 2
 ----
 5 0 10.1
@@ -47,13 +47,13 @@ select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet (patte
 
 # More row groups
 
-query TT
+query TI
 select * from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int limit 2;
 ----
 [1] 0
 [1] 0
 
-query TT
+query T
 select col_arr from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int desc limit 2;
 ----
 [1,2]

@@ -9,7 +9,7 @@ CREATE VIEW list_int AS
 SELECT i, i%2 as i2, [i, i + 1, i + 2] as l3
 FROM numbers(10) tbl(i);
 
-query IIIIII
+query IITIIT
 select lhs.*, rhs.*
 from list_int lhs, list_int rhs
 where lhs.i2 = rhs.i2 and lhs.l3 <> rhs.l3
@@ -56,7 +56,7 @@ order by lhs.i, rhs.i;
 9 1 [9,10,11] 5 1 [5,6,7]
 9 1 [9,10,11] 7 1 [7,8,9]
 
-query IIIIII
+query IITIIT
 select lhs.*, rhs.*
 from list_int lhs, list_int rhs
 where lhs.i2 = rhs.i2 and lhs.l3 <= rhs.l3
@@ -93,7 +93,7 @@ order by lhs.i, rhs.i;
 8 0 [8,9,10] 8 0 [8,9,10]
 9 1 [9,10,11] 9 1 [9,10,11]
 
-query IIIIII
+query IITIIT
 select lhs.*, rhs.*
 from list_int lhs, list_int rhs
 where lhs.i2 = rhs.i2 and lhs.l3 < rhs.l3
@@ -120,7 +120,7 @@ order by lhs.i, rhs.i;
 6 0 [6,7,8] 8 0 [8,9,10]
 7 1 [7,8,9] 9 1 [9,10,11]
 
-query IIIIII
+query IITIIT
 select lhs.*, rhs.*
 from list_int lhs, list_int rhs
 where lhs.i2 = rhs.i2 and lhs.l3 >= rhs.l3
@@ -157,7 +157,7 @@ order by lhs.i, rhs.i;
 9 1 [9,10,11] 7 1 [7,8,9]
 9 1 [9,10,11] 9 1 [9,10,11]
 
-query IIIIII
+query IITIIT
 select lhs.*, rhs.*
 from list_int lhs, list_int rhs
 where lhs.i2 = rhs.i2 and lhs.l3 > rhs.l3

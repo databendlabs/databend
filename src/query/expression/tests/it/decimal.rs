@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::type_check::common_super_type;
@@ -25,7 +24,7 @@ use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_decimal_text_exact() -> Result<()> {
+fn test_decimal_text_exact() -> anyhow::Result<()> {
     let cases = vec!["", ".e", ".", ".a", "-", "+", "e1", "a", "1e1e1", "1.1.1"];
 
     for s in cases {
@@ -36,7 +35,7 @@ fn test_decimal_text_exact() -> Result<()> {
 }
 
 #[test]
-fn test_decimal_text() -> Result<()> {
+fn test_decimal_text() -> anyhow::Result<()> {
     let cases = vec![
         ("0#", (0i128, 0, 0, 1)),
         ("+0#", (0i128, 0, 0, 2)),
@@ -79,7 +78,7 @@ fn test_decimal_text() -> Result<()> {
 }
 
 #[test]
-fn test_decimal_with_size_text() -> Result<()> {
+fn test_decimal_with_size_text() -> anyhow::Result<()> {
     let cases = vec![
         ("0#", 0i128),
         ("+0#", 0i128),

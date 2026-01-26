@@ -34,7 +34,6 @@ use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::base::escape_for_key;
-use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
@@ -60,11 +59,13 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use tokio::sync::AcquireError as TokioAcquireError;
+use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
@@ -118,12 +119,15 @@ impl<Data: QueueData> QueueManager<Data> {
         let metastore = {
             let provider = Arc::new(MetaStoreProvider::new(
                 conf.meta
-                    .to_meta_grpc_client_conf(&databend_common_version::BUILD_INFO),
+                    .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.semver()),
             ));
 
-            provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?
+            provider
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|e| {
+                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);

@@ -28,8 +28,6 @@ impl Binder {
         match table_ref {
             TableReference::Table {
                 span,
-                catalog,
-                database,
                 table,
                 alias,
                 temporal,
@@ -40,8 +38,6 @@ impl Binder {
             } => self.bind_table(
                 bind_context,
                 span,
-                catalog,
-                database,
                 table,
                 alias,
                 temporal,

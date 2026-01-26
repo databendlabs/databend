@@ -229,12 +229,11 @@ impl Rule for RuleTryApplyAggIndex {
     ) -> Result<()> {
         let (table_index, table_name) = self.get_table(s_expr);
         let metadata = self.metadata.read();
-        let index_plans = metadata.get_agg_indexes(&table_name);
-        if index_plans.is_none() {
+        let index_plans = metadata.get_agg_indices(&table_name);
+        let Some(index_plans) = index_plans else {
             // No enterprise license or no index.
             return Ok(());
-        }
-        let index_plans = index_plans.unwrap();
+        };
         if index_plans.is_empty() {
             // No enterprise license or no index.
             return Ok(());

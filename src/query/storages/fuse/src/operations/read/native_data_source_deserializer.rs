@@ -48,6 +48,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
 use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MutableBitmap;
@@ -663,10 +664,9 @@ impl NativeDeserializeDataTransform {
                 };
 
                 let probe_block = self.block_reader.build_block(&[column], None)?;
-                let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
                 let probe_column = probe_block.get_last_column().clone();
                 // Apply the filter to the probe column.
-                ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column, &mut bitmap)?;
+                let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
 
                 let unset_bits = bitmap.null_count();
                 let elapsed = start.elapsed();
@@ -684,7 +684,10 @@ impl NativeDeserializeDataTransform {
             if !bitmaps.is_empty() {
                 let rf_bitmap = bitmaps
                     .into_iter()
-                    .reduce(|acc, rf_filter| acc.bitand(&rf_filter.into()))
+                    .reduce(|acc, rf_filter| {
+                        let bitmap: Bitmap = rf_filter.into();
+                        acc.bitand(&bitmap)
+                    })
                     .unwrap();
 
                 let filter_executor = self.filter_executor.as_mut().unwrap();
@@ -772,12 +775,6 @@ impl NativeDeserializeDataTransform {
                     .map(|f| f.filter_id)
                     .collect::<Vec<_>>();
                 filter_ids.sort_unstable();
-                log::info!(
-                    "RUNTIME-FILTER: scan_id={} bloom_filters={} filter_ids={:?}",
-                    self.scan_id,
-                    bloom_filters.len(),
-                    filter_ids
-                );
                 self.bloom_runtime_filter = Some(bloom_filters);
                 if self.filter_executor.is_none() {
                     self.filter_executor = Some(new_dummy_filter_executor(self.func_ctx.clone()));

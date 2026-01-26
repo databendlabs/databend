@@ -4,7 +4,7 @@ DROP VIEW IF EXISTS tmp_view
 statement ok
 CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a
 
-query I?
+query IR
 SELECT * FROM tmp_view
 ----
 0 499.5
@@ -21,7 +21,7 @@ SELECT * FROM tmp_view
 1
 2
 
-query T
+query TTTTT
 DESCRIBE tmp_view;
 ----
 number BIGINT UNSIGNED NO 0 (empty)
@@ -29,7 +29,7 @@ number BIGINT UNSIGNED NO 0 (empty)
 statement ok
 ALTER VIEW tmp_view(c1) AS SELECT * from numbers(3)
 
-query T
+query TTTTT
 DESCRIBE tmp_view;
 ----
 c1 BIGINT UNSIGNED NO 0 (empty)

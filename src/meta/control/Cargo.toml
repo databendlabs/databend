@@ -10,14 +10,15 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-databend-common-base = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-runtime = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -26,6 +27,7 @@ futures = { workspace = true }
 mlua = { workspace = true }
 raft-log = { workspace = true }
 reqwest = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

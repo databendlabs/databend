@@ -4,7 +4,7 @@ set sandbox_tenant = 'test_tenant';
 statement ok
 use tpch_test;
 
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -71,7 +71,7 @@ from
 103
 103
 
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -107,7 +107,7 @@ order by c_custkey
 20 0
 
 
-query I
+query II
 select
     c_custkey, count(o_orderkey) as c_count
 from
@@ -261,7 +261,7 @@ order by o_custkey
 4
 4
 
-query I
+query T
 select
     o_comment
 from
@@ -330,7 +330,7 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 3
 
 # LEFT OUTER / LEFT SINGEL / FULL
-query I
+query I?I
 select l_orderkey, o_orderdate, o_shippriority from lineitem left join orders on l_orderkey = o_orderkey  and o_orderdate < to_date('1995-03-15') order by o_orderdate, l_orderkey limit 5;
 ----
 3271 1992-01-01 0

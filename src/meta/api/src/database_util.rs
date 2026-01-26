@@ -24,17 +24,26 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
+use databend_common_meta_app::schema::ObjectTagIdRef;
+use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::TagIdObjectRef;
+use databend_common_meta_app::schema::TagIdObjectRefIdent;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
+use futures::TryStreamExt;
 use log::debug;
 use log::warn;
 
 use crate::error_util::unknown_database_error;
 use crate::kv_app_error::KVAppError;
+use crate::kv_app_error::KVAppResultExt;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
 use crate::txn_condition_util::txn_cond_seq;
@@ -56,17 +65,10 @@ pub(crate) async fn drop_database_meta(
     )
     .await;
 
-    let (seq_db_id, mut db_meta) = match res {
+    let (seq_db_id, mut db_meta) = match res.into_nested()? {
         Ok(x) => x,
-        Err(e) => {
-            if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
-                if if_exists {
-                    return Ok(0);
-                }
-            }
-
-            return Err(e);
-        }
+        Err(AppError::UnknownDatabase(_)) if if_exists => return Ok(0),
+        Err(app_err) => return Err(app_err.into()),
     };
 
     // remove db_name -> db id
@@ -137,7 +139,34 @@ pub(crate) async fn drop_database_meta(
         txn.if_then.push(txn_op_del(&ownership_key));
     }
 
-    Ok(*seq_db_id.data)
+    // Clean up tag references (UNDROP won't restore them; small race window is acceptable,
+    // VACUUM handles orphans). See `set_object_tags` in tag_api.rs for concurrency design.
+    let db_id = *seq_db_id.data;
+    let taggable_object = TaggableObject::Database { db_id };
+    let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(
+        tenant_dbname.tenant().clone(),
+        ObjectTagIdRef::new(taggable_object.clone(), 0),
+    );
+    let obj_tag_dir = DirName::new(obj_tag_prefix);
+    let strm = kv_api.list_pb(ListOptions::unlimited(&obj_tag_dir)).await?;
+    let tag_entries: Vec<_> = strm.try_collect().await?;
+    for entry in tag_entries {
+        let tag_id = entry.key.name().tag_id;
+        // Delete object -> tag reference
+        let obj_ref_key = ObjectTagIdRefIdent::new_generic(
+            tenant_dbname.tenant().clone(),
+            ObjectTagIdRef::new(taggable_object.clone(), tag_id),
+        );
+        // Delete tag -> object reference
+        let tag_ref_key = TagIdObjectRefIdent::new_generic(
+            tenant_dbname.tenant().clone(),
+            TagIdObjectRef::new(tag_id, taggable_object.clone()),
+        );
+        txn.if_then.push(txn_op_del(&obj_ref_key));
+        txn.if_then.push(txn_op_del(&tag_ref_key));
+    }
+
+    Ok(db_id)
 }
 
 /// Returns (db_id_seq, db_id, db_meta_seq, db_meta)

@@ -18,14 +18,13 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::tenant::Tenant;
 use log::warn;
 use parking_lot::RwLock;
+use tokio::task::JoinHandle;
 
 use crate::UserApiProvider;
 use crate::role_util::find_all_related_roles;
