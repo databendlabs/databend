@@ -27,7 +27,7 @@
 
 use std::time::Instant;
 
-use databend_common_metrics::count;
+use databend_base::counter;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 
 pub mod server_metrics {
@@ -1007,8 +1007,8 @@ pub(crate) struct InFlightMetrics<const IS_READ: bool> {
     start: Option<Instant>,
 }
 
-impl<const IS_READ: bool> count::Count for InFlightMetrics<IS_READ> {
-    fn incr_count(&mut self, n: i64) {
+impl<const IS_READ: bool> counter::Counter for InFlightMetrics<IS_READ> {
+    fn incr(&mut self, n: i64) {
         network_metrics::incr_request_inflights(n);
 
         #[allow(clippy::comparison_chain)]
@@ -1037,8 +1037,8 @@ pub(crate) type InFlightWrite = InFlightMetrics<false>;
 #[derive(Default)]
 pub(crate) struct ProposalPending;
 
-impl count::Count for ProposalPending {
-    fn incr_count(&mut self, n: i64) {
+impl counter::Counter for ProposalPending {
+    fn incr(&mut self, n: i64) {
         server_metrics::incr_proposals_pending(n);
     }
 }
@@ -1055,8 +1055,8 @@ pub fn meta_metrics_to_prometheus_string() -> String {
 #[derive(Default)]
 pub(crate) struct SnapshotBuilding;
 
-impl count::Count for SnapshotBuilding {
-    fn incr_count(&mut self, n: i64) {
+impl counter::Counter for SnapshotBuilding {
+    fn incr(&mut self, n: i64) {
         raft_metrics::storage::incr_snapshot_building_by(n);
     }
 }

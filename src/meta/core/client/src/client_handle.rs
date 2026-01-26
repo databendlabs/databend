@@ -22,6 +22,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use anyerror::AnyError;
+use databend_base::counter::Counter;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -37,7 +38,6 @@ use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_metrics::count::Count;
 use fastrace::Span;
 use log::debug;
 use log::error;
@@ -155,7 +155,7 @@ impl<RT: SpawnApi> ClientHandle<RT> {
             .map_err(MetaClientError::from)?;
 
         let recv_res = RT::unlimited_future(async move {
-            let _g = grpc_metrics::client_request_inflight.counter_guard();
+            let _g = grpc_metrics::client_request_inflight.counted_guard();
             rx.await
         })
         .await;
@@ -173,7 +173,7 @@ impl<RT: SpawnApi> ClientHandle<RT> {
         <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
     {
-        let _g = grpc_metrics::client_request_inflight.counter_guard();
+        let _g = grpc_metrics::client_request_inflight.counted_guard();
 
         let rx = self
             .send_request_to_worker(req)

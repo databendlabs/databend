@@ -20,6 +20,8 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
+use databend_base::counter::Counted;
+use databend_base::counter::Counter;
 use databend_base::futures::ElapsedFutureExt;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
@@ -50,8 +52,6 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
-use databend_common_metrics::count::Count;
-use databend_common_metrics::count::WithCount;
 use databend_common_tracing::start_trace_for_remote_request;
 use display_more::DisplayOptionExt;
 use fastrace::func_name;
@@ -87,7 +87,7 @@ use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 
 /// Guard type for in-flight read requests.
-type InFlightReadGuard = WithCount<InFlightRead, ()>;
+type InFlightReadGuard = Counted<InFlightRead, ()>;
 
 /// A request that is currently being processed.
 ///
