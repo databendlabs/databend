@@ -15,6 +15,7 @@
 mod async_block_prune_transform;
 mod block_metas_meta;
 mod block_prune_result_meta;
+mod block_slot_filter_transform;
 mod column_oriented_block_prune;
 mod extract_segment_transform;
 mod lazy_segment_meta;
@@ -28,6 +29,7 @@ mod topn_prune_transform;
 mod vector_index_prune_transform;
 
 pub use async_block_prune_transform::AsyncBlockPruneTransform;
+pub use block_slot_filter_transform::BlockSlotFilterTransform;
 pub use column_oriented_block_prune::ColumnOrientedBlockPruneSink;
 pub use extract_segment_transform::ExtractSegmentTransform;
 pub use lazy_segment_meta::LazySegmentMeta;
