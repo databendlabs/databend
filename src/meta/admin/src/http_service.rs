@@ -43,14 +43,20 @@ use crate::v1::features::SetFeatureQuery;
 pub struct HttpService<SP: SpawnApi> {
     cfg: HttpServiceConfig,
     shutdown_handler: HttpShutdownHandler,
+    version: String,
     pub(crate) meta_handle: Arc<MetaHandle<SP>>,
 }
 
 impl<SP: SpawnApi> HttpService<SP> {
-    pub fn create(cfg: HttpServiceConfig, meta_handle: Arc<MetaHandle<SP>>) -> Box<Self> {
+    pub fn create(
+        cfg: HttpServiceConfig,
+        version: String,
+        meta_handle: Arc<MetaHandle<SP>>,
+    ) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
+            version,
             meta_handle,
         })
     }
@@ -111,9 +117,11 @@ impl<SP: SpawnApi> HttpService<SP> {
             })
             .at("/v1/cluster/status", {
                 let mh = mh.clone();
+                let version = self.version.clone();
                 get(poem::endpoint::make(move |_req: Request| {
                     let mh = mh.clone();
-                    async move { Self::status_handler(mh).await }
+                    let version = version.clone();
+                    async move { Self::status_handler(mh, &version).await }
                 }))
             })
             .at("/v1/metrics", {

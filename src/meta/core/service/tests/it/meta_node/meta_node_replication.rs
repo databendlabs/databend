@@ -37,7 +37,6 @@ use databend_common_meta_types::raft_types::SnapshotResponse;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_version::BUILD_INFO;
 use databend_meta::message::ForwardRequest;
 use databend_meta::meta_service::MetaNode;
 use futures::TryStreamExt;
@@ -70,7 +69,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     tc.config.raft_config.max_applied_log_to_keep = 0;
 
-    let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::boot(&tc.config).await?;
 
     tc.assert_raft_server_connection().await?;
 

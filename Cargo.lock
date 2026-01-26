@@ -13696,15 +13696,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eba9638e96ac5a324654f8d47fb71c5e21abef0f072740ed9c1d4b0801faa37"
 
 [[package]]
-name = "rio"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e98c25665909853c07874301124482754434520ab572ac6a22e90366de6685b"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "rkyv"
 version = "0.7.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14748,7 +14739,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
- "rio",
 ]
 
 [[package]]

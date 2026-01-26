@@ -59,7 +59,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
     let mn1 = MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
@@ -111,9 +111,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
-    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
+    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
     let _ = mn1
         .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
         .await?;
@@ -151,7 +151,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
             .await?;
     }
 
-    let status = mn0.get_status().await;
+    let status = mn0
+        .get_status(BUILD_INFO.semver().to_string().as_str())
+        .await;
 
     println!(
         "status = {}",
@@ -265,7 +267,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     tc1.config.admin.tls.key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
     let meta_handle_1 =
@@ -287,7 +289,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         admin: tc1.config.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
-    let mut srv = HttpService::create(http_cfg, meta_handle_1);
+    let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);
 
     // test cert is issued for "localhost"
     let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);

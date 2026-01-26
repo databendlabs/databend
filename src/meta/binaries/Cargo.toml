@@ -14,11 +14,6 @@ memory-profiling = [
     "databend-common-base/memory-profiling",
 ]
 jemalloc = ["databend-common-base/jemalloc"]
-io-uring = [
-    "databend-meta/io-uring",
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
-]
 
 [dependencies]
 databend-base = { workspace = true }

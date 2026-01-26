@@ -34,8 +34,11 @@ impl<SP: SpawnApi> HttpService<SP> {
         Ok(Json(nodes).into_response())
     }
 
-    pub async fn status_handler(meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
-        let status = meta_handle.handle_get_status().await.map_err(|e| {
+    pub async fn status_handler(
+        meta_handle: Arc<MetaHandle<SP>>,
+        version: &str,
+    ) -> poem::Result<Response> {
+        let status = meta_handle.handle_get_status(version).await.map_err(|e| {
             poem::Error::from_string(
                 format!("Failed to get status: {}", e),
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -17,7 +17,6 @@ use std::time::Duration;
 
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::ServerState;
-use databend_common_version::BUILD_INFO;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::message::JoinRequest;
@@ -85,8 +84,7 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // Create a learner node but don't start it as part of the initial cluster
     let learner_node_id = 2;
     let learner_tc = MetaSrvTestContext::new(learner_node_id);
-    let learner_mn =
-        MetaNode::<TokioRuntime>::open(&learner_tc.config.raft_config, BUILD_INFO.semver()).await?;
+    let learner_mn = MetaNode::<TokioRuntime>::open(&learner_tc.config.raft_config).await?;
 
     // Get the leader to send join request
     let leader_tc = &tcs[0];

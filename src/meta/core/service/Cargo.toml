@@ -7,13 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[features]
-default = []
-io-uring = [
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
-]
-
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
@@ -32,7 +25,6 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
-databend-common-version = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }

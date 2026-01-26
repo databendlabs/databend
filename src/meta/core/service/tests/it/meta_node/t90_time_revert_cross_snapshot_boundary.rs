@@ -22,7 +22,6 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::raft_types::new_log_id;
-use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use maplit::btreeset;
@@ -117,8 +116,7 @@ async fn write_two_logs(
 
         sleep(Duration::from_secs(2)).await;
 
-        meta_node =
-            MetaNode::<TokioRuntime>::open(&tc0.config.raft_config, BUILD_INFO.semver()).await?;
+        meta_node = MetaNode::<TokioRuntime>::open(&tc0.config.raft_config).await?;
     }
 
     // Apply second log

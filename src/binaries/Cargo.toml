@@ -16,9 +16,6 @@ memory-profiling = [
 python-udf = ["databend-query/python-udf"]
 simd = ["databend-query/simd"]
 jemalloc = ["databend-common-base/jemalloc", "databend-query/jemalloc"]
-io-uring = [
-    "databend-query/io-uring",
-]
 
 [dependencies]
 clap = { workspace = true }

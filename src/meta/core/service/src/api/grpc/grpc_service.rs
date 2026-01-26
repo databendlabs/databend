@@ -183,9 +183,9 @@ impl<SP: SpawnApi> Drop for MetaServiceImpl<SP> {
 }
 
 impl<SP: SpawnApi> MetaServiceImpl<SP> {
-    pub fn create(meta_handle: Weak<MetaHandle<SP>>) -> Self {
+    pub fn create(version: Version, meta_handle: Weak<MetaHandle<SP>>) -> Self {
         Self {
-            version: meta_handle.upgrade().unwrap().version.clone(),
+            version,
             token: GrpcToken::create(),
             meta_handle,
         }
@@ -678,7 +678,9 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
 
         let meta_handle = self.try_get_meta_handle()?;
 
-        let status = meta_handle.handle_get_status().await?;
+        let status = meta_handle
+            .handle_get_status(&self.version.to_string())
+            .await?;
 
         let resp = ClusterStatus {
             id: status.id,

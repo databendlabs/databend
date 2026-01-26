@@ -51,7 +51,7 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
         },
         config_display: "test config".to_string(),
     };
-    let mut srv = HttpService::create(http_cfg, mh);
+    let mut srv = HttpService::create(http_cfg, "test-version".to_string(), mh);
     // test cert is issued for "localhost"
     let url = format!("https://{}:30002/v1/health", TEST_CN_NAME);
 

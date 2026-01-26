@@ -6,9 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[features]
-io-uring = ["databend-common-meta-store/io-uring"]
-
 [dependencies]
 async-backtrace = { workspace = true }
 base64 = { workspace = true }
