@@ -8,6 +8,8 @@ message UdfAsset {
   string url = 2;
   // Content tag for caching (e.g. etag or content length), independent of presigned URL.
   string tag = 3;
+  // Presigned request headers required by the backend (e.g. Azure/GCS signed headers).
+  map<string, string> headers = 4;
 }
 
 message UdfRuntimeSpec {
