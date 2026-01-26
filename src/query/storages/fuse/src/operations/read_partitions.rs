@@ -471,6 +471,17 @@ impl FuseTable {
 
         prune_pipeline
             .add_transform(|input, output| ExtractSegmentTransform::create(input, output, true))?;
+
+        // Add block-level filtering early in the pipeline to avoid unnecessary processing
+        if block_slot.is_some() {
+            prune_pipeline.add_transform(|input, output| {
+                crate::pruning_pipeline::BlockSlotFilterTransform::create(
+                    input,
+                    output,
+                    block_slot.clone(),
+                )
+            })?;
+        }
         let sample_probability = table_sample(&pruner.push_down)?;
         if let Some(probability) = sample_probability {
             prune_pipeline.add_transform(|input, output| {
@@ -570,7 +581,6 @@ impl FuseTable {
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
                 enable_prune_cache,
-                block_slot.clone(),
             )
         })?;
 
