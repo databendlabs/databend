@@ -36,15 +36,13 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
-use crate::configs::GrpcConfig;
 use crate::configs::MetaServiceConfig;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
 
 pub struct GrpcServer<SP: SpawnApi> {
-    node_id: u64,
-    grpc_config: GrpcConfig,
+    config: MetaServiceConfig,
     version: Version,
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
@@ -56,7 +54,7 @@ pub struct GrpcServer<SP: SpawnApi> {
 
 impl<SP: SpawnApi> Drop for GrpcServer<SP> {
     fn drop(&mut self) {
-        info!("GrpcServer::drop: id={}", self.node_id);
+        info!("GrpcServer::drop: id={}", self.config.raft_config.id);
     }
 }
 
@@ -67,8 +65,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         meta_handle: Arc<MetaHandle<SP>>,
     ) -> Self {
         Self {
-            node_id: config.raft_config.id,
-            grpc_config: config.grpc.clone(),
+            config: config.clone(),
             version,
             meta_handle: Some(meta_handle),
             join_handle: None,
@@ -109,7 +106,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         // Setting to None disables the limit entirely.
         let builder = Server::builder().http2_max_pending_accept_reset_streams(Some(4096));
 
-        let tls_conf = Self::tls_config(&self.grpc_config)
+        let tls_conf = Self::tls_config(&self.config.grpc)
             .await
             .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
 
@@ -124,7 +121,8 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         };
 
         let addr = self
-            .grpc_config
+            .config
+            .grpc
             .api_address
             .parse::<std::net::SocketAddr>()?;
 
@@ -135,7 +133,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
 
-        let id = self.node_id;
+        let id = self.config.raft_config.id;
 
         let j = SP::spawn(
             async move {
@@ -223,7 +221,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     }
 
     async fn tls_config(
-        grpc_config: &GrpcConfig,
+        grpc_config: &crate::configs::GrpcConfig,
     ) -> Result<Option<ServerTlsConfig>, std::io::Error> {
         if grpc_config.tls.enabled() {
             let cert = tokio::fs::read(grpc_config.tls.cert.as_str()).await?;
