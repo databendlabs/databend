@@ -68,10 +68,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let res = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
@@ -114,9 +111,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
-    let _ = mn1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
-        .await?;
+    let _ = mn1.join_cluster(&tc1.config).await?;
 
     info!("--- write sample data to the cluster ---");
     {
@@ -277,10 +272,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let _ = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;

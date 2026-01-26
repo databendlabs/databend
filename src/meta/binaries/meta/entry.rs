@@ -39,6 +39,7 @@ use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
+use databend_meta::configs::MetaServiceConfig;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
@@ -183,12 +184,8 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv = GrpcServer::<RT>::create(
-            conf.service.raft_config.id,
-            conf.service.grpc.clone(),
-            DATABEND_SEMVER.clone(),
-            meta_handle.clone(),
-        );
+        let mut srv =
+            GrpcServer::<RT>::create(&conf.service, DATABEND_SEMVER.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
             conf.service.grpc.api_address.clone()
@@ -201,13 +198,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     let service_config = conf.service.clone();
     let join_res = meta_handle
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(
-                    &service_config.raft_config,
-                    service_config.grpc.advertise_address(),
-                )
-                .await
-            };
+            let fu = async move { mn.join_cluster(&service_config).await };
             Box::pin(fu)
         })
         .await??;
@@ -228,13 +219,12 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
 
 async fn do_register<RT: RuntimeApi>(
     meta_handle: &Arc<MetaHandle<RT>>,
-    raft_config: &RaftConfig,
-    grpc_advertise_address: Option<String>,
+    config: &MetaServiceConfig,
 ) -> Result<(), MetaAPIError> {
     let node_id = meta_handle.id;
-    let raft_endpoint = raft_config.raft_api_advertise_host_endpoint();
-    let node =
-        Node::new(node_id, raft_endpoint).with_grpc_advertise_address(grpc_advertise_address);
+    let raft_endpoint = config.raft_config.raft_api_advertise_host_endpoint();
+    let node = Node::new(node_id, raft_endpoint)
+        .with_grpc_advertise_address(config.grpc.advertise_address());
 
     println!("Register this node: {{{}}}", node);
     println!();
@@ -313,12 +303,7 @@ async fn register_node<RT: RuntimeApi>(
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res = do_register::<RT>(
-            meta_handle,
-            &conf.service.raft_config,
-            conf.service.grpc.advertise_address(),
-        )
-        .await;
+        let res = do_register::<RT>(meta_handle, &conf.service).await;
         info!("Register-node result: {:?}", res);
 
         match res {

@@ -37,6 +37,7 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::GrpcConfig;
+use crate::configs::MetaServiceConfig;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
@@ -61,14 +62,13 @@ impl<SP: SpawnApi> Drop for GrpcServer<SP> {
 
 impl<SP: SpawnApi> GrpcServer<SP> {
     pub fn create(
-        node_id: u64,
-        grpc_config: GrpcConfig,
+        config: &MetaServiceConfig,
         version: Version,
         meta_handle: Arc<MetaHandle<SP>>,
     ) -> Self {
         Self {
-            node_id,
-            grpc_config,
+            node_id: config.raft_config.id,
+            grpc_config: config.grpc.clone(),
             version,
             meta_handle: Some(meta_handle),
             join_handle: None,

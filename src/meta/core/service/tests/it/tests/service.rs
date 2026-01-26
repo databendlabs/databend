@@ -60,20 +60,12 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     let c = tc.config.clone();
     let _ = mh
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
 
-    let mut srv = GrpcServer::create(
-        tc.config.raft_config.id,
-        tc.config.grpc.clone(),
-        BUILD_INFO.semver(),
-        mh,
-    );
+    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh);
     srv.do_start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 
