@@ -3268,8 +3268,8 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.3"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.3#71428e7e39971212eb1e2fea0a6f8f93d942ae66"
+version = "0.2.4"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.4#a0850782a466214494d97c1d761441a4af75bfea"
 dependencies = [
  "async-trait",
  "ctrlc",
@@ -5460,7 +5460,6 @@ dependencies = [
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
- "databend-common-metrics",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta-admin",

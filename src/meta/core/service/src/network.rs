@@ -22,6 +22,7 @@ use std::time::Duration;
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
+use databend_base::counter::Counter;
 use databend_base::futures::ElapsedFutureExt;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
 use databend_common_meta_runtime_api::SpawnApi;
@@ -56,7 +57,6 @@ use databend_common_meta_types::raft_types::Unreachable;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::raft_types::VoteResponse;
-use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -827,7 +827,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
     ) -> Result<SnapshotResponse, StreamingError> {
         debug!(id = self.id, target = self.target; "{}", func_name!());
 
-        let _g = snapshot_send_inflight(self.target).counter_guard();
+        let _g = snapshot_send_inflight(self.target).counted_guard();
 
         // Clone the cancel
         let (tx1, cancel1) = oneshot::channel();

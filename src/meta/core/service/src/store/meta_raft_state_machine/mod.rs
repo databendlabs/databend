@@ -21,6 +21,7 @@ use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::Duration;
 
+use databend_base::counter::Counter;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::immutable_compactor::InMemoryCompactor;
 use databend_common_meta_raft_store::sm_v003::SMV003;
@@ -32,7 +33,6 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_metrics::count::Count;
 use futures::FutureExt;
 use futures::TryStreamExt;
 use log::error;
