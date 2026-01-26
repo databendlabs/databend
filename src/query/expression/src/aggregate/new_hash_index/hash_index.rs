@@ -18,8 +18,7 @@ use std::mem::size_of;
 
 use crate::ProbeState;
 use crate::aggregate::LOAD_FACTOR;
-use crate::aggregate::hash_index::HashIndexOps;
-use crate::aggregate::hash_index::TableAdapter;
+use crate::aggregate::legacy_hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
@@ -56,7 +55,7 @@ impl From<RawRowPtr> for RowPtr {
     }
 }
 
-pub struct NewHashIndex {
+pub struct ExperimentalHashIndex {
     ctrls: Vec<Tag>,
     pointers: Vec<RawRowPtr>,
     capacity: usize,
@@ -64,7 +63,7 @@ pub struct NewHashIndex {
     count: usize,
 }
 
-impl NewHashIndex {
+impl ExperimentalHashIndex {
     pub fn with_capacity(capacity: usize) -> Self {
         debug_assert!(capacity.is_power_of_two());
         // avoid handling: SMALL TABLE NASTY CORNER CASE
@@ -93,7 +92,7 @@ impl NewHashIndex {
     }
 }
 
-impl NewHashIndex {
+impl ExperimentalHashIndex {
     #[inline]
     fn ctrl(&mut self, index: usize) -> *mut Tag {
         debug_assert!(index < self.ctrls.len());
@@ -128,6 +127,8 @@ impl NewHashIndex {
         }
     }
 
+    /// Find the index of a given `hash` from the `pos` or return a new slot if not exist
+    /// If not exists, the ctrl byte will be set directly
     pub fn find_or_insert(&mut self, mut pos: usize, hash: u64) -> (usize, bool) {
         let mut insert_index = None;
         let tag_hash = Tag::full(hash);
@@ -185,7 +186,7 @@ impl NewHashIndex {
         }
     }
 
-    pub fn probe_and_create(
+    pub(in crate::aggregate) fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
         row_count: usize,
@@ -256,24 +257,24 @@ impl NewHashIndex {
     }
 }
 
-impl HashIndexOps for NewHashIndex {
-    fn capacity(&self) -> usize {
+impl ExperimentalHashIndex {
+    pub fn capacity(&self) -> usize {
         self.capacity
     }
 
-    fn count(&self) -> usize {
+    pub fn count(&self) -> usize {
         self.count
     }
 
-    fn resize_threshold(&self) -> usize {
+    pub fn resize_threshold(&self) -> usize {
         (self.capacity as f64 / LOAD_FACTOR) as usize
     }
 
-    fn allocated_bytes(&self) -> usize {
+    pub fn allocated_bytes(&self) -> usize {
         self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RawRowPtr>()
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         if self.capacity == 0 {
             return;
         }
@@ -282,16 +283,7 @@ impl HashIndexOps for NewHashIndex {
         self.pointers.fill(RawRowPtr::null());
     }
 
-    fn probe_and_create(
-        &mut self,
-        state: &mut ProbeState,
-        row_count: usize,
-        adapter: &mut dyn TableAdapter,
-    ) -> usize {
-        NewHashIndex::probe_and_create(self, state, row_count, adapter)
-    }
-
-    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
         let index = self.probe_empty(hash);
         unsafe {
             *self.pointers.get_unchecked_mut(index) = RawRowPtr::from(row_ptr);

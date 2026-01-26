@@ -21,7 +21,7 @@ use super::RowPtr;
 use super::payload_row::CompareState;
 use crate::ProjectedBlock;
 
-pub(super) struct HashIndex {
+pub(super) struct LegacyHashIndex {
     pub entries: Vec<Entry>,
     pub count: usize,
     pub capacity: usize,
@@ -51,9 +51,7 @@ fn init_slot(hash: u64, capacity_mask: usize) -> usize {
     hash as usize & capacity_mask
 }
 
-impl HashIndex {
-    /// Create a dummy HashIndex with zero capacity.
-    /// Any operation on this HashIndex is not allowed.
+impl LegacyHashIndex {
     pub fn dummy() -> Self {
         Self {
             entries: vec![],
@@ -63,7 +61,6 @@ impl HashIndex {
         }
     }
 
-    /// Create a HashIndex with the given capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         debug_assert!(capacity.is_power_of_two());
         let capacity_mask = capacity - 1;
@@ -109,6 +106,14 @@ impl HashIndex {
         &mut self.entries[slot]
     }
 
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
     pub fn reset(&mut self) {
         self.count = 0;
         self.entries.fill(Entry::default());
@@ -120,6 +125,14 @@ impl HashIndex {
 
     pub fn allocated_bytes(&self) -> usize {
         self.entries.len() * std::mem::size_of::<Entry>()
+    }
+
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+        let slot = Self::probe_slot(self, hash);
+        let mut entry = self.mut_entry(slot);
+        entry.set_hash(hash);
+        entry.set_pointer(row_ptr);
+        self.count += 1;
     }
 }
 
@@ -188,22 +201,7 @@ pub(super) trait TableAdapter {
     ) -> usize;
 }
 
-pub(super) trait HashIndexOps {
-    fn capacity(&self) -> usize;
-    fn count(&self) -> usize;
-    fn resize_threshold(&self) -> usize;
-    fn allocated_bytes(&self) -> usize;
-    fn reset(&mut self);
-    fn probe_and_create(
-        &mut self,
-        state: &mut ProbeState,
-        row_count: usize,
-        adapter: &mut dyn TableAdapter,
-    ) -> usize;
-    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr);
-}
-
-impl HashIndex {
+impl LegacyHashIndex {
     pub fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
@@ -283,45 +281,6 @@ impl HashIndex {
     }
 }
 
-impl HashIndexOps for HashIndex {
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
-
-    fn count(&self) -> usize {
-        self.count
-    }
-
-    fn resize_threshold(&self) -> usize {
-        HashIndex::resize_threshold(self)
-    }
-
-    fn allocated_bytes(&self) -> usize {
-        HashIndex::allocated_bytes(self)
-    }
-
-    fn reset(&mut self) {
-        HashIndex::reset(self)
-    }
-
-    fn probe_and_create(
-        &mut self,
-        state: &mut ProbeState,
-        row_count: usize,
-        adapter: &mut dyn TableAdapter,
-    ) -> usize {
-        HashIndex::probe_and_create(self, state, row_count, adapter)
-    }
-
-    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
-        let slot = HashIndex::probe_slot(self, hash);
-        let mut entry = self.mut_entry(slot);
-        entry.set_hash(hash);
-        entry.set_pointer(row_ptr);
-        self.count += 1;
-    }
-}
-
 pub(super) struct AdapterImpl<'a> {
     pub payload: &'a mut PartitionedPayload,
     pub group_columns: ProjectedBlock<'a>,
@@ -390,7 +349,7 @@ mod tests {
             state
         }
 
-        fn init_hash_index(&self, hash_index: &mut HashIndex) {
+        fn init_hash_index(&self, hash_index: &mut LegacyHashIndex) {
             for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
                 let slot = hash_index.probe_slot(hash);
 
@@ -474,7 +433,7 @@ mod tests {
                 want_count,
                 want,
             } = self;
-            let mut hash_index = HashIndex::with_capacity(capacity);
+            let mut hash_index = LegacyHashIndex::with_capacity(capacity);
 
             let mut adapter = TestTableAdapter::new(incoming, payload);
 

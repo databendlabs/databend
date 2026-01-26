@@ -21,13 +21,13 @@ use bumpalo::Bump;
 use databend_common_exception::Result;
 
 use super::BATCH_SIZE;
+use super::HashIndex;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
-use super::hash_index::AdapterImpl;
-use super::hash_index::HashIndexOps;
+use super::legacy_hash_index::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
@@ -46,7 +46,7 @@ pub struct AggregateHashTable {
     pub config: HashTableConfig,
 
     current_radix_bits: u64,
-    hash_index: Box<dyn HashIndexOps>,
+    hash_index: HashIndex,
     hash_index_resize_count: usize,
 }
 
@@ -80,7 +80,7 @@ impl AggregateHashTable {
                 1 << config.initial_radix_bits,
                 vec![arena],
             ),
-            hash_index: config.new_hash_index(capacity),
+            hash_index: HashIndex::new(&config, capacity),
             config,
             hash_index_resize_count: 0,
         }
@@ -98,9 +98,9 @@ impl AggregateHashTable {
         // if need_init_entry is false, we will directly append rows without probing hash index
         // so we can use a dummy hash index, which is not allowed to insert any entry
         let hash_index = if need_init_entry {
-            config.new_hash_index(capacity)
+            HashIndex::new(&config, capacity)
         } else {
-            config.new_dummy_hash_index()
+            HashIndex::new_dummy(&config)
         };
         Self {
             direct_append: !need_init_entry,
@@ -423,13 +423,13 @@ impl AggregateHashTable {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = self.config.new_hash_index(target);
+            self.hash_index = HashIndex::new(&self.config, target);
             return;
         }
 
         self.hash_index_resize_count += 1;
 
-        let mut hash_index = self.config.new_hash_index(new_capacity);
+        let mut hash_index = HashIndex::new(&self.config, new_capacity);
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {

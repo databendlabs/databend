@@ -19,7 +19,7 @@ mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
 mod group_hash;
-mod hash_index;
+mod legacy_hash_index;
 mod new_hash_index;
 mod partitioned_payload;
 mod payload;
@@ -36,7 +36,6 @@ pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use group_hash::*;
-use hash_index::HashIndexOps;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
@@ -44,8 +43,9 @@ pub use probe_state::ProbeState;
 use probe_state::*;
 use row_ptr::*;
 
-use crate::aggregate::hash_index::HashIndex;
-use crate::aggregate::new_hash_index::NewHashIndex;
+use crate::aggregate::legacy_hash_index::LegacyHashIndex;
+use crate::aggregate::legacy_hash_index::TableAdapter;
+use crate::aggregate::new_hash_index::ExperimentalHashIndex;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
@@ -61,6 +61,86 @@ pub(crate) const L3_CACHE_SIZE: usize = 1572864 / 2;
 
 pub(crate) const MAX_RADIX_BITS: u64 = 7;
 pub const MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM: u64 = 1 << MAX_RADIX_BITS;
+
+enum HashIndex {
+    Legacy(LegacyHashIndex),
+    Experimental(ExperimentalHashIndex),
+}
+
+impl HashIndex {
+    /// Create a HashIndex with the given capacity
+    fn new(config: &HashTableConfig, capacity: usize) -> HashIndex {
+        if config.enable_experiment_hash_index {
+            HashIndex::Experimental(ExperimentalHashIndex::with_capacity(capacity))
+        } else {
+            HashIndex::Legacy(LegacyHashIndex::with_capacity(capacity))
+        }
+    }
+
+    /// Create a dummy LegacyHashIndex with zero capacity
+    /// Any operation on this LegacyHashIndex is not allowed.
+    fn new_dummy(config: &HashTableConfig) -> HashIndex {
+        if config.enable_experiment_hash_index {
+            HashIndex::Experimental(ExperimentalHashIndex::dummy())
+        } else {
+            HashIndex::Legacy(LegacyHashIndex::dummy())
+        }
+    }
+
+    fn capacity(&self) -> usize {
+        match self {
+            HashIndex::Legacy(index) => index.capacity(),
+            HashIndex::Experimental(index) => index.capacity(),
+        }
+    }
+
+    fn count(&self) -> usize {
+        match self {
+            HashIndex::Legacy(index) => index.count(),
+            HashIndex::Experimental(index) => index.count(),
+        }
+    }
+
+    fn resize_threshold(&self) -> usize {
+        match self {
+            HashIndex::Legacy(index) => index.resize_threshold(),
+            HashIndex::Experimental(index) => index.resize_threshold(),
+        }
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        match self {
+            HashIndex::Legacy(index) => index.allocated_bytes(),
+            HashIndex::Experimental(index) => index.allocated_bytes(),
+        }
+    }
+
+    fn reset(&mut self) {
+        match self {
+            HashIndex::Legacy(index) => index.reset(),
+            HashIndex::Experimental(index) => index.reset(),
+        }
+    }
+
+    fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        adapter: &mut dyn TableAdapter,
+    ) -> usize {
+        match self {
+            HashIndex::Legacy(index) => index.probe_and_create(state, row_count, adapter),
+            HashIndex::Experimental(index) => index.probe_and_create(state, row_count, adapter),
+        }
+    }
+
+    fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
+        match self {
+            HashIndex::Legacy(index) => index.probe_slot_and_set(hash, row_ptr),
+            HashIndex::Experimental(index) => index.probe_slot_and_set(hash, row_ptr),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
@@ -168,22 +248,6 @@ impl HashTableConfig {
                 continue;
             }
             break;
-        }
-    }
-
-    fn new_hash_index(&self, capacity: usize) -> Box<dyn HashIndexOps> {
-        if self.enable_experiment_hash_index {
-            Box::new(NewHashIndex::with_capacity(capacity))
-        } else {
-            Box::new(HashIndex::with_capacity(capacity))
-        }
-    }
-
-    fn new_dummy_hash_index(&self) -> Box<dyn HashIndexOps> {
-        if self.enable_experiment_hash_index {
-            Box::new(NewHashIndex::dummy())
-        } else {
-            Box::new(HashIndex::dummy())
         }
     }
 }

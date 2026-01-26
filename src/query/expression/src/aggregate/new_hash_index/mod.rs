@@ -19,4 +19,4 @@ mod bitmask;
 mod group;
 mod hash_index;
 
-pub use hash_index::NewHashIndex;
+pub use hash_index::ExperimentalHashIndex;
