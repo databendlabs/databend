@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+/// Simple configuration for HttpService, avoiding dependency on full Config
+#[derive(Clone, Debug, Default)]
+pub struct HttpServiceConfig {
+    pub admin_api_address: String,
+    pub admin_tls_server_cert: String,
+    pub admin_tls_server_key: String,
+    /// Pre-formatted config string for /v1/config endpoint
+    pub config_display: String,
+}
 
-use databend_common_meta_runtime_api::SpawnApi;
-use poem::IntoResponse;
-use poem::Response;
-
-use crate::api::http_service::HttpService;
-use crate::meta_node::meta_handle::MetaHandle;
-use crate::metrics::meta_metrics_to_prometheus_string;
-
-impl<SP: SpawnApi> HttpService<SP> {
-    pub async fn metrics_handler(_meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
-        Ok(meta_metrics_to_prometheus_string().into_response())
+impl HttpServiceConfig {
+    pub fn tls_enabled(&self) -> bool {
+        !self.admin_tls_server_key.is_empty() && !self.admin_tls_server_cert.is_empty()
     }
 }

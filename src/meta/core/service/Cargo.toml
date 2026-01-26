@@ -9,7 +9,6 @@ edition = { workspace = true }
 
 [features]
 default = []
-memory-profiling = ["databend-common-http/memory-profiling"]
 io-uring = [
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
@@ -26,7 +25,6 @@ clap = { workspace = true }
 databend-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-grpc = { workspace = true }
-databend-common-http = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
@@ -60,7 +58,6 @@ semver = { workspace = true }
 seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_urlencoded = { workspace = true }
 serfig = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
@@ -76,6 +73,7 @@ databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-schema-api-test-suite = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 databend-common-version = { workspace = true }
+databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }

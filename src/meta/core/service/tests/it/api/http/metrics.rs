@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_runtime_api::TokioRuntime;
-use databend_meta::api::HttpService;
 use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
 use databend_meta::metrics::server_metrics;
+use databend_meta_admin::HttpService;
 use http::Method;
 use http::StatusCode;
 use http::Uri;

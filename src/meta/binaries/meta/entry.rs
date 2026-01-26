@@ -40,7 +40,6 @@ use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
-use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
@@ -49,6 +48,8 @@ use databend_meta::metrics::server_metrics;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
+use databend_meta_admin::HttpService;
+use databend_meta_admin::HttpServiceConfig;
 use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
@@ -168,7 +169,13 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     // HTTP API service.
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
-        let mut srv = HttpService::create(conf.clone(), meta_handle.clone());
+        let http_cfg = HttpServiceConfig {
+            admin_api_address: conf.admin_api_address.clone(),
+            admin_tls_server_cert: conf.admin_tls_server_cert.clone(),
+            admin_tls_server_key: conf.admin_tls_server_key.clone(),
+            config_display: format!("{:?}", conf),
+        };
+        let mut srv = HttpService::create(http_cfg, meta_handle.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.do_start().await.expect("Failed to start http server");
         stop_handler.push(srv);

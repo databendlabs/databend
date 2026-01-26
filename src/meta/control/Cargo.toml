@@ -18,6 +18,7 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }
 
 anyhow = { workspace = true }

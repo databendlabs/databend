@@ -18,8 +18,9 @@ use std::time::Duration;
 
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
-use databend_meta::api::HttpService;
-use databend_meta::api::http::v1::features::FeatureResponse;
+use databend_meta_admin::HttpService;
+use databend_meta_admin::HttpServiceConfig;
+use databend_meta_admin::v1::features::FeatureResponse;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
@@ -35,11 +36,23 @@ async fn test_features() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
-    let mut srv1 = HttpService::create(tcs[0].config.clone(), meta0.clone());
-    srv1.do_start().await.expect("HTTP: admin api error");
+    let http_cfg0 = HttpServiceConfig {
+        admin_api_address: tcs[0].config.admin_api_address.clone(),
+        admin_tls_server_cert: tcs[0].config.admin_tls_server_cert.clone(),
+        admin_tls_server_key: tcs[0].config.admin_tls_server_key.clone(),
+        config_display: format!("{:?}", tcs[0].config),
+    };
+    let mut srv0 = HttpService::create(http_cfg0, meta0.clone());
+    srv0.do_start().await.expect("HTTP: admin api error");
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
-    let mut srv1 = HttpService::create(tcs[1].config.clone(), meta1.clone());
+    let http_cfg1 = HttpServiceConfig {
+        admin_api_address: tcs[1].config.admin_api_address.clone(),
+        admin_tls_server_cert: tcs[1].config.admin_tls_server_cert.clone(),
+        admin_tls_server_key: tcs[1].config.admin_tls_server_key.clone(),
+        config_display: format!("{:?}", tcs[1].config),
+    };
+    let mut srv1 = HttpService::create(http_cfg1, meta1.clone());
     srv1.do_start().await.expect("HTTP: admin api error");
 
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();

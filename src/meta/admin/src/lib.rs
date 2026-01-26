@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::web::Data;
+mod http_service;
+mod http_service_config;
+pub mod v1;
 
-use crate::configs::Config;
-
-#[poem::handler]
-pub async fn config_handler(cfg: Data<&Config>) -> String {
-    format!("{:?}", cfg.0)
-}
+pub use http_service::HttpService;
+pub use http_service_config::HttpServiceConfig;

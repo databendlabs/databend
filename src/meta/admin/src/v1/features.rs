@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
+use databend_meta::meta_node::errors::MetaNodeStopped;
+use databend_meta::meta_node::meta_handle::MetaHandle;
 use http::StatusCode;
 use log::info;
 use log::warn;
@@ -24,9 +26,7 @@ use poem::IntoResponse;
 use poem::Response;
 use poem::web::Json;
 
-use crate::api::http_service::HttpService;
-use crate::meta_node::errors::MetaNodeStopped;
-use crate::meta_node::meta_handle::MetaHandle;
+use crate::HttpService;
 
 /// Query parameters for setting a feature.
 #[derive(Debug, serde::Deserialize)]
