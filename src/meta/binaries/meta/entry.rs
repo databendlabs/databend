@@ -411,7 +411,7 @@ async fn run_cmd(conf: &Config) -> bool {
                         &conf.grpc.api_address,
                         &conf.username,
                         &conf.password,
-                        &conf.kv_api_args(),
+                        &conf.kv_api,
                         op,
                     )
                     .await;
