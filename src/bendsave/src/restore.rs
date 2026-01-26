@@ -43,7 +43,10 @@ pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn restore_meta(efs: Operator, meta_cfg: &databend_meta::configs::Config) -> Result<()> {
+pub async fn restore_meta(
+    efs: Operator,
+    meta_cfg: &databend_meta::configs::MetaServiceConfig,
+) -> Result<()> {
     let mut stream = efs
         .reader(DATABEND_META_BACKUP_PATH)
         .await?

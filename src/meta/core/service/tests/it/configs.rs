@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta::configs::Config;
+use databend_meta::configs::MetaServiceConfig;
 
 #[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
-    let mut conf = Config::default();
+    let mut conf = MetaServiceConfig::default();
     assert!(!conf.grpc.tls.enabled());
     conf.grpc.tls.key = "test".to_owned();
     assert!(!conf.grpc.tls.enabled());

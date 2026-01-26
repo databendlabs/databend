@@ -130,7 +130,12 @@ pub fn next_port() -> u16 {
 pub struct MetaSrvTestContext {
     pub _temp_dir: tempfile::TempDir,
 
-    pub config: configs::Config,
+    pub config: configs::MetaServiceConfig,
+
+    /// Admin API configuration for HTTP service tests.
+    /// This is separate from the core `MetaServiceConfig` because admin config
+    /// is a CLI-level concern, not a service-level concern.
+    pub admin: configs::AdminConfig,
 
     pub meta_node: Option<Arc<MetaNode<TokioRuntime>>>,
 
@@ -150,7 +155,7 @@ impl MetaSrvTestContext {
 
         let config_id = next_port();
 
-        let mut config = configs::Config::default();
+        let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = id;
 
@@ -178,15 +183,19 @@ impl MetaSrvTestContext {
             config.grpc.advertise_host = Some(host.to_string());
         }
 
-        {
+        let admin = {
             let http_port = next_port();
-            config.admin.api_address = format!("{}:{}", host, http_port);
-        }
+            configs::AdminConfig {
+                api_address: format!("{}:{}", host, http_port),
+                tls: configs::TlsConfig::default(),
+            }
+        };
 
         info!("new test context config: {:?}", config);
 
         let c = MetaSrvTestContext {
             config,
+            admin,
             meta_node: None,
             grpc_srv: None,
             _temp_dir: temp_dir,
