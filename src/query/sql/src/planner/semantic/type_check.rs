@@ -6076,13 +6076,18 @@ impl<'a> TypeChecker<'a> {
         }
 
         if use_cloud {
+            let code_bytes =
+                databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?;
+            let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
+                ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
+            })?;
             let settings = self.ctx.get_settings();
             let import_assets = self.build_udf_cloud_imports(
                 &imports,
                 Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
             )?;
             let script = self.build_udf_cloud_script(
-                &code,
+                &resolved_code,
                 &handler,
                 &import_assets,
                 &packages,
