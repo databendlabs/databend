@@ -21,11 +21,11 @@ use tempfile::tempdir;
 #[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
     let mut conf = Config::default();
-    assert!(!conf.grpc.tls_enabled());
+    assert!(!conf.grpc.tls.enabled());
     conf.grpc.tls.key = "test".to_owned();
-    assert!(!conf.grpc.tls_enabled());
+    assert!(!conf.grpc.tls.enabled());
     conf.grpc.tls.cert = "test".to_owned();
-    assert!(conf.grpc.tls_enabled());
+    assert!(conf.grpc.tls.enabled());
     Ok(())
 }
 

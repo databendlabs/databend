@@ -217,7 +217,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     async fn tls_config(
         grpc_config: &GrpcConfig,
     ) -> Result<Option<ServerTlsConfig>, std::io::Error> {
-        if grpc_config.tls_enabled() {
+        if grpc_config.tls.enabled() {
             let cert = tokio::fs::read(grpc_config.tls.cert.as_str()).await?;
             let key = tokio::fs::read(grpc_config.tls.key.as_str()).await?;
             let server_identity = Identity::from_pem(cert, key);

@@ -63,11 +63,6 @@ pub struct GrpcConfig {
 }
 
 impl GrpcConfig {
-    /// Returns `true` if TLS is enabled (both cert and key are provided).
-    pub fn tls_enabled(&self) -> bool {
-        self.tls.enabled()
-    }
-
     /// Returns the advertise address if `advertise_host` is set.
     /// The address is formed by combining `advertise_host` with the port from `api_address`.
     pub fn advertise_address(&self) -> Option<String> {
