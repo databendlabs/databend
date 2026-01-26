@@ -38,8 +38,8 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 async fn test_tls_server() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
-    tc.config.grpc.tls_server_key = TEST_SERVER_KEY.to_owned();
-    tc.config.grpc.tls_server_cert = TEST_SERVER_CERT.to_owned();
+    tc.config.grpc.tls.key = TEST_SERVER_KEY.to_owned();
+    tc.config.grpc.tls.cert = TEST_SERVER_CERT.to_owned();
 
     let r = start_metasrv_with_context(&mut tc).await;
     assert!(r.is_ok());
@@ -74,8 +74,8 @@ async fn test_tls_server() -> anyhow::Result<()> {
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
-    tc.config.grpc.tls_server_key = "../tests/data/certs/not_exist.key".to_owned();
-    tc.config.grpc.tls_server_cert = "../tests/data/certs/not_exist.pem".to_owned();
+    tc.config.grpc.tls.key = "../tests/data/certs/not_exist.key".to_owned();
+    tc.config.grpc.tls.cert = "../tests/data/certs/not_exist.pem".to_owned();
 
     let r = start_metasrv_with_context(&mut tc).await;
     assert!(r.is_err());

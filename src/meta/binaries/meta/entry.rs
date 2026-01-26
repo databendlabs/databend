@@ -174,8 +174,8 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let http_cfg = HttpServiceConfig {
             admin_api_address: conf.admin.api_address.clone(),
-            admin_tls_server_cert: conf.admin.tls_server_cert.clone(),
-            admin_tls_server_key: conf.admin.tls_server_key.clone(),
+            admin_tls_server_cert: conf.admin.tls.cert.clone(),
+            admin_tls_server_key: conf.admin.tls.key.clone(),
             config_display: format!("{:?}", conf),
         };
         let mut srv = HttpService::create(http_cfg, meta_handle.clone());
@@ -229,7 +229,8 @@ async fn do_register<RT: RuntimeApi>(
 ) -> Result<(), MetaAPIError> {
     let node_id = meta_handle.id;
     let raft_endpoint = raft_config.raft_api_advertise_host_endpoint();
-    let node = Node::new(node_id, raft_endpoint).with_grpc_advertise_address(grpc_advertise_address);
+    let node =
+        Node::new(node_id, raft_endpoint).with_grpc_advertise_address(grpc_advertise_address);
 
     println!("Register this node: {{{}}}", node);
     println!();
@@ -349,8 +350,12 @@ async fn register_node<RT: RuntimeApi>(
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res =
-            do_register::<RT>(meta_handle, &conf.raft_config, conf.grpc.advertise_address()).await;
+        let res = do_register::<RT>(
+            meta_handle,
+            &conf.raft_config,
+            conf.grpc.advertise_address(),
+        )
+        .await;
         info!("Register-node result: {:?}", res);
 
         match res {
