@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta::configs::TlsConfig;
+use databend_meta::configs::AdminConfig;
 
-/// Simple configuration for HttpService, avoiding dependency on full Config
+/// Configuration for HttpService.
 #[derive(Clone, Debug, Default)]
 pub struct HttpServiceConfig {
-    pub admin_api_address: String,
-    pub tls: TlsConfig,
+    pub admin: AdminConfig,
     /// Pre-formatted config string for /v1/config endpoint
     pub config_display: String,
 }

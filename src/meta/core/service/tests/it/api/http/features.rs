@@ -37,8 +37,7 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg0 = HttpServiceConfig {
-        admin_api_address: tcs[0].config.admin.api_address.clone(),
-        tls: tcs[0].config.admin.tls.clone(),
+        admin: tcs[0].config.admin.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
     let mut srv0 = HttpService::create(http_cfg0, meta0.clone());
@@ -46,8 +45,7 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg1 = HttpServiceConfig {
-        admin_api_address: tcs[1].config.admin.api_address.clone(),
-        tls: tcs[1].config.admin.tls.clone(),
+        admin: tcs[1].config.admin.clone(),
         config_display: format!("{:?}", tcs[1].config),
     };
     let mut srv1 = HttpService::create(http_cfg1, meta1.clone());
