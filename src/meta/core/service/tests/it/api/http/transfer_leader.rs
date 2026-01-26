@@ -39,8 +39,7 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
 
     let http_cfg = HttpServiceConfig {
         admin_api_address: tcs[0].config.admin.api_address.clone(),
-        admin_tls_server_cert: tcs[0].config.admin.tls.cert.clone(),
-        admin_tls_server_key: tcs[0].config.admin.tls.key.clone(),
+        tls: tcs[0].config.admin.tls.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
     let mut srv = HttpService::create(http_cfg, meta0.clone());

@@ -174,8 +174,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let http_cfg = HttpServiceConfig {
             admin_api_address: conf.admin.api_address.clone(),
-            admin_tls_server_cert: conf.admin.tls.cert.clone(),
-            admin_tls_server_key: conf.admin.tls.key.clone(),
+            tls: conf.admin.tls.clone(),
             config_display: format!("{:?}", conf),
         };
         let mut srv = HttpService::create(http_cfg, meta_handle.clone());

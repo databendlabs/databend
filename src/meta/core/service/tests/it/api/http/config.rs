@@ -28,8 +28,7 @@ use pretty_assertions::assert_eq;
 async fn test_config() -> anyhow::Result<()> {
     let http_cfg = HttpServiceConfig {
         admin_api_address: "127.0.0.1:28002".to_string(),
-        admin_tls_server_cert: "".to_string(),
-        admin_tls_server_key: "".to_string(),
+        tls: Default::default(),
         config_display: "test config display".to_string(),
     };
     let cluster_router = Route::new()

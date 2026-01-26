@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_meta::configs::TlsConfig;
+
 /// Simple configuration for HttpService, avoiding dependency on full Config
 #[derive(Clone, Debug, Default)]
 pub struct HttpServiceConfig {
     pub admin_api_address: String,
-    pub admin_tls_server_cert: String,
-    pub admin_tls_server_key: String,
+    pub tls: TlsConfig,
     /// Pre-formatted config string for /v1/config endpoint
     pub config_display: String,
-}
-
-impl HttpServiceConfig {
-    pub fn tls_enabled(&self) -> bool {
-        !self.admin_tls_server_key.is_empty() && !self.admin_tls_server_cert.is_empty()
-    }
 }
