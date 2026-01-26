@@ -69,7 +69,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let res = meta_handle_1
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
                     .await
             };
             Box::pin(fu)
@@ -115,10 +115,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
     let _ = mn1
-        .join_cluster(
-            &tc1.config.raft_config,
-            tc1.config.grpc_api_advertise_address(),
-        )
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
         .await?;
 
     info!("--- write sample data to the cluster ---");
@@ -264,9 +261,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    tc1.config.admin_api_address = addr_str.to_owned();
-    tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
-    tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
+    tc1.config.admin.api_address = addr_str.to_owned();
+    tc1.config.admin.tls_server_key = TEST_SERVER_KEY.to_owned();
+    tc1.config.admin.tls_server_cert = TEST_SERVER_CERT.to_owned();
 
     let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
 
@@ -279,7 +276,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let _ = meta_handle_1
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
                     .await
             };
             Box::pin(fu)
@@ -287,9 +284,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         .await??;
 
     let http_cfg = HttpServiceConfig {
-        admin_api_address: tc1.config.admin_api_address.clone(),
-        admin_tls_server_cert: tc1.config.admin_tls_server_cert.clone(),
-        admin_tls_server_key: tc1.config.admin_tls_server_key.clone(),
+        admin_api_address: tc1.config.admin.api_address.clone(),
+        admin_tls_server_cert: tc1.config.admin.tls_server_cert.clone(),
+        admin_tls_server_key: tc1.config.admin.tls_server_key.clone(),
         config_display: format!("{:?}", tc1.config),
     };
     let mut srv = HttpService::create(http_cfg, meta_handle_1);

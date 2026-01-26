@@ -114,7 +114,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             builder
         };
 
-        let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = conf.grpc.api_address.parse::<std::net::SocketAddr>()?;
 
         info!("start gRPC listening: {}", addr);
 
@@ -211,9 +211,9 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
-        if conf.tls_rpc_server_enabled() {
-            let cert = tokio::fs::read(conf.grpc_tls_server_cert.as_str()).await?;
-            let key = tokio::fs::read(conf.grpc_tls_server_key.as_str()).await?;
+        if conf.grpc.tls_enabled() {
+            let cert = tokio::fs::read(conf.grpc.tls_server_cert.as_str()).await?;
+            let key = tokio::fs::read(conf.grpc.tls_server_key.as_str()).await?;
             let server_identity = Identity::from_pem(cert, key);
 
             let tls = ServerTlsConfig::new().identity(server_identity);

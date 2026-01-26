@@ -102,7 +102,8 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
     let endpoint = learner_tc.config.raft_config.raft_api_addr().await?;
     let grpc_api_advertise_address = learner_tc
         .config
-        .grpc_api_advertise_address()
+        .grpc
+        .advertise_address()
         .unwrap_or_else(|| "127.0.0.1:29191".to_string());
 
     let admin_req = ForwardRequest {
@@ -151,7 +152,7 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // Collect expected addresses
     let mut expected_addresses = HashSet::new();
     for tc in &tcs {
-        if let Some(addr) = tc.config.grpc_api_advertise_address() {
+        if let Some(addr) = tc.config.grpc.advertise_address() {
             expected_addresses.insert(addr);
         }
     }

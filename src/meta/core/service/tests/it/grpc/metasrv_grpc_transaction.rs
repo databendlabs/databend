@@ -28,7 +28,7 @@ async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();

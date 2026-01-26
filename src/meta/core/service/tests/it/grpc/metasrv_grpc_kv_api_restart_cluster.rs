@@ -163,7 +163,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
     let client = MetaGrpcClient::<DatabendRuntime>::try_create(
-        vec![tcs[0].config.grpc_api_address.clone()],
+        vec![tcs[0].config.grpc.api_address.clone()],
         BUILD_INFO.semver(),
         "root",
         "xxx",

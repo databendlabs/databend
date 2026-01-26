@@ -47,7 +47,7 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
     start_metasrv_with_context(&mut tc).await?;
 
-    let addr = tc.config.grpc_api_address.clone();
+    let addr = tc.config.grpc.api_address.clone();
 
     Ok((tc, addr))
 }
@@ -61,7 +61,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     let _ = mh
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
                     .await
             };
             Box::pin(fu)
@@ -169,13 +169,13 @@ impl MetaSrvTestContext {
 
         {
             let grpc_port = next_port();
-            config.grpc_api_address = format!("{}:{}", host, grpc_port);
-            config.grpc_api_advertise_host = Some(host.to_string());
+            config.grpc.api_address = format!("{}:{}", host, grpc_port);
+            config.grpc.advertise_host = Some(host.to_string());
         }
 
         {
             let http_port = next_port();
-            config.admin_api_address = format!("{}:{}", host, http_port);
+            config.admin.api_address = format!("{}:{}", host, http_port);
         }
 
         info!("new test context config: {:?}", config);
@@ -210,7 +210,7 @@ impl MetaSrvTestContext {
     }
 
     pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
-        let addr = self.config.grpc_api_address.clone();
+        let addr = self.config.grpc.api_address.clone();
 
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],

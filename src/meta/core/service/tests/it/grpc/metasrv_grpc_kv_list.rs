@@ -73,8 +73,8 @@ async fn test_kv_list_on_leader() -> anyhow::Result<()> {
 async fn test_kv_list_on_follower_returns_leader() -> anyhow::Result<()> {
     let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let leader_addr = &tcs[0].config.grpc_api_address;
-    let follower_addr = &tcs[1].config.grpc_api_address;
+    let leader_addr = &tcs[0].config.grpc.api_address;
+    let follower_addr = &tcs[1].config.grpc.api_address;
 
     let client = make_grpc_client(vec![follower_addr.clone()])?;
     let mut ec = client.make_established_client().await?;
@@ -98,7 +98,7 @@ async fn test_kv_list_on_follower_returns_leader() -> anyhow::Result<()> {
 async fn test_kv_list_no_quorum_no_leader() -> anyhow::Result<()> {
     let mut tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let remaining_addr = tcs[2].config.grpc_api_address.clone();
+    let remaining_addr = tcs[2].config.grpc.api_address.clone();
 
     tcs[0].grpc_srv.take().unwrap().do_stop(None).await;
     tcs[1].grpc_srv.take().unwrap().do_stop(None).await;

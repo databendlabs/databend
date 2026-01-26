@@ -237,9 +237,9 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     start_metasrv_with_context(&mut tc1).await?;
     start_metasrv_with_context(&mut tc2).await?;
 
-    let addr0 = tc0.config.grpc_api_address.clone();
-    let addr1 = tc1.config.grpc_api_address.clone();
-    let addr2 = tc2.config.grpc_api_address.clone();
+    let addr0 = tc0.config.grpc.api_address.clone();
+    let addr1 = tc1.config.grpc.api_address.clone();
+    let addr2 = tc2.config.grpc.api_address.clone();
 
     let client = tc1.grpc_client().await?;
 
@@ -339,7 +339,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
         debug!("got leader, metrics: {metrics:?}");
 
-        let addr3 = tc3.config.grpc_api_address.clone();
+        let addr3 = tc3.config.grpc.api_address.clone();
 
         let mut i = 0;
         let mut res = vec![];
