@@ -37,9 +37,9 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg0 = HttpServiceConfig {
-        admin_api_address: tcs[0].config.admin_api_address.clone(),
-        admin_tls_server_cert: tcs[0].config.admin_tls_server_cert.clone(),
-        admin_tls_server_key: tcs[0].config.admin_tls_server_key.clone(),
+        admin_api_address: tcs[0].config.admin.api_address.clone(),
+        admin_tls_server_cert: tcs[0].config.admin.tls_server_cert.clone(),
+        admin_tls_server_key: tcs[0].config.admin.tls_server_key.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
     let mut srv0 = HttpService::create(http_cfg0, meta0.clone());
@@ -47,9 +47,9 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg1 = HttpServiceConfig {
-        admin_api_address: tcs[1].config.admin_api_address.clone(),
-        admin_tls_server_cert: tcs[1].config.admin_tls_server_cert.clone(),
-        admin_tls_server_key: tcs[1].config.admin_tls_server_key.clone(),
+        admin_api_address: tcs[1].config.admin.api_address.clone(),
+        admin_tls_server_cert: tcs[1].config.admin.tls_server_cert.clone(),
+        admin_tls_server_key: tcs[1].config.admin.tls_server_key.clone(),
         config_display: format!("{:?}", tcs[1].config),
     };
     let mut srv1 = HttpService::create(http_cfg1, meta1.clone());
@@ -61,14 +61,14 @@ async fn test_features() -> anyhow::Result<()> {
     let list_features_url = |i: usize| {
         format!(
             "http://{}/v1/features/list",
-            &tcs[i].config.admin_api_address
+            &tcs[i].config.admin.api_address
         )
     };
 
     let set_feature_url = |i: usize, feature: &str, enable: bool| {
         format!(
             "http://{}/v1/features/set?feature={}&enable={}",
-            &tcs[i].config.admin_api_address, feature, enable
+            &tcs[i].config.admin.api_address, feature, enable
         )
     };
 

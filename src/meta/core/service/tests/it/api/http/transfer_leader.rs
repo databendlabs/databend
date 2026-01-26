@@ -38,9 +38,9 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
     assert_eq!(metrics.current_leader, Some(0));
 
     let http_cfg = HttpServiceConfig {
-        admin_api_address: tcs[0].config.admin_api_address.clone(),
-        admin_tls_server_cert: tcs[0].config.admin_tls_server_cert.clone(),
-        admin_tls_server_key: tcs[0].config.admin_tls_server_key.clone(),
+        admin_api_address: tcs[0].config.admin.api_address.clone(),
+        admin_tls_server_cert: tcs[0].config.admin.tls_server_cert.clone(),
+        admin_tls_server_key: tcs[0].config.admin.tls_server_key.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
     let mut srv = HttpService::create(http_cfg, meta0.clone());
@@ -49,7 +49,7 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
     let transfer_url = || {
         format!(
             "http://{}/v1/ctrl/trigger_transfer_leader?to=2",
-            &tcs[0].config.admin_api_address
+            &tcs[0].config.admin.api_address
         )
     };
 

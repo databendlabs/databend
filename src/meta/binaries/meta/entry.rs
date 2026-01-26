@@ -92,7 +92,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         format!("join {:?}", conf.raft_config.join)
     };
 
-    let grpc_advertise = if let Some(a) = conf.grpc_api_advertise_address() {
+    let grpc_advertise = if let Some(a) = conf.grpc.advertise_address() {
         a
     } else {
         "-".to_string()
@@ -141,8 +141,8 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         println!("      Dir: {}", r.raft_dir);
         println!("      Status: {}", single_or_join);
         println!();
-        println!("HTTP API listen at: {}", conf.admin_api_address);
-        println!("gRPC API listen at: {} advertise: {}", conf.grpc_api_address, grpc_advertise);
+        println!("HTTP API listen at: {}", conf.admin.api_address);
+        println!("gRPC API listen at: {} advertise: {}", conf.grpc.api_address, grpc_advertise);
         println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
         println!();
     }
@@ -170,13 +170,13 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let http_cfg = HttpServiceConfig {
-            admin_api_address: conf.admin_api_address.clone(),
-            admin_tls_server_cert: conf.admin_tls_server_cert.clone(),
-            admin_tls_server_key: conf.admin_tls_server_key.clone(),
+            admin_api_address: conf.admin.api_address.clone(),
+            admin_tls_server_cert: conf.admin.tls_server_cert.clone(),
+            admin_tls_server_key: conf.admin.tls_server_key.clone(),
             config_display: format!("{:?}", conf),
         };
         let mut srv = HttpService::create(http_cfg, meta_handle.clone());
-        info!("HTTP API server listening on {}", conf.admin_api_address);
+        info!("HTTP API server listening on {}", conf.admin.api_address);
         srv.do_start().await.expect("Failed to start http server");
         stop_handler.push(srv);
     }
@@ -186,7 +186,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         let mut srv = GrpcServer::<RT>::create(conf.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
-            conf.grpc_api_address.clone()
+            conf.grpc.api_address.clone()
         );
         srv.do_start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));
@@ -197,7 +197,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     let join_res = meta_handle
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
                     .await
             };
             Box::pin(fu)
@@ -225,7 +225,7 @@ async fn do_register<RT: RuntimeApi>(
     let node_id = meta_handle.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
-        .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+        .with_grpc_advertise_address(conf.grpc.advertise_address());
 
     println!("Register this node: {{{}}}", node);
     println!();
@@ -246,7 +246,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
     match KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
-                endpoints: vec![conf.grpc_api_address.clone()],
+                endpoints: vec![conf.grpc.api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
                 ..RpcClientConf::empty(BUILD_INFO.semver())

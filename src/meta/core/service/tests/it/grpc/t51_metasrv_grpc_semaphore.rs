@@ -36,7 +36,7 @@ async fn test_semaphore_simple() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -87,7 +87,7 @@ async fn test_semaphore_guard_future() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -127,7 +127,7 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -178,7 +178,7 @@ async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -210,7 +210,7 @@ async fn test_permit_removal_notification() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -253,7 +253,7 @@ async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -286,7 +286,7 @@ async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -357,7 +357,7 @@ async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -393,7 +393,7 @@ async fn test_watch_stream_resilience() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -428,7 +428,7 @@ async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -472,7 +472,7 @@ async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc_api_address.clone())
+        .map(|tc| tc.config.grpc.api_address.clone())
         .collect::<Vec<_>>();
 
     let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
@@ -511,7 +511,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 
     let tc = tcs.remove(0);
 
-    let address = tc.config.grpc_api_address.clone();
+    let address = tc.config.grpc.api_address.clone();
 
     let cli = make_grpc_client(vec![address])?;
     let client = || cli.clone();
@@ -580,7 +580,7 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
 
     let mut tc = tcs.remove(0);
 
-    let address = tc.config.grpc_api_address.clone();
+    let address = tc.config.grpc.api_address.clone();
 
     let cli = make_grpc_client(vec![address])?;
     let client = || cli.clone();

@@ -208,7 +208,7 @@ pub(crate) async fn start_meta_node_non_voter(
             .add_node(
                 id,
                 Node::new(id, addr.clone())
-                    .with_grpc_advertise_address(tc.config.grpc_api_advertise_address()),
+                    .with_grpc_advertise_address(tc.config.grpc.advertise_address()),
             )
             .await?;
         match resp {

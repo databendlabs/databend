@@ -21,6 +21,67 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 
+/// Configuration for the gRPC API server.
+///
+/// This struct holds settings for the gRPC endpoint that serves client requests,
+/// including the listening address, optional advertise host for cluster communication,
+/// and TLS certificates for secure connections.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+pub struct GrpcConfig {
+    /// The address the gRPC server listens on, e.g., "0.0.0.0:9191".
+    pub api_address: String,
+
+    /// Optional hostname to advertise to other nodes in the cluster.
+    /// If set, this host combined with the port from `api_address` forms the
+    /// address other nodes use to connect to this server.
+    pub advertise_host: Option<String>,
+
+    /// Path to the TLS certificate file for the gRPC server.
+    /// Leave empty to disable TLS.
+    pub tls_server_cert: String,
+
+    /// Path to the TLS private key file for the gRPC server.
+    /// Leave empty to disable TLS.
+    pub tls_server_key: String,
+}
+
+impl GrpcConfig {
+    /// Returns `true` if TLS is enabled (both cert and key are provided).
+    pub fn tls_enabled(&self) -> bool {
+        !self.tls_server_key.is_empty() && !self.tls_server_cert.is_empty()
+    }
+
+    /// Returns the advertise address if `advertise_host` is set.
+    /// The address is formed by combining `advertise_host` with the port from `api_address`.
+    pub fn advertise_address(&self) -> Option<String> {
+        if let Some(h) = &self.advertise_host {
+            // Safe unwrap(): Config::validate() ensures api_address is valid.
+            let a: SocketAddr = self.api_address.parse().unwrap();
+            Some(format!("{}:{}", h, a.port()))
+        } else {
+            None
+        }
+    }
+}
+
+/// Configuration for the Admin HTTP API server.
+///
+/// This struct holds settings for the HTTP endpoint that serves administrative
+/// requests such as health checks, metrics, and cluster management operations.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+pub struct AdminConfig {
+    /// The address the admin HTTP server listens on, e.g., "0.0.0.0:28002".
+    pub api_address: String,
+
+    /// Path to the TLS certificate file for the admin server.
+    /// Leave empty to disable TLS.
+    pub tls_server_cert: String,
+
+    /// Path to the TLS private key file for the admin server.
+    /// Leave empty to disable TLS.
+    pub tls_server_key: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
@@ -32,14 +93,8 @@ pub struct Config {
     pub password: String,
     pub config_file: String,
     pub log: LogConfig,
-    pub admin_api_address: String,
-    pub admin_tls_server_cert: String,
-    pub admin_tls_server_key: String,
-    pub grpc_api_address: String,
-    pub grpc_api_advertise_host: Option<String>,
-    /// Certificate for server to identify itself
-    pub grpc_tls_server_cert: String,
-    pub grpc_tls_server_key: String,
+    pub admin: AdminConfig,
+    pub grpc: GrpcConfig,
     pub raft_config: RaftConfig,
 }
 
@@ -55,13 +110,17 @@ impl Default for Config {
             password: "".to_string(),
             config_file: "".to_string(),
             log: LogConfig::default(),
-            admin_api_address: "127.0.0.1:28002".to_string(),
-            admin_tls_server_cert: "".to_string(),
-            admin_tls_server_key: "".to_string(),
-            grpc_api_address: "127.0.0.1:9191".to_string(),
-            grpc_api_advertise_host: None,
-            grpc_tls_server_cert: "".to_string(),
-            grpc_tls_server_key: "".to_string(),
+            admin: AdminConfig {
+                api_address: "127.0.0.1:28002".to_string(),
+                tls_server_cert: "".to_string(),
+                tls_server_key: "".to_string(),
+            },
+            grpc: GrpcConfig {
+                api_address: "127.0.0.1:9191".to_string(),
+                advertise_host: None,
+                tls_server_cert: "".to_string(),
+                tls_server_key: "".to_string(),
+            },
             raft_config: Default::default(),
         }
     }
@@ -80,10 +139,10 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), MetaStartupError> {
-        let _a: SocketAddr = self.grpc_api_address.parse().map_err(|e| {
+        let _a: SocketAddr = self.grpc.api_address.parse().map_err(|e| {
             MetaStartupError::InvalidConfig(format!(
                 "{} while parsing {}",
-                e, self.grpc_api_address
+                e, self.grpc.api_address
             ))
         })?;
         Ok(())
@@ -118,22 +177,6 @@ impl Config {
             self.raft_config.id,
             self.raft_config.raft_api_advertise_host_endpoint(),
         )
-        .with_grpc_advertise_address(self.grpc_api_advertise_address())
-    }
-
-    pub fn grpc_api_advertise_address(&self) -> Option<String> {
-        if let Some(h) = &self.grpc_api_advertise_host {
-            // Safe unwrap(): Self::validate() ensures it is valid.
-            let a: SocketAddr = self.grpc_api_address.parse().unwrap();
-
-            let addr = format!("{}:{}", h, a.port());
-            Some(addr)
-        } else {
-            None
-        }
-    }
-
-    pub fn tls_rpc_server_enabled(&self) -> bool {
-        !self.grpc_tls_server_key.is_empty() && !self.grpc_tls_server_cert.is_empty()
+        .with_grpc_advertise_address(self.grpc.advertise_address())
     }
 }

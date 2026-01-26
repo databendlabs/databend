@@ -60,7 +60,7 @@ impl fmt::Display for LocalMetaService {
         write!(
             f,
             "LocalMetaService({}: raft={} grpc={})",
-            self.name, self.config.raft_config.raft_api_port, self.config.grpc_api_address
+            self.name, self.config.raft_config.raft_api_port, self.config.grpc.api_address
         )
     }
 }
@@ -133,13 +133,13 @@ impl LocalMetaService {
 
         {
             let grpc_port = next_port();
-            config.grpc_api_address = format!("{}:{}", host, grpc_port);
-            config.grpc_api_advertise_host = Some(host.to_string());
+            config.grpc.api_address = format!("{}:{}", host, grpc_port);
+            config.grpc.advertise_host = Some(host.to_string());
         }
 
         {
             let http_port = next_port();
-            config.admin_api_address = format!("{}:{}", host, http_port);
+            config.admin.api_address = format!("{}:{}", host, http_port);
         }
 
         info!("new LocalMetaService({}) with config: {:?}", name, config);
@@ -188,7 +188,7 @@ impl LocalMetaService {
         config: &configs::Config,
         version: Version,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-        let addr = config.grpc_api_address.clone();
+        let addr = config.grpc.api_address.clone();
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             version,

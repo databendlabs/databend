@@ -124,7 +124,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         let admin_req = join_req(
             node_id,
             tc2.config.raft_config.raft_api_addr().await?,
-            tc2.config.grpc_api_advertise_address(),
+            tc2.config.grpc.advertise_address(),
             0,
         );
         leader.handle_forwardable_request(admin_req).await?;
@@ -161,7 +161,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         let admin_req = join_req(
             node_id,
             tc3.config.raft_config.raft_api_addr().await?,
-            tc3.config.grpc_api_advertise_address(),
+            tc3.config.grpc.advertise_address(),
             1,
         );
         client.forward(admin_req).await?;
@@ -242,7 +242,7 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
         let leader = all[leader_id as usize].clone();
 
         let endpoint = tc2.config.raft_config.raft_api_addr().await?;
-        let grpc_api_advertise_address = tc2.config.grpc_api_advertise_address();
+        let grpc_api_advertise_address = tc2.config.grpc.advertise_address();
 
         let admin_req = ForwardRequest {
             forward_to_leader: 0,
@@ -343,7 +343,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let req = join_req(
         node_id,
         tc1.config.raft_config.raft_api_addr().await?,
-        tc1.config.grpc_api_advertise_address(),
+        tc1.config.grpc.advertise_address(),
         1,
     );
     leader.handle_forwardable_request(req).await?;
@@ -375,7 +375,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         let req = join_req(
             node_id,
             tc2.config.raft_config.raft_api_addr().await?,
-            tc2.config.grpc_api_advertise_address(),
+            tc2.config.grpc.advertise_address(),
             1,
         );
         leader.handle_forwardable_request(req).await?;
@@ -385,7 +385,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
         let req = join_req(
             node_id,
             tc2.config.raft_config.raft_api_addr().await?,
-            tc2.config.grpc_api_advertise_address(),
+            tc2.config.grpc.advertise_address(),
             1,
         );
         mn1.handle_forwardable_request(req).await?;
@@ -431,19 +431,13 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     let mut log_index = 3;
 
     let res = n1
-        .join_cluster(
-            &tc0.config.raft_config,
-            tc0.config.grpc_api_advertise_address(),
-        )
+        .join_cluster(&tc0.config.raft_config, tc0.config.grpc.advertise_address())
         .await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
     let n1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
     let res = n1
-        .join_cluster(
-            &tc1.config.raft_config,
-            tc1.config.grpc_api_advertise_address(),
-        )
+        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
         .await?;
     assert_eq!(Ok(()), res);
 
@@ -467,10 +461,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     {
         let n2 = MetaNode::<TokioRuntime>::start(&tc2.config, BUILD_INFO.semver()).await?;
         let res = n2
-            .join_cluster(
-                &tc2.config.raft_config,
-                tc2.config.grpc_api_advertise_address(),
-            )
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc.advertise_address())
             .await?;
         assert_eq!(Ok(()), res);
 
@@ -495,10 +486,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     {
         let n2 = MetaNode::<TokioRuntime>::start(&tc2.config, BUILD_INFO.semver()).await?;
         let res = n2
-            .join_cluster(
-                &tc2.config.raft_config,
-                tc2.config.grpc_api_advertise_address(),
-            )
+            .join_cluster(&tc2.config.raft_config, tc2.config.grpc.advertise_address())
             .await?;
         assert_eq!(
             Err("Did not join: node 2 already in cluster".to_string()),
