@@ -75,27 +75,6 @@ impl HashIndex {
         }
     }
 
-    pub(super) fn rebuild_from(capacity: usize, data: Vec<(u64, RowPtr)>) -> Self {
-        let mut hash_index = HashIndex::with_capacity(capacity);
-
-        for (hash, row_ptr) in data {
-            let slot = hash_index.probe_slot(hash);
-
-            let entry = hash_index.mut_entry(slot);
-            debug_assert!(!entry.is_occupied());
-            entry.set_hash(hash);
-            entry.set_pointer(row_ptr);
-
-            debug_assert!(entry.is_occupied());
-            debug_assert_eq!(entry.get_pointer(), row_ptr);
-            debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash));
-
-            hash_index.count += 1;
-        }
-
-        hash_index
-    }
-
     fn find_or_insert(&mut self, mut slot: usize, hash: u64) -> (usize, bool) {
         let salt = Entry::hash_to_salt(hash);
         let entries = self.entries.as_mut_slice();
