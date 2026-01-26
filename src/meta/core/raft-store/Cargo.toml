@@ -12,7 +12,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
 databend-base = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
