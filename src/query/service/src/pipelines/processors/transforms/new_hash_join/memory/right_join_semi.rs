@@ -68,11 +68,12 @@ impl SemiRightHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(SemiRightHashJoin {
@@ -115,7 +116,7 @@ impl Join for SemiRightHashJoin {
         let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -124,6 +125,9 @@ impl Join for SemiRightHashJoin {
 
                 let probe_data = ProbeData::new(probe_keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
+            }
+            HashJoinHashTable::NestedLoop(_) => {
+                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -222,7 +226,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
                 0 => None,
                 _ => Some(DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?),
             };
 
@@ -234,7 +238,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
@@ -306,8 +309,10 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 1 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as _,
+                        row_index: idx as _,
+                    });
                 }
             }
 
@@ -334,7 +339,6 @@ impl<'a> JoinStream for SemiRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };

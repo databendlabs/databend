@@ -1028,6 +1028,15 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn mget_tables(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        self.cat.mget_tables(tenant, db_name, table_names).await
+    }
+
     async fn get_table_history(
         &self,
         _tenant: &Tenant,

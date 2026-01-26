@@ -1,0 +1,29 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/// Simple configuration for HttpService, avoiding dependency on full Config
+#[derive(Clone, Debug, Default)]
+pub struct HttpServiceConfig {
+    pub admin_api_address: String,
+    pub admin_tls_server_cert: String,
+    pub admin_tls_server_key: String,
+    /// Pre-formatted config string for /v1/config endpoint
+    pub config_display: String,
+}
+
+impl HttpServiceConfig {
+    pub fn tls_enabled(&self) -> bool {
+        !self.admin_tls_server_key.is_empty() && !self.admin_tls_server_cert.is_empty()
+    }
+}

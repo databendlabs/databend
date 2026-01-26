@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
@@ -57,6 +58,13 @@ pub fn row_fetch_processor(
         .ok_or_else(|| ErrorCode::Internal("Row fetcher is only supported by Fuse engine"))?
         .to_owned();
     let fuse_table = Arc::new(fuse_table);
+    let table_schema = source.source_info.schema();
+    let projected_schema = projection.project_schema(table_schema.as_ref());
+    let fetched_data_types = projected_schema
+        .fields()
+        .iter()
+        .map(|field| DataType::from(field.data_type()))
+        .collect::<Vec<_>>();
     let block_reader =
         fuse_table.create_block_reader(ctx.clone(), projection.clone(), false, false, true)?;
 
@@ -83,6 +91,7 @@ pub fn row_fetch_processor(
                         read_settings,
                     ),
                     need_wrap_nullable,
+                    fetched_data_types.clone(),
                     block_threshold,
                 ))
             }))
@@ -147,6 +156,7 @@ pub struct TransformRowsFetcher<F: RowsFetcher> {
     finished: bool,
     row_id_col_offset: usize,
     need_wrap_nullable: bool,
+    fetched_data_types: Vec<DataType>,
     fetch_row_ids: Vec<u64>,
     blocks: Vec<DataBlock>,
 
@@ -218,30 +228,72 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
         if let Some(data) = self.input_data.take() {
             let num_rows = data.num_rows();
             let fetched_columns_bytes = data.memory_size() / data.num_rows();
-            let row_id_column = self.get_row_id_column(&data);
-
-            // Process the row id column in block batch
-            // Ensure that the same block would be processed in the same batch and threads
+            let entry = &data.columns()[self.row_id_col_offset];
             let mut consumed_len = num_rows;
-            for (idx, row_id) in row_id_column.iter().enumerate() {
-                let (prefix, _) = split_row_id(*row_id);
+            match entry.data_type() {
+                DataType::Number(NumberDataType::UInt64) => {
+                    let row_id_column = self.get_row_id_column(&data);
+                    // Process the row id column in block batch
+                    // Ensure that the same block would be processed in the same batch and threads
+                    for (idx, row_id) in row_id_column.iter().enumerate() {
+                        let (prefix, _) = split_row_id(*row_id);
 
-                if !self.metadata.contains_key(&prefix) {
-                    let metadata = self.fetcher.fetch_metadata(prefix).await?;
-                    self.metadata.insert(prefix, metadata);
+                        if !self.metadata.contains_key(&prefix) {
+                            let metadata = self.fetcher.fetch_metadata(prefix).await?;
+                            self.metadata.insert(prefix, metadata);
+                        }
+
+                        let fetch_columns_bytes = self.metadata[&prefix].row_bytes();
+                        let bytes = fetched_columns_bytes + fetch_columns_bytes;
+                        let reach_threshold = self.block_threshold.acc(1, bytes);
+                        self.fetch_row_ids.push(*row_id);
+                        if reach_threshold {
+                            consumed_len = idx + 1;
+                            break;
+                        }
+                    }
+
+                    self.blocks.push(data.slice(0..consumed_len));
                 }
+                DataType::Nullable(inner)
+                    if matches!(inner.as_ref(), DataType::Number(NumberDataType::UInt64)) =>
+                {
+                    let column = entry.to_column();
+                    let value = column.into_nullable().unwrap();
+                    let row_id_column = value.column.into_number().unwrap().into_u_int64().unwrap();
 
-                let fetch_columns_bytes = self.metadata[&prefix].row_bytes();
-                let bytes = fetched_columns_bytes + fetch_columns_bytes;
-                if self.block_threshold.acc(1, bytes) {
-                    consumed_len = idx + 1;
-                    break;
+                    for (idx, (row_id, is_valid)) in
+                        row_id_column.iter().zip(value.validity.iter()).enumerate()
+                    {
+                        if !is_valid {
+                            if self.block_threshold.acc(1, fetched_columns_bytes) {
+                                consumed_len = idx + 1;
+                                break;
+                            }
+                            continue;
+                        }
+
+                        let (prefix, _) = split_row_id(*row_id);
+
+                        if !self.metadata.contains_key(&prefix) {
+                            let metadata = self.fetcher.fetch_metadata(prefix).await?;
+                            self.metadata.insert(prefix, metadata);
+                        }
+
+                        let fetch_columns_bytes = self.metadata[&prefix].row_bytes();
+                        let bytes = fetched_columns_bytes + fetch_columns_bytes;
+                        let reach_threshold = self.block_threshold.acc(1, bytes);
+                        self.fetch_row_ids.push(*row_id);
+                        if reach_threshold {
+                            consumed_len = idx + 1;
+                            break;
+                        }
+                    }
+
+                    self.blocks.push(data.slice(0..consumed_len));
                 }
-            }
-
-            self.blocks.push(data.slice(0..consumed_len));
-            self.fetch_row_ids
-                .extend_from_slice(&row_id_column.as_slice()[0..consumed_len]);
+                _ => unreachable!("Row id column should be UInt64 or Nullable(UInt64)"),
+            };
 
             let remain_rows = data.slice(consumed_len..num_rows);
 
@@ -284,6 +336,7 @@ impl<F: RowsFetcher + Send + Sync + 'static> TransformRowsFetcher<F> {
         row_id_col_offset: usize,
         fetcher: F,
         need_wrap_nullable: bool,
+        fetched_data_types: Vec<DataType>,
         block_threshold: BlockThreshold,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformRowsFetcher {
@@ -291,6 +344,7 @@ impl<F: RowsFetcher + Send + Sync + 'static> TransformRowsFetcher<F> {
             block_threshold,
             row_id_col_offset,
             need_wrap_nullable,
+            fetched_data_types,
 
             input_port: input,
             output_port: output,
@@ -324,14 +378,60 @@ impl<F: RowsFetcher + Sync + Send + 'static> TransformRowsFetcher<F> {
             return Ok(None);
         }
 
-        let fetched_block = self.fetcher.fetch(&row_ids, metadata).await?;
-
-        for mut entry in fetched_block.take_columns() {
-            if self.need_wrap_nullable {
-                entry = wrap_true_validity(&entry, num_rows);
+        let entry = &data.columns()[self.row_id_col_offset];
+        let row_id_validity = match entry.data_type() {
+            DataType::Nullable(inner)
+                if matches!(inner.as_ref(), DataType::Number(NumberDataType::UInt64)) =>
+            {
+                let column = entry.to_column();
+                let value = column.into_nullable().unwrap();
+                Some(value.validity)
             }
+            _ => None,
+        };
+        let non_null_count = row_ids.len();
 
-            data.add_entry(entry);
+        if non_null_count == num_rows {
+            let fetched_block = self.fetcher.fetch(&row_ids, metadata).await?;
+
+            for mut entry in fetched_block.take_columns() {
+                if self.need_wrap_nullable {
+                    entry = wrap_true_validity(&entry, num_rows);
+                }
+
+                data.add_entry(entry);
+            }
+        } else {
+            let validity =
+                row_id_validity.expect("Row id validity should be available for null handling");
+
+            if non_null_count == 0 {
+                for data_type in &self.fetched_data_types {
+                    let nullable_type = data_type.wrap_nullable();
+                    let mut builder = ColumnBuilder::with_capacity(&nullable_type, num_rows);
+                    for _ in 0..num_rows {
+                        builder.push_default();
+                    }
+                    data.add_entry(builder.build().into());
+                }
+            } else {
+                let fetched_block = self.fetcher.fetch(&row_ids, metadata).await?;
+                for entry in fetched_block.take_columns() {
+                    let column = entry.to_column();
+                    let mut fetched_iter = column.iter();
+                    let nullable_type = entry.data_type().wrap_nullable();
+                    let mut builder = ColumnBuilder::with_capacity(&nullable_type, num_rows);
+                    for is_valid in validity.iter() {
+                        if is_valid {
+                            let scalar = fetched_iter.next().unwrap();
+                            builder.push(scalar);
+                        } else {
+                            builder.push_default();
+                        }
+                    }
+                    data.add_entry(builder.build().into());
+                }
+            }
         }
 
         log::info!(

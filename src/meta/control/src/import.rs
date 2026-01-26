@@ -26,6 +26,7 @@ use std::str::FromStr;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::raft_log_v004;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
@@ -49,7 +50,7 @@ use crate::args::ImportArgs;
 use crate::reading;
 use crate::upgrade;
 
-pub async fn import_data(args: &ImportArgs) -> anyhow::Result<()> {
+pub async fn import_data<SP: SpawnApi>(args: &ImportArgs) -> anyhow::Result<()> {
     let raft_dir = args.raft_dir.clone().unwrap_or_default();
 
     eprintln!();
@@ -64,18 +65,18 @@ pub async fn import_data(args: &ImportArgs) -> anyhow::Result<()> {
     let nodes = build_nodes(args.initial_cluster.clone(), args.id)?;
 
     clear(args)?;
-    let max_log_id = import_from_stdin_or_file(args).await?;
+    let max_log_id = import_from_stdin_or_file::<SP>(args).await?;
 
     if args.initial_cluster.is_empty() {
         return Ok(());
     }
 
-    init_new_cluster(args, nodes, max_log_id).await?;
+    init_new_cluster::<SP>(args, nodes, max_log_id).await?;
     Ok(())
 }
 
 /// Import from lines of exported data and Return the max log id that is found.
-async fn import_lines<B: BufRead + 'static>(
+async fn import_lines<SP: SpawnApi, B: BufRead + 'static>(
     raft_config: RaftConfig,
     lines: Lines<B>,
 ) -> anyhow::Result<Option<LogId>> {
@@ -97,9 +98,9 @@ async fn import_lines<B: BufRead + 'static>(
             ));
         }
         // v002 v003 v004 share the same exported data format.
-        DataVersion::V002 => crate::import_v004::import_v004(raft_config, it).await?,
-        DataVersion::V003 => crate::import_v004::import_v004(raft_config, it).await?,
-        DataVersion::V004 => crate::import_v004::import_v004(raft_config, it).await?,
+        DataVersion::V002 => crate::import_v004::import_v004::<SP>(raft_config, it).await?,
+        DataVersion::V003 => crate::import_v004::import_v004::<SP>(raft_config, it).await?,
+        DataVersion::V004 => crate::import_v004::import_v004::<SP>(raft_config, it).await?,
     };
 
     Ok(max_log_id)
@@ -109,7 +110,9 @@ async fn import_lines<B: BufRead + 'static>(
 /// Insert them into sled db and flush.
 ///
 /// Finally upgrade the data in raft_dir to the latest version.
-async fn import_from_stdin_or_file(args: &ImportArgs) -> anyhow::Result<Option<LogId>> {
+async fn import_from_stdin_or_file<SP: SpawnApi>(
+    args: &ImportArgs,
+) -> anyhow::Result<Option<LogId>> {
     let restore = args.db.clone();
 
     let raft_config: RaftConfig = args.clone().into();
@@ -117,18 +120,18 @@ async fn import_from_stdin_or_file(args: &ImportArgs) -> anyhow::Result<Option<L
         eprintln!("    From: <stdin>");
         let lines = io::stdin().lines();
 
-        import_lines(raft_config, lines).await?
+        import_lines::<SP, _>(raft_config, lines).await?
     } else {
         eprintln!("    From: {}", args.db);
         let file = File::open(restore)?;
         let reader = BufReader::new(file);
         let lines = reader.lines();
 
-        import_lines(raft_config, lines).await?
+        import_lines::<SP, _>(raft_config, lines).await?
     };
 
     let raft_config: RaftConfig = args.clone().into();
-    upgrade::upgrade(&raft_config).await?;
+    upgrade::upgrade::<SP>(&raft_config).await?;
 
     eprintln!("Finished import, max_log_id: '{}'", max_log_id.display());
 
@@ -191,7 +194,7 @@ fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap
 }
 
 // initial_cluster format: node_id=endpoint,grpc_api_addr;
-async fn init_new_cluster(
+async fn init_new_cluster<SP: SpawnApi>(
     args: &ImportArgs,
     nodes: BTreeMap<NodeId, Node>,
     max_log_id: Option<LogId>,
@@ -201,7 +204,7 @@ async fn init_new_cluster(
 
     let raft_config: RaftConfig = args.clone().into();
 
-    let sto = RaftStore::open(&raft_config).await?;
+    let sto = RaftStore::<SP>::open(&raft_config).await?;
 
     let last_applied = {
         let sm2 = sto.get_sm_v003();

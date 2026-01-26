@@ -24,7 +24,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::sinks::Sink;
 
-use crate::pipelines::processors::transforms::range_join::RangeJoinState;
+use super::RangeJoinState;
 
 enum RangeJoinStep {
     Sink,

@@ -71,11 +71,12 @@ impl OuterRightHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(OuterRightHashJoin {
@@ -121,7 +122,7 @@ impl Join for OuterRightHashJoin {
         let valids = self.desc.build_valids_by_keys(&probe_keys)?;
 
         self.desc.remove_keys_nullable(&mut probe_keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -130,6 +131,9 @@ impl Join for OuterRightHashJoin {
 
                 let probe_data = ProbeData::new(probe_keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
+            }
+            HashJoinHashTable::NestedLoop(_) => {
+                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -209,7 +213,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                 0 => None,
                 _ => Some(wrap_nullable_block(&DataBlock::take(
                     &self.probe_data_block,
-                    &self.probed_rows.matched_probe,
+                    self.probed_rows.matched_probe.as_slice(),
                 )?)),
             };
 
@@ -221,7 +225,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
-                        row_ptrs.len(),
                     ))
                 }
             };
@@ -318,8 +321,10 @@ impl<'a> JoinStream for OuterRightHashJoinFinalStream<'a> {
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
                 if scan_map[idx] == 0 {
-                    let row_ptr = RowPtr::new(chunk_idx as u32, idx as u32);
-                    self.scan_idx.push(row_ptr);
+                    self.scan_idx.push(RowPtr {
+                        chunk_index: chunk_idx as u32,
+                        row_index: idx as u32,
+                    });
                 }
             }
 
@@ -352,7 +357,6 @@ impl<'a> JoinStream for OuterRightHashJoinFinalStream<'a> {
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     row_ptrs,
-                    row_ptrs.len(),
                 ))
             }
         };
@@ -376,7 +380,7 @@ impl<'a> OuterRightHashJoinFinalStream<'a> {
         let scan_progress = join_state.steal_scan_chunk_index();
         let mut types = vec![];
         for (i, field) in desc.probe_schema.fields().iter().enumerate() {
-            if desc.probe_projections.contains(&i) {
+            if desc.probe_projection.contains(&i) {
                 types.push(field.data_type().clone());
             }
         }

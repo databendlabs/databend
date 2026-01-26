@@ -20,6 +20,7 @@ pub use crate::binary_write::BinaryWrite;
 pub use crate::binary_write::put_uvarint;
 pub use crate::bincode_serialization::*;
 pub use crate::borsh_serialization::*;
+pub use crate::format_settings::BinaryDisplayFormat;
 pub use crate::format_settings::FormatSettings;
 pub use crate::position::*;
 pub use crate::stat_buffer::StatBuffer;

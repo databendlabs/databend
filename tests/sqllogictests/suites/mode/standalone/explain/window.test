@@ -200,34 +200,26 @@ Filter
         └── UnionAll
             ├── output columns: [k (#4), v (#5)]
             ├── estimated rows: 0.00
-            ├── Filter
-            │   ├── output columns: [test.k (#0), test.v (#1)]
-            │   ├── filters: [is_true(test.k (#0) = 12)]
-            │   ├── estimated rows: 0.00
-            │   └── TableScan
-            │       ├── table: default.test_explain_window.test
-            │       ├── scan id: 0
-            │       ├── output columns: [k (#0), v (#1)]
-            │       ├── read rows: 0
-            │       ├── read size: 0
-            │       ├── partitions total: 0
-            │       ├── partitions scanned: 0
-            │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-            │       └── estimated rows: 0.00
-            └── Filter
-                ├── output columns: [test.k (#2), test.v (#3)]
-                ├── filters: [is_true(test.k (#2) = 12)]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.test_explain_window.test
-                    ├── scan id: 1
-                    ├── output columns: [k (#2), v (#3)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-                    └── estimated rows: 0.00
+            ├── TableScan
+            │   ├── table: default.test_explain_window.test
+            │   ├── scan id: 0
+            │   ├── output columns: [k (#0), v (#1)]
+            │   ├── read rows: 0
+            │   ├── read size: 0
+            │   ├── partitions total: 0
+            │   ├── partitions scanned: 0
+            │   ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+            │   └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.test
+                ├── scan id: 1
+                ├── output columns: [k (#2), v (#3)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -374,20 +366,16 @@ Window
     ├── output columns: [tbpush.b (#0)]
     ├── sort keys: [b ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── Filter
-        ├── output columns: [tbpush.b (#0)]
-        ├── filters: [is_true(tbpush.b (#0) > 3)]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.test_explain_window.tbpush
-            ├── scan id: 0
-            ├── output columns: [b (#0)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
-            └── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.test_explain_window.tbpush
+        ├── scan id: 0
+        ├── output columns: [b (#0)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
+        └── estimated rows: 0.00
 
 query T
 explain select * from vwpush where b > 3;
@@ -671,29 +659,28 @@ digraph {
     2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "AddInternalColumnsTransform" ]
-    5 [ label = "TransformFilter" ]
-    6 [ label = "ShufflePartition(Window)" ]
-    7 [ label = "ShuffleMergePartition(Window)" ]
-    8 [ label = "TransformWindowPartitionCollect(Sort)" ]
-    9 [ label = "Transform Window" ]
-    10 [ label = "Resize" ]
+    5 [ label = "ShufflePartition(Window)" ]
+    6 [ label = "ShuffleMergePartition(Window)" ]
+    7 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    8 [ label = "Transform Window" ]
+    9 [ label = "Resize" ]
+    10 [ label = "SortPartialTransform" ]
     11 [ label = "SortPartialTransform" ]
     12 [ label = "SortPartialTransform" ]
     13 [ label = "SortPartialTransform" ]
-    14 [ label = "SortPartialTransform" ]
+    14 [ label = "TransformSortMergeLimit" ]
     15 [ label = "TransformSortMergeLimit" ]
     16 [ label = "TransformSortMergeLimit" ]
     17 [ label = "TransformSortMergeLimit" ]
-    18 [ label = "TransformSortMergeLimit" ]
-    19 [ label = "KWayMergePartitioner" ]
+    18 [ label = "KWayMergePartitioner" ]
+    19 [ label = "KWayMergeWorker" ]
     20 [ label = "KWayMergeWorker" ]
     21 [ label = "KWayMergeWorker" ]
     22 [ label = "KWayMergeWorker" ]
-    23 [ label = "KWayMergeWorker" ]
-    24 [ label = "KWayMergeCombiner" ]
-    25 [ label = "LimitTransform" ]
-    26 [ label = "TransformRowsFetcher" ]
-    27 [ label = "CompoundBlockOperator(Project)" ]
+    23 [ label = "KWayMergeCombiner" ]
+    24 [ label = "LimitTransform" ]
+    25 [ label = "TransformRowsFetcher" ]
+    26 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -703,30 +690,29 @@ digraph {
     6 -> 7 [ label = "" ]
     7 -> 8 [ label = "" ]
     8 -> 9 [ label = "" ]
-    9 -> 10 [ label = "" ]
-    10 -> 11 [ label = "from: 0, to: 0" ]
-    10 -> 12 [ label = "from: 1, to: 0" ]
-    10 -> 13 [ label = "from: 2, to: 0" ]
-    10 -> 14 [ label = "from: 3, to: 0" ]
+    9 -> 10 [ label = "from: 0, to: 0" ]
+    9 -> 11 [ label = "from: 1, to: 0" ]
+    9 -> 12 [ label = "from: 2, to: 0" ]
+    9 -> 13 [ label = "from: 3, to: 0" ]
+    10 -> 14 [ label = "" ]
     11 -> 15 [ label = "" ]
     12 -> 16 [ label = "" ]
     13 -> 17 [ label = "" ]
-    14 -> 18 [ label = "" ]
-    15 -> 19 [ label = "from: 0, to: 0" ]
-    16 -> 19 [ label = "from: 0, to: 1" ]
-    17 -> 19 [ label = "from: 0, to: 2" ]
-    18 -> 19 [ label = "from: 0, to: 3" ]
-    19 -> 20 [ label = "from: 0, to: 0" ]
-    19 -> 21 [ label = "from: 1, to: 0" ]
-    19 -> 22 [ label = "from: 2, to: 0" ]
-    19 -> 23 [ label = "from: 3, to: 0" ]
-    20 -> 24 [ label = "from: 0, to: 0" ]
-    21 -> 24 [ label = "from: 0, to: 1" ]
-    22 -> 24 [ label = "from: 0, to: 2" ]
-    23 -> 24 [ label = "from: 0, to: 3" ]
+    14 -> 18 [ label = "from: 0, to: 0" ]
+    15 -> 18 [ label = "from: 0, to: 1" ]
+    16 -> 18 [ label = "from: 0, to: 2" ]
+    17 -> 18 [ label = "from: 0, to: 3" ]
+    18 -> 19 [ label = "from: 0, to: 0" ]
+    18 -> 20 [ label = "from: 1, to: 0" ]
+    18 -> 21 [ label = "from: 2, to: 0" ]
+    18 -> 22 [ label = "from: 3, to: 0" ]
+    19 -> 23 [ label = "from: 0, to: 0" ]
+    20 -> 23 [ label = "from: 0, to: 1" ]
+    21 -> 23 [ label = "from: 0, to: 2" ]
+    22 -> 23 [ label = "from: 0, to: 3" ]
+    23 -> 24 [ label = "" ]
     24 -> 25 [ label = "" ]
     25 -> 26 [ label = "" ]
-    26 -> 27 [ label = "" ]
 }
 
 # row fetch with window function(plan explain)
@@ -756,20 +742,16 @@ RowFetch
                 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
                 ├── hash keys: [a]
                 ├── estimated rows: 0.00
-                └── Filter
-                    ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
-                    ├── filters: [is_true(t.a (#0) > 1)]
-                    ├── estimated rows: 0.00
-                    └── TableScan
-                        ├── table: default.test_explain_window.t
-                        ├── scan id: 0
-                        ├── output columns: [a (#0), b (#1), _row_id (#7)]
-                        ├── read rows: 0
-                        ├── read size: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
-                        └── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.t
+                    ├── scan id: 0
+                    ├── output columns: [a (#0), b (#1), _row_id (#7)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+                    └── estimated rows: 0.00
 
 statement ok
 drop table if exists table43764_orc

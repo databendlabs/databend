@@ -228,30 +228,29 @@ jobs:
         with:
           name: test-sqllogic-cluster-minio-${{ matrix.dirs }}-${{ matrix.handler }}
 
-  # TODO: tmp disable since iceberg image not running on arm64
-  # standalone_iceberg_tpch:
-  #   runs-on:
-  #     - self-hosted
-  #     - ${{ inputs.runner_arch }}
-  #     - Linux
-  #     - 4c
-  #     - "${{ inputs.runner_provider }}"
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-java@v4
-  #       with:
-  #         distribution: "temurin"
-  #         java-version: "17"
-  #     - uses: ./.github/actions/test_sqllogic_iceberg_tpch
-  #       timeout-minutes: 15
-  #       with:
-  #         dirs: tpch_iceberg
-  #         handlers: http,hybrid
-  #     - name: Upload failure
-  #       if: failure()
-  #       uses: ./.github/actions/artifact_failure
-  #       with:
-  #         name: test-sqllogic-standalone-iceberg-tpch
+  standalone_iceberg_tpch:
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_arch }}
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      - uses: ./.github/actions/test_sqllogic_iceberg_tpch
+        timeout-minutes: 15
+        with:
+          dirs: tpch_iceberg
+          handlers: http,hybrid
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-iceberg-tpch
 
   cluster:
     runs-on:

@@ -21,6 +21,7 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_meta_runtime::DatabendRuntime;
 use futures::StreamExt;
 use log::debug;
 use log::warn;
@@ -34,7 +35,7 @@ use sub_cache::event_stream::EventStream;
 use tonic::Status;
 
 pub struct MetaClientSource {
-    pub(crate) client: Arc<ClientHandle>,
+    pub(crate) client: Arc<ClientHandle<DatabendRuntime>>,
 
     /// The name of the watcher owning this source. For debugging purposes.
     pub(crate) name: String,

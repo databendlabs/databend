@@ -14,12 +14,13 @@
 
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::OnDisk;
+use databend_common_meta_runtime_api::SpawnApi;
 
 /// Upgrade the data in raft_dir to the latest version.
-pub async fn upgrade(raft_config: &RaftConfig) -> anyhow::Result<()> {
+pub async fn upgrade<SP: SpawnApi>(raft_config: &RaftConfig) -> anyhow::Result<()> {
     let mut on_disk = OnDisk::open(raft_config).await?;
     on_disk.log_stderr(true);
-    on_disk.upgrade().await?;
+    on_disk.upgrade::<SP>().await?;
 
     Ok(())
 }

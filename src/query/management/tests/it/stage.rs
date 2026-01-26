@@ -28,6 +28,7 @@ use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -139,7 +140,7 @@ fn create_test_stage_info() -> StageInfo {
 }
 
 async fn new_stage_api() -> Result<(Arc<MetaStore>, StageMgr)> {
-    let test_api = MetaStore::new_local_testing(BUILD_INFO.semver()).await;
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = StageMgr::create(

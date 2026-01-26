@@ -146,6 +146,60 @@ pub struct TrackingPayload {
     pub process_rows: AtomicUsize,
 }
 
+/// Extension trait for wrapping a future with thread tracking context.
+///
+/// This trait provides an ergonomic way to associate a [`TrackingPayload`] with a future,
+/// enabling memory tracking, query ID propagation, and other per-query context.
+///
+/// # Example
+///
+/// ```ignore
+/// let mut payload = ThreadTracker::new_tracking_payload();
+/// payload.query_id = Some(query_id.clone());
+/// payload.mem_stat = Some(mem_stat);
+///
+/// payload.tracking(async {
+///     // This future runs with the tracking context
+///     do_work().await
+/// }).await;
+/// ```
+pub trait TrackingPayloadExt {
+    /// Wraps a future with this tracking payload.
+    ///
+    /// The returned [`TrackingFuture`] will set up the tracking context before polling
+    /// and restore the previous context when the future completes or is dropped.
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future;
+}
+
+impl TrackingPayloadExt for Option<Arc<TrackingPayload>> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self)
+    }
+}
+
+impl TrackingPayloadExt for Arc<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(self))
+    }
+}
+
+impl TrackingPayloadExt for TrackingPayload {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, Some(Arc::new(self)))
+    }
+}
+
+impl TrackingPayloadExt for Option<TrackingPayload> {
+    fn tracking<F>(self, future: F) -> TrackingFuture<F>
+    where F: Future {
+        ThreadTracker::tracking_future_with_payload(future, self.map(Arc::new))
+    }
+}
+
 impl Clone for TrackingPayload {
     fn clone(&self) -> Self {
         TrackingPayload {
@@ -286,6 +340,18 @@ impl ThreadTracker {
 
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
         TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
+    }
+
+    pub fn tracking_future_with_payload<T: Future>(
+        future: T,
+        payload: Option<Arc<TrackingPayload>>,
+    ) -> TrackingFuture<T> {
+        TRACKER.with(move |x| {
+            TrackingFuture::create(
+                future,
+                payload.unwrap_or_else(|| x.borrow().payload.clone()),
+            )
+        })
     }
 
     pub fn tracking_function<F, T>(f: F) -> impl FnOnce() -> T

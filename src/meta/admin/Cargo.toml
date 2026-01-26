@@ -1,0 +1,46 @@
+[package]
+name = "databend-meta-admin"
+description = "Admin HTTP API service for databend-meta"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[features]
+default = []
+memory-profiling = ["databend-common-http/memory-profiling"]
+
+[dependencies]
+databend-base = { workspace = true }
+databend-common-http = { workspace = true }
+databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-meta = { workspace = true }
+
+anyerror = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+log = { workspace = true }
+poem = { workspace = true }
+serde = { workspace = true }
+serde_urlencoded = { workspace = true }
+
+[dev-dependencies]
+databend-common-meta-runtime-api = { workspace = true }
+databend-meta = { workspace = true }
+databend-meta-runtime = { workspace = true }
+env_logger = { workspace = true }
+maplit = { workspace = true }
+pretty_assertions = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+temp-env = { workspace = true }
+tempfile = { workspace = true }
+test-harness = { workspace = true }
+
+[lints]
+workspace = true

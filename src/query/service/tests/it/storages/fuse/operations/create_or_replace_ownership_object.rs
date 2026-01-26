@@ -22,6 +22,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storages_fuse::TableContext;
 use databend_common_version::BUILD_INFO;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -31,7 +32,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> anyhow::Resu
     let meta = {
         let config = meta_config.to_meta_grpc_client_conf(version.semver());
         let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await?
+        provider.create_meta_store::<DatabendRuntime>().await?
     };
 
     // Extracts endpoints to communicate with meta service

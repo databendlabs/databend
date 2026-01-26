@@ -74,6 +74,7 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey, const UNIQU
 
 pub enum HashJoinHashTable {
     Null,
+    NestedLoop(Vec<DataBlock>),
     Serializer(SerializerHashJoinHashTable),
     UniqueSerializer(UniqueSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
@@ -330,15 +331,11 @@ impl HashJoinState {
         num_rows: &usize,
     ) -> Result<DataBlock> {
         if *num_rows != 0 {
-            let data_block = DataBlock::take_column_vec(
-                build_columns,
-                build_columns_data_type,
-                row_ptrs,
-                row_ptrs.len(),
-            );
+            let data_block =
+                DataBlock::take_column_vec(build_columns, build_columns_data_type, row_ptrs);
             Ok(data_block)
         } else {
-            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
+            Ok(DataBlock::empty_with_schema(&self.build_schema))
         }
     }
 }

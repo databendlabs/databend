@@ -24,6 +24,7 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_config::GlobalConfig;
@@ -148,6 +149,7 @@ impl QueryResponseField {
 pub struct ResultFormatSettings {
     pub timezone: String,
     pub geometry_output_format: String,
+    pub binary_output_format: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -545,8 +547,8 @@ async fn query_page_handler(
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.mem_stat = query_mem_stat;
         tracking_payload.query_id = Some(query_id.clone());
-        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(query_page_handle)
+
+        tracking_payload.tracking(query_page_handle)
     };
 
     query_page_handle.await
@@ -727,8 +729,8 @@ pub(crate) async fn query_handler(
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
         tracking_payload.workload_group_resource = tracking_workload_group;
-        let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-        ThreadTracker::tracking_future(query_handle)
+
+        tracking_payload.tracking(query_handle)
     };
 
     query_handle.await

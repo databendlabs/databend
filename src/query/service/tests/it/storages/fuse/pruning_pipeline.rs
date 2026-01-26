@@ -303,8 +303,10 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        (Some(e3), 3, 3 * row_per_block),
-        (Some(e4), 4, 4 * row_per_block),
+        // TopN asc limit stops after the first block satisfies the limit.
+        (Some(e3), 1, row_per_block),
+        // Desc variant follows the same rule.
+        (Some(e4), 1, row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];
 
@@ -312,6 +314,8 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (10, 10, 10, 10),
         (10, 0, 0, 0),
         (10, 3, 3, 3),
+        // TopN pruning stops after block one, but the range-pruning counters stay at 10
+        // because TopN applies after the range statistics reducer.
         (10, 10, 10, 10),
         (10, 10, 10, 10),
         (10, 10, 10, 2),

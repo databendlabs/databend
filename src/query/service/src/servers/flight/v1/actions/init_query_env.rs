@@ -19,6 +19,7 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadGroupResourceManager;
@@ -46,23 +47,23 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     tracking_payload.query_id = Some(env.query_id.clone());
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     tracking_payload.workload_group_resource = tracking_workload_group;
-    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    ThreadTracker::tracking_future(async move {
-        let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
-            true => None,
-            false => Some(env.create_query_ctx().await?),
-        };
+    tracking_payload
+        .tracking(async move {
+            let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
+                true => None,
+                false => Some(env.create_query_ctx().await?),
+            };
 
-        if let Err(e) = DataExchangeManager::instance()
-            .init_query_env(&env, ctx)
-            .await
-        {
-            DataExchangeManager::instance().on_finished_query(&env.query_id, Some(e.clone()));
-            return Err(e);
-        }
+            if let Err(e) = DataExchangeManager::instance()
+                .init_query_env(&env, ctx)
+                .await
+            {
+                DataExchangeManager::instance().on_finished_query(&env.query_id, Some(e.clone()));
+                return Err(e);
+            }
 
-        Ok(())
-    })
-    .await
+            Ok(())
+        })
+        .await
 }

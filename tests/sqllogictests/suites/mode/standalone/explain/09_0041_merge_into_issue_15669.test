@@ -15,18 +15,14 @@ merge into t using (select  99  c ) s on t.c = s.c when matched then delete;
 query T
 explain select * from t where c = 99;
 ----
-Filter
-├── output columns: [t.c (#0)]
-├── filters: [is_true(t.c (#0) = 99)]
-├── estimated rows: 1.04
-└── TableScan
-    ├── table: default.test_15669.t
-    ├── scan id: 0
-    ├── output columns: [c (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.c (#0) = 99)], limit: NONE]
-    └── estimated rows: 999.00
+TableScan
+├── table: default.test_15669.t
+├── scan id: 0
+├── output columns: [c (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.c (#0) = 99)], limit: NONE]
+└── estimated rows: 1.04

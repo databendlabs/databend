@@ -128,6 +128,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_id_get_response;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
+use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
@@ -1528,6 +1529,71 @@ where
         };
 
         return Ok(Arc::new(tb_info));
+    }
+
+    /// Get multiple tables by db_id and table names in batch.
+    /// Returns TableInfo for tables that exist, in the same order as input.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn mget_tables(
+        &self,
+        db_id: u64,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
+        debug!(db_id = db_id, table_names :? = table_names; "TableApi: {}", func_name!());
+
+        // Build DBIdTableName keys for all table names
+        let dbid_tbnames: Vec<DBIdTableName> = table_names
+            .iter()
+            .map(|name| DBIdTableName::new(db_id, name))
+            .collect();
+
+        // Batch get table ids
+        let table_ids = mget_u64_values(self, &dbid_tbnames).await?;
+
+        // Collect valid table ids with their names
+        let mut valid_tables: Vec<(String, u64)> = Vec::with_capacity(table_names.len());
+        for (dbid_tbname, table_id_opt) in dbid_tbnames.into_iter().zip(table_ids.into_iter()) {
+            if let Some(table_id) = table_id_opt {
+                valid_tables.push((dbid_tbname.table_name, table_id));
+            }
+        }
+
+        if valid_tables.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Batch get table metas
+        let table_id_keys: Vec<TableId> = valid_tables
+            .iter()
+            .map(|(_, id)| TableId { table_id: *id })
+            .collect();
+        let seq_metas = self.get_pb_values_vec(table_id_keys).await?;
+
+        // Build TableInfo for valid tables
+        let db_type = DatabaseType::NormalDB;
+        let mut results = Vec::with_capacity(valid_tables.len());
+        for ((table_name, table_id), seq_meta_opt) in
+            valid_tables.into_iter().zip(seq_metas.into_iter())
+        {
+            if let Some(seq_meta) = seq_meta_opt {
+                let tb_info = TableInfo {
+                    ident: TableIdent {
+                        table_id,
+                        seq: seq_meta.seq,
+                    },
+                    desc: format!("'{}'.'{}'", db_name, table_name),
+                    name: table_name,
+                    meta: seq_meta.data,
+                    db_type: db_type.clone(),
+                    catalog_info: Default::default(),
+                };
+                results.push(Arc::new(tb_info));
+            }
+        }
+
+        Ok(results)
     }
 
     #[logcall::logcall]

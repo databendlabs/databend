@@ -9,6 +9,7 @@ STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
 timezone = "Asia/Shanghai"
 geometry_output_format = "EWKB"
+binary_output_format = "HEX"
 
 scan_progress = "scan_progress"
 
@@ -172,6 +173,7 @@ def test_query_lifecycle_finalized(rows):
         "settings": {
             "timezone": "Asia/Shanghai",
             "geometry_output_format": f"{geometry_output_format}",
+            "binary_output_format": f"{binary_output_format}",
         },
         "session": {
             "catalog": "default",

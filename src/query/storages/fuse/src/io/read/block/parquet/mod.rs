@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
@@ -22,46 +23,77 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
-
 mod adapter;
 mod deserialize;
+mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
+pub use row_selection::RowSelection;
 
+use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
-    pub(crate) fn deserialize_parquet_chunks(
+    pub fn deserialize_part(
+        &self,
+        part: &FuseBlockPartInfo,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks(
+            part.nums_rows,
+            &part.columns_meta,
+            column_chunks,
+            &part.compression,
+            &part.location,
+            selection,
+        )
+    }
+
+    pub fn deserialize_parquet_chunks(
         &self,
         num_rows: usize,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
+        selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
+        let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
+        // If projection is empty, return a DataBlock with the appropriate row count but no columns
+        if self.projected_schema.fields.is_empty() {
+            return Ok(DataBlock::empty_with_rows(result_rows));
         }
+
+        if result_rows == 0 {
+            return Ok(DataBlock::empty_with_schema(&self.data_schema()));
+        }
+
+        let has_selection = selection.is_some();
+        let parquet_selection = selection.map(|s| s.selection.clone());
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
+            parquet_selection,
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache {
+        let array_cache = if self.put_cache && !has_selection {
             CacheManager::instance().get_table_data_array_cache()
         } else {
             None
@@ -91,7 +123,7 @@ impl BlockReader {
             //  Yes, it is too obscure, we need to polish it later.
 
             let value = match column_chunks.get(&field.column_id) {
-                Some(DataItem::RawData(data)) => {
+                Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     if !column_node.is_nested {
@@ -100,7 +132,8 @@ impl BlockReader {
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.insert(key.into(), (arrow_array.clone(), data.len()));
+                            let array_memory_size = arrow_array.get_array_memory_size();
+                            cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
                         }
                     }
                     Value::from_arrow_rs(arrow_array, &data_type)?
@@ -112,13 +145,19 @@ impl BlockReader {
                             "unexpected nested field: nested leaf field hits cached",
                         ));
                     }
-                    Value::from_arrow_rs(cached.0.clone(), &data_type)?
+                    let mut value = Value::from_arrow_rs(cached.0.clone(), &data_type)?;
+                    if let Some(selection) = selection {
+                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
+                        filter_visitor.visit_value(value)?;
+                        value = filter_visitor.take_result().unwrap();
+                    }
+                    value
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
-            entries.push(BlockEntry::new(value, || (data_type, num_rows)));
+            entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
-        Ok(DataBlock::new(entries, num_rows))
+        Ok(DataBlock::new(entries, result_rows))
     }
 }
 

@@ -7,21 +7,17 @@ INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45);
 query T
 explain select * from twocolumn where x is not NULL;
 ----
-Filter
-├── output columns: [twocolumn.x (#0), twocolumn.y (#1)]
-├── filters: [is_not_null(twocolumn.x (#0))]
-├── estimated rows: 3.00
-└── TableScan
-    ├── table: default.default.twocolumn
-    ├── scan id: 0
-    ├── output columns: [x (#0), y (#1)]
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_not_null(twocolumn.x (#0))], limit: NONE]
-    └── estimated rows: 4.00
+TableScan
+├── table: default.default.twocolumn
+├── scan id: 0
+├── output columns: [x (#0), y (#1)]
+├── read rows: 4
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_not_null(twocolumn.x (#0))], limit: NONE]
+└── estimated rows: 3.00
 
 statement ok
 DROP TABLE twocolumn;
@@ -35,21 +31,17 @@ insert into t_user values (10, 'alice'), (103, 'bod');
 query T
 EXPLAIN SELECT * FROM t_user WHERE name LIKE '%';
 ----
-Filter
-├── output columns: [t_user.id (#0), t_user.name (#1)]
-├── filters: [is_not_null(t_user.name (#1))]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.t_user
-    ├── scan id: 0
-    ├── output columns: [id (#0), name (#1)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_not_null(t_user.name (#1))], limit: NONE]
-    └── estimated rows: 2.00
+TableScan
+├── table: default.default.t_user
+├── scan id: 0
+├── output columns: [id (#0), name (#1)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_not_null(t_user.name (#1))], limit: NONE]
+└── estimated rows: 2.00
 
 statement ok
 drop table t_user;

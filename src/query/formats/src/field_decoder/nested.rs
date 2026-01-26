@@ -86,7 +86,6 @@ impl NestedValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                timezone: options_ext.timezone,
                 jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),

@@ -23,6 +23,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::ondisk::OnDisk;
+use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::Cmd;
@@ -39,7 +40,6 @@ use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
-use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
@@ -48,6 +48,9 @@ use databend_meta::metrics::server_metrics;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
+use databend_meta_admin::HttpService;
+use databend_meta_admin::HttpServiceConfig;
+use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
 use tokio::time::Instant;
@@ -57,7 +60,7 @@ use crate::kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
-pub async fn entry(conf: Config) -> anyhow::Result<()> {
+pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
     }
@@ -77,7 +80,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
     // Leaving does not access the local store thus it can be done before the store is initialized.
-    let has_left = MetaNode::leave_cluster(&conf.raft_config).await?;
+    let has_left = MetaNode::<RT>::leave_cluster(&conf.raft_config).await?;
     if has_left {
         info!("node {:?} has left cluster", conf.raft_config.leave_id);
         return Ok(());
@@ -89,7 +92,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         format!("join {:?}", conf.raft_config.join)
     };
 
-    let grpc_advertise = if let Some(a) = conf.grpc_api_advertise_address() {
+    let grpc_advertise = if let Some(a) = conf.grpc.advertise_address() {
         a
     } else {
         "-".to_string()
@@ -138,20 +141,26 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         println!("      Dir: {}", r.raft_dir);
         println!("      Status: {}", single_or_join);
         println!();
-        println!("HTTP API listen at: {}", conf.admin_api_address);
-        println!("gRPC API listen at: {} advertise: {}", conf.grpc_api_address, grpc_advertise);
+        println!("HTTP API listen at: {}", conf.admin.api_address);
+        println!("gRPC API listen at: {} advertise: {}", conf.grpc.api_address, grpc_advertise);
         println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
         println!();
     }
 
-    on_disk.upgrade().await?;
+    on_disk.upgrade::<RT>().await?;
 
     info!(
         "Starting MetaNode, is-single: {} with config: {:?}",
         conf.raft_config.single, conf
     );
 
-    let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
+    let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
+        databend_common_meta_types::MetaStartupError::MetaServiceError(format!(
+            "Cannot create meta IO runtime: {}",
+            e
+        ))
+    })?;
+    let meta_handle = MetaWorker::create_meta_worker(conf.clone(), Arc::new(runtime)).await?;
     let meta_handle = Arc::new(meta_handle);
 
     let mut stop_handler = ShutdownGroup::<AnyError>::new();
@@ -160,18 +169,24 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     // HTTP API service.
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
-        let mut srv = HttpService::create(conf.clone(), meta_handle.clone());
-        info!("HTTP API server listening on {}", conf.admin_api_address);
+        let http_cfg = HttpServiceConfig {
+            admin_api_address: conf.admin.api_address.clone(),
+            admin_tls_server_cert: conf.admin.tls_server_cert.clone(),
+            admin_tls_server_key: conf.admin.tls_server_key.clone(),
+            config_display: format!("{:?}", conf),
+        };
+        let mut srv = HttpService::create(http_cfg, meta_handle.clone());
+        info!("HTTP API server listening on {}", conf.admin.api_address);
         srv.do_start().await.expect("Failed to start http server");
         stop_handler.push(srv);
     }
 
     // gRPC API service.
     {
-        let mut srv = GrpcServer::create(conf.clone(), meta_handle.clone());
+        let mut srv = GrpcServer::<RT>::create(conf.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
-            conf.grpc_api_address.clone()
+            conf.grpc.api_address.clone()
         );
         srv.do_start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));
@@ -182,7 +197,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     let join_res = meta_handle
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
                     .await
             };
             Box::pin(fu)
@@ -191,7 +206,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     info!("Join result: {:?}", join_res);
 
-    register_node(&meta_handle, &conf).await?;
+    register_node::<RT>(&meta_handle, &conf).await?;
 
     println!("Databend Metasrv started");
 
@@ -203,11 +218,14 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn do_register(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), MetaAPIError> {
+async fn do_register<RT: RuntimeApi>(
+    meta_handle: &Arc<MetaHandle<RT>>,
+    conf: &Config,
+) -> Result<(), MetaAPIError> {
     let node_id = meta_handle.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
-        .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+        .with_grpc_advertise_address(conf.grpc.advertise_address());
 
     println!("Register this node: {{{}}}", node);
     println!();
@@ -228,12 +246,15 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
     match KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
-                endpoints: vec![conf.grpc_api_address.clone()],
+                endpoints: vec![conf.grpc.api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
                 ..RpcClientConf::empty(BUILD_INFO.semver())
             };
-            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
+            let client = match MetaStoreProvider::new(rpc_conf)
+                .create_meta_store::<DatabendRuntime>()
+                .await
+            {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
                     eprintln!("{}", e);
@@ -260,7 +281,10 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
 #[fastrace::trace]
-async fn register_node(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), anyhow::Error> {
+async fn register_node<RT: RuntimeApi>(
+    meta_handle: &Arc<MetaHandle<RT>>,
+    conf: &Config,
+) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
@@ -315,7 +339,7 @@ async fn register_node(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res = do_register(meta_handle, conf).await;
+        let res = do_register::<RT>(meta_handle, conf).await;
         info!("Register-node result: {:?}", res);
 
         match res {

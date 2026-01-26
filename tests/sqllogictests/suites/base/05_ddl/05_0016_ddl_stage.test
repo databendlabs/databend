@@ -25,6 +25,25 @@ desc stage test_stage_internal
 statement ok
 SHOW STAGES
 
+query III
+copy into @test_stage_internal from (select 1) file_format=(type=csv)
+----
+1 2 2
+
+query I
+select count(*) from  list_stage(location=>'@test_stage_internal')
+----
+1
+
+
+statement ok
+create or replace stage test_stage_internal
+
+# files should be removed
+query TITTT
+list @test_stage_internal
+----
+
 statement ok
 DROP STAGE test_stage
 

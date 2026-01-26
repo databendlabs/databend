@@ -15,21 +15,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a = 1;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.b (#1)]
-├── filters: [is_true(cte1.a (#0) = 1)]
-├── estimated rows: 1.67
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
+└── estimated rows: 1.67
 
 # Test 2: CTE with aggregation - filter on GROUP BY column should be pushed down
 query T
@@ -40,21 +36,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a = 1;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1), cte1.sum_b (#2)]
-├── filters: [is_true(cte1.a (#0) = 1)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1), sum_b (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
+└── estimated rows: 1.00
 
 # Test 3: CTE with aggregation - filter on aggregate result should NOT be pushed down
 query T
@@ -65,21 +57,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where sum_b > 25;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1), cte1.sum_b (#2)]
-├── filters: [is_true(cte1.sum_b (#2) > 25)]
-├── estimated rows: 3.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(cte1.sum_b (#2) > 25)], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1), sum_b (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(cte1.sum_b (#2) > 25)], limit: NONE]
+└── estimated rows: 3.00
 
 # Test 4: Mixed filters - GROUP BY column filter should be pushed down, aggregate filter should remain
 query T
@@ -90,21 +78,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a > 1 and sum_b > 25;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1), cte1.sum_b (#2)]
-├── filters: [is_true(cte1.a (#0) > 1), is_true(cte1.sum_b (#2) > 25)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) > 1 and cte1.sum_b (#2) > 25], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1), sum_b (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) > 1 and cte1.sum_b (#2) > 25], limit: NONE]
+└── estimated rows: 2.00
 
 # Test 5: Multiple CTE references with different filters
 # Should create OR condition in CTE definition
@@ -121,36 +105,28 @@ select * from cte1 as c2 where c2.a = 2;
 UnionAll
 ├── output columns: [a (#4), cnt (#5)]
 ├── estimated rows: 2.00
-├── Filter
-│   ├── output columns: [c1.a (#0), c1.cnt (#1)]
-│   ├── filters: [is_true(c1.a (#0) = 1)]
-│   ├── estimated rows: 1.00
-│   └── TableScan
-│       ├── table: default.default.cte1
-│       ├── scan id: 0
-│       ├── output columns: [a (#0), cnt (#1)]
-│       ├── read rows: 3
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-│       ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
-│       └── estimated rows: 3.00
-└── Filter
-    ├── output columns: [c2.a (#2), c2.cnt (#3)]
-    ├── filters: [is_true(c2.a (#2) = 2)]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.cte1
-        ├── scan id: 1
-        ├── output columns: [a (#2), cnt (#3)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(cte1.a (#2) = 2)], limit: NONE]
-        └── estimated rows: 3.00
+├── TableScan
+│   ├── table: default.default.cte1
+│   ├── scan id: 0
+│   ├── output columns: [a (#0), cnt (#1)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.cte1
+    ├── scan id: 1
+    ├── output columns: [a (#2), cnt (#3)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(cte1.a (#2) = 2)], limit: NONE]
+    └── estimated rows: 1.00
 
 # Test 6: Multiple CTE references with three different filters
 # Should create complex OR condition in CTE definition
@@ -172,51 +148,39 @@ UnionAll
 ├── UnionAll
 │   ├── output columns: [a (#4), cnt (#5)]
 │   ├── estimated rows: 2.00
-│   ├── Filter
-│   │   ├── output columns: [cte1.a (#0), cte1.cnt (#1)]
-│   │   ├── filters: [is_true(cte1.a (#0) = 1)]
-│   │   ├── estimated rows: 1.00
-│   │   └── TableScan
-│   │       ├── table: default.default.cte1
-│   │       ├── scan id: 0
-│   │       ├── output columns: [a (#0), cnt (#1)]
-│   │       ├── read rows: 3
-│   │       ├── read size: < 1 KiB
-│   │       ├── partitions total: 1
-│   │       ├── partitions scanned: 1
-│   │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-│   │       ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
-│   │       └── estimated rows: 3.00
-│   └── Filter
-│       ├── output columns: [cte1.a (#2), cte1.cnt (#3)]
-│       ├── filters: [is_true(cte1.a (#2) = 2)]
-│       ├── estimated rows: 1.00
-│       └── TableScan
-│           ├── table: default.default.cte1
-│           ├── scan id: 1
-│           ├── output columns: [a (#2), cnt (#3)]
-│           ├── read rows: 3
-│           ├── read size: < 1 KiB
-│           ├── partitions total: 1
-│           ├── partitions scanned: 1
-│           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-│           ├── push downs: [filters: [is_true(cte1.a (#2) = 2)], limit: NONE]
-│           └── estimated rows: 3.00
-└── Filter
-    ├── output columns: [cte1.a (#6), cte1.cnt (#7)]
-    ├── filters: [is_true(cte1.a (#6) = 3)]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.cte1
-        ├── scan id: 2
-        ├── output columns: [a (#6), cnt (#7)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(cte1.a (#6) = 3)], limit: NONE]
-        └── estimated rows: 3.00
+│   ├── TableScan
+│   │   ├── table: default.default.cte1
+│   │   ├── scan id: 0
+│   │   ├── output columns: [a (#0), cnt (#1)]
+│   │   ├── read rows: 3
+│   │   ├── read size: < 1 KiB
+│   │   ├── partitions total: 1
+│   │   ├── partitions scanned: 1
+│   │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+│   │   ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
+│   │   └── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.default.cte1
+│       ├── scan id: 1
+│       ├── output columns: [a (#2), cnt (#3)]
+│       ├── read rows: 3
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [is_true(cte1.a (#2) = 2)], limit: NONE]
+│       └── estimated rows: 1.00
+└── TableScan
+    ├── table: default.default.cte1
+    ├── scan id: 2
+    ├── output columns: [a (#6), cnt (#7)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(cte1.a (#6) = 3)], limit: NONE]
+    └── estimated rows: 1.00
 
 # Test 8: CTE with existing filter condition and additional pushdown filter
 query T
@@ -225,21 +189,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a = 1 and b < 50;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.b (#1)]
-├── filters: [is_true(cte1.a (#0) = 1), is_true(cte1.b (#1) < 50)]
-├── estimated rows: 1.67
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) < 50], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) < 50], limit: NONE]
+└── estimated rows: 1.67
 
 # Test 9: CTE with aggregation and HAVING clause
 query T
@@ -251,21 +211,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a > 1;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1), cte1.sum_b (#2)]
-├── filters: [is_true(cte1.a (#0) > 1)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(cte1.a (#0) > 1)], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1), sum_b (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(cte1.a (#0) > 1)], limit: NONE]
+└── estimated rows: 2.00
 
 # Test 10: Complex aggregation with multiple GROUP BY columns
 query T
@@ -276,21 +232,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a = 1 and b > 15;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.b (#1), cte1.cnt (#2)]
-├── filters: [is_true(cte1.a (#0) = 1), is_true(cte1.b (#1) > 15)]
-├── estimated rows: 1.67
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), cnt (#2)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) > 15], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), b (#1), cnt (#2)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) > 15], limit: NONE]
+└── estimated rows: 1.67
 
 # Test 11: Test case that demonstrates nested Filter issue
 # This should show merged filters, not nested Filter nodes
@@ -304,21 +256,17 @@ select * from cte1
 where a = 1           -- Should be pushed down to before GROUP BY
 and sum_b > 25;       -- Should remain after aggregation
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1), cte1.sum_b (#2)]
-├── filters: [is_true(cte1.a (#0) = 1), is_true(cte1.sum_b (#2) > 25)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) = 1 and cte1.sum_b (#2) > 25], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1), sum_b (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) = 1 and cte1.sum_b (#2) > 25], limit: NONE]
+└── estimated rows: 1.00
 
 # Test 12: Test filter pushdown with IN clause
 query T
@@ -329,21 +277,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a in (1, 2);
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1)]
-├── filters: [cte1.a (#0) = 1 or cte1.a (#0) = 2]
-├── estimated rows: 1.67
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) = 1 or cte1.a (#0) = 2], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) = 1 or cte1.a (#0) = 2], limit: NONE]
+└── estimated rows: 1.67
 
 # Test 13: Test filter pushdown with complex conditions
 query T
@@ -354,21 +298,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where (a = 1 or a = 2) and b > 10;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.b (#1), cte1.cnt (#2)]
-├── filters: [is_true(cte1.b (#1) > 10), cte1.a (#0) = 1 or cte1.a (#0) = 2]
-├── estimated rows: 2.78
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), cnt (#2)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.b (#1) > 10 and (cte1.a (#0) = 1 or cte1.a (#0) = 2)], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), b (#1), cnt (#2)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.b (#1) > 10 and (cte1.a (#0) = 1 or cte1.a (#0) = 2)], limit: NONE]
+└── estimated rows: 2.78
 
 # Test 15: Test filter pushdown with subquery
 query T
@@ -379,21 +319,17 @@ explain select * from (
     select * from cte1 where a > 1
 ) where cnt > 0;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.cnt (#1)]
-├── filters: [is_true(cte1.a (#0) > 1), is_true(cte1.cnt (#1) > 0)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), cnt (#1)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [cte1.a (#0) > 1 and cte1.cnt (#1) > 0], limit: NONE]
-    └── estimated rows: 3.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), cnt (#1)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [cte1.a (#0) > 1 and cte1.cnt (#1) > 0], limit: NONE]
+└── estimated rows: 2.00
 
 # Test 17: CTE with window function
 query T
@@ -403,21 +339,17 @@ explain with cte1 as materialized (
 )
 select * from cte1 where a = 1;
 ----
-Filter
-├── output columns: [cte1.a (#0), cte1.b (#1), cte1.rn (#2)]
-├── filters: [is_true(cte1.a (#0) = 1)]
-├── estimated rows: 1.67
-└── TableScan
-    ├── table: default.default.cte1
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), rn (#2)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
-    └── estimated rows: 5.00
+TableScan
+├── table: default.default.cte1
+├── scan id: 0
+├── output columns: [a (#0), b (#1), rn (#2)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(cte1.a (#0) = 1)], limit: NONE]
+└── estimated rows: 1.67
 
 statement ok
 drop table t;

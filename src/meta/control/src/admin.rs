@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta::api::http::v1::features::FeatureResponse;
+use databend_meta_admin::v1::features::FeatureResponse;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;

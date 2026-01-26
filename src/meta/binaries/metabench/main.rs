@@ -29,7 +29,6 @@ use std::time::Instant;
 
 use chrono::Utc;
 use clap::Parser;
-use databend_common_base::runtime;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_api::serialize_struct;
@@ -49,6 +48,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::required;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
@@ -60,6 +60,7 @@ use databend_common_tracing::StderrConfig;
 use databend_common_tracing::init_logging;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -155,25 +156,28 @@ async fn main() {
 
         let client = client.clone();
 
-        let handle = runtime::spawn(async move {
-            for i in 0..config.number {
-                if cmd == "upsert_kv" {
-                    benchmark_upsert(&client, prefix, client_num, i).await;
-                } else if cmd == "table" {
-                    benchmark_table(&client, prefix, client_num, i).await;
-                } else if cmd == "get_table" {
-                    benchmark_get_table(&client, prefix, client_num, i).await;
-                } else if cmd == "table_copy_file" {
-                    benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
-                } else if cmd == "semaphore" {
-                    benchmark_semaphore(&client, prefix, client_num, i, &param).await;
-                } else if cmd == "list" {
-                    benchmark_list(&client, prefix, client_num, i, &param).await;
-                } else {
-                    unreachable!("Invalid config.rpc: {}", rpc);
+        let handle = DatabendRuntime::spawn(
+            async move {
+                for i in 0..config.number {
+                    if cmd == "upsert_kv" {
+                        benchmark_upsert(&client, prefix, client_num, i).await;
+                    } else if cmd == "table" {
+                        benchmark_table(&client, prefix, client_num, i).await;
+                    } else if cmd == "get_table" {
+                        benchmark_get_table(&client, prefix, client_num, i).await;
+                    } else if cmd == "table_copy_file" {
+                        benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
+                    } else if cmd == "semaphore" {
+                        benchmark_semaphore(&client, prefix, client_num, i, &param).await;
+                    } else if cmd == "list" {
+                        benchmark_list(&client, prefix, client_num, i, &param).await;
+                    } else {
+                        unreachable!("Invalid config.rpc: {}", rpc);
+                    }
                 }
-            }
-        });
+            },
+            None,
+        );
         handles.push(handle)
     }
 
@@ -189,7 +193,12 @@ async fn main() {
     );
 }
 
-async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_upsert(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let node_key = || format!("{}-{}-{}", prefix, client_num, i);
 
     let seq = MatchSeq::Any;
@@ -202,7 +211,12 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     print_res(i, "upsert_kv", &res);
 }
 
-async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_table(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -290,7 +304,12 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     print_res(i, "create_table again", &res);
 }
 
-async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_get_table(
+    client: &Arc<ClientHandle<DatabendRuntime>>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -319,7 +338,7 @@ impl Default for TableCopyFileConfig {
 
 /// Benchmark upsert table with copy file.
 async fn benchmark_table_copy_file(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     client_num: u64,
     i: u64,
@@ -406,7 +425,7 @@ impl SemaphoreConfig {
 /// - `i` is the index of the current client.
 /// - `param` is a json string of bench specific config.
 async fn benchmark_semaphore(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     key_prefix: u64,
     client_num: u64,
     i: u64,
@@ -469,7 +488,7 @@ struct ListConfig {
 
 /// Benchmark listing keys with a prefix.
 async fn benchmark_list(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     client_num: u64,
     i: u64,

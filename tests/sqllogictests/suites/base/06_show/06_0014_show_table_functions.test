@@ -13,6 +13,7 @@ fuse_block
 fuse_column
 fuse_dump_snapshots
 fuse_encoding
+fuse_page
 fuse_segment
 fuse_snapshot
 fuse_statistic

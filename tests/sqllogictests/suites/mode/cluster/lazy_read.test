@@ -16,7 +16,7 @@ insert into t_lazy select (number + 1) * 1000, 1.1, '1.1', (1,2), '2020-01-01' f
 statement ok
 insert into t_lazy select (number + 1) * 100000, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
 
-query ???
+query III
 select count(), count(distinct _block_name), count(distinct _segment_name) from t_lazy
 ----
 300 3 3
@@ -76,21 +76,17 @@ RowFetch
             ├── limit: 2
             ├── offset: 0
             ├── estimated rows: 0.00
-            └── Filter
-                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-                ├── filters: [t_lazy.a (#0) < 100]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.default.t_lazy
-                    ├── scan id: 0
-                    ├── output columns: [a (#0), _row_id (#7)]
-                    ├── read rows: 100
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 3
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                    ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: NONE]
-                    └── estimated rows: 300.00
+            └── TableScan
+                ├── table: default.default.t_lazy
+                ├── scan id: 0
+                ├── output columns: [a (#0), _row_id (#7)]
+                ├── read rows: 100
+                ├── read size: < 1 KiB
+                ├── partitions total: 3
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
+                └── estimated rows: 0.00
 
 statement ok
 set lazy_read_threshold=0
@@ -142,21 +138,17 @@ Limit
         ├── limit: 2
         ├── offset: 0
         ├── estimated rows: 0.00
-        └── Filter
-            ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-            ├── filters: [t_lazy.a (#0) < 100]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.default.t_lazy
-                ├── scan id: 0
-                ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-                ├── read rows: 100
-                ├── read size: < 1 KiB
-                ├── partitions total: 3
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: NONE]
-                └── estimated rows: 300.00
+        └── TableScan
+            ├── table: default.default.t_lazy
+            ├── scan id: 0
+            ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+            ├── read rows: 100
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
+            └── estimated rows: 0.00
 
 query T
 explain select * from t_lazy where true limit 2;

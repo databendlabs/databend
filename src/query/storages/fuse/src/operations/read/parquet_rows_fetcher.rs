@@ -27,7 +27,6 @@ use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockRowIndex;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -141,7 +140,6 @@ impl RowsFetcher for ParquetRowsFetcher {
         row_ids: &[u64],
         metadata: HashMap<u64, Self::Metadata>,
     ) -> Result<DataBlock> {
-        let num_rows = row_ids.len();
         let final_block_index = metadata
             .keys()
             .enumerate()
@@ -160,12 +158,12 @@ impl RowsFetcher for ParquetRowsFetcher {
                     let task_indices: &mut Vec<_> = v.get_mut();
 
                     let final_index = task_indices.len() as u32;
-                    task_indices.push((0u32, idx as u32, 1_usize));
-                    final_indices.push((final_block_index[&block_id], final_index, 1_usize));
+                    task_indices.push(idx as u32);
+                    final_indices.push((final_block_index[&block_id], final_index));
                 }
                 Entry::Vacant(v) => {
-                    v.insert(vec![(0u32, idx as u32, 1_usize)]);
-                    final_indices.push((final_block_index[&block_id], 0_u32, 1_usize));
+                    v.insert(vec![idx as u32]);
+                    final_indices.push((final_block_index[&block_id], 0_u32));
                 }
             }
         }
@@ -201,7 +199,7 @@ impl RowsFetcher for ParquetRowsFetcher {
             .collect::<Vec<_>>();
 
         // check if row index is in valid bounds cause we don't ensure rowid is valid
-        for (block_idx, row_idx, _) in final_indices.iter() {
+        for (block_idx, row_idx) in final_indices.iter() {
             if *block_idx as usize >= final_blocks.len()
                 || *row_idx as usize >= final_blocks[*block_idx as usize].num_rows()
             {
@@ -213,11 +211,7 @@ impl RowsFetcher for ParquetRowsFetcher {
             }
         }
 
-        Ok(DataBlock::take_blocks(
-            &final_blocks,
-            &final_indices,
-            num_rows,
-        ))
+        Ok(DataBlock::take_blocks(&final_blocks, &final_indices))
     }
 }
 
@@ -250,7 +244,7 @@ impl ParquetRowsFetcher {
         &self,
         metadata: Arc<RowsFetchMetadataImpl>,
         final_index: u32,
-        take_indices: Vec<BlockRowIndex>,
+        take_indices: Vec<u32>,
     ) -> impl Future<Output = Result<(u32, DataBlock)>> + use<> {
         {
             let settings = self.settings;
@@ -265,10 +259,9 @@ impl ParquetRowsFetcher {
                     )
                     .await?;
 
-                let block = Self::build_block(&reader, &metadata, chunk)?;
                 Ok((
                     final_index,
-                    DataBlock::take_blocks(&[block], &take_indices, take_indices.len()),
+                    Self::build_block(&reader, &metadata, chunk)?.take(take_indices.as_slice())?,
                 ))
             }
         }
@@ -334,6 +327,7 @@ impl ParquetRowsFetcher {
             columns_chunks,
             &metadata.compression,
             &metadata.location,
+            None,
         )
     }
 }

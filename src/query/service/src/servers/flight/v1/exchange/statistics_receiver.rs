@@ -203,7 +203,7 @@ impl StatisticsReceiver {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                exchange_handler.await.flatten()?;
+                exchange_handler.await??;
             }
 
             Ok(())

@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
+use base64::Engine as _;
+use base64::engine::general_purpose;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryColumn;
@@ -47,8 +50,9 @@ use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
+use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
-use jiff::tz::TimeZone;
 use jsonb::RawJsonb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
@@ -63,6 +67,8 @@ pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
     pub escape_char: u8,
     pub quote_char: u8,
+    // Output display format; CSV/TSV binary columns use common_settings.binary_format instead.
+    pub binary_format: BinaryDisplayFormat,
 }
 
 impl FieldEncoderValues {
@@ -74,21 +80,17 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone: options.timezone,
                 jiff_timezone: options.jiff_timezone.clone(),
                 binary_format: Default::default(),
                 geometry_format: Default::default(),
             },
             escape_char: b'"',
             quote_char: b'"',
+            binary_format: options.binary_format,
         }
     }
 
-    pub fn create_for_http_handler(
-        jiff_timezone: TimeZone,
-        timezone: Tz,
-        geometry_format: GeometryDataType,
-    ) -> Self {
+    pub fn create_for_http_handler(format: &FormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -96,13 +98,13 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                timezone,
-                jiff_timezone,
+                jiff_timezone: format.jiff_timezone.clone(),
                 binary_format: Default::default(),
-                geometry_format,
+                geometry_format: format.geometry_format,
             },
             escape_char: b'\\',
             quote_char: b'"',
+            binary_format: format.binary_format,
         }
     }
 
@@ -110,11 +112,7 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(
-        jiff_timezone: TimeZone,
-        timezone: Tz,
-        geometry_format: GeometryDataType,
-    ) -> Self {
+    pub fn create_for_mysql_handler(format: &FormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -122,13 +120,13 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                timezone,
-                jiff_timezone,
+                jiff_timezone: format.jiff_timezone.clone(),
                 binary_format: Default::default(),
-                geometry_format,
+                geometry_format: format.geometry_format,
             },
             escape_char: b'\\',
             quote_char: b'"',
+            binary_format: format.binary_format,
         }
     }
 
@@ -138,7 +136,7 @@ impl FieldEncoderValues {
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
-    ) {
+    ) -> Result<()> {
         match &column {
             Column::Null { .. } => self.write_null(out_buf),
             Column::EmptyArray { .. } => self.write_empty_array(out_buf),
@@ -158,9 +156,9 @@ impl FieldEncoderValues {
             },
             Column::Decimal(c) => self.write_decimal(c, row_index, out_buf),
 
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested),
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested)?,
 
-            Column::Binary(c) => self.write_binary(c, row_index, out_buf),
+            Column::Binary(c) => self.write_binary(c, row_index, out_buf)?,
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
             Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
@@ -171,12 +169,13 @@ impl FieldEncoderValues {
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
-            Column::Array(box c) => self.write_array(c, row_index, out_buf),
-            Column::Map(box c) => self.write_map(c, row_index, out_buf),
-            Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
+            Column::Array(box c) => self.write_array(c, row_index, out_buf)?,
+            Column::Map(box c) => self.write_map(c, row_index, out_buf)?,
+            Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf)?,
             Column::Vector(c) => self.write_vector(c, row_index, out_buf),
             Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
         }
+        Ok(())
     }
     fn common_settings(&self) -> &OutputCommonSettings {
         &self.common_settings
@@ -225,9 +224,10 @@ impl FieldEncoderValues {
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
-    ) {
+    ) -> Result<()> {
         if !column.validity.get_bit(row_index) {
-            self.write_null(out_buf)
+            self.write_null(out_buf);
+            Ok(())
         } else {
             self.write_field(&column.column, row_index, out_buf, in_nested)
         }
@@ -256,9 +256,38 @@ impl FieldEncoderValues {
         out_buf.extend_from_slice(data.as_bytes());
     }
 
-    fn write_binary(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_binary(
+        &self,
+        column: &BinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let v = unsafe { column.index_unchecked(row_index) };
-        out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+        match self.binary_format {
+            BinaryDisplayFormat::Hex => {
+                out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
+                Ok(())
+            }
+            BinaryDisplayFormat::Base64 => {
+                let encoded = general_purpose::STANDARD.encode(v);
+                out_buf.extend_from_slice(encoded.as_bytes());
+                Ok(())
+            }
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(v) {
+                Ok(text) => {
+                    out_buf.extend_from_slice(text.as_bytes());
+                    Ok(())
+                }
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => {
+                out_buf.extend_from_slice(String::from_utf8_lossy(v).as_bytes());
+                Ok(())
+            }
+        }
     }
 
     fn write_string(
@@ -399,7 +428,12 @@ impl FieldEncoderValues {
         }
     }
 
-    fn write_array(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_array(
+        &self,
+        column: &ArrayColumn<AnyType>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
@@ -408,12 +442,18 @@ impl FieldEncoderValues {
             if i != start {
                 out_buf.push(b',');
             }
-            self.write_field(inner, i, out_buf, true);
+            self.write_field(inner, i, out_buf, true)?;
         }
         out_buf.push(b']');
+        Ok(())
     }
 
-    fn write_map(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_map(
+        &self,
+        column: &ArrayColumn<AnyType>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
@@ -424,25 +464,32 @@ impl FieldEncoderValues {
                     if i != start {
                         out_buf.push(b',');
                     }
-                    self.write_field(&fields[0], i, out_buf, true);
+                    self.write_field(&fields[0], i, out_buf, true)?;
                     out_buf.push(b':');
-                    self.write_field(&fields[1], i, out_buf, true);
+                    self.write_field(&fields[1], i, out_buf, true)?;
                 }
             }
             _ => unreachable!(),
         }
         out_buf.push(b'}');
+        Ok(())
     }
 
-    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_tuple(
+        &self,
+        columns: &[Column],
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         out_buf.push(b'(');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
                 out_buf.push(b',');
             }
-            self.write_field(inner, row_index, out_buf, true);
+            self.write_field(inner, row_index, out_buf, true)?;
         }
         out_buf.push(b')');
+        Ok(())
     }
 
     pub fn write_vector(&self, column: &VectorColumn, row_index: usize, out_buf: &mut Vec<u8>) {

@@ -93,6 +93,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
+            ast::TableIndexType::Spatial => todo!(),
             ast::TableIndexType::Aggregating => unreachable!(),
         };
 
