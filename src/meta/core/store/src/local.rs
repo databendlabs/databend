@@ -153,7 +153,8 @@ impl LocalMetaService {
         let runtime = RT::new_embedded("meta-io-rt-embedded");
         let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
-        let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
+        let mut grpc_server =
+            GrpcServer::create(config.raft_config.id, config.grpc.clone(), meta_handle);
         grpc_server.do_start().await?;
 
         let client = Self::grpc_client(&config, version).await?;

@@ -64,6 +64,25 @@ impl GrpcConfig {
     }
 }
 
+/// Arguments for KV API commands.
+///
+/// This struct holds the parameters needed to execute KV API operations
+/// like upsert, get, mget, and list.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+pub struct KvApiArgs {
+    /// Keys to operate on.
+    pub key: Vec<String>,
+
+    /// Value to store (for upsert operations).
+    pub value: String,
+
+    /// Optional TTL in seconds for the key.
+    pub expire_after: Option<u64>,
+
+    /// Prefix for list operations.
+    pub prefix: String,
+}
+
 /// Configuration for the Admin HTTP API server.
 ///
 /// This struct holds settings for the HTTP endpoint that serves administrative
@@ -178,5 +197,15 @@ impl Config {
             self.raft_config.raft_api_advertise_host_endpoint(),
         )
         .with_grpc_advertise_address(self.grpc.advertise_address())
+    }
+
+    /// Extract KV API arguments from config
+    pub fn kv_api_args(&self) -> KvApiArgs {
+        KvApiArgs {
+            key: self.key.clone(),
+            value: self.value.clone(),
+            expire_after: self.expire_after,
+            prefix: self.prefix.clone(),
+        }
     }
 }

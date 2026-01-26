@@ -68,7 +68,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         })
         .await??;
 
-    let mut srv = GrpcServer::create(tc.config.clone(), mh);
+    let mut srv = GrpcServer::create(tc.config.raft_config.id, tc.config.grpc.clone(), mh);
     srv.do_start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 

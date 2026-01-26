@@ -76,7 +76,7 @@ async fn upgrade_09() -> anyhow::Result<()> {
         }
         "upgrade" => {
             let p = GenericKVProcessor::new(rewrite_kv::upgrade_table_meta);
-            process_meta_dir::process_sled_db(&config, |x| p.process(x))?;
+            process_meta_dir::process_sled_db(&config.raft_config.raft_dir, |x| p.process(x))?;
         }
         _ => {
             return Err(anyhow::anyhow!("invalid cmd: {:?}", config.cmd));
