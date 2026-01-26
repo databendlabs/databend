@@ -50,7 +50,6 @@ use databend_common_meta_types::sys_data::SysData;
 use display_more::DisplayOptionExt;
 use futures::Stream;
 use futures::stream::BoxStream;
-use semver::Version;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tonic::Status;
@@ -70,7 +69,6 @@ pub type MetaFnOnce<Arg, Ret> = Box<dyn FnOnce(Arg) -> BoxFuture<Ret> + Send + '
 #[derive(Clone)]
 pub struct MetaHandle<SP: SpawnApi> {
     pub id: NodeId,
-    pub version: Version,
     tx: mpsc::Sender<MetaFnOnce<Arc<MetaNode<SP>>, ()>>,
     /// The runtime containing the meta node worker.
     ///
@@ -82,16 +80,10 @@ pub struct MetaHandle<SP: SpawnApi> {
 impl<SP: SpawnApi> MetaHandle<SP> {
     pub fn new<RT: Send + Sync + 'static>(
         id: NodeId,
-        version: Version,
         tx: mpsc::Sender<MetaFnOnce<Arc<MetaNode<SP>>, ()>>,
         rt: Arc<RT>,
     ) -> Self {
-        MetaHandle {
-            id,
-            version,
-            tx,
-            _rt: rt,
-        }
+        MetaHandle { id, tx, _rt: rt }
     }
 
     /// Run a function in meta-node
@@ -403,9 +395,13 @@ impl<SP: SpawnApi> MetaHandle<SP> {
         .await
     }
 
-    pub async fn handle_get_status(&self) -> Result<MetaNodeStatus, MetaNodeStopped> {
+    pub async fn handle_get_status(
+        &self,
+        binary_version: &str,
+    ) -> Result<MetaNodeStatus, MetaNodeStopped> {
+        let version = binary_version.to_string();
         self.request(move |meta_node| {
-            let fu = async move { meta_node.get_status().await };
+            let fu = async move { meta_node.get_status(&version).await };
 
             Box::pin(fu)
         })

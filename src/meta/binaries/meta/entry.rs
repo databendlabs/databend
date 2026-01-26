@@ -167,7 +167,8 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
             admin: conf.admin.clone(),
             config_display: format!("{:?}", conf),
         };
-        let mut srv = HttpService::create(http_cfg, meta_handle.clone());
+        let mut srv =
+            HttpService::create(http_cfg, DATABEND_SEMVER.to_string(), meta_handle.clone());
         info!("HTTP API server listening on {}", conf.admin.api_address);
         srv.do_start().await.expect("Failed to start http server");
         stop_handler.push(srv);
@@ -175,8 +176,12 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv =
-            GrpcServer::<RT>::create(conf.raft_config.id, conf.grpc.clone(), meta_handle.clone());
+        let mut srv = GrpcServer::<RT>::create(
+            conf.raft_config.id,
+            conf.grpc.clone(),
+            DATABEND_SEMVER.clone(),
+            meta_handle.clone(),
+        );
         info!(
             "Databend meta server listening on {}",
             conf.grpc.api_address.clone()

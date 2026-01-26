@@ -41,7 +41,7 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
         admin: tcs[0].config.admin.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
-    let mut srv = HttpService::create(http_cfg, meta0.clone());
+    let mut srv = HttpService::create(http_cfg, "test-version".to_string(), meta0.clone());
     srv.do_start().await.expect("HTTP: admin api error");
 
     let transfer_url = || {

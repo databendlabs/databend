@@ -28,6 +28,7 @@ use futures::future::BoxFuture;
 use futures::future::Either;
 use futures::future::select;
 use log::info;
+use semver::Version;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tonic::transport::Identity;
@@ -43,6 +44,7 @@ use crate::util::DropDebug;
 pub struct GrpcServer<SP: SpawnApi> {
     node_id: u64,
     grpc_config: GrpcConfig,
+    version: Version,
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
@@ -58,10 +60,16 @@ impl<SP: SpawnApi> Drop for GrpcServer<SP> {
 }
 
 impl<SP: SpawnApi> GrpcServer<SP> {
-    pub fn create(node_id: u64, grpc_config: GrpcConfig, meta_handle: Arc<MetaHandle<SP>>) -> Self {
+    pub fn create(
+        node_id: u64,
+        grpc_config: GrpcConfig,
+        version: Version,
+        meta_handle: Arc<MetaHandle<SP>>,
+    ) -> Self {
         Self {
             node_id,
             grpc_config,
+            version,
             meta_handle: Some(meta_handle),
             join_handle: None,
             stop_grpc_tx: None,
@@ -122,7 +130,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
 
         info!("start gRPC listening: {}", addr);
 
-        let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_handle));
+        let grpc_impl = MetaServiceImpl::create(self.version.clone(), Arc::downgrade(&meta_handle));
         let grpc_srv = MetaServiceServer::new(grpc_impl)
             .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);

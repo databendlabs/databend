@@ -40,7 +40,7 @@ async fn test_features() -> anyhow::Result<()> {
         admin: tcs[0].config.admin.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
-    let mut srv0 = HttpService::create(http_cfg0, meta0.clone());
+    let mut srv0 = HttpService::create(http_cfg0, "test-version".to_string(), meta0.clone());
     srv0.do_start().await.expect("HTTP: admin api error");
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
@@ -48,7 +48,7 @@ async fn test_features() -> anyhow::Result<()> {
         admin: tcs[1].config.admin.clone(),
         config_display: format!("{:?}", tcs[1].config),
     };
-    let mut srv1 = HttpService::create(http_cfg1, meta1.clone());
+    let mut srv1 = HttpService::create(http_cfg1, "test-version".to_string(), meta1.clone());
     srv1.do_start().await.expect("HTTP: admin api error");
 
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
