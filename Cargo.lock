@@ -3299,6 +3299,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
+ "databend-meta-cli-config",
  "databend-meta-runtime",
  "databend-query",
  "form_urlencoded",
@@ -5446,9 +5447,7 @@ dependencies = [
  "async-trait",
  "backon",
  "chrono",
- "clap",
  "databend-base",
- "databend-common-config",
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-cache",
@@ -5462,7 +5461,6 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
  "databend-common-metrics",
- "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta-admin",
@@ -5493,7 +5491,6 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
- "serfig",
  "state-machine-api",
  "temp-env",
  "tempfile",
@@ -5546,7 +5543,6 @@ dependencies = [
  "clap",
  "databend-base",
  "databend-common-base",
- "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-client",
@@ -5556,13 +5552,13 @@ dependencies = [
  "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
- "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
  "databend-meta-admin",
+ "databend-meta-cli-config",
  "databend-meta-runtime",
  "display-more 0.2.1",
  "fastrace",
@@ -5575,6 +5571,26 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "databend-meta-cli-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "databend-common-config",
+ "databend-common-meta-raft-store",
+ "databend-common-meta-types",
+ "databend-common-storage",
+ "databend-common-tracing",
+ "databend-common-version",
+ "databend-meta",
+ "env_logger 0.11.8",
+ "serde",
+ "serfig",
+ "temp-env",
+ "tempfile",
 ]
 
 [[package]]

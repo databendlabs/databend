@@ -19,6 +19,7 @@ databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-cli-config = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-query = { workspace = true }
 
