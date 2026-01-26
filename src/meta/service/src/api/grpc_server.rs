@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use databend_base::shutdown::Graceful;
+use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
@@ -150,9 +151,12 @@ impl GrpcServer {
             .in_span(Span::enter_with_local_parent("spawn-grpc")),
         );
 
-        started_rx
-            .await
-            .expect("maybe address already in use, try to use another port");
+        started_rx.await.map_err(|err| {
+            MetaNetworkError::ConnectionError(ConnectionError::new(
+                err,
+                format!("failed to start gRPC server on {addr}"),
+            ))
+        })?;
 
         self.join_handle = Some(j);
         self.stop_grpc_tx = Some(stop_grpc_tx);

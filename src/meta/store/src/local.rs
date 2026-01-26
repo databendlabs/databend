@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use databend_base::uniq_id::GlobalSeq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -39,6 +40,8 @@ use tokio::time::sleep;
 ///
 /// The service will be shutdown if this struct is dropped.
 /// It deref to `ClientHandle` thus it can be used as a client.
+const LOCAL_META_START_RETRIES: usize = 5;
+
 pub struct LocalMetaService {
     _temp_dir: Option<tempfile::TempDir>,
 
@@ -109,60 +112,88 @@ impl LocalMetaService {
             (Some(temp_dir), dir_path)
         };
 
-        let raft_port = next_port();
-        let mut config = configs::Config::default();
+        for attempt in 1..=LOCAL_META_START_RETRIES {
+            let raft_port = find_available_port().unwrap_or_else(|_| next_port());
+            let mut config = configs::Config::default();
 
-        config.raft_config.id = 0;
+            config.raft_config.id = 0;
+            config.raft_config.config_id = raft_port.to_string();
 
-        config.raft_config.config_id = raft_port.to_string();
+            // Use a unique dir for each instance.
+            config.raft_config.raft_dir = format!("{}/{}-{}/raft_dir", dir_path, name, raft_port);
 
-        // Use a unique dir for each instance.
-        config.raft_config.raft_dir = format!("{}/{}-{}/raft_dir", dir_path, name, raft_port);
+            // By default, create a meta node instead of open an existent one.
+            config.raft_config.single = true;
 
-        // By default, create a meta node instead of open an existent one.
-        config.raft_config.single = true;
+            config.raft_config.raft_api_port = raft_port;
+            config.raft_config.raft_listen_host = "127.0.0.1".to_string();
+            config.raft_config.raft_advertise_host = "localhost".to_string();
 
-        config.raft_config.raft_api_port = raft_port;
-        config.raft_config.raft_listen_host = "127.0.0.1".to_string();
-        config.raft_config.raft_advertise_host = "localhost".to_string();
+            let host = "127.0.0.1";
 
-        let host = "127.0.0.1";
+            {
+                let grpc_port = find_available_port().unwrap_or_else(|_| next_port());
+                config.grpc_api_address = format!("{}:{}", host, grpc_port);
+                config.grpc_api_advertise_host = Some(host.to_string());
+            }
 
-        {
-            let grpc_port = next_port();
-            config.grpc_api_address = format!("{}:{}", host, grpc_port);
-            config.grpc_api_advertise_host = Some(host.to_string());
+            {
+                let http_port = find_available_port().unwrap_or_else(|_| next_port());
+                config.admin_api_address = format!("{}:{}", host, http_port);
+            }
+
+            info!(
+                "new LocalMetaService({}) attempt #{} with config: {:?}",
+                name, attempt, config
+            );
+
+            // Clean up the raft dir if it exists.
+            if temp_dir.is_some() {
+                Self::rm_raft_dir(&config, "new LocalMetaService");
+            }
+
+            // Bring up the services
+            let meta_handle = Arc::new(MetaWorker::create_meta_worker_in_rt(config.clone()).await?);
+            let mut grpc_server = GrpcServer::create(config.clone(), meta_handle.clone());
+
+            match grpc_server.do_start().await {
+                Ok(()) => {
+                    let client = Self::grpc_client(&config, version.clone()).await?;
+                    return Ok(LocalMetaService {
+                        _temp_dir: temp_dir,
+                        name,
+                        config,
+                        grpc_server: Some(Box::new(grpc_server)),
+                        client,
+                    });
+                }
+                Err(err) => {
+                    warn!(
+                        "LocalMetaService({}) attempt #{} failed to start on {}: {err}",
+                        name, attempt, config.grpc_api_address
+                    );
+                    if let Err(stop_err) = meta_handle
+                        .request(|meta_node| {
+                            Box::pin(async move {
+                                let _ = meta_node.stop().await;
+                            })
+                        })
+                        .await
+                    {
+                        warn!(
+                            "LocalMetaService({}) attempt #{} failed to stop meta node cleanly: {}",
+                            name, attempt, stop_err
+                        );
+                    }
+                }
+            }
         }
 
-        {
-            let http_port = next_port();
-            config.admin_api_address = format!("{}:{}", host, http_port);
-        }
-
-        info!("new LocalMetaService({}) with config: {:?}", name, config);
-
-        // Clean up the raft dir if it exists.
-        if temp_dir.is_some() {
-            Self::rm_raft_dir(&config, "new LocalMetaService");
-        }
-
-        // Bring up the services
-        let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
-        let meta_handle = Arc::new(meta_handle);
-        let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
-        grpc_server.do_start().await?;
-
-        let client = Self::grpc_client(&config, version).await?;
-
-        let local = LocalMetaService {
-            _temp_dir: temp_dir,
+        Err(anyhow!(
+            "LocalMetaService({}) failed to start after {} attempts",
             name,
-            config,
-            grpc_server: Some(Box::new(grpc_server)),
-            client,
-        };
-
-        Ok(local)
+            LOCAL_META_START_RETRIES
+        ))
     }
 
     pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
