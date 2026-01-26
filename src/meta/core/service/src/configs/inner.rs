@@ -151,19 +151,6 @@ impl Config {
         Ok(cfg)
     }
 
-    /// Transform config into the outer style.
-    ///
-    /// This function should only be used for end-users.
-    ///
-    /// For examples:
-    ///
-    /// - system config table
-    /// - HTTP Handler
-    /// - tests
-    pub fn into_outer(self) -> OuterV0Config {
-        OuterV0Config::from(self)
-    }
-
     /// Create `Node` from config
     pub fn get_node(&self) -> Node {
         Node::new(
