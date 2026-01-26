@@ -41,7 +41,6 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
@@ -135,7 +134,6 @@ pub struct SendPartInfoSink {
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
     enable_cache: bool,
-    block_slot: Option<BlockSlotDescription>,
 }
 
 impl SendPartInfoSink {
@@ -147,7 +145,6 @@ impl SendPartInfoSink {
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
         enable_cache: bool,
-        block_slot: Option<BlockSlotDescription>,
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
@@ -162,7 +159,6 @@ impl SendPartInfoSink {
                 statistics,
                 send_part_state,
                 enable_cache,
-                block_slot,
             },
         )))
     }
@@ -232,13 +228,6 @@ impl SendPartInfoSink {
         let mut parts = Vec::with_capacity(block_metas.len());
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            // Block-level partition shuffle: filter blocks by block_idx % num_slots == slot
-            if let Some(BlockSlotDescription { num_slots, slot }) = &self.block_slot {
-                if block_meta_index.block_idx % num_slots != *slot as usize {
-                    continue;
-                }
-            }
-
             let rows = block_meta.row_count as usize;
             let previous_limit = self.send_part_state.limit.fetch_sub(
                 rows.min(self.send_part_state.limit.load(Ordering::SeqCst)),
@@ -286,13 +275,6 @@ impl SendPartInfoSink {
         };
 
         for (block_meta_index, block_meta) in block_metas.iter() {
-            // Block-level partition shuffle: filter blocks by block_idx % num_slots == slot
-            if let Some(BlockSlotDescription { num_slots, slot }) = &self.block_slot {
-                if block_meta_index.block_idx % num_slots != *slot as usize {
-                    continue;
-                }
-            }
-
             let rows = block_meta.row_count as usize;
             let previous_limit = self.send_part_state.limit.fetch_sub(
                 rows.min(self.send_part_state.limit.load(Ordering::SeqCst)),
