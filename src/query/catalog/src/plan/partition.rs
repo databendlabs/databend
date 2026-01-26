@@ -195,8 +195,10 @@ impl Partitions {
                 parts.shuffle(&mut rng);
                 parts
             }
-            // All executors receive all partitions, process them sequentially.
-            // For BlockMod, block filtering is controlled by plan.block_slot, not by kind.
+            // These shuffle kinds distribute all partitions to all executors (broadcast pattern):
+            // - BlockMod: Each executor filters blocks using block_idx % num_executors during execution
+            // - BroadcastCluster/BroadcastWarehouse: Each executor processes all blocks
+            // The actual filtering logic is handled during partition processing, not here.
             PartitionsShuffleKind::BlockMod
             | PartitionsShuffleKind::BroadcastCluster
             | PartitionsShuffleKind::BroadcastWarehouse => {
