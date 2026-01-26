@@ -48,6 +48,7 @@
 #![feature(never_type)]
 #![feature(iter_map_windows)]
 #![feature(likely_unlikely)]
+#![feature(portable_simd)]
 
 #[allow(dead_code)]
 mod block;
