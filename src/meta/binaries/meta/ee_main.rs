@@ -15,7 +15,6 @@
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 mod entry;
-mod kvapi;
 
 use databend_common_base::mem_allocator::DefaultGlobalAllocator;
 use databend_meta::configs::Config;

@@ -16,7 +16,6 @@
 #![allow(clippy::collapsible_if)]
 
 mod entry;
-mod kvapi;
 
 use databend_common_base::mem_allocator::DefaultGlobalAllocator;
 use databend_meta::configs::Config;

@@ -76,25 +76,6 @@ impl GrpcConfig {
     }
 }
 
-/// Arguments for KV API commands.
-///
-/// This struct holds the parameters needed to execute KV API operations
-/// like upsert, get, mget, and list.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
-pub struct KvApiArgs {
-    /// Keys to operate on.
-    pub key: Vec<String>,
-
-    /// Value to store (for upsert operations).
-    pub value: String,
-
-    /// Optional TTL in seconds for the key.
-    pub expire_after: Option<u64>,
-
-    /// Prefix for list operations.
-    pub prefix: String,
-}
-
 /// Configuration for the Admin HTTP API server.
 ///
 /// This struct holds settings for the HTTP endpoint that serves administrative
@@ -111,9 +92,6 @@ pub struct AdminConfig {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
-    pub kv_api: KvApiArgs,
-    pub username: String,
-    pub password: String,
     pub config_file: String,
     pub log: LogConfig,
     pub admin: AdminConfig,
@@ -125,9 +103,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             cmd: "".to_string(),
-            kv_api: KvApiArgs::default(),
-            username: "".to_string(),
-            password: "".to_string(),
             config_file: "".to_string(),
             log: LogConfig::default(),
             admin: AdminConfig {

@@ -105,19 +105,17 @@ class TestContext:
         print(f" === databend-meta ver={version} id={node_id} started")
 
     def feed_data(self, node_id: int, number: int = 10) -> None:
-        """Feed test data to node using databend-meta --cmd."""
+        """Feed test data to node using databend-metactl upsert."""
         # Use leader_ver to match the leader's protocol version (only leader accepts writes)
-        # Use databend-meta --cmd for compatibility with older versions that lack metabench
         print(f" === Feeding {number} key-value pairs to node {node_id}")
         for i in range(number):
             key = f"test_key_{i}"
             value = f"test_value_{i}_data"
             cmd = [
-                str(self.binary(self.leader_ver, "databend-meta")),
+                str(self.binary(self.leader_ver, "databend-metactl")),
+                "upsert",
                 "--grpc-api-address",
                 self.grpc_addr(node_id),
-                "--cmd",
-                "kvapi::upsert",
                 "--key",
                 key,
                 "--value",
