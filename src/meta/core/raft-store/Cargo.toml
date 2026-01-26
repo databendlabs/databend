@@ -7,9 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[features]
-io-uring = ["databend-common-meta-sled-store/io-uring"]
-
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }

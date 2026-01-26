@@ -7,13 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[features]
-default = []
-io-uring = [
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
-]
-
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
