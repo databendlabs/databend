@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
+use std::sync::Arc;
 
-pub mod grpc;
-mod grpc_server;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_meta::meta_node::meta_handle::MetaHandle;
+use databend_meta::metrics::meta_metrics_to_prometheus_string;
+use poem::IntoResponse;
+use poem::Response;
 
-pub use grpc_server::GrpcServer;
+use crate::HttpService;
+
+impl<SP: SpawnApi> HttpService<SP> {
+    pub async fn metrics_handler(_meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {
+        Ok(meta_metrics_to_prometheus_string().into_response())
+    }
+}

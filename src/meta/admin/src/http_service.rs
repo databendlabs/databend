@@ -25,7 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::MetaNetworkError;
+use databend_meta::meta_node::meta_handle::MetaHandle;
 use futures::future::BoxFuture;
 use log::info;
 use log::warn;
@@ -36,19 +36,18 @@ use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
 
-use crate::api::http::v1::ctrl::TransferLeaderQuery;
-use crate::api::http::v1::features::SetFeatureQuery;
-use crate::configs::Config;
-use crate::meta_node::meta_handle::MetaHandle;
+use crate::HttpServiceConfig;
+use crate::v1::ctrl::TransferLeaderQuery;
+use crate::v1::features::SetFeatureQuery;
 
 pub struct HttpService<SP: SpawnApi> {
-    cfg: Config,
+    cfg: HttpServiceConfig,
     shutdown_handler: HttpShutdownHandler,
     pub(crate) meta_handle: Arc<MetaHandle<SP>>,
 }
 
 impl<SP: SpawnApi> HttpService<SP> {
-    pub fn create(cfg: Config, meta_handle: Arc<MetaHandle<SP>>) -> Box<Self> {
+    pub fn create(cfg: HttpServiceConfig, meta_handle: Arc<MetaHandle<SP>>) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
@@ -62,7 +61,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
-            .at("/v1/config", get(super::http::v1::config::config_handler))
+            .at("/v1/config", get(crate::v1::config::config_handler))
             .at("/v1/ctrl/trigger_snapshot", {
                 let mh = mh.clone();
                 get(poem::endpoint::make(move |_req: Request| {
@@ -142,18 +141,16 @@ impl<SP: SpawnApi> HttpService<SP> {
         route.data(self.cfg.clone())
     }
 
-    fn build_tls(config: &Config) -> Result<OpensslTlsConfig, MetaNetworkError> {
-        let cfg = OpensslTlsConfig::new()
+    fn build_tls(config: &HttpServiceConfig) -> OpensslTlsConfig {
+        OpensslTlsConfig::new()
             .cert_from_file(config.admin_tls_server_cert.as_str())
-            .key_from_file(config.admin_tls_server_key.as_str());
-        Ok(cfg)
+            .key_from_file(config.admin_tls_server_key.as_str())
     }
 
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<(), HttpError> {
         info!("Http API TLS enabled");
 
-        let tls_config = Self::build_tls(&self.cfg.clone())
-            .map_err(|e| HttpError::TlsConfigError(AnyError::new(&e)))?;
+        let tls_config = Self::build_tls(&self.cfg);
         self.shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router(), None)
             .await?;

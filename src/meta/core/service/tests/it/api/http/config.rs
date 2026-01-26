@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta::api::http::v1::config::config_handler;
-use databend_meta::configs::Config;
+use databend_meta_admin::HttpServiceConfig;
+use databend_meta_admin::v1::config::config_handler;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
@@ -26,10 +26,15 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_config() -> anyhow::Result<()> {
-    let conf = Config::default();
+    let http_cfg = HttpServiceConfig {
+        admin_api_address: "127.0.0.1:28002".to_string(),
+        admin_tls_server_cert: "".to_string(),
+        admin_tls_server_key: "".to_string(),
+        config_display: "test config display".to_string(),
+    };
     let cluster_router = Route::new()
         .at("/v1/config", get(config_handler))
-        .data(conf.clone());
+        .data(http_cfg.clone());
 
     let response = cluster_router
         .call(

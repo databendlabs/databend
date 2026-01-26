@@ -15,7 +15,8 @@
 use std::time::Duration;
 
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
-use databend_meta::api::HttpService;
+use databend_meta_admin::HttpService;
+use databend_meta_admin::HttpServiceConfig;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
@@ -36,7 +37,13 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(0));
 
-    let mut srv = HttpService::create(tcs[0].config.clone(), meta0.clone());
+    let http_cfg = HttpServiceConfig {
+        admin_api_address: tcs[0].config.admin_api_address.clone(),
+        admin_tls_server_cert: tcs[0].config.admin_tls_server_cert.clone(),
+        admin_tls_server_key: tcs[0].config.admin_tls_server_key.clone(),
+        config_display: format!("{:?}", tcs[0].config),
+    };
+    let mut srv = HttpService::create(http_cfg, meta0.clone());
     srv.do_start().await.expect("HTTP: admin api error");
 
     let transfer_url = || {

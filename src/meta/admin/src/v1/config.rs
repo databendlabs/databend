@@ -12,4 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod v1;
+use poem::web::Data;
+
+use crate::HttpServiceConfig;
+
+#[poem::handler]
+pub async fn config_handler(cfg: Data<&HttpServiceConfig>) -> String {
+    cfg.0.config_display.clone()
+}

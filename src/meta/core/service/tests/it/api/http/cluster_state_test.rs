@@ -26,9 +26,10 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_version::BUILD_INFO;
-use databend_meta::api::HttpService;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
+use databend_meta_admin::HttpService;
+use databend_meta_admin::HttpServiceConfig;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
@@ -285,7 +286,13 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         })
         .await??;
 
-    let mut srv = HttpService::create(tc1.config.clone(), meta_handle_1);
+    let http_cfg = HttpServiceConfig {
+        admin_api_address: tc1.config.admin_api_address.clone(),
+        admin_tls_server_cert: tc1.config.admin_tls_server_cert.clone(),
+        admin_tls_server_key: tc1.config.admin_tls_server_key.clone(),
+        config_display: format!("{:?}", tc1.config),
+    };
+    let mut srv = HttpService::create(http_cfg, meta_handle_1);
 
     // test cert is issued for "localhost"
     let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);

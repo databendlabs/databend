@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_meta_runtime_api::SpawnApi;
+use databend_meta::meta_node::meta_handle::MetaHandle;
 use http::StatusCode;
 use poem::IntoResponse;
 use poem::Response;
 use poem::web::Json;
 
-use crate::api::http_service::HttpService;
-use crate::meta_node::meta_handle::MetaHandle;
+use crate::HttpService;
 
 impl<SP: SpawnApi> HttpService<SP> {
     pub async fn nodes_handler(meta_handle: Arc<MetaHandle<SP>>) -> poem::Result<Response> {

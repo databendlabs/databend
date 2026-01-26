@@ -4102,6 +4102,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "databend-meta-admin",
  "databend-meta-runtime",
  "display-more 0.2.1",
  "futures",
@@ -5449,7 +5450,6 @@ dependencies = [
  "databend-base",
  "databend-common-config",
  "databend-common-grpc",
- "databend-common-http",
  "databend-common-meta-api",
  "databend-common-meta-cache",
  "databend-common-meta-client",
@@ -5465,6 +5465,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-meta-admin",
  "databend-meta-runtime",
  "deepsize",
  "derive_more",
@@ -5492,7 +5493,6 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "serfig",
  "state-machine-api",
  "temp-env",
@@ -5504,6 +5504,36 @@ dependencies = [
  "tonic 0.13.1",
  "tonic-reflection",
  "watcher",
+]
+
+[[package]]
+name = "databend-meta-admin"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "async-trait",
+ "databend-base",
+ "databend-common-http",
+ "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
+ "databend-common-meta-sled-store",
+ "databend-common-meta-types",
+ "databend-meta",
+ "databend-meta-runtime",
+ "env_logger 0.11.8",
+ "futures",
+ "http 1.3.1",
+ "log",
+ "maplit",
+ "poem",
+ "pretty_assertions",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_urlencoded",
+ "temp-env",
+ "tempfile",
+ "test-harness",
 ]
 
 [[package]]
@@ -5532,6 +5562,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
+ "databend-meta-admin",
  "databend-meta-runtime",
  "display-more 0.2.1",
  "fastrace",

@@ -10,7 +10,7 @@ edition = { workspace = true }
 [features]
 default = ["jemalloc"]
 memory-profiling = [
-    "databend-meta/memory-profiling",
+    "databend-meta-admin/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
 jemalloc = ["databend-common-base/jemalloc"]
@@ -40,6 +40,7 @@ databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }
 
 anyerror = { workspace = true }

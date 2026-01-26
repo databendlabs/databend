@@ -20,6 +20,7 @@ members = [
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
+    "src/meta/admin",
     "src/meta/kvapi",
     "src/meta/kvapi-test-suite",
     "src/meta/process",
@@ -44,6 +45,7 @@ default-members = [
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
+    "src/meta/admin",
     "src/meta/kvapi",
     "src/meta/kvapi-test-suite",
     "src/meta/process",
@@ -151,6 +153,7 @@ databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functio
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/core/service" }
+databend-meta-admin = { path = "src/meta/admin" }
 databend-meta-runtime = { path = "src/meta/runtime" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
