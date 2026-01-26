@@ -48,6 +48,7 @@ use serfig::parsers::Toml;
 use super::inner::AdminConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::GrpcConfig;
+use super::inner::TlsConfig;
 use crate::version::MIN_METACLI_SEMVER;
 
 /// Full version string for databend-meta including build info, min client version, and data version
@@ -192,14 +193,18 @@ impl TryFrom<Config> for InnerConfig {
             log,
             admin: AdminConfig {
                 api_address: outer.admin_api_address,
-                tls_server_cert: outer.admin_tls_server_cert,
-                tls_server_key: outer.admin_tls_server_key,
+                tls: TlsConfig {
+                    cert: outer.admin_tls_server_cert,
+                    key: outer.admin_tls_server_key,
+                },
             },
             grpc: GrpcConfig {
                 api_address: outer.grpc_api_address,
                 advertise_host: outer.grpc_api_advertise_host,
-                tls_server_cert: outer.grpc_tls_server_cert,
-                tls_server_key: outer.grpc_tls_server_key,
+                tls: TlsConfig {
+                    cert: outer.grpc_tls_server_cert,
+                    key: outer.grpc_tls_server_key,
+                },
             },
             raft_config: outer.raft_config.into(),
         })
@@ -221,12 +226,12 @@ impl From<InnerConfig> for Config {
             log_dir: inner.log.file.dir.clone(),
             log: inner.log.into(),
             admin_api_address: inner.admin.api_address,
-            admin_tls_server_cert: inner.admin.tls_server_cert,
-            admin_tls_server_key: inner.admin.tls_server_key,
+            admin_tls_server_cert: inner.admin.tls.cert,
+            admin_tls_server_key: inner.admin.tls.key,
             grpc_api_address: inner.grpc.api_address,
             grpc_api_advertise_host: inner.grpc.advertise_host,
-            grpc_tls_server_cert: inner.grpc.tls_server_cert,
-            grpc_tls_server_key: inner.grpc.tls_server_key,
+            grpc_tls_server_cert: inner.grpc.tls.cert,
+            grpc_tls_server_key: inner.grpc.tls.key,
             raft_config: inner.raft_config.into(),
         }
     }

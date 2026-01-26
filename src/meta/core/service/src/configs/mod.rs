@@ -18,3 +18,5 @@ pub mod outer_v0;
 pub use inner::AdminConfig;
 pub use inner::Config;
 pub use inner::GrpcConfig;
+pub use inner::KvApiArgs;
+pub use inner::TlsConfig;

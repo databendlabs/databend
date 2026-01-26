@@ -21,7 +21,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
-use databend_meta::configs::Config;
+use databend_meta::configs::KvApiArgs;
 
 pub enum KvApiCommand {
     Get(String),
@@ -31,16 +31,16 @@ pub enum KvApiCommand {
 }
 
 impl KvApiCommand {
-    pub fn from_config(config: &Config, op: &str) -> Result<Self, String> {
+    pub fn from_args(args: &KvApiArgs, op: &str) -> Result<Self, String> {
         let api = match op {
             "upsert" => {
-                if config.key.len() != 1 {
+                if args.key.len() != 1 {
                     return Err("The number of keys must be 1".to_string());
                 }
 
-                let req = UpsertKV::update(config.key[0].as_str(), config.value.as_bytes());
+                let req = UpsertKV::update(args.key[0].as_str(), args.value.as_bytes());
 
-                let req = if let Some(expire_after) = config.expire_after {
+                let req = if let Some(expire_after) = args.expire_after {
                     req.with(MetaSpec::new_ttl(std::time::Duration::from_secs(
                         expire_after,
                     )))
@@ -51,19 +51,19 @@ impl KvApiCommand {
                 Self::Upsert(req)
             }
             "delete" => {
-                if config.key.len() != 1 {
+                if args.key.len() != 1 {
                     return Err("The number of keys must be 1".to_string());
                 }
-                Self::Upsert(UpsertKV::delete(&config.key[0]))
+                Self::Upsert(UpsertKV::delete(&args.key[0]))
             }
             "get" => {
-                if config.key.len() != 1 {
+                if args.key.len() != 1 {
                     return Err("The number of keys must be 1".to_string());
                 }
-                Self::Get(config.key[0].clone())
+                Self::Get(args.key[0].clone())
             }
-            "mget" => Self::MGet(config.key.clone()),
-            "list" => Self::List(config.prefix.clone()),
+            "mget" => Self::MGet(args.key.clone()),
+            "list" => Self::List(args.prefix.clone()),
             _ => {
                 return Err(format!("Unknown kv api command: {}", op));
             }

@@ -19,7 +19,7 @@ use anyerror::AnyError;
 use databend_base::shutdown::Graceful;
 use databend_common_meta_runtime_api::JoinHandle;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcConfig as GrpcLimits;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
@@ -35,13 +35,14 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
-use crate::configs::Config;
+use crate::configs::GrpcConfig;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
 
 pub struct GrpcServer<SP: SpawnApi> {
-    conf: Config,
+    node_id: u64,
+    grpc_config: GrpcConfig,
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
@@ -52,14 +53,15 @@ pub struct GrpcServer<SP: SpawnApi> {
 
 impl<SP: SpawnApi> Drop for GrpcServer<SP> {
     fn drop(&mut self) {
-        info!("GrpcServer::drop: id={}", self.conf.raft_config.id);
+        info!("GrpcServer::drop: id={}", self.node_id);
     }
 }
 
 impl<SP: SpawnApi> GrpcServer<SP> {
-    pub fn create(conf: Config, meta_handle: Arc<MetaHandle<SP>>) -> Self {
+    pub fn create(node_id: u64, grpc_config: GrpcConfig, meta_handle: Arc<MetaHandle<SP>>) -> Self {
         Self {
-            conf,
+            node_id,
+            grpc_config,
             meta_handle: Some(meta_handle),
             join_handle: None,
             stop_grpc_tx: None,
@@ -83,7 +85,6 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
         info!("GrpcServer::start");
 
-        let conf = self.conf.clone();
         let meta_handle = self.meta_handle.clone().unwrap();
         // For sending signal when server started.
         let (started_tx, started_rx) = oneshot::channel::<()>();
@@ -100,7 +101,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         // Setting to None disables the limit entirely.
         let builder = Server::builder().http2_max_pending_accept_reset_streams(Some(4096));
 
-        let tls_conf = Self::tls_config(&self.conf)
+        let tls_conf = Self::tls_config(&self.grpc_config)
             .await
             .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
 
@@ -114,16 +115,19 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             builder
         };
 
-        let addr = conf.grpc.api_address.parse::<std::net::SocketAddr>()?;
+        let addr = self
+            .grpc_config
+            .api_address
+            .parse::<std::net::SocketAddr>()?;
 
         info!("start gRPC listening: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_handle));
         let grpc_srv = MetaServiceServer::new(grpc_impl)
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+            .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
 
-        let id = conf.raft_config.id;
+        let id = self.node_id;
 
         let j = SP::spawn(
             async move {
@@ -210,10 +214,12 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         info!("Done GrpcServer::stop");
     }
 
-    async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
-        if conf.grpc.tls_enabled() {
-            let cert = tokio::fs::read(conf.grpc.tls_server_cert.as_str()).await?;
-            let key = tokio::fs::read(conf.grpc.tls_server_key.as_str()).await?;
+    async fn tls_config(
+        grpc_config: &GrpcConfig,
+    ) -> Result<Option<ServerTlsConfig>, std::io::Error> {
+        if grpc_config.tls.enabled() {
+            let cert = tokio::fs::read(grpc_config.tls.cert.as_str()).await?;
+            let key = tokio::fs::read(grpc_config.tls.key.as_str()).await?;
             let server_identity = Identity::from_pem(cert, key);
 
             let tls = ServerTlsConfig::new().identity(server_identity);

@@ -21,6 +21,28 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::outer_v0::Config as OuterV0Config;
 
+/// TLS configuration for server endpoints.
+///
+/// This struct holds the paths to TLS certificate and private key files
+/// used to secure server connections.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+pub struct TlsConfig {
+    /// Path to the TLS certificate file.
+    /// Leave empty to disable TLS.
+    pub cert: String,
+
+    /// Path to the TLS private key file.
+    /// Leave empty to disable TLS.
+    pub key: String,
+}
+
+impl TlsConfig {
+    /// Returns `true` if TLS is enabled (both cert and key are provided).
+    pub fn enabled(&self) -> bool {
+        !self.key.is_empty() && !self.cert.is_empty()
+    }
+}
+
 /// Configuration for the gRPC API server.
 ///
 /// This struct holds settings for the gRPC endpoint that serves client requests,
@@ -36,21 +58,11 @@ pub struct GrpcConfig {
     /// address other nodes use to connect to this server.
     pub advertise_host: Option<String>,
 
-    /// Path to the TLS certificate file for the gRPC server.
-    /// Leave empty to disable TLS.
-    pub tls_server_cert: String,
-
-    /// Path to the TLS private key file for the gRPC server.
-    /// Leave empty to disable TLS.
-    pub tls_server_key: String,
+    /// TLS configuration for the gRPC server.
+    pub tls: TlsConfig,
 }
 
 impl GrpcConfig {
-    /// Returns `true` if TLS is enabled (both cert and key are provided).
-    pub fn tls_enabled(&self) -> bool {
-        !self.tls_server_key.is_empty() && !self.tls_server_cert.is_empty()
-    }
-
     /// Returns the advertise address if `advertise_host` is set.
     /// The address is formed by combining `advertise_host` with the port from `api_address`.
     pub fn advertise_address(&self) -> Option<String> {
@@ -64,6 +76,25 @@ impl GrpcConfig {
     }
 }
 
+/// Arguments for KV API commands.
+///
+/// This struct holds the parameters needed to execute KV API operations
+/// like upsert, get, mget, and list.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+pub struct KvApiArgs {
+    /// Keys to operate on.
+    pub key: Vec<String>,
+
+    /// Value to store (for upsert operations).
+    pub value: String,
+
+    /// Optional TTL in seconds for the key.
+    pub expire_after: Option<u64>,
+
+    /// Prefix for list operations.
+    pub prefix: String,
+}
+
 /// Configuration for the Admin HTTP API server.
 ///
 /// This struct holds settings for the HTTP endpoint that serves administrative
@@ -73,13 +104,8 @@ pub struct AdminConfig {
     /// The address the admin HTTP server listens on, e.g., "0.0.0.0:28002".
     pub api_address: String,
 
-    /// Path to the TLS certificate file for the admin server.
-    /// Leave empty to disable TLS.
-    pub tls_server_cert: String,
-
-    /// Path to the TLS private key file for the admin server.
-    /// Leave empty to disable TLS.
-    pub tls_server_key: String,
+    /// TLS configuration for the admin server.
+    pub tls: TlsConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -112,14 +138,12 @@ impl Default for Config {
             log: LogConfig::default(),
             admin: AdminConfig {
                 api_address: "127.0.0.1:28002".to_string(),
-                tls_server_cert: "".to_string(),
-                tls_server_key: "".to_string(),
+                tls: TlsConfig::default(),
             },
             grpc: GrpcConfig {
                 api_address: "127.0.0.1:9191".to_string(),
                 advertise_host: None,
-                tls_server_cert: "".to_string(),
-                tls_server_key: "".to_string(),
+                tls: TlsConfig::default(),
             },
             raft_config: Default::default(),
         }
@@ -178,5 +202,15 @@ impl Config {
             self.raft_config.raft_api_advertise_host_endpoint(),
         )
         .with_grpc_advertise_address(self.grpc.advertise_address())
+    }
+
+    /// Extract KV API arguments from config
+    pub fn kv_api_args(&self) -> KvApiArgs {
+        KvApiArgs {
+            key: self.key.clone(),
+            value: self.value.clone(),
+            expire_after: self.expire_after,
+            prefix: self.prefix.clone(),
+        }
     }
 }

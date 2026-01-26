@@ -43,8 +43,10 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
 
     let http_cfg = HttpServiceConfig {
         admin_api_address: addr_str.to_string(),
-        admin_tls_server_cert: TEST_SERVER_CERT.to_owned(),
-        admin_tls_server_key: TEST_SERVER_KEY.to_owned(),
+        tls: databend_meta::configs::TlsConfig {
+            cert: TEST_SERVER_CERT.to_owned(),
+            key: TEST_SERVER_KEY.to_owned(),
+        },
         config_display: "test config".to_string(),
     };
     let mut srv = HttpService::create(http_cfg, mh);
