@@ -4571,6 +4571,7 @@ dependencies = [
  "simsearch",
  "tantivy-query-grammar",
  "tokio",
+ "toml 0.8.22",
  "unicase",
  "url",
  "uuid",

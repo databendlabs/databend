@@ -150,7 +150,9 @@ def _download_udf_imports(imports, target_dir):
         if UDF_DOCKER_LOG_COMMANDS:
             _log("UDF import download:", item.location, "->", dest)
         try:
-            with urllib.request.urlopen(item.url, timeout=30) as resp, open(dest, "wb") as f:
+            headers = dict(item.headers)
+            req = urllib.request.Request(item.url, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as f:
                 shutil.copyfileobj(resp, f)
         except Exception as exc:
             raise RuntimeError(f"failed to download UDF import '{item.location}': {exc}") from exc

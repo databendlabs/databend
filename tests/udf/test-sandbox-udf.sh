@@ -199,9 +199,16 @@ IMPORTS = ('@udf_import_stage/imports/helper.py')
 PACKAGES = ()
 HANDLER = 'add_one'
 AS $$
+# This metadata dependency is required for sandbox UDFs too; without parsing it
+# the cloud path misses the package and raises ModuleNotFoundError. TOML format
+# /// script
+# dependencies = ["humanize==4.9.0"]
+# ///
 import helper
+import humanize
 
 def add_one(x: int) -> int:
+    humanize.intcomma(x)
     return helper.add_one(x)
 $$
 SQL
