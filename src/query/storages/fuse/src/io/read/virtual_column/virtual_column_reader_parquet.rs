@@ -13,10 +13,14 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::BitOr;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -87,40 +91,33 @@ impl VirtualColumnReader {
 
         let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
-        for (name, column_id) in &virtual_block_meta.virtual_column_name_ids {
-            let Some(virtual_column_meta) = virtual_block_meta.virtual_column_metas.get(column_id)
-            else {
-                continue;
-            };
+        let mut shared_value_ids = HashSet::new();
+        let mut base_id_to_source = HashMap::new();
+        for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
+            shared_value_ids.insert(*base_id + 1);
+            base_id_to_source.insert(*base_id, *source_column_id);
+        }
+        for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
             let (offset, len) = virtual_column_meta.offset_length();
             ranges.push((*column_id, offset..(offset + len)));
-            let data_type = virtual_column_meta.data_type();
-            schema.add_internal_field(name, data_type, *column_id);
-        }
-
-        for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
-            let Some(shared_key_meta) = virtual_block_meta.virtual_column_metas.get(base_id) else {
+            if shared_value_ids.contains(column_id) {
                 continue;
-            };
-            let value_id = base_id + 1;
-            let Some(shared_value_meta) = virtual_block_meta.virtual_column_metas.get(&value_id)
-            else {
-                continue;
-            };
-            let (offset, len) = shared_key_meta.offset_length();
-            ranges.push((*base_id, offset..(offset + len)));
-            let (offset, len) = shared_value_meta.offset_length();
-            ranges.push((value_id, offset..(offset + len)));
-
-            let name = format!("{}__shared__", source_column_id);
-            let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
-                fields_name: vec!["key".to_string(), "value".to_string()],
-                fields_type: vec![
-                    TableDataType::Number(NumberDataType::UInt32),
-                    TableDataType::Variant,
-                ],
-            }));
-            schema.add_internal_field(&name, data_type, *base_id);
+            }
+            if let Some(source_column_id) = base_id_to_source.get(column_id) {
+                let name = format!("{}__shared__", source_column_id);
+                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::UInt32),
+                        TableDataType::Variant,
+                    ],
+                }));
+                schema.add_internal_field(&name, data_type, *column_id);
+            } else {
+                let name = column_id.to_string();
+                let data_type = virtual_column_meta.data_type();
+                schema.add_internal_field(&name, data_type, *column_id);
+            }
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
@@ -413,12 +410,22 @@ fn eval_read_plan(
                 return Ok(None);
             }
             let mut args = Vec::with_capacity(entries.len() * 2);
+            // Aggregate non-null flags via bitmap OR to check whether all columns are NULL.
+            let mut any_not_null_bitmap = MutableBitmap::from_len_zeroed(num_rows);
             for (key, plan) in entries {
                 let Some((value, data_type)) =
                     eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
                 else {
                     return Ok(None);
                 };
+                let not_null_bitmap = match &value {
+                    Value::Column(Column::Nullable(box nullable)) => nullable.validity.clone(),
+                    Value::Scalar(Scalar::Null) | Value::Column(Column::Null { .. }) => {
+                        Bitmap::new_zeroed(num_rows)
+                    }
+                    _ => Bitmap::new_trued(num_rows),
+                };
+                any_not_null_bitmap = any_not_null_bitmap.bitor(&not_null_bitmap);
                 args.push((Value::Scalar(Scalar::String(key.clone())), DataType::String));
                 args.push((value, data_type));
             }
@@ -426,6 +433,22 @@ fn eval_read_plan(
                 None,
                 "object_construct",
                 args,
+                func_ctx,
+                num_rows,
+                &BUILTIN_FUNCTIONS,
+            )?;
+            // If all columns in Object are NULL, return NULL instead of empty Object.
+            let has_any = Value::Column(Column::Boolean(any_not_null_bitmap.into()));
+            let has_any_type = DataType::Boolean;
+            let null_type = value_type.wrap_nullable();
+            let (value, value_type) = eval_function(
+                None,
+                "if",
+                [
+                    (has_any, has_any_type),
+                    (value, value_type),
+                    (Value::Scalar(Scalar::Null), null_type),
+                ],
                 func_ctx,
                 num_rows,
                 &BUILTIN_FUNCTIONS,

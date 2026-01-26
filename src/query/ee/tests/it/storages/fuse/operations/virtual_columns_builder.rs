@@ -188,7 +188,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     // Expected columns: id, create, text, user.id, replies, geo.lat, shared_data
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
-        7
+        6
     );
 
     // Check types for good measure
@@ -234,13 +234,6 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     )
     .unwrap();
     assert_eq!(meta_geo_lat.data_type, VariantDataType::Jsonb);
-    let meta_shared_data = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "__shared_virtual_column_data__",
-    )
-    .unwrap();
-    assert_eq!(meta_shared_data.data_type, VariantDataType::Jsonb);
 
     let entries = vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
@@ -300,18 +293,14 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // Expected columns: shared_data due to > 70% nulls
-    assert_eq!(
-        result.draft_virtual_block_meta.virtual_column_metas.len(),
-        1
+    // all columns should be add to shared_column due to > 70% nulls
+    assert!(!result.data.is_empty());
+    assert!(
+        result
+            .draft_virtual_block_meta
+            .virtual_column_metas
+            .is_empty()
     );
-    let meta_shared_data = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "__shared_virtual_column_data__",
-    )
-    .unwrap();
-    assert_eq!(meta_shared_data.data_type, VariantDataType::Jsonb);
 
     // Test consecutive blocks with different JSON virtual columns
     // This test verifies that when adding consecutive blocks with completely different

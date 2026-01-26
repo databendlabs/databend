@@ -128,7 +128,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down.clone()))?
         .expect("virtual column pruner");
     let virtual_block_meta_index = pruner
-        .prune_virtual_columns(block.num_rows() as u64, &Some(virtual_block_meta))
+        .prune_virtual_columns(&Some(virtual_block_meta))
         .await?
         .expect("virtual block meta index");
 

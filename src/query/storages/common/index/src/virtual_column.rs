@@ -14,39 +14,30 @@
 
 use std::collections::HashMap;
 
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field;
-use arrow_schema::FieldRef;
 use arrow_schema::Schema;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use parquet::format::FileMetaData;
 
 pub const VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "virtual_column_string_table";
 pub const VIRTUAL_COLUMN_NODES_KEY: &str = "virtual_column_nodes";
+pub const VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: &str = "virtual_column_shared_column_ids";
 
-// Virtual columns are extracted from Variant/JSON values into independent parquet columns.
-// Each source column builds a trie keyed by path segments; leaf nodes point to either a
-// dedicated virtual column or a shared map entry for sparse paths. The parquet file stores:
-// - ARROW:schema: column names/types for all virtual columns.
-// - VIRTUAL_COLUMN_STRING_TABLE_KEY: a string table of unique path segments.
-// - VIRTUAL_COLUMN_NODES_KEY: the trie encoded by string table ids and leaf indices.
-// Column offsets/lengths/num_values and shared map columns are derived from parquet metadata.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum VirtualColumnNameIndex {
     // column_metas index
     Column(u32),
     // shared column index, index is shared map key index
-    Shared { source_id: u32, index: u32 },
+    Shared(u32),
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnNode {
     // children: segment_id -> child node, where segment_id references string_table.
     pub children: HashMap<u32, VirtualColumnNode>,
@@ -54,14 +45,14 @@ pub struct VirtualColumnNode {
     pub leaf: Option<VirtualColumnNameIndex>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnIdWithMeta {
     pub column_id: u32,
     pub meta: SingleColumnMeta,
     pub data_type: DataType,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnFileMeta {
     // All unique path segment strings in this file.
     pub string_table: Vec<String>,
@@ -98,6 +89,14 @@ impl TryFrom<Bytes> for VirtualColumnFileMeta {
     }
 }
 
+// Virtual columns are extracted from Variant/JSON values into independent parquet columns.
+// Each source column builds a trie keyed by path segments; leaf nodes point to either a
+// dedicated virtual column or a shared map entry for sparse paths. The parquet file stores:
+// - ARROW:schema: column names/types for all virtual columns.
+// - VIRTUAL_COLUMN_STRING_TABLE_KEY: a string table of unique path segments.
+// - VIRTUAL_COLUMN_NODES_KEY: the trie encoded by string table ids and leaf indices.
+// - VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: mapping of source_column_id -> (key_id, value_id).
+// Column offsets/lengths/num_values and shared map columns are derived from parquet metadata.
 impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
     type Error = ErrorCode;
 
@@ -105,6 +104,7 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
         let mut arrow_schema = None;
         let mut string_table = None;
         let mut virtual_column_nodes = None;
+        let mut shared_column_ids = None;
 
         let key_value_metadata = meta.key_value_metadata.unwrap_or_default();
         for key_value in &key_value_metadata {
@@ -117,22 +117,26 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
             } else if key_value.key == VIRTUAL_COLUMN_NODES_KEY {
                 let encoded_meta = key_value.value.as_ref().unwrap();
                 virtual_column_nodes = Some(get_virtual_column_nodes(encoded_meta)?);
+            } else if key_value.key == VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY {
+                let encoded_meta = key_value.value.as_ref().unwrap();
+                shared_column_ids = Some(get_virtual_column_shared_ids(encoded_meta)?);
             }
         }
 
         let arrow_schema = arrow_schema.ok_or_else(|| {
             ErrorCode::Internal("virtual column file missing ARROW:schema metadata")
         })?;
+        let data_schema = DataSchema::try_from(&arrow_schema)?;
         let string_table = string_table.ok_or_else(|| {
             ErrorCode::Internal("virtual column file missing virtual column string table metadata")
         })?;
         let virtual_column_nodes = virtual_column_nodes.ok_or_else(|| {
             ErrorCode::Internal("virtual column file missing virtual column nodes metadata")
         })?;
+        let shared_column_ids = shared_column_ids.unwrap_or_default();
 
         let rg = meta.row_groups.remove(0);
         let mut column_metas = Vec::with_capacity(rg.columns.len());
-        let mut shared_column_index: HashMap<u32, (Option<u32>, Option<u32>)> = HashMap::new();
         for (column_idx, column) in rg.columns.iter().enumerate() {
             let chunk_meta = column.meta_data.as_ref().ok_or_else(|| {
                 ErrorCode::Internal(
@@ -155,33 +159,24 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
                 len: col_len as u64,
                 num_values,
             };
-            let data_type = data_type_from_path(&arrow_schema, &chunk_meta.path_in_schema)?;
+            let data_type = data_type_from_path(&data_schema, &chunk_meta.path_in_schema)?;
             let column_id = column_idx as u32;
             column_metas.push(VirtualColumnIdWithMeta {
                 column_id,
                 meta: res,
                 data_type,
             });
-
-            let column_name = chunk_meta.path_in_schema.join(".");
-            if let Some((source_id, is_key)) = parse_shared_column_name(&column_name) {
-                let entry = shared_column_index.entry(source_id).or_insert((None, None));
-                if is_key {
-                    entry.0 = Some(column_id);
-                } else {
-                    entry.1 = Some(column_id);
-                }
-            }
         }
 
         let mut shared_column_metas = HashMap::new();
-        for (source_id, (key_idx, value_idx)) in shared_column_index {
-            let (Some(key_idx), Some(value_idx)) = (key_idx, value_idx) else {
+        for (source_id, (key_idx, value_idx)) in shared_column_ids {
+            let Some(key_meta) = column_metas.get(key_idx as usize) else {
                 continue;
             };
-            let key_meta = column_metas[key_idx as usize].clone();
-            let value_meta = column_metas[value_idx as usize].clone();
-            shared_column_metas.insert(source_id, (key_meta, value_meta));
+            let Some(value_meta) = column_metas.get(value_idx as usize) else {
+                continue;
+            };
+            shared_column_metas.insert(source_id, (key_meta.clone(), value_meta.clone()));
         }
 
         Ok(Self {
@@ -238,72 +233,41 @@ fn get_virtual_column_nodes(encoded_meta: &str) -> Result<HashMap<u32, VirtualCo
     })
 }
 
-fn data_type_from_path(schema: &Schema, path: &[String]) -> Result<DataType> {
-    let field = find_arrow_field(schema.fields(), path).ok_or_else(|| {
-        ErrorCode::Internal(format!("failed to find arrow field for path {:?}", path))
-    })?;
-    let table_field = TableField::try_from(field)?;
-    Ok(DataType::from(table_field.data_type()))
+fn get_virtual_column_shared_ids(encoded_meta: &str) -> Result<HashMap<u32, (u32, u32)>> {
+    serde_json::from_str(encoded_meta).map_err(|e| {
+        ErrorCode::StorageOther(format!(
+            "failed to decode virtual column shared ids {:?}",
+            e
+        ))
+    })
 }
 
-fn find_arrow_field<'a>(fields: &'a [FieldRef], path: &[String]) -> Option<&'a Field> {
+fn data_type_from_path(schema: &DataSchema, path: &[String]) -> Result<DataType> {
     if path.is_empty() {
-        return None;
+        return Err(ErrorCode::Internal(
+            "empty path in parquet schema".to_string(),
+        ));
     }
-    let field_ref = fields
-        .iter()
-        .find(|field| field.name().as_str() == path[0].as_str())?;
-    let field = field_ref.as_ref();
+
+    let field = schema.field_with_name(&path[0])?;
+    let data_type = field.data_type().clone();
     if path.len() == 1 {
-        return Some(field);
+        return Ok(data_type);
     }
-    find_arrow_field_in_type(field.data_type(), &path[1..])
-}
 
-fn find_arrow_field_in_type<'a>(
-    data_type: &'a ArrowDataType,
-    path: &[String],
-) -> Option<&'a Field> {
-    if path.is_empty() {
-        return None;
-    }
-    match data_type {
-        ArrowDataType::Struct(fields) => find_arrow_field(fields, path),
-        ArrowDataType::Map(child, _) => {
-            if child.name().as_str() != path[0].as_str() {
-                return None;
+    if let DataType::Map(inner) = data_type.remove_nullable() {
+        if let DataType::Tuple(inner_types) = inner.as_ref() {
+            if inner_types.len() == 2 {
+                let last = path.last().map(String::as_str).unwrap_or_default();
+                if last == "key" || last == "value" {
+                    return Ok(inner_types[1].clone());
+                }
             }
-            if path.len() == 1 {
-                return Some(child.as_ref());
-            }
-            find_arrow_field_in_type(child.data_type(), &path[1..])
         }
-        ArrowDataType::List(child)
-        | ArrowDataType::LargeList(child)
-        | ArrowDataType::FixedSizeList(child, _) => {
-            if child.name().as_str() != path[0].as_str() {
-                return None;
-            }
-            if path.len() == 1 {
-                return Some(child.as_ref());
-            }
-            find_arrow_field_in_type(child.data_type(), &path[1..])
-        }
-        _ => None,
     }
-}
 
-fn parse_shared_column_name(name: &str) -> Option<(u32, bool)> {
-    const SHARED_KEY_SUFFIX: &str = ".__shared_virtual_column_data__.entries.key";
-    const SHARED_VALUE_SUFFIX: &str = ".__shared_virtual_column_data__.entries.value";
-
-    if let Some(prefix) = name.strip_suffix(SHARED_KEY_SUFFIX) {
-        let source_id = prefix.parse::<u32>().ok()?;
-        return Some((source_id, true));
-    }
-    if let Some(prefix) = name.strip_suffix(SHARED_VALUE_SUFFIX) {
-        let source_id = prefix.parse::<u32>().ok()?;
-        return Some((source_id, false));
-    }
-    None
+    Err(ErrorCode::Internal(format!(
+        "failed to find data type for path {:?}",
+        path
+    )))
 }

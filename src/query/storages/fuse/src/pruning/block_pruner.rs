@@ -251,10 +251,7 @@ impl BlockPruner {
                                     // Check whether can read virtual columns,
                                     // and ignore the source columns.
                                     let virtual_block_meta = virtual_column_pruner
-                                        .prune_virtual_columns(
-                                            block_meta.row_count,
-                                            &block_meta.virtual_block_meta,
-                                        )
+                                        .prune_virtual_columns(&block_meta.virtual_block_meta)
                                         .await?;
                                     prune_result.virtual_block_meta = virtual_block_meta;
                                 }

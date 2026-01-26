@@ -79,6 +79,7 @@ use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
 use crate::index::VIRTUAL_COLUMN_NODES_KEY;
+use crate::index::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
 use crate::index::VIRTUAL_COLUMN_STRING_TABLE_KEY;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::WriteSettings;
@@ -487,18 +488,14 @@ impl VirtualColumnBuilder {
     }
 
     fn build_shared_map_column(
-        source_column_id: ColumnId,
-        shared_data: Vec<(String, usize)>,
+        shared_value_indexes: Vec<usize>,
         virtual_values: &[Vec<JsonbScalarValue>],
         total_rows: usize,
-    ) -> (Vec<String>, Column) {
-        let mut shared_key_names = Vec::with_capacity(shared_data.len());
+    ) -> Column {
         let mut shared_jsonb_values: HashMap<usize, Vec<(u32, Vec<u8>)>> = HashMap::new();
-        for (key_name, index) in shared_data.into_iter() {
-            let key_name_index = shared_key_names.len() as u32;
-            shared_key_names.push(format!("{}{}", source_column_id, key_name));
-
-            let values = &virtual_values[index];
+        for (index, value_index) in shared_value_indexes.into_iter().enumerate() {
+            let key_name_index = index as u32;
+            let values = &virtual_values[value_index];
             for val in values {
                 let jsonb_bytes = Self::scalar_to_variant_bytes(val.scalar.as_ref());
                 if let Some(shared_rows) = shared_jsonb_values.get_mut(&val.row) {
@@ -531,7 +528,7 @@ impl VirtualColumnBuilder {
         let values_column = value_builder.build();
         let tuple = Column::Tuple(vec![keys_column, values_column]);
         let array_col = ArrayColumn::new(tuple, Buffer::from(offsets));
-        (shared_key_names, Column::Map(Box::new(array_col)))
+        Column::Map(Box::new(array_col))
     }
 
     #[async_backtrace::framed]
@@ -565,23 +562,22 @@ impl VirtualColumnBuilder {
             });
         }
 
-        let mut virtual_column_names = Vec::new();
+        let mut virtual_column_names = HashMap::new();
         let mut virtual_fields = Vec::new();
         let mut virtual_columns = Vec::new();
         let mut string_table = Vec::new();
         let mut string_table_index = HashMap::new();
         let mut virtual_column_nodes = HashMap::new();
+        let mut shared_column_names = HashMap::new();
+        // leaf_index tracks the parquet column id for virtual columns and shared maps.
+        // It stays aligned with the VirtualColumnNameIndex used by the trie.
         let mut leaf_index: u32 = 0;
-
-        // use a tmp column id to generate statistics for virtual columns.
-        let mut tmp_column_id = 0;
         for (source_field, field_virtual_paths) in
             self.variant_fields.iter().zip(virtual_paths.into_iter())
         {
             // Collect virtual paths and index as BTreeMap to keep order
             let sorted_virtual_paths: BTreeMap<_, _> = field_virtual_paths.into_iter().collect();
-            // let mut shared_rows: Vec<Vec<(String, Vec<u8>)>> = vec![Vec::new(); total_rows];
-            let mut shared_data: Vec<(String, usize)> = Vec::new();
+            let mut shared_value_indexes: Vec<usize> = Vec::new();
             let mut shared_paths: Vec<OwnedKeyPaths> = Vec::new();
             let node = virtual_column_nodes
                 .entry(source_field.column_id)
@@ -601,16 +597,14 @@ impl VirtualColumnBuilder {
                         let (column, table_type) =
                             Self::build_typed_column(total_rows, values, value_type.clone());
                         let virtual_name = format!("{}{}", source_field.name, key_name);
-                        let field = TableField::new_from_column_id(
-                            &virtual_name,
-                            table_type,
-                            tmp_column_id,
-                        );
+                        let column_id = leaf_index;
+                        let field =
+                            TableField::new_from_column_id(&virtual_name, table_type, column_id);
                         virtual_columns.push(BlockEntry::Column(column));
                         virtual_fields.push(field);
-                        tmp_column_id += 1;
                         let source_column_id = source_field.column_id;
-                        virtual_column_names.push((source_column_id, key_name, value_type));
+                        virtual_column_names
+                            .insert(virtual_name, (source_column_id, key_name, value_type));
                         Self::insert_virtual_column_node(
                             node,
                             &field_virtual_path,
@@ -626,20 +620,16 @@ impl VirtualColumnBuilder {
                             infer_schema_type(&DataType::Nullable(Box::new(DataType::Variant)))
                                 .unwrap();
                         let virtual_name = format!("{}{}", source_field.name, key_name);
-                        let field = TableField::new_from_column_id(
-                            &virtual_name,
-                            virtual_type,
-                            tmp_column_id,
-                        );
+                        let column_id = leaf_index;
+                        let field =
+                            TableField::new_from_column_id(&virtual_name, virtual_type, column_id);
                         virtual_columns.push(BlockEntry::Column(column));
                         virtual_fields.push(field);
-                        tmp_column_id += 1;
                         let source_column_id = source_field.column_id;
-                        virtual_column_names.push((
-                            source_column_id,
-                            key_name,
-                            VariantDataType::Jsonb,
-                        ));
+                        virtual_column_names.insert(
+                            virtual_name,
+                            (source_column_id, key_name, VariantDataType::Jsonb),
+                        );
                         Self::insert_virtual_column_node(
                             node,
                             &field_virtual_path,
@@ -650,16 +640,15 @@ impl VirtualColumnBuilder {
                         leaf_index += 1;
                     }
                     PathClass::Shared => {
-                        shared_data.push((key_name, index));
+                        shared_value_indexes.push(index);
                         shared_paths.push(field_virtual_path);
                     }
                 }
             }
 
-            if !shared_data.is_empty() {
-                let (_shared_key_names, column) = Self::build_shared_map_column(
-                    source_field.column_id,
-                    shared_data,
+            if !shared_value_indexes.is_empty() {
+                let column = Self::build_shared_map_column(
+                    shared_value_indexes,
                     &virtual_values,
                     total_rows,
                 );
@@ -672,27 +661,18 @@ impl VirtualColumnBuilder {
                     ],
                 }));
 
-                let virtual_name =
-                    format!("{}.__shared_virtual_column_data__", source_field.column_id);
-                let field = TableField::new_from_column_id(&virtual_name, map_type, tmp_column_id);
+                let virtual_name = format!("{}.__shared_virtual_column_data__", source_field.name);
+                let column_id = leaf_index;
+                let field = TableField::new_from_column_id(&virtual_name, map_type, column_id);
                 virtual_columns.push(BlockEntry::Column(column));
                 virtual_fields.push(field);
-                tmp_column_id += 2;
                 let source_column_id = source_field.column_id;
-                // Temporarily mark shared map as Jsonb. Meta handling will be updated later.
-                virtual_column_names.push((
-                    source_column_id,
-                    String::from("__shared_virtual_column_data__"),
-                    VariantDataType::Jsonb,
-                ));
+                shared_column_names.insert(source_column_id, virtual_name);
                 for (shared_index, shared_path) in shared_paths.into_iter().enumerate() {
                     Self::insert_virtual_column_node(
                         node,
                         &shared_path,
-                        VirtualColumnNameIndex::Shared {
-                            source_id: source_field.column_id,
-                            index: shared_index as u32,
-                        },
+                        VirtualColumnNameIndex::Shared(shared_index as u32),
                         &mut string_table,
                         &mut string_table_index,
                     );
@@ -700,11 +680,16 @@ impl VirtualColumnBuilder {
                 leaf_index += 2;
             }
         }
+        let virtual_block_schema = TableSchemaRefExt::create(virtual_fields);
+        let virtual_block = DataBlock::new(virtual_columns, total_rows);
+
+        let shared_column_ids =
+            Self::build_shared_column_ids(&virtual_block_schema, &shared_column_names);
+
         let mut metadata = Vec::new();
-        // Parquet metadata stores only the trie (virtual_column_nodes) and string table.
-        // Column metas (offset/len/num_values), column ids, and data types are derived from
-        // the parquet schema + row group metadata during read. Shared columns are persisted
-        // as a map column named "__shared_virtual_column_data__" with key/value entries.
+        // Parquet metadata stores only the trie (virtual_column_nodes), string table, and
+        // shared column ids. Column metas (offset/len/num_values), column ids, and data types
+        // are derived from the parquet schema + row group metadata during read.
         let string_table_json = serde_json::to_string(&string_table)?;
         metadata.push(KeyValue {
             key: VIRTUAL_COLUMN_STRING_TABLE_KEY.to_string(),
@@ -715,12 +700,16 @@ impl VirtualColumnBuilder {
             key: VIRTUAL_COLUMN_NODES_KEY.to_string(),
             value: Some(nodes_json),
         });
+        if !shared_column_ids.is_empty() {
+            let shared_ids_json = serde_json::to_string(&shared_column_ids)?;
+            metadata.push(KeyValue {
+                key: VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY.to_string(),
+                value: Some(shared_ids_json),
+            });
+        }
         let metadata = Some(metadata);
 
         // Create the virtual block and convert to parquet
-        let virtual_block_schema = TableSchemaRefExt::create(virtual_fields);
-        let virtual_block = DataBlock::new(virtual_columns, total_rows);
-
         let columns_statistics =
             gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
 
@@ -740,7 +729,6 @@ impl VirtualColumnBuilder {
             virtual_column_names,
             columns_statistics,
         )?;
-
         let data_size = data.len() as u64;
         let virtual_column_location =
             TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
@@ -787,10 +775,39 @@ impl VirtualColumnBuilder {
         }
     }
 
+    fn build_shared_column_ids(
+        schema: &TableSchemaRef,
+        shared_column_names: &HashMap<ColumnId, String>,
+    ) -> HashMap<u32, (u32, u32)> {
+        if shared_column_names.is_empty() {
+            return HashMap::new();
+        }
+
+        let mut leaf_name_to_id = HashMap::new();
+        for (idx, field) in schema.leaf_fields().iter().enumerate() {
+            leaf_name_to_id.insert(field.name.clone(), idx as u32);
+        }
+
+        let mut shared_column_ids = HashMap::new();
+        for (source_id, name) in shared_column_names {
+            let key_name = format!("{name}:key");
+            let value_name = format!("{name}:value");
+            let Some(key_id) = leaf_name_to_id.get(&key_name) else {
+                continue;
+            };
+            let Some(value_id) = leaf_name_to_id.get(&value_name) else {
+                continue;
+            };
+            shared_column_ids.insert(*source_id, (*key_id, *value_id));
+        }
+
+        shared_column_ids
+    }
+
     fn file_meta_to_virtual_column_metas(
         &self,
         file_meta: FileMetaData,
-        virtual_column_names: Vec<(ColumnId, String, VariantDataType)>,
+        mut virtual_column_names: HashMap<String, (u32, String, VariantDataType)>,
         mut columns_statistics: StatisticsOfColumns,
     ) -> Result<Vec<DraftVirtualColumnMeta>> {
         let num_row_groups = file_meta.row_groups.len();
@@ -803,14 +820,16 @@ impl VirtualColumnBuilder {
         let row_group = &file_meta.row_groups[0];
 
         let mut draft_virtual_column_metas = Vec::with_capacity(virtual_column_names.len());
-        for ((i, (source_column_id, name, variant_type)), col_chunk) in virtual_column_names
-            .into_iter()
-            .enumerate()
-            .zip(row_group.columns.iter())
-        {
+        for (i, col_chunk) in row_group.columns.iter().enumerate() {
             let tmp_column_id = i as u32;
             match &col_chunk.meta_data {
                 Some(chunk_meta) => {
+                    let Some((source_column_id, key_name, variant_type)) =
+                        virtual_column_names.remove(&chunk_meta.path_in_schema[0])
+                    else {
+                        continue;
+                    };
+
                     let col_start =
                         if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
                             dict_page_offset
@@ -836,7 +855,7 @@ impl VirtualColumnBuilder {
 
                     let draft_virtual_column_meta = DraftVirtualColumnMeta {
                         source_column_id,
-                        name,
+                        name: key_name,
                         data_type: variant_type,
                         column_meta: virtual_column_meta,
                     };

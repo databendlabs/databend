@@ -77,7 +77,6 @@ impl VirtualColumnPruner {
     #[async_backtrace::framed]
     pub async fn prune_virtual_columns(
         &self,
-        _row_count: u64,
         virtual_block_meta: &Option<VirtualBlockMeta>,
     ) -> Result<Option<VirtualBlockMetaIndex>> {
         let Some(virtual_block_meta) = virtual_block_meta else {
@@ -100,7 +99,6 @@ impl VirtualColumnPruner {
         // - Object: reconstruct parent object from child plans.
         // - FromParent: read nearest variant parent and extract suffix via keypath.
         let mut virtual_column_metas = BTreeMap::new();
-        let mut virtual_column_name_ids = BTreeMap::new();
         // Each column can have multiple read plans due to heterogeneous JSON shapes.
         let mut virtual_column_read_plan = BTreeMap::new();
         let mut shared_virtual_column_ids = BTreeMap::new();
@@ -169,7 +167,6 @@ impl VirtualColumnPruner {
                         segments,
                         &virtual_meta,
                         &mut virtual_column_metas,
-                        &mut virtual_column_name_ids,
                         &mut shared_virtual_column_ids,
                     );
                     plans.append(&mut node_plans);
@@ -188,7 +185,6 @@ impl VirtualColumnPruner {
                         parent_segments,
                         &virtual_meta,
                         &mut virtual_column_metas,
-                        &mut virtual_column_name_ids,
                         &mut shared_virtual_column_ids,
                     );
                     let suffix_start = name_positions
@@ -234,7 +230,6 @@ impl VirtualColumnPruner {
             let virtual_block_meta = VirtualBlockMetaIndex {
                 virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
                 virtual_column_metas,
-                virtual_column_name_ids,
                 shared_virtual_column_ids,
                 ignored_source_column_ids,
                 virtual_column_read_plan,
@@ -273,15 +268,12 @@ fn is_variant_meta(meta: &VirtualColumnIdWithMeta) -> bool {
 
 fn ensure_virtual_column_id(
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    virtual_column_name_ids: &mut BTreeMap<String, ColumnId>,
     meta: &VirtualColumnIdWithMeta,
-    name: &str,
 ) -> ColumnId {
     let column_id = meta.column_id;
     if !virtual_column_metas.contains_key(&column_id) {
         virtual_column_metas.insert(column_id, build_virtual_column_meta(meta));
     }
-    virtual_column_name_ids.insert(name.to_string(), column_id);
     column_id
 }
 
@@ -327,7 +319,6 @@ fn build_plans_for_node(
     segments: &[String],
     virtual_meta: &VirtualColumnFileMeta,
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    virtual_column_name_ids: &mut BTreeMap<String, ColumnId>,
     shared_virtual_column_ids: &mut BTreeMap<ColumnId, ColumnId>,
 ) -> Vec<VirtualColumnReadPlan> {
     let mut plans = Vec::new();
@@ -336,27 +327,22 @@ fn build_plans_for_node(
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
                 if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
-                    let name = build_virtual_column_name(source_column_id, segments);
-                    ensure_virtual_column_id(
-                        virtual_column_metas,
-                        virtual_column_name_ids,
-                        meta,
-                        &name,
-                    );
+                    ensure_virtual_column_id(virtual_column_metas, meta);
                     // Direct: read the materialized virtual column.
+                    let name = meta.column_id.to_string();
                     plans.push(VirtualColumnReadPlan::Direct { name });
                 }
             }
-            VirtualColumnNameIndex::Shared { source_id, index } => {
+            VirtualColumnNameIndex::Shared(index) => {
                 if ensure_shared_virtual_column_ids(
                     virtual_column_metas,
                     shared_virtual_column_ids,
                     &virtual_meta.shared_column_metas,
-                    *source_id,
+                    source_column_id,
                 ) {
                     // Shared: read from the shared map column by key index.
                     plans.push(VirtualColumnReadPlan::Shared {
-                        source_column_id: *source_id,
+                        source_column_id,
                         index: *index,
                     });
                 }
@@ -386,7 +372,6 @@ fn build_plans_for_node(
             &child_segments,
             virtual_meta,
             virtual_column_metas,
-            virtual_column_name_ids,
             shared_virtual_column_ids,
         );
         if let Some(plan) = child_plans.into_iter().next() {
@@ -433,18 +418,6 @@ fn key_paths_match_info(key_paths: &OwnedKeyPaths) -> KeyPathMatchInfo {
         name_positions,
         has_index,
     }
-}
-
-fn build_virtual_column_name(source_column_id: u32, segments: &[String]) -> String {
-    let mut name = source_column_id.to_string();
-    for segment in segments {
-        name.push('[');
-        name.push('\'');
-        name.push_str(segment);
-        name.push('\'');
-        name.push(']');
-    }
-    name
 }
 
 fn build_virtual_column_suffix_path(key_paths: &OwnedKeyPaths, start: usize) -> String {

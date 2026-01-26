@@ -58,6 +58,7 @@ pub use page_index::PageIndex;
 pub use range_index::RangeIndex;
 pub use range_index::statistics_to_domain;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;
+pub use virtual_column::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
 pub use virtual_column::VIRTUAL_COLUMN_STRING_TABLE_KEY;
 pub use virtual_column::VirtualColumnFileMeta;
 pub use virtual_column::VirtualColumnIdWithMeta;

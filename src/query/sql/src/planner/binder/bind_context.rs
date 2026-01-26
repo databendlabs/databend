@@ -132,7 +132,7 @@ pub struct BindContext {
     // map internal column: (table_index, column_id) -> column_index
     pub bound_internal_columns: BTreeMap<(IndexType, ColumnId), IndexType>,
 
-    // map virtual column: shared_virtual_column_name -> (column_id, column_index)
+    // map virtual column: virtual_column_name -> (column_id, column_index)
     pub bound_virtual_columns: BTreeMap<VirtualColumnName, (ColumnId, IndexType)>,
 
     pub aggregate_info: AggregateInfo,
@@ -746,10 +746,14 @@ impl BindContext {
                         break;
                     }
                 }
-                // column_id does not exist. Generate a temporary shared column id
                 let column_id = if let Some(column_id) = column_id {
                     column_id
                 } else {
+                    // If the column_id does not exist, generate a temporary column_id.
+                    // This may occur in the following scenarios:
+                    // 1. The path is not an independent virtual column but is stored within shared data column.
+                    // 2. The path is an object composed of multiple virtual columns.
+                    // 3. The path is extracted from columns within a virtual column itself.
                     let exists_virtual_columns =
                         metadata.virtual_columns_by_table_index(table_index);
                     let mut max_column_id = 0;
