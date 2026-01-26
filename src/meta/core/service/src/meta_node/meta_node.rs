@@ -104,7 +104,7 @@ use watcher::watch_stream::WatchStreamSender;
 
 use crate::analysis::request_histogram;
 use crate::api::grpc::grpc_service::try_remove_sender;
-use crate::configs::Config as MetaConfig;
+use crate::configs::MetaServiceConfig as MetaConfig;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;

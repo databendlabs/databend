@@ -17,7 +17,6 @@ use std::net::SocketAddr;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::node::Node;
-use databend_common_tracing::Config as LogConfig;
 
 /// TLS configuration for server endpoints.
 ///
@@ -87,26 +86,20 @@ pub struct AdminConfig {
     pub tls: TlsConfig,
 }
 
+/// Configuration for the meta service.
+///
+/// This struct contains only the configuration needed by the service library
+/// to run a meta node. CLI-specific fields (cmd, config_file, log, admin)
+/// are kept in the cli-config crate's `MetaStartupConfig`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct Config {
-    pub cmd: String,
-    pub config_file: String,
-    pub log: LogConfig,
-    pub admin: AdminConfig,
+pub struct MetaServiceConfig {
     pub grpc: GrpcConfig,
     pub raft_config: RaftConfig,
 }
 
-impl Default for Config {
+impl Default for MetaServiceConfig {
     fn default() -> Self {
         Self {
-            cmd: "".to_string(),
-            config_file: "".to_string(),
-            log: LogConfig::default(),
-            admin: AdminConfig {
-                api_address: "127.0.0.1:28002".to_string(),
-                tls: TlsConfig::default(),
-            },
             grpc: GrpcConfig {
                 api_address: "127.0.0.1:9191".to_string(),
                 advertise_host: None,
@@ -117,7 +110,7 @@ impl Default for Config {
     }
 }
 
-impl Config {
+impl MetaServiceConfig {
     pub fn validate(&self) -> Result<(), MetaStartupError> {
         let _a: SocketAddr = self.grpc.api_address.parse().map_err(|e| {
             MetaStartupError::InvalidConfig(format!(

@@ -39,7 +39,6 @@ use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
-use databend_meta::configs::Config;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
@@ -49,12 +48,13 @@ use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
+use databend_meta_cli_config::MetaConfig;
 use log::info;
 use log::warn;
 use tokio::time::Instant;
 use tokio::time::sleep;
 
-pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
+pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     if run_cmd(&conf) {
         return Ok(());
     }
@@ -62,7 +62,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
 
     set_panic_hook(binary_version);
 
-    init_logging_system(&conf.raft_config, &conf.log).await?;
+    init_logging_system(&conf.service.raft_config, &conf.log).await?;
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -70,30 +70,33 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         serde_json::to_string_pretty(&conf).unwrap()
     );
 
-    conf.raft_config.check()?;
+    conf.service.raft_config.check()?;
 
     // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
     // Leaving does not access the local store thus it can be done before the store is initialized.
-    let has_left = MetaNode::<RT>::leave_cluster(&conf.raft_config).await?;
+    let has_left = MetaNode::<RT>::leave_cluster(&conf.service.raft_config).await?;
     if has_left {
-        info!("node {:?} has left cluster", conf.raft_config.leave_id);
+        info!(
+            "node {:?} has left cluster",
+            conf.service.raft_config.leave_id
+        );
         return Ok(());
     }
 
-    let single_or_join = if conf.raft_config.single {
+    let single_or_join = if conf.service.raft_config.single {
         "single".to_string()
     } else {
-        format!("join {:?}", conf.raft_config.join)
+        format!("join {:?}", conf.service.raft_config.join)
     };
 
-    let grpc_advertise = if let Some(a) = conf.grpc.advertise_address() {
+    let grpc_advertise = if let Some(a) = conf.service.grpc.advertise_address() {
         a
     } else {
         "-".to_string()
     };
 
-    let raft_listen = conf.raft_config.raft_api_listen_host_string();
-    let raft_advertise = conf.raft_config.raft_api_advertise_host_string();
+    let raft_listen = conf.service.raft_config.raft_api_listen_host_string();
+    let raft_advertise = conf.service.raft_config.raft_api_advertise_host_string();
 
     // Print information to users.
     println!("Databend Metasrv");
@@ -107,9 +110,12 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     println!("    Client Require: {{ {} }}", raft_client_requires());
     println!();
 
-    info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
+    info!(
+        "Initialize on-disk data at {}",
+        conf.service.raft_config.raft_dir
+    );
 
-    let mut on_disk = OnDisk::open(&conf.raft_config).await?;
+    let mut on_disk = OnDisk::open(&conf.service.raft_config).await?;
     on_disk.log_stderr(true);
 
     let h = &on_disk.header;
@@ -117,7 +123,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     #[rustfmt::skip]
     {
         println!("Disk  Data: {:?}; Upgrading: {:?}", h.version, h.upgrading);
-        println!("      Dir: {}", conf.raft_config.raft_dir);
+        println!("      Dir: {}", conf.service.raft_config.raft_dir);
         println!();
         println!("Log   File:   {}", conf.log.file);
         println!("      Stderr: {}", conf.log.stderr);
@@ -130,13 +136,13 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
         if conf.log.history.on {
             println!("    Storage: {}", conf.log.history.on);
         }
-        let r = &conf.raft_config;
+        let r = &conf.service.raft_config;
         println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
         println!("      Dir: {}", r.raft_dir);
         println!("      Status: {}", single_or_join);
         println!();
         println!("HTTP API listen at: {}", conf.admin.api_address);
-        println!("gRPC API listen at: {} advertise: {}", conf.grpc.api_address, grpc_advertise);
+        println!("gRPC API listen at: {} advertise: {}", conf.service.grpc.api_address, grpc_advertise);
         println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
         println!();
     }
@@ -145,7 +151,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
 
     info!(
         "Starting MetaNode, is-single: {} with config: {:?}",
-        conf.raft_config.single, conf
+        conf.service.raft_config.single, conf
     );
 
     let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
@@ -154,7 +160,8 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
             e
         ))
     })?;
-    let meta_handle = MetaWorker::create_meta_worker(conf.clone(), Arc::new(runtime)).await?;
+    let meta_handle =
+        MetaWorker::create_meta_worker(conf.service.clone(), Arc::new(runtime)).await?;
     let meta_handle = Arc::new(meta_handle);
 
     let mut stop_handler = ShutdownGroup::<AnyError>::new();
@@ -177,21 +184,21 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     // gRPC API service.
     {
         let mut srv = GrpcServer::<RT>::create(
-            conf.raft_config.id,
-            conf.grpc.clone(),
+            conf.service.raft_config.id,
+            conf.service.grpc.clone(),
             DATABEND_SEMVER.clone(),
             meta_handle.clone(),
         );
         info!(
             "Databend meta server listening on {}",
-            conf.grpc.api_address.clone()
+            conf.service.grpc.api_address.clone()
         );
         srv.do_start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));
     }
 
     // Join a raft cluster only after all service started.
-    let c = conf.clone();
+    let c = conf.service.clone();
     let join_res = meta_handle
         .request(move |mn| {
             let fu = async move {
@@ -247,7 +254,7 @@ async fn do_register<RT: RuntimeApi>(
 #[fastrace::trace]
 async fn register_node<RT: RuntimeApi>(
     meta_handle: &Arc<MetaHandle<RT>>,
-    conf: &Config,
+    conf: &MetaConfig,
 ) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
@@ -256,13 +263,13 @@ async fn register_node<RT: RuntimeApi>(
     let mut last_err = None;
     let mut sleep_time = Duration::from_millis(500);
 
-    let timeout = Duration::from_millis(conf.raft_config.wait_leader_timeout);
+    let timeout = Duration::from_millis(conf.service.raft_config.wait_leader_timeout);
     let timeout_at = Instant::now() + timeout;
 
     info!(
         "Wait {:?} for active leader to register node, raft election timeouts: {:?}",
         timeout,
-        conf.raft_config.election_timeout()
+        conf.service.raft_config.election_timeout()
     );
     println!("Wait for {:?} for active leader...", timeout);
 
@@ -305,8 +312,8 @@ async fn register_node<RT: RuntimeApi>(
 
         let res = do_register::<RT>(
             meta_handle,
-            &conf.raft_config,
-            conf.grpc.advertise_address(),
+            &conf.service.raft_config,
+            conf.service.grpc.advertise_address(),
         )
         .await;
         info!("Register-node result: {:?}", res);
@@ -342,7 +349,7 @@ async fn register_node<RT: RuntimeApi>(
     Err(anyhow::anyhow!("timeout; no error received"))
 }
 
-fn run_cmd(conf: &Config) -> bool {
+fn run_cmd(conf: &MetaConfig) -> bool {
     if conf.cmd.is_empty() {
         return false;
     }

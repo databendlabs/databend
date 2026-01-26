@@ -263,9 +263,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    tc1.config.admin.api_address = addr_str.to_owned();
-    tc1.config.admin.tls.key = TEST_SERVER_KEY.to_owned();
-    tc1.config.admin.tls.cert = TEST_SERVER_CERT.to_owned();
+    tc1.admin.api_address = addr_str.to_owned();
+    tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
+    tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
     let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
@@ -286,7 +286,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         .await??;
 
     let http_cfg = HttpServiceConfig {
-        admin: tc1.config.admin.clone(),
+        admin: tc1.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
     let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);

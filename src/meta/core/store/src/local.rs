@@ -47,7 +47,7 @@ pub struct LocalMetaService {
     /// For debugging
     name: String,
 
-    pub config: configs::Config,
+    pub config: configs::MetaServiceConfig,
 
     /// Kept alive for shutdown; dropped when `LocalMetaService` is dropped.
     _grpc_server: Option<Box<dyn Send + Sync>>,
@@ -113,7 +113,7 @@ impl LocalMetaService {
         };
 
         let raft_port = next_port();
-        let mut config = configs::Config::default();
+        let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = 0;
 
@@ -135,11 +135,6 @@ impl LocalMetaService {
             let grpc_port = next_port();
             config.grpc.api_address = format!("{}:{}", host, grpc_port);
             config.grpc.advertise_host = Some(host.to_string());
-        }
-
-        {
-            let http_port = next_port();
-            config.admin.api_address = format!("{}:{}", host, http_port);
         }
 
         info!("new LocalMetaService({}) with config: {:?}", name, config);
@@ -176,7 +171,7 @@ impl LocalMetaService {
 }
 
 impl LocalMetaService {
-    pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
+    pub fn rm_raft_dir(config: &configs::MetaServiceConfig, msg: impl fmt::Display + Copy) {
         let raft_dir = &config.raft_config.raft_dir;
 
         info!("{}: about to remove raft_dir: {:?}", msg, raft_dir);
@@ -190,7 +185,7 @@ impl LocalMetaService {
     }
 
     async fn grpc_client(
-        config: &configs::Config,
+        config: &configs::MetaServiceConfig,
         version: Version,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         let addr = config.grpc.api_address.clone();
