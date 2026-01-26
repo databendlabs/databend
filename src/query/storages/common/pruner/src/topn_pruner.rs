@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::BlockMetaIndex;
 
@@ -92,10 +95,6 @@ impl TopNPruner {
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 || metas.is_empty() {
-            return Ok(metas);
-        }
-
-        if self.limit >= metas.len() && !self.filter_only_use_index {
             return Ok(metas);
         }
 
@@ -205,22 +204,19 @@ impl TopNPruner {
             }
             Ok(pruned_metas)
         } else {
-            id_stats.sort_by(|a, b| {
-                if a.1.null_count + b.1.null_count != 0 && *nulls_first {
-                    return a.1.null_count.cmp(&b.1.null_count).reverse();
-                }
-                // no nulls
-                if *asc {
-                    a.1.min().cmp(b.1.min())
-                } else {
-                    a.1.max().cmp(b.1.max()).reverse()
-                }
-            });
+            id_stats.sort_by(|a, b| compare_block_stats(&a.1, &b.1, *asc, *nulls_first));
+
+            let keep_block_count = if self.limit == 0 {
+                0
+            } else {
+                truncate_blocks_after_limit(&id_stats, *asc, *nulls_first, self.limit)
+            };
+            let keep_block_count = keep_block_count.min(self.limit).min(id_stats.len());
 
             let pruned_metas = id_stats
                 .into_iter()
                 .map(|s| (s.0, s.2))
-                .take(self.limit)
+                .take(keep_block_count)
                 .collect();
             Ok(pruned_metas)
         }
@@ -308,6 +304,107 @@ fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
     let max_score = scores[0];
     let min_score = scores[scores.len() - 1];
     Some((min_score, max_score))
+}
+
+fn compare_scalar_for_sorting(
+    left: &Scalar,
+    right: &Scalar,
+    asc: bool,
+    nulls_first: bool,
+) -> Ordering {
+    let left_is_null = matches!(left, Scalar::Null);
+    let right_is_null = matches!(right, Scalar::Null);
+
+    if left_is_null && right_is_null {
+        return Ordering::Equal;
+    }
+
+    if left_is_null {
+        return if nulls_first {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        };
+    }
+
+    if right_is_null {
+        return if nulls_first {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        };
+    }
+
+    if asc {
+        left.cmp(right)
+    } else {
+        left.cmp(right).reverse()
+    }
+}
+
+fn compare_block_stats(
+    left: &ColumnStatistics,
+    right: &ColumnStatistics,
+    asc: bool,
+    nulls_first: bool,
+) -> Ordering {
+    if nulls_first && (left.null_count + right.null_count != 0) {
+        return left.null_count.cmp(&right.null_count).reverse();
+    }
+
+    let (left_scalar, right_scalar) = if asc {
+        (left.min(), right.min())
+    } else {
+        (left.max(), right.max())
+    };
+
+    compare_scalar_for_sorting(left_scalar, right_scalar, asc, nulls_first)
+}
+
+fn truncate_blocks_after_limit(
+    stats: &[(BlockMetaIndex, ColumnStatistics, Arc<BlockMeta>)],
+    asc: bool,
+    nulls_first: bool,
+    limit: usize,
+) -> usize {
+    if limit == 0 || stats.is_empty() {
+        return 0;
+    }
+
+    let mut keep = stats.len();
+    let mut accumulated_rows = 0usize;
+
+    for (idx, (_, col_stat, meta)) in stats.iter().enumerate() {
+        accumulated_rows = accumulated_rows.saturating_add(meta.row_count as usize);
+        if accumulated_rows >= limit {
+            keep = idx + 1;
+            if let Some((_, next_stat, _)) = stats.get(idx + 1) {
+                if ranges_do_not_overlap(col_stat, next_stat, asc, nulls_first) {
+                    return keep;
+                }
+            } else {
+                return keep;
+            }
+        }
+    }
+
+    keep
+}
+
+fn ranges_do_not_overlap(
+    current: &ColumnStatistics,
+    next: &ColumnStatistics,
+    asc: bool,
+    nulls_first: bool,
+) -> bool {
+    if asc {
+        compare_scalar_for_sorting(current.max(), next.min(), true, nulls_first) == Ordering::Less
+    } else {
+        // In short, the flip is what keeps NULL ordering semantics consistent when we reuse the same comparator for both ASC and DESC overlap checks.
+        let natural_nulls_first = !nulls_first;
+        compare_scalar_for_sorting(current.min(), next.max(), true, natural_nulls_first)
+            == Ordering::Greater
+    }
 }
 
 #[cfg(test)]
@@ -407,6 +504,144 @@ mod tests {
         assert_eq!(kept_blocks, vec![0, 1]);
     }
 
+    #[test]
+    fn test_prune_topn_respects_nulls_last_desc() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_null_block(column_id, 0, 5),
+            build_block(column_id, 1, 100, 200, 5),
+        ];
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), false, false)],
+            1,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        assert_eq!(kept_blocks, vec![1]);
+    }
+
+    #[test]
+    fn test_prune_topn_stops_when_ranges_disjoint() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_block(column_id, 0, 0, 9, 10),
+            build_block(column_id, 1, 15, 19, 8),
+            build_block(column_id, 2, 30, 39, 12),
+        ];
+        let row_counts: Vec<_> = metas
+            .iter()
+            .map(|(_, meta)| meta.row_count as usize)
+            .collect();
+        assert_eq!(row_counts, vec![10, 8, 12]);
+        let mut stats = metas
+            .iter()
+            .map(|(idx, meta)| {
+                (
+                    idx.clone(),
+                    meta.col_stats.get(&column_id).unwrap().clone(),
+                    meta.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        stats.sort_by(|a, b| super::compare_block_stats(&a.1, &b.1, true, false));
+        assert_eq!(
+            super::truncate_blocks_after_limit(&stats, true, false, 5),
+            1
+        );
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            5,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        assert_eq!(kept_blocks, vec![0]);
+    }
+
+    #[test]
+    fn test_prune_topn_keeps_overlapping_blocks() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_block(column_id, 0, 0, 99, 100),
+            build_block(column_id, 1, 0, 99, 100),
+            build_block(column_id, 2, 0, 99, 100),
+        ];
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), false, false)],
+            5,
+            false,
+        );
+        let result = pruner.prune(metas.clone()).unwrap();
+        assert_eq!(result.len(), metas.len());
+    }
+
+    #[test]
+    fn test_prune_topn_constant_ranges_prune_extra_blocks() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+        let metas = (0..5)
+            .map(|i| build_block(column_id, i, i as i64, i as i64, 10))
+            .collect::<Vec<_>>();
+
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            3,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
     fn build_block(
         column_id: ColumnId,
         block_id: usize,
@@ -414,11 +649,28 @@ mod tests {
         max: i64,
         matched_rows: usize,
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
+        let column_stats = ColumnStatistics::new(Scalar::from(min), Scalar::from(max), 0, 0, None);
+        build_block_with_stats(column_id, block_id, column_stats, matched_rows)
+    }
+
+    fn build_null_block(
+        column_id: ColumnId,
+        block_id: usize,
+        matched_rows: usize,
+    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
+        let column_stats =
+            ColumnStatistics::new(Scalar::Null, Scalar::Null, matched_rows as u64, 0, None);
+        build_block_with_stats(column_id, block_id, column_stats, matched_rows)
+    }
+
+    fn build_block_with_stats(
+        column_id: ColumnId,
+        block_id: usize,
+        column_stats: ColumnStatistics,
+        matched_rows: usize,
+    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
         let mut col_stats = HashMap::new();
-        col_stats.insert(
-            column_id,
-            ColumnStatistics::new(Scalar::from(min), Scalar::from(max), 0, 0, None),
-        );
+        col_stats.insert(column_id, column_stats);
 
         let column_metas: HashMap<ColumnId, ColumnMeta> = HashMap::new();
 
