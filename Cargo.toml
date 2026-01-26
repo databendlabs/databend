@@ -17,6 +17,7 @@ members = [
     "src/meta/app-types",
     "src/meta/binaries",
     "src/meta/cache",
+    "src/meta/cli-config",
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
@@ -42,6 +43,7 @@ default-members = [
     "src/meta/app-types",
     "src/meta/binaries",
     "src/meta/cache",
+    "src/meta/cli-config",
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
@@ -154,6 +156,7 @@ databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathe
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/core/service" }
 databend-meta-admin = { path = "src/meta/admin" }
+databend-meta-cli-config = { path = "src/meta/cli-config" }
 databend-meta-runtime = { path = "src/meta/runtime" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }

@@ -54,7 +54,6 @@ use log::warn;
 use tokio::time::Instant;
 use tokio::time::sleep;
 
-
 pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf) {
         return Ok(());

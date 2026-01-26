@@ -16,7 +16,6 @@ memory-profiling = [
 jemalloc = ["databend-common-base/jemalloc"]
 io-uring = [
     "databend-meta/io-uring",
-    "databend-common-meta-store/io-uring",
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
 ]
@@ -24,7 +23,6 @@ io-uring = [
 [dependencies]
 databend-base = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-client = { workspace = true }
@@ -34,13 +32,13 @@ databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-admin = { workspace = true }
+databend-meta-cli-config = { workspace = true }
 databend-meta-runtime = { workspace = true }
 
 anyerror = { workspace = true }

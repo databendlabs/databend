@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! CLI configuration parsing layer for databend-meta.
+//!
+//! This crate provides the "outer" configuration struct that maps to CLI arguments
+//! and config files, then converts to the inner [`databend_meta::configs::Config`].
+//!
+//! The separation allows the service library (`databend-meta`) to remain free of
+//! CLI-specific dependencies like `clap` and `serfig`.
+
 use std::env;
 use std::sync::LazyLock;
 
@@ -39,17 +47,16 @@ use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::VERGEN_BUILD_TIMESTAMP;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_common_version::VERGEN_RUSTC_SEMVER;
+use databend_meta::configs::AdminConfig;
+use databend_meta::configs::Config as InnerConfig;
+use databend_meta::configs::GrpcConfig;
+use databend_meta::configs::TlsConfig;
+use databend_meta::version::MIN_METACLI_SEMVER;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
-
-use super::inner::AdminConfig;
-use super::inner::Config as InnerConfig;
-use super::inner::GrpcConfig;
-use super::inner::TlsConfig;
-use crate::version::MIN_METACLI_SEMVER;
 
 /// Full version string for databend-meta including build info, min client version, and data version
 static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
@@ -735,5 +742,84 @@ impl From<InnerLogHistoryConfig> for StorageLogConfig {
             log_storage_level: value.level,
             log_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::Write;
+
+    use databend_meta::configs::Config as InnerConfig;
+    use tempfile::tempdir;
+
+    use crate::Config;
+
+    #[test]
+    fn test_load_config() -> anyhow::Result<()> {
+        let _ = env_logger::try_init();
+
+        let d = tempdir()?;
+        let file_path = d.path().join("foo.toml");
+        let mut file = File::create(&file_path)?;
+        write!(
+            file,
+            r#"
+log_level = "ERROR"
+log_dir = "foo/logs"
+metric_api_address = "127.0.0.1:8000"
+admin_api_address = "127.0.0.1:9000"
+admin_tls_server_cert = "admin tls cert"
+admin_tls_server_key = "admin tls key"
+grpc_api_address = "127.0.0.1:10000"
+grpc_tls_server_cert = "grpc server cert"
+grpc_tls_server_key = "grpc server key"
+
+[raft_config]
+config_id = "raft config id"
+raft_api_host = "127.0.0.1"
+raft_listen_host = "127.0.0.1"
+raft_api_port = 11000
+raft_dir = "raft dir"
+no_sync = true
+snapshot_logs_since_last = 1000
+heartbeat_interval = 2000
+install_snapshot_timeout = 3000
+wait_leader_timeout = 3000
+single = false
+join = ["j1", "j2"]
+id = 20
+sled_tree_prefix = "sled_foo"
+cluster_name = "foo_cluster"
+             "#
+        )?;
+
+        temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
+            let cfg: InnerConfig = Config::load(false)
+                .expect("load must success")
+                .try_into()
+                .expect("conversion must success");
+            assert_eq!(cfg.log.file.level, "ERROR");
+            assert_eq!(cfg.log.file.dir, "foo/logs");
+            assert_eq!(cfg.admin.api_address, "127.0.0.1:9000");
+            assert_eq!(cfg.admin.tls.cert, "admin tls cert");
+            assert_eq!(cfg.admin.tls.key, "admin tls key");
+            assert_eq!(cfg.grpc.api_address, "127.0.0.1:10000");
+            assert_eq!(cfg.grpc.tls.cert, "grpc server cert");
+            assert_eq!(cfg.grpc.tls.key, "grpc server key");
+            assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
+            assert_eq!(cfg.raft_config.raft_api_port, 11000);
+            assert_eq!(cfg.raft_config.raft_dir, "raft dir");
+            assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
+            assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
+            assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);
+            assert_eq!(cfg.raft_config.wait_leader_timeout, 3000);
+            assert!(!cfg.raft_config.single);
+            assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
+            assert_eq!(cfg.raft_config.id, 20);
+            assert_eq!(cfg.raft_config.cluster_name, "foo_cluster");
+        });
+
+        Ok(())
     }
 }

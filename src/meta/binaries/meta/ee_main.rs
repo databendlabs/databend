@@ -17,7 +17,8 @@
 mod entry;
 
 use databend_common_base::mem_allocator::DefaultGlobalAllocator;
-use databend_meta::configs::Config;
+use databend_meta::configs::Config as InnerConfig;
+use databend_meta_cli_config::Config;
 use databend_meta_runtime::DatabendRuntime;
 
 #[global_allocator]
@@ -25,7 +26,9 @@ pub static GLOBAL_ALLOCATOR: DefaultGlobalAllocator = DefaultGlobalAllocator::cr
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-    let conf = Config::load()?;
+    let conf: InnerConfig = Config::load(true)?
+        .try_into()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
     conf.validate()?;
     entry::entry::<DatabendRuntime>(conf).await
 }
