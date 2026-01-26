@@ -143,8 +143,8 @@ impl<SP: SpawnApi> HttpService<SP> {
 
     fn build_tls(config: &HttpServiceConfig) -> OpensslTlsConfig {
         OpensslTlsConfig::new()
-            .cert_from_file(config.tls.cert.as_str())
-            .key_from_file(config.tls.key.as_str())
+            .cert_from_file(config.admin.tls.cert.as_str())
+            .key_from_file(config.admin.tls.key.as_str())
     }
 
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<(), HttpError> {
@@ -169,11 +169,12 @@ impl<SP: SpawnApi> HttpService<SP> {
     pub async fn do_start(&mut self) -> Result<(), HttpError> {
         let conf = self.cfg.clone();
         let listening = conf
-            .admin_api_address
+            .admin
+            .api_address
             .parse::<SocketAddr>()
             .map_err(|e| HttpError::BadAddressFormat(AnyError::new(&e)))?;
 
-        if conf.tls.enabled() {
+        if conf.admin.tls.enabled() {
             self.start_with_tls(listening).await
         } else {
             self.start_without_tls(listening).await

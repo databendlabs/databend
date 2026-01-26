@@ -173,8 +173,7 @@ pub async fn entry<RT: RuntimeApi>(conf: Config) -> anyhow::Result<()> {
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let http_cfg = HttpServiceConfig {
-            admin_api_address: conf.admin.api_address.clone(),
-            tls: conf.admin.tls.clone(),
+            admin: conf.admin.clone(),
             config_display: format!("{:?}", conf),
         };
         let mut srv = HttpService::create(http_cfg, meta_handle.clone());
@@ -412,7 +411,7 @@ async fn run_cmd(conf: &Config) -> bool {
                         &conf.grpc.api_address,
                         &conf.username,
                         &conf.password,
-                        &conf.kv_api_args(),
+                        &conf.kv_api,
                         op,
                     )
                     .await;

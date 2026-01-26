@@ -284,8 +284,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         .await??;
 
     let http_cfg = HttpServiceConfig {
-        admin_api_address: tc1.config.admin.api_address.clone(),
-        tls: tc1.config.admin.tls.clone(),
+        admin: tc1.config.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
     let mut srv = HttpService::create(http_cfg, meta_handle_1);

@@ -48,6 +48,7 @@ use serfig::parsers::Toml;
 use super::inner::AdminConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::GrpcConfig;
+use super::inner::KvApiArgs;
 use super::inner::TlsConfig;
 use crate::version::MIN_METACLI_SEMVER;
 
@@ -183,10 +184,12 @@ impl TryFrom<Config> for InnerConfig {
 
         Ok(InnerConfig {
             cmd: outer.cmd,
-            key: outer.key,
-            value: outer.value,
-            expire_after: outer.expire_after,
-            prefix: outer.prefix,
+            kv_api: KvApiArgs {
+                key: outer.key,
+                value: outer.value,
+                expire_after: outer.expire_after,
+                prefix: outer.prefix,
+            },
             username: outer.username,
             password: outer.password,
             config_file: outer.config_file,
@@ -215,10 +218,10 @@ impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
             cmd: inner.cmd,
-            key: inner.key,
-            value: inner.value,
-            expire_after: inner.expire_after,
-            prefix: inner.prefix,
+            key: inner.kv_api.key,
+            value: inner.kv_api.value,
+            expire_after: inner.kv_api.expire_after,
+            prefix: inner.kv_api.prefix,
             username: inner.username,
             password: inner.password,
             config_file: inner.config_file,

@@ -111,10 +111,7 @@ pub struct AdminConfig {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Config {
     pub cmd: String,
-    pub key: Vec<String>,
-    pub value: String,
-    pub expire_after: Option<u64>,
-    pub prefix: String,
+    pub kv_api: KvApiArgs,
     pub username: String,
     pub password: String,
     pub config_file: String,
@@ -128,10 +125,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             cmd: "".to_string(),
-            key: vec![],
-            value: "".to_string(),
-            expire_after: None,
-            prefix: "".to_string(),
+            kv_api: KvApiArgs::default(),
             username: "".to_string(),
             password: "".to_string(),
             config_file: "".to_string(),
@@ -202,15 +196,5 @@ impl Config {
             self.raft_config.raft_api_advertise_host_endpoint(),
         )
         .with_grpc_advertise_address(self.grpc.advertise_address())
-    }
-
-    /// Extract KV API arguments from config
-    pub fn kv_api_args(&self) -> KvApiArgs {
-        KvApiArgs {
-            key: self.key.clone(),
-            value: self.value.clone(),
-            expire_after: self.expire_after,
-            prefix: self.prefix.clone(),
-        }
     }
 }
