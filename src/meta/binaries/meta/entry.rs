@@ -198,12 +198,15 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     }
 
     // Join a raft cluster only after all service started.
-    let c = conf.service.clone();
+    let service_config = conf.service.clone();
     let join_res = meta_handle
         .request(move |mn| {
             let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
+                mn.join_cluster(
+                    &service_config.raft_config,
+                    service_config.grpc.advertise_address(),
+                )
+                .await
             };
             Box::pin(fu)
         })

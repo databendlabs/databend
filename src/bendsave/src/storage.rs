@@ -76,20 +76,20 @@ pub fn load_query_storage(cfg: &InnerConfig) -> Result<Operator> {
 pub fn load_meta_config(path: &str) -> Result<MetaServiceConfig> {
     let content = std::fs::read_to_string(path)?;
     let outer_config: databend_meta_cli_config::Config = toml::from_str(&content)?;
-    let startup_config: MetaConfig = outer_config
+    let meta_config: MetaConfig = outer_config
         .try_into()
         .map_err(|msg: String| anyhow!("{msg}"))?;
-    let inner_config = startup_config.service;
+    let service_config = meta_config.service;
 
-    if !inner_config.raft_config.raft_dir.starts_with("/") {
+    if !service_config.raft_config.raft_dir.starts_with("/") {
         return Err(anyhow!(
             "raft_dir of meta service must be an absolute path, but got: {:?}",
-            inner_config.raft_config.raft_dir
+            service_config.raft_config.raft_dir
         ));
     }
 
-    debug!("databend meta storage loaded: {:?}", inner_config);
-    Ok(inner_config)
+    debug!("databend meta storage loaded: {:?}", service_config);
+    Ok(service_config)
 }
 
 /// Init databend query instance so that we can read meta and check license

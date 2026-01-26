@@ -104,7 +104,7 @@ use watcher::watch_stream::WatchStreamSender;
 
 use crate::analysis::request_histogram;
 use crate::api::grpc::grpc_service::try_remove_sender;
-use crate::configs::MetaServiceConfig as MetaConfig;
+use crate::configs::MetaServiceConfig;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
@@ -776,7 +776,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[fastrace::trace]
-    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    pub async fn start(config: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
@@ -1054,7 +1054,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
         )))
     }
 
-    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    async fn do_start(conf: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
@@ -1070,7 +1070,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
-    pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    pub async fn boot(config: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let mn = Self::open(&config.raft_config).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)

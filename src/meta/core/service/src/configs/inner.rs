@@ -90,7 +90,7 @@ pub struct AdminConfig {
 ///
 /// This struct contains only the configuration needed by the service library
 /// to run a meta node. CLI-specific fields (cmd, config_file, log, admin)
-/// are kept in the cli-config crate's `MetaStartupConfig`.
+/// are kept in the cli-config crate's `MetaConfig`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct MetaServiceConfig {
     pub grpc: GrpcConfig,
