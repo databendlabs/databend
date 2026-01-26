@@ -31,6 +31,7 @@ databend-common-meta-client = { workspace = true }
 databend-common-meta-control = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-store = { workspace = true }
@@ -39,6 +40,7 @@ databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-runtime = { workspace = true }
 
 anyerror = { workspace = true }
 anyhow = { workspace = true }

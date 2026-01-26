@@ -328,12 +328,15 @@ mod tests {
     use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
     use databend_common_base::runtime::workload_group::WorkloadGroup;
     use databend_common_meta_store::MetaStore;
+    use databend_meta_runtime::DatabendRuntime;
 
     use super::*;
 
     async fn create_workload_mgr() -> WorkloadMgr {
-        let test_api =
-            MetaStore::new_local_testing(databend_common_version::BUILD_INFO.semver()).await;
+        let test_api = MetaStore::new_local_testing::<DatabendRuntime>(
+            databend_common_version::BUILD_INFO.semver(),
+        )
+        .await;
         WorkloadMgr::create(test_api.clone(), "test-tenant-id").unwrap()
     }
 

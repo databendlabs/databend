@@ -29,6 +29,7 @@ use databend_common_users::UserApiProvider;
 use log::debug;
 use log::info;
 
+use crate::interpreters::DropUserStageInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -94,24 +95,24 @@ impl Interpreter for CreateUserStageInterpreter {
             _ => None,
         };
 
-        let mut user_stage = user_stage;
-        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
-        user_stage.created_on = Utc::now();
-        let _ = user_mgr
-            .add_stage(tenant, user_stage.clone(), &plan.create_option)
-            .await?;
-
         // when create or replace stage success, if old stage is not External stage, remove stage files
         if let Some(stage) = old_stage {
             if stage.stage_type != StageType::External {
                 let op = StageTable::get_op(&stage)?;
-                op.remove_all("/").await?;
+                DropUserStageInterpreter::remove_all(self.ctx.clone(), op).await?;
                 info!(
                     "create or replace stage {:?} with all objects removed in stage",
                     user_stage.stage_name
                 );
             }
         }
+
+        let mut user_stage = user_stage;
+        user_stage.creator = Some(self.ctx.get_current_user()?.identity());
+        user_stage.created_on = Utc::now();
+        let _ = user_mgr
+            .add_stage(tenant, user_stage.clone(), &plan.create_option)
+            .await?;
 
         // create dir if new stage if not external stage
         if user_stage.stage_type != StageType::External {

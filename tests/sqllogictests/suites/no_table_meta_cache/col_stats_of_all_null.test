@@ -15,21 +15,17 @@ insert into t values(NULL);
 query T
 explain select * from t where c > 6;
 ----
-Filter
-├── output columns: [t.c (#0)]
-├── filters: [is_true(t.c (#0) > 6)]
-├── estimated rows: 0.50
-└── TableScan
-    ├── table: default.col_stats_all_null.t
-    ├── scan id: 0
-    ├── output columns: [c (#0)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.col_stats_all_null.t
+├── scan id: 0
+├── output columns: [c (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
+└── estimated rows: 0.50
 
 
 statement ok

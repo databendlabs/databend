@@ -204,6 +204,21 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn mget_tables(&self, table_names: &[String]) -> Result<Vec<Arc<dyn Table>>> {
+        let db_id = self.db_info.database_id.db_id;
+        let db_name = self.get_db_name();
+
+        // Batch get table infos from meta
+        let table_infos = self
+            .ctx
+            .meta
+            .mget_tables(db_id, db_name, table_names)
+            .await?;
+
+        self.load_tables(table_infos)
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         include_non_retainable: bool,

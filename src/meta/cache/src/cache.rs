@@ -17,6 +17,7 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_common_meta_client::ClientHandle;
+use databend_meta_runtime::DatabendRuntime;
 
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;
@@ -50,7 +51,7 @@ impl Cache {
     /// * `prefix` - The prefix for the cache, used to identify the cache instance.
     /// * `name` - The name of the cache, used for debugging and logging purposes.
     pub async fn new(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
         name: impl ToString,
     ) -> Self {

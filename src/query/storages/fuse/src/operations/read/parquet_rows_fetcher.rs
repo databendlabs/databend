@@ -327,6 +327,7 @@ impl ParquetRowsFetcher {
             columns_chunks,
             &metadata.compression,
             &metadata.location,
+            None,
         )
     }
 }

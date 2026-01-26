@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
@@ -593,7 +592,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                        timezone: Tz::UTC,
                         jiff_timezone: TimeZone::UTC,
                         binary_format: Default::default(),
                         geometry_format: Default::default(),

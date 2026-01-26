@@ -29,40 +29,32 @@ ALTER TABLE test_hilbert RECLUSTER FINAL;
 query T
 EXPLAIN SELECT * FROM test_hilbert WHERE a = 1;
 ----
-Filter
-├── output columns: [test_hilbert.a (#0), test_hilbert.b (#1)]
-├── filters: [is_true(test_hilbert.a (#0) = 1)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.test_hilbert
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(test_hilbert.a (#0) = 1)], limit: NONE]
-    └── estimated rows: 4.00
+TableScan
+├── table: default.default.test_hilbert
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 4
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(test_hilbert.a (#0) = 1)], limit: NONE]
+└── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT * FROM test_hilbert WHERE b = 1;
 ----
-Filter
-├── output columns: [test_hilbert.a (#0), test_hilbert.b (#1)]
-├── filters: [is_true(test_hilbert.b (#1) = 1)]
-├── estimated rows: 2.00
-└── TableScan
-    ├── table: default.default.test_hilbert
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1)]
-    ├── read rows: 2
-    ├── read size: < 1 KiB
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [is_true(test_hilbert.b (#1) = 1)], limit: NONE]
-    └── estimated rows: 4.00
+TableScan
+├── table: default.default.test_hilbert
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(test_hilbert.b (#1) = 1)], limit: NONE]
+└── estimated rows: 2.00
 
 statement ok
 DROP TABLE test_hilbert ALL;

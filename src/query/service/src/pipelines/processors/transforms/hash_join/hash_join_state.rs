@@ -74,6 +74,7 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey, const UNIQU
 
 pub enum HashJoinHashTable {
     Null,
+    NestedLoop(Vec<DataBlock>),
     Serializer(SerializerHashJoinHashTable),
     UniqueSerializer(UniqueSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),

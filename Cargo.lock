@@ -3299,6 +3299,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
+ "databend-meta-runtime",
  "databend-query",
  "form_urlencoded",
  "futures",
@@ -3483,6 +3484,7 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
+ "databend-meta-runtime",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "dyn-clone",
@@ -3934,6 +3936,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "databend-common-version",
+ "databend-meta-runtime",
  "enumflags2",
  "fastrace",
  "futures",
@@ -3959,7 +3962,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-meta-kvapi",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "display-more 0.2.1",
@@ -4036,9 +4038,10 @@ name = "databend-common-meta-cache"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "databend-common-base",
  "databend-common-meta-client",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-types",
+ "databend-meta-runtime",
  "futures",
  "log",
  "sub-cache",
@@ -4059,10 +4062,12 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-kvapi",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-meta-runtime",
  "derive_more",
  "display-more 0.2.1",
  "fastrace",
@@ -4092,10 +4097,12 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "databend-meta-runtime",
  "display-more 0.2.1",
  "futures",
  "mlua",
@@ -4169,8 +4176,8 @@ dependencies = [
  "databend-base",
  "databend-common-base",
  "databend-common-meta-kvapi",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "deepsize",
  "derive_more",
@@ -4204,6 +4211,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tonic 0.13.1",
+]
+
+[[package]]
 name = "databend-common-meta-schema-api-test-suite"
 version = "0.1.0"
 dependencies = [
@@ -4228,10 +4243,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "codeq",
- "databend-common-base",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-types",
+ "databend-meta-runtime",
  "display-more 0.2.1",
  "futures",
  "itertools 0.13.0",
@@ -4263,16 +4279,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-stoerr"
-version = "0.1.0"
-dependencies = [
- "anyerror",
- "serde_json",
- "sled",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "databend-common-meta-store"
 version = "0.1.0"
 dependencies = [
@@ -4283,10 +4289,12 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-common-version",
  "databend-meta",
+ "databend-meta-runtime",
  "log",
  "semver",
  "tempfile",
@@ -4301,8 +4309,6 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
- "databend-common-meta-stoerr",
- "databend-common-tracing",
  "deepsize",
  "derive_more",
  "display-more 0.2.1",
@@ -5106,6 +5112,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-version",
+ "databend-meta-runtime",
  "divan",
  "enumflags2",
  "itertools 0.13.0",
@@ -5238,6 +5245,7 @@ dependencies = [
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
+ "databend-meta-runtime",
  "databend-query",
  "databend-storages-common-cache",
  "databend-storages-common-io",
@@ -5439,7 +5447,6 @@ dependencies = [
  "chrono",
  "clap",
  "databend-base",
- "databend-common-base",
  "databend-common-config",
  "databend-common-grpc",
  "databend-common-http",
@@ -5449,15 +5456,16 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
- "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-meta-runtime",
  "deepsize",
  "derive_more",
  "display-more 0.2.1",
@@ -5484,6 +5492,7 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "serfig",
  "state-machine-api",
  "temp-env",
@@ -5514,6 +5523,7 @@ dependencies = [
  "databend-common-meta-control",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-store",
@@ -5522,6 +5532,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
+ "databend-meta-runtime",
  "display-more 0.2.1",
  "fastrace",
  "futures",
@@ -5533,6 +5544,17 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "databend-meta-runtime"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-meta-runtime-api",
+ "databend-common-tracing",
+ "tokio",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -5629,6 +5651,7 @@ dependencies = [
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
+ "databend-meta-runtime",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -5745,7 +5768,6 @@ dependencies = [
 name = "databend-sqlsmith"
 version = "0.1.0"
 dependencies = [
- "chrono-tz 0.8.6",
  "clap",
  "cookie",
  "databend-common-ast",
@@ -17447,8 +17469,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.4.2"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.4.2#38e5109dd07a0fd496a48646dddd7de43242d75d"
+version = "0.5.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.5.0#4508a803df787f525ebd9b91729a7c5b31931916"
 dependencies = [
  "futures",
  "log",

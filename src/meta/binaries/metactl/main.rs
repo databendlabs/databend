@@ -58,6 +58,7 @@ use databend_common_tracing::LogFormat;
 use databend_common_tracing::init_logging;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_runtime::DatabendRuntime;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
 use mlua::Lua;
@@ -82,7 +83,7 @@ impl App {
 
     async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
-        let client = MetaGrpcClient::try_create(
+        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",
@@ -164,7 +165,7 @@ impl App {
         let mut i = 0;
         loop {
             i += 1;
-            let client = MetaGrpcClient::try_create(
+            let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
                 BUILD_INFO.semver(),
                 "root",
@@ -203,14 +204,14 @@ impl App {
                 export_from_grpc::export_from_running_node(args, BUILD_INFO.semver()).await?;
             }
             Some(ref _dir) => {
-                export_from_disk::export_from_dir(args).await?;
+                export_from_disk::export_from_dir::<DatabendRuntime>(args).await?;
             }
         }
         Ok(())
     }
 
     async fn import(&self, args: &ImportArgs) -> anyhow::Result<()> {
-        import::import_data(args).await?;
+        import::import_data::<DatabendRuntime>(args).await?;
         Ok(())
     }
 
@@ -313,7 +314,10 @@ return metrics, nil
         Ok(())
     }
 
-    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
+    fn new_grpc_client(
+        &self,
+        addresses: Vec<String>,
+    ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         lua_support::new_grpc_client(addresses, BUILD_INFO.semver())
     }
 

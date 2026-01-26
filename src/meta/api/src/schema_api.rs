@@ -774,6 +774,7 @@ pub fn mark_table_index_as_deleted(
         TableIndexType::Inverted => MarkedDeletedIndexType::INVERTED,
         TableIndexType::Ngram => MarkedDeletedIndexType::NGRAM,
         TableIndexType::Vector => MarkedDeletedIndexType::VECTOR,
+        TableIndexType::Spatial => MarkedDeletedIndexType::SPATIAL,
     };
     let marked_deleted_table_index_meta = MarkedDeletedIndexMeta {
         dropped_on: Utc::now(),

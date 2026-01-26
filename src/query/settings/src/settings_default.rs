@@ -516,6 +516,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("nested_loop_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables bloom runtime filter optimization for JOIN.",
@@ -755,12 +762,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("enable_lazy_read_across_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables lazy read across join.",
+                ("lazy_read_across_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Sets the maximum LIMIT in a query to enable lazy read across joins. Setting it to 0 disables the optimization.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),

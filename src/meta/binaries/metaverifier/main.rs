@@ -26,11 +26,11 @@ use std::time::Instant;
 use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
-use databend_common_base::runtime;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
@@ -40,6 +40,7 @@ use databend_common_tracing::StderrConfig;
 use databend_common_tracing::init_logging;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_runtime::DatabendRuntime;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -127,70 +128,79 @@ async fn main() -> Result<()> {
             .map(|addr| addr.to_string())
             .collect();
 
-        let handle = runtime::spawn(async move {
-            let client = MetaGrpcClient::try_create(
-                addrs.clone(),
-                BUILD_INFO.semver(),
-                "root",
-                "xxx",
-                None,
-                None,
-                None,
-            );
+        let handle = DatabendRuntime::spawn(
+            async move {
+                let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+                    addrs.clone(),
+                    BUILD_INFO.semver(),
+                    "root",
+                    "xxx",
+                    None,
+                    None,
+                    None,
+                );
 
-            let client = match client {
-                Ok(client) => client,
-                Err(e) => {
-                    fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
-                    eprintln!("Failed to create client: {}", e);
-                    bail!("Failed to create client: {}", e);
-                }
-            };
+                let client = match client {
+                    Ok(client) => client,
+                    Err(e) => {
+                        fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
+                        eprintln!("Failed to create client: {}", e);
+                        bail!("Failed to create client: {}", e);
+                    }
+                };
 
-            verifier(
-                &client,
-                prefix,
-                config.number,
-                client_num,
-                config.remove_percent,
-            )
-            .await
-        });
+                verifier(
+                    &client,
+                    prefix,
+                    config.number,
+                    client_num,
+                    config.remove_percent,
+                )
+                .await
+            },
+            None,
+        );
         println!("verifier worker {} started..", client_num);
         handles.push(handle)
     }
 
-    let waiter_handle = runtime::spawn(async move {
-        let result = rx.recv_timeout(Duration::from_secs(config.time));
+    let waiter_handle = DatabendRuntime::spawn(
+        async move {
+            let result = rx.recv_timeout(Duration::from_secs(config.time));
 
-        match result {
-            Ok(_) => {
-                println!("verifier completed within the timeout.");
+            match result {
+                Ok(_) => {
+                    println!("verifier completed within the timeout.");
+                }
+                Err(e) => {
+                    println!(
+                        "verifier did not complete within the timeout: {:?}s, error: {:?}",
+                        config.time, e
+                    );
+                    let _ = fs::write(VERIFIER_RESULT_FILE, "ERROR");
+                    panic!("verifier did not complete within the timeout.")
+                }
             }
-            Err(e) => {
-                println!(
-                    "verifier did not complete within the timeout: {:?}s, error: {:?}",
-                    config.time, e
-                );
-                let _ = fs::write(VERIFIER_RESULT_FILE, "ERROR");
-                panic!("verifier did not complete within the timeout.")
-            }
-        }
-    });
+        },
+        None,
+    );
 
-    let wait_verifier_handle = runtime::spawn(async move {
-        for handle in handles {
-            let ret = handle.await.unwrap();
-            if let Err(e) = ret {
-                fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
-                println!("verifier return error: {:?}", e);
-                return Err(e);
+    let wait_verifier_handle = DatabendRuntime::spawn(
+        async move {
+            for handle in handles {
+                let ret = handle.await.unwrap();
+                if let Err(e) = ret {
+                    fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
+                    println!("verifier return error: {:?}", e);
+                    return Err(e);
+                }
             }
-        }
-        tx.send(()).unwrap();
+            tx.send(()).unwrap();
 
-        Ok(())
-    });
+            Ok(())
+        },
+        None,
+    );
 
     let _ret = wait_verifier_handle.await.unwrap();
     if let Err(e) = waiter_handle.await {
@@ -219,7 +229,7 @@ async fn main() -> Result<()> {
 }
 
 async fn verifier(
-    client: &Arc<ClientHandle>,
+    client: &Arc<ClientHandle<DatabendRuntime>>,
     prefix: u64,
     number: u64,
     client_num: u64,

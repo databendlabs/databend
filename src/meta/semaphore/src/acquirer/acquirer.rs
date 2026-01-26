@@ -19,13 +19,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codeq::Encode;
-use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use databend_common_meta_types::protobuf as pb;
+use databend_meta_runtime::DatabendRuntime;
 use futures::FutureExt;
 use log::info;
 use log::warn;
@@ -87,7 +88,7 @@ pub struct Acquirer {
     pub(crate) seq_policy: SeqPolicy,
 
     /// The meta client to interact with the meta-service.
-    pub(crate) meta_client: Arc<ClientHandle>,
+    pub(crate) meta_client: Arc<ClientHandle<DatabendRuntime>>,
 
     /// The sender to cancel the subscriber task.
     pub(crate) subscriber_cancel_tx: oneshot::Sender<()>,
@@ -458,7 +459,7 @@ impl Acquirer {
 
         let task_name = format!("{}/(seq={})", self.name, permit_key.seq);
 
-        spawn_named(
+        DatabendRuntime::spawn(
             async move {
                 let res = fu.await;
                 if let Err(e) = res {
@@ -468,7 +469,7 @@ impl Acquirer {
                     );
                 }
             },
-            task_name,
+            Some(task_name),
         );
 
         cancel_tx
@@ -478,7 +479,7 @@ impl Acquirer {
     ///
     /// If it receives the cancel signal, it will remove the [`PermitEntry`].
     async fn extend_lease_loop(
-        meta_client: Arc<ClientHandle>,
+        meta_client: Arc<ClientHandle<DatabendRuntime>>,
         permit_key: PermitKey,
         val_bytes: Vec<u8>,
         ttl: Duration,

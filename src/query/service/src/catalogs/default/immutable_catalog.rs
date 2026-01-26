@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -314,6 +315,27 @@ impl Catalog for ImmutableCatalog {
         let _db = self.get_database(tenant, db_name).await?;
 
         self.sys_db_meta.get_by_name(db_name, table_name)
+    }
+
+    async fn mget_tables(
+        &self,
+        _tenant: &Tenant,
+        db_name: &str,
+        table_names: &[String],
+    ) -> Result<Vec<Arc<dyn Table>>> {
+        let tables = self.sys_db_meta.get_all_tables(db_name)?;
+        let mut table_map = HashMap::with_capacity(tables.len());
+        for table in tables {
+            table_map.insert(table.name().to_string(), table);
+        }
+
+        let mut res = Vec::with_capacity(table_names.len());
+        for table_name in table_names {
+            if let Some(table) = table_map.get(table_name) {
+                res.push(table.clone());
+            }
+        }
+        Ok(res)
     }
 
     #[async_backtrace::framed]
