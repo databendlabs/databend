@@ -14,11 +14,11 @@
 
 use std::fmt;
 use std::fs;
-use std::net::TcpListener;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use databend_base::testutil::next_port;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -109,19 +109,6 @@ pub fn make_grpc_client(
     )?;
 
     Ok(client)
-}
-
-/// Get an available port by asking the OS to assign one.
-///
-/// This binds to port 0, retrieves the assigned port, then drops the listener.
-/// There's a small race window between dropping and actual use, but it's
-/// acceptable for tests and avoids conflicts between parallel test processes.
-pub fn next_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to port 0");
-    listener
-        .local_addr()
-        .expect("Failed to get local address")
-        .port()
 }
 
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.

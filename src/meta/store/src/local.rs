@@ -14,11 +14,11 @@
 
 use std::fmt;
 use std::fs;
-use std::net::TcpListener;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_base::testutil::next_port;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -227,33 +227,5 @@ impl LocalMetaService {
 
         client.forward(req).await?;
         Ok(())
-    }
-}
-
-/// Get an available port by asking the OS to assign one.
-///
-/// This binds to port 0, retrieves the assigned port, then drops the listener.
-/// There's a small race window between dropping and actual use, but it's
-/// acceptable for tests and avoids conflicts between parallel test processes.
-fn next_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to port 0");
-    listener
-        .local_addr()
-        .expect("Failed to get local address")
-        .port()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_next_port() {
-        let port = next_port();
-        assert!(port > 0, "Port should be positive: {}", port);
-
-        // Ports should be unique
-        let port2 = next_port();
-        assert_ne!(port, port2, "Consecutive ports should differ");
     }
 }
