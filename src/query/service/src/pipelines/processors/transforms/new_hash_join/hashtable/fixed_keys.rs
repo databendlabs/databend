@@ -83,11 +83,6 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
     }
 
     /// Insert using open addressing with linear probing.
-    ///
-    /// This method is more cache-friendly by:
-    /// 1. Computing all hashes in batch first
-    /// 2. Computing all salts and initial slots in batch
-    /// 3. Then performing insertions with atomic CAS
     pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
         if num_rows == 0 {
@@ -97,7 +92,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
 
-        // Step 1: Compute all hashes in batch
+        // Compute all hashes in batch for cache efficiency
         let mut hashes = Vec::with_capacity(num_rows);
         self.hash_method.build_keys_hashes(&keys_state, &mut hashes);
 
@@ -113,12 +108,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         let capacity_mask = self.hash_table.capacity() - 1;
         let hash_shift = self.hash_table.hash_shift();
 
-        // Step 2: Compute all salts and initial slots in batch
-        let salts: Vec<u64> = hashes.iter().map(|h| extract_salt(*h) & TAG_MASK).collect();
-        let initial_slots: Vec<usize> =
-            hashes.iter().map(|h| (*h >> hash_shift) as usize).collect();
-
-        // Step 3: Insert entries using linear probing
+        // Insert entries using linear probing (compute salt and slot inline)
         for (row_index, key) in build_keys_iter.enumerate() {
             let row_ptr = RowPtr {
                 chunk_index: chunk as u32,
@@ -133,11 +123,12 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
                 }
             }
 
-            let salt = salts[row_index];
+            let hash = hashes[row_index];
+            let salt = extract_salt(hash) & TAG_MASK;
             let new_entry = new_entry_with_salt(salt, raw_entry_ptr as u64);
 
             let mut expected = 0;
-            let mut slot = initial_slots[row_index];
+            let mut slot = (hash >> hash_shift) as usize;
             let mut atomic_ptr = unsafe { &*atomic_pointers.add(slot) };
 
             loop {
@@ -179,20 +170,14 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         Ok(())
     }
 
-    /// Batch probe using open addressing
-    ///
-    /// This method is more cache-friendly by:
-    /// 1. Computing all salts and initial slots in batch
-    /// 2. Performing first-round probes in batch (checking initial slots)
-    /// 3. Handling collisions for remaining keys
+    /// Batch probe using open addressing with linear probing.
     fn probe_open_addressing_batch(
         &self,
         keys: &dyn KeyAccessor<Key = T>,
         hashes: &mut [u64],
         bitmap: Option<databend_common_column::bitmap::Bitmap>,
     ) -> usize {
-        let num_keys = hashes.len();
-        if num_keys == 0 {
+        if hashes.len() == 0 {
             return 0;
         }
 
@@ -208,18 +193,21 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
             }
         }
 
-        // Step 1: Compute salts and initial slots in batch
-        let mut salts: Vec<u64> = Vec::with_capacity(num_keys);
-        let mut slots: Vec<usize> = Vec::with_capacity(num_keys);
+        // Compute salts and slots in batch
+        let mut salts: Vec<u64> = Vec::with_capacity(hashes.len());
+        let mut slots: Vec<usize> = Vec::with_capacity(hashes.len());
+
+        assume(salts.capacity() >= hashes.len());
+        assume(slots.capacity() >= hashes.len());
 
         for hash in hashes.iter() {
             salts.push(extract_salt(*hash) & TAG_MASK);
             slots.push((*hash >> hash_shift) as usize);
         }
 
-        // Step 2: First-round probe - check initial slots in batch
-        // This is cache-friendly as we access pointers sequentially based on slots
-        let mut need_continue: Vec<usize> = Vec::new(); // indices that need further probing
+        // First-round probe - check initial slots in batch
+        // Store idx only for keys that need further probing
+        let mut need_continue: Vec<usize> = Vec::new();
         let mut count = 0;
 
         match bitmap {
@@ -251,13 +239,12 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
                         }
                     }
 
-                    // Need to continue probing
                     slots[idx] = increment_slot(slot, capacity_mask);
                     need_continue.push(idx);
                 }
             }
             _ => {
-                for idx in 0..num_keys {
+                for idx in 0..hashes.len() {
                     let slot = slots[idx];
                     let current = pointers[slot];
 
@@ -279,31 +266,20 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
                         }
                     }
 
-                    // Need to continue probing
                     slots[idx] = increment_slot(slot, capacity_mask);
                     need_continue.push(idx);
                 }
             }
         }
 
-        // Step 3: Handle collisions - continue probing for remaining keys
-        // Use iterative approach to handle multiple collision rounds
-        let initial_slots: Vec<usize> = (0..num_keys)
-            .map(|idx| (hashes[idx] >> hash_shift) as usize)
-            .collect();
-
+        // Handle collisions - continue probing for remaining keys
+        // Use in-place modification to avoid allocating new Vec each iteration
         while !need_continue.is_empty() {
-            let mut still_need_continue: Vec<usize> = Vec::new();
+            let mut write_idx = 0;
 
-            for &idx in &need_continue {
+            for read_idx in 0..need_continue.len() {
+                let idx = need_continue[read_idx];
                 let slot = slots[idx];
-
-                // Check if we've wrapped around
-                if slot == initial_slots[idx] {
-                    hashes[idx] = 0;
-                    continue;
-                }
-
                 let current = pointers[slot];
 
                 if current == 0 {
@@ -326,10 +302,11 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
 
                 // Still need to continue
                 slots[idx] = increment_slot(slot, capacity_mask);
-                still_need_continue.push(idx);
+                need_continue[write_idx] = idx;
+                write_idx += 1;
             }
 
-            need_continue = still_need_continue;
+            need_continue.truncate(write_idx);
         }
 
         count
@@ -426,12 +403,11 @@ impl<Key: HashtableKeyable + 'static, const MATCHED: bool, const MATCH_FIRST: bo
             }
 
             if self.pointers[self.key_idx] == 0 {
-                self.key_idx += 1;
-
                 if !MATCHED {
                     res.unmatched.push(self.key_idx as u64);
                 }
 
+                self.key_idx += 1;
                 continue;
             }
 
