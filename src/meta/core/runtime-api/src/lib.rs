@@ -74,6 +74,29 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     /// `DatabendRuntime` injects tracing context and query ID.
     fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T>
     where Self: Sized;
+
+    /// Trace an incoming remote request.
+    ///
+    /// Server-side counterpart to `prepare_request`:
+    /// - `prepare_request`: client injects tracing context into outgoing requests
+    /// - `trace_request`: server extracts tracing context and wraps handler with span
+    ///
+    /// The closure receives the request and returns a future. The implementation
+    /// extracts any tracing context from request metadata and wraps the future
+    /// with the appropriate span.
+    ///
+    /// `TokioRuntime` just calls the closure without tracing.
+    /// `DatabendRuntime` extracts span context and wraps with `.in_span()`.
+    fn trace_request<'a, T, F, Fut, R>(
+        name: &'static str,
+        request: tonic::Request<T>,
+        f: F,
+    ) -> BoxFuture<'a, R>
+    where
+        Self: Sized,
+        F: FnOnce(tonic::Request<T>) -> Fut,
+        Fut: Future<Output = R> + Send + 'a,
+        R: Send + 'a;
 }
 
 /// Owned runtime instance that can spawn tasks.
