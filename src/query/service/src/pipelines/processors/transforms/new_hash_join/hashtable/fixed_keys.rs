@@ -177,7 +177,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         hashes: &mut [u64],
         bitmap: Option<databend_common_column::bitmap::Bitmap>,
     ) -> usize {
-        if hashes.len() == 0 {
+        if hashes.is_empty() {
             return 0;
         }
 
