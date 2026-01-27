@@ -29,6 +29,7 @@ use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
 use crate::optimizer::optimizers::CascadesOptimizer;
+use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
@@ -280,6 +281,12 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add_if(
             settings.get_force_eager_aggregate()?,
             RuleEagerAggregation::new(opt_ctx.get_metadata()),
+        )
+        // Common subexpression elimination optimization
+        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
+        .add_if(
+            settings.get_enable_cse_optimizer()?,
+            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
         )
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
