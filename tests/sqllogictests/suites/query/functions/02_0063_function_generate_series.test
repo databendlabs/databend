@@ -96,3 +96,11 @@ select * from range((select 3)::int, (select 7)::int);
 4
 5
 6
+
+query II
+select t.start, s.generate_series
+from (select 1 as start, 3 as finish) t, lateral generate_series(t.start, t.finish) s;
+----
+1 1
+1 2
+1 3

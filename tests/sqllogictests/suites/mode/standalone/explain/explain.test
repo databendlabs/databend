@@ -1779,14 +1779,14 @@ HashJoin
 
 # issue: https://github.com/databendlabs/databend/issues/17162
 query T
-EXPLAIN WITH RECURSIVE aoc10_input(i) AS (SELECT '\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n'), lines(y, line, rest) AS (SELECT 0::UInt64, substr(i, 1, position('\n' IN i) - 1), substr(i, position('\n' IN i) + 1) FROM aoc10_input UNION ALL SELECT y + 1::UInt64, substr(rest, 1, position('\n' IN rest) - 1), substr(rest, position('\n' IN rest) + 1) FROM lines WHERE position('\n' IN rest) > 0), field(x, y, v, line) AS (SELECT (n.number + 1)::UInt64 AS x, l.y, (ascii(substr(l.line, ((n.number + 1)::Int64), 1)) - 48)::UInt64 AS v, l.line FROM lines l CROSS JOIN numbers(64) n WHERE l.line <> '' AND n.number < (length(l.line))::UInt64), paths(x, y, v, sx, sy) AS (SELECT x, y, 9::UInt64, x, y FROM field WHERE v = 9 UNION ALL SELECT f.x, f.y, f.v, p.sx, p.sy FROM field f JOIN paths p ON f.v = p.v - 1 AND p.v > 0 AND ((f.x = p.x AND abs(f.y - p.y) = 1) OR (f.y = p.y AND abs(f.x - p.x) = 1))), results AS (SELECT * FROM paths WHERE v = 0), part1 AS (SELECT DISTINCT * FROM results) SELECT (SELECT count(*) FROM part1) AS part1, (SELECT count(*) FROM results) AS part2;
+EXPLAIN WITH RECURSIVE aoc10_input(i) AS (SELECT '\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n'), lines(y, line, rest) AS (SELECT 0::UInt64, substr(i, 1, position('\n' IN i) - 1), substr(i, position('\n' IN i) + 1) FROM aoc10_input UNION ALL SELECT y + 1::UInt64, substr(rest, 1, position('\n' IN rest) - 1), substr(rest, position('\n' IN rest) + 1) FROM lines WHERE position('\n' IN rest) > 0), field(x, y, v) AS (SELECT x::UInt64 AS x, y, (ascii(substr(line, x::Int64, 1)) - 48)::UInt64 AS v FROM (SELECT * FROM lines l WHERE line <> '') s, LATERAL generate_series(1, length(line)) g(x)), paths(x, y, v, sx, sy) AS (SELECT x, y, 9::UInt64, x, y FROM field WHERE v = 9 UNION ALL SELECT f.x, f.y, f.v, p.sx, p.sy FROM field f JOIN paths p ON f.v = p.v - 1 AND p.v > 0 AND ((f.x = p.x AND abs(f.y - p.y) = 1) OR (f.y = p.y AND abs(f.x - p.x) = 1))), results AS (SELECT * FROM paths WHERE v = 0), part1 AS (SELECT DISTINCT * FROM results) SELECT (SELECT count(*) FROM part1) AS part1, (SELECT count(*) FROM results) AS part2;
 ----
 EvalScalar
-├── output columns: [part1 (#88), part2 (#89)]
-├── expressions: [scalar_subquery_43 (#43), scalar_subquery_87 (#87)]
+├── output columns: [part1 (#92), part2 (#93)]
+├── expressions: [scalar_subquery_45 (#45), scalar_subquery_91 (#91)]
 ├── estimated rows: 1.00
 └── HashJoin
-    ├── output columns: [COUNT(*) (#43), COUNT(*) (#87)]
+    ├── output columns: [COUNT(*) (#45), COUNT(*) (#91)]
     ├── join type: LEFT SINGLE
     ├── build keys: []
     ├── probe keys: []
@@ -1794,7 +1794,7 @@ EvalScalar
     ├── filters: []
     ├── estimated rows: 1.00
     ├── AggregateFinal(Build)
-    │   ├── output columns: [COUNT(*) (#87)]
+    │   ├── output columns: [COUNT(*) (#91)]
     │   ├── group by: []
     │   ├── aggregate functions: [count()]
     │   ├── estimated rows: 1.00
@@ -1804,128 +1804,112 @@ EvalScalar
     │       ├── estimated rows: 1.00
     │       └── Filter
     │           ├── output columns: []
-    │           ├── filters: [paths.v (#84) = 0]
-    │           ├── estimated rows: 3.20
+    │           ├── filters: [paths.v (#88) = 0]
+    │           ├── estimated rows: 0.15
     │           └── UnionAll(recursive cte)
-    │               ├── output columns: [x (#82), y (#83), 9 (#84), x (#85), y (#86)]
-    │               ├── estimated rows: 6.40
+    │               ├── output columns: [x (#86), y (#87), 9 (#88), x (#89), y (#90)]
+    │               ├── estimated rows: 0.30
     │               ├── EvalScalar
-    │               │   ├── output columns: [0 (#54), x (#58), 9 (#60)]
+    │               │   ├── output columns: [0 (#56), x (#61), 9 (#63)]
     │               │   ├── expressions: [9]
-    │               │   ├── estimated rows: 6.40
+    │               │   ├── estimated rows: 0.30
     │               │   └── EvalScalar
-    │               │       ├── output columns: [0 (#54), x (#58)]
-    │               │       ├── expressions: [n.number (#57) + 1]
-    │               │       ├── estimated rows: 6.40
-    │               │       └── Filter
-    │               │           ├── output columns: [0 (#54), n.number (#57)]
-    │               │           ├── filters: [CAST(ascii(substr(l.line (#55), CAST(n.number (#57) + 1 AS Int64), 1)) - 48 AS UInt64) = 9]
-    │               │           ├── estimated rows: 6.40
-    │               │           └── MergeJoin
-    │               │               ├── output columns: [0 (#54), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#55), n.number (#57)]
-    │               │               ├── join type: INNER
-    │               │               ├── range join conditions: [length(l.line (#55)) "gt" n.number (#57)]
-    │               │               ├── other conditions: []
-    │               │               ├── estimated rows: 32.00
-    │               │               ├── Filter(Left)
-    │               │               │   ├── output columns: [0 (#54), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#55)]
-    │               │               │   ├── filters: [l.line (#55) <> '']
-    │               │               │   ├── estimated rows: 0.50
-    │               │               │   └── UnionAll(recursive cte)
-    │               │               │       ├── output columns: [0 (#54), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#55), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#56)]
-    │               │               │       ├── estimated rows: 1.00
-    │               │               │       ├── EvalScalar
-    │               │               │       │   ├── output columns: [0 (#45), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#46), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#47)]
-    │               │               │       │   ├── expressions: [0, substr(aoc10_input.i (#44), 1, CAST(locate('\n', aoc10_input.i (#44)) - 1 AS UInt64)), substr(aoc10_input.i (#44), CAST(locate('\n', aoc10_input.i (#44)) + 1 AS Int64))]
-    │               │               │       │   ├── estimated rows: 1.00
-    │               │               │       │   └── EvalScalar
-    │               │               │       │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#44)]
-    │               │               │       │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-    │               │               │       │       ├── estimated rows: 1.00
-    │               │               │       │       └── DummyTableScan
-    │               │               │       └── EvalScalar
-    │               │               │           ├── output columns: [y + 1::UInt64 (#51), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#52), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#53)]
-    │               │               │           ├── expressions: [lines.y (#48) + 1, substr(lines.rest (#50), 1, CAST(locate('\n', lines.rest (#50)) - 1 AS UInt64)), substr(lines.rest (#50), CAST(locate('\n', lines.rest (#50)) + 1 AS Int64))]
-    │               │               │           ├── estimated rows: 0.00
-    │               │               │           └── Filter
-    │               │               │               ├── output columns: [y (#48), rest (#50)]
-    │               │               │               ├── filters: [locate('\n', lines.rest (#50)) > 0]
-    │               │               │               ├── estimated rows: 0.00
-    │               │               │               └── RecursiveCteScan
-    │               │               └── TableScan(Right)
-    │               │                   ├── table: default.system.numbers
-    │               │                   ├── scan id: 2
-    │               │                   ├── output columns: [number (#57)]
-    │               │                   ├── read rows: 64
-    │               │                   ├── read size: < 1 KiB
-    │               │                   ├── partitions total: 1
-    │               │                   ├── partitions scanned: 1
-    │               │                   ├── push downs: [filters: [], limit: NONE]
-    │               │                   └── estimated rows: 64.00
+    │               │       ├── output columns: [0 (#56), x (#61)]
+    │               │       ├── expressions: [CAST(g.x (#60) AS UInt64 NULL)]
+    │               │       ├── estimated rows: 0.30
+    │               │       └── EvalScalar
+    │               │           ├── output columns: [0 (#56), generate_series(1, length(line)) (#60)]
+    │               │           ├── expressions: [get(1)(generate_series(1, length(s.line (#57))) (#59))]
+    │               │           ├── estimated rows: 0.30
+    │               │           └── Filter
+    │               │               ├── output columns: [0 (#56), generate_series(1, length(s.line (#57))) (#59)]
+    │               │               ├── filters: [is_true(CAST(ascii(substr(CAST(s.line (#57) AS String NULL), get(1)(generate_series(1, length(s.line (#57))) (#59)), 1)) - 48 AS UInt64 NULL) = 9)]
+    │               │               ├── estimated rows: 0.30
+    │               │               └── ProjectSet
+    │               │                   ├── output columns: [0 (#56), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#57), generate_series(1, length(s.line (#57))) (#59)]
+    │               │                   ├── estimated rows: 1.50
+    │               │                   ├── set returning functions: generate_series(1, length(s.line (#57)))
+    │               │                   └── Filter
+    │               │                       ├── output columns: [0 (#56), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#57)]
+    │               │                       ├── filters: [l.line (#57) <> '']
+    │               │                       ├── estimated rows: 0.50
+    │               │                       └── UnionAll(recursive cte)
+    │               │                           ├── output columns: [0 (#56), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#57), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#58)]
+    │               │                           ├── estimated rows: 1.00
+    │               │                           ├── EvalScalar
+    │               │                           │   ├── output columns: [0 (#47), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#48), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#49)]
+    │               │                           │   ├── expressions: [0, substr(aoc10_input.i (#46), 1, CAST(locate('\n', aoc10_input.i (#46)) - 1 AS UInt64)), substr(aoc10_input.i (#46), CAST(locate('\n', aoc10_input.i (#46)) + 1 AS Int64))]
+    │               │                           │   ├── estimated rows: 1.00
+    │               │                           │   └── EvalScalar
+    │               │                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#46)]
+    │               │                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
+    │               │                           │       ├── estimated rows: 1.00
+    │               │                           │       └── DummyTableScan
+    │               │                           └── EvalScalar
+    │               │                               ├── output columns: [y + 1::UInt64 (#53), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#54), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#55)]
+    │               │                               ├── expressions: [lines.y (#50) + 1, substr(lines.rest (#52), 1, CAST(locate('\n', lines.rest (#52)) - 1 AS UInt64)), substr(lines.rest (#52), CAST(locate('\n', lines.rest (#52)) + 1 AS Int64))]
+    │               │                               ├── estimated rows: 0.00
+    │               │                               └── Filter
+    │               │                                   ├── output columns: [y (#50), rest (#52)]
+    │               │                                   ├── filters: [locate('\n', lines.rest (#52)) > 0]
+    │               │                                   ├── estimated rows: 0.00
+    │               │                                   └── RecursiveCteScan
     │               └── Filter
-    │                   ├── output columns: [0 (#71), x (#75), v (#76), sx (#80), sy (#81)]
-    │                   ├── filters: [f.x (#75) = p.x (#77) and abs(f.y (#71) - p.y (#78)) = 1 or f.y (#71) = p.y (#78) and abs(f.x (#75) - p.x (#77)) = 1]
+    │                   ├── output columns: [0 (#74), x (#79), v (#80), sx (#84), sy (#85)]
+    │                   ├── filters: [f.x (#79) = p.x (#81) and abs(f.y (#74) - p.y (#82)) = 1 or f.y (#74) = p.y (#82) and abs(f.x (#79) - p.x (#81)) = 1]
     │                   ├── estimated rows: 0.00
     │                   └── HashJoin
-    │                       ├── output columns: [0 (#71), x (#75), v (#76), x (#77), y (#78), sx (#80), sy (#81)]
+    │                       ├── output columns: [0 (#74), x (#79), v (#80), x (#81), y (#82), sx (#84), sy (#85)]
     │                       ├── join type: INNER
-    │                       ├── build keys: [p.v (#79) - 1]
-    │                       ├── probe keys: [CAST(f.v (#76) AS Int64)]
+    │                       ├── build keys: [CAST(p.v (#83) - 1 AS Int64 NULL)]
+    │                       ├── probe keys: [CAST(f.v (#80) AS Int64 NULL)]
     │                       ├── keys is null equal: [false]
     │                       ├── filters: []
     │                       ├── estimated rows: 0.00
     │                       ├── Filter(Build)
-    │                       │   ├── output columns: [x (#77), y (#78), v (#79), sx (#80), sy (#81)]
-    │                       │   ├── filters: [p.v (#79) > 0]
+    │                       │   ├── output columns: [x (#81), y (#82), v (#83), sx (#84), sy (#85)]
+    │                       │   ├── filters: [p.v (#83) > 0]
     │                       │   ├── estimated rows: 0.00
     │                       │   └── RecursiveCteScan
     │                       └── EvalScalar(Probe)
-    │                           ├── output columns: [0 (#71), x (#75), v (#76)]
-    │                           ├── expressions: [n.number (#74) + 1, CAST(ascii(substr(l.line (#72), CAST(n.number (#74) + 1 AS Int64), 1)) - 48 AS UInt64)]
-    │                           ├── estimated rows: 32.00
-    │                           └── MergeJoin
-    │                               ├── output columns: [0 (#71), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#72), n.number (#74)]
-    │                               ├── join type: INNER
-    │                               ├── range join conditions: [length(l.line (#72)) "gt" n.number (#74)]
-    │                               ├── other conditions: []
-    │                               ├── estimated rows: 32.00
-    │                               ├── Filter(Left)
-    │                               │   ├── output columns: [0 (#71), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#72)]
-    │                               │   ├── filters: [l.line (#72) <> '']
-    │                               │   ├── estimated rows: 0.50
-    │                               │   └── UnionAll(recursive cte)
-    │                               │       ├── output columns: [0 (#71), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#72), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#73)]
-    │                               │       ├── estimated rows: 1.00
-    │                               │       ├── EvalScalar
-    │                               │       │   ├── output columns: [0 (#62), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#63), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#64)]
-    │                               │       │   ├── expressions: [0, substr(aoc10_input.i (#61), 1, CAST(locate('\n', aoc10_input.i (#61)) - 1 AS UInt64)), substr(aoc10_input.i (#61), CAST(locate('\n', aoc10_input.i (#61)) + 1 AS Int64))]
-    │                               │       │   ├── estimated rows: 1.00
-    │                               │       │   └── EvalScalar
-    │                               │       │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#61)]
-    │                               │       │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-    │                               │       │       ├── estimated rows: 1.00
-    │                               │       │       └── DummyTableScan
-    │                               │       └── EvalScalar
-    │                               │           ├── output columns: [y + 1::UInt64 (#68), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#69), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#70)]
-    │                               │           ├── expressions: [lines.y (#65) + 1, substr(lines.rest (#67), 1, CAST(locate('\n', lines.rest (#67)) - 1 AS UInt64)), substr(lines.rest (#67), CAST(locate('\n', lines.rest (#67)) + 1 AS Int64))]
-    │                               │           ├── estimated rows: 0.00
-    │                               │           └── Filter
-    │                               │               ├── output columns: [y (#65), rest (#67)]
-    │                               │               ├── filters: [locate('\n', lines.rest (#67)) > 0]
-    │                               │               ├── estimated rows: 0.00
-    │                               │               └── RecursiveCteScan
-    │                               └── TableScan(Right)
-    │                                   ├── table: default.system.numbers
-    │                                   ├── scan id: 3
-    │                                   ├── output columns: [number (#74)]
-    │                                   ├── read rows: 64
-    │                                   ├── read size: < 1 KiB
-    │                                   ├── partitions total: 1
-    │                                   ├── partitions scanned: 1
-    │                                   ├── push downs: [filters: [], limit: NONE]
-    │                                   └── estimated rows: 64.00
+    │                           ├── output columns: [0 (#74), x (#79), v (#80)]
+    │                           ├── expressions: [CAST(g.x (#78) AS UInt64 NULL), CAST(ascii(substr(CAST(s.line (#75) AS String NULL), g.x (#78), 1)) - 48 AS UInt64 NULL)]
+    │                           ├── estimated rows: 1.50
+    │                           └── EvalScalar
+    │                               ├── output columns: [0 (#74), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#75), generate_series(1, length(line)) (#78)]
+    │                               ├── expressions: [get(1)(generate_series(1, length(s.line (#75))) (#77))]
+    │                               ├── estimated rows: 1.50
+    │                               └── ProjectSet
+    │                                   ├── output columns: [0 (#74), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#75), generate_series(1, length(s.line (#75))) (#77)]
+    │                                   ├── estimated rows: 1.50
+    │                                   ├── set returning functions: generate_series(1, length(s.line (#75)))
+    │                                   └── Filter
+    │                                       ├── output columns: [0 (#74), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#75)]
+    │                                       ├── filters: [l.line (#75) <> '']
+    │                                       ├── estimated rows: 0.50
+    │                                       └── UnionAll(recursive cte)
+    │                                           ├── output columns: [0 (#74), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#75), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#76)]
+    │                                           ├── estimated rows: 1.00
+    │                                           ├── EvalScalar
+    │                                           │   ├── output columns: [0 (#65), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#66), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#67)]
+    │                                           │   ├── expressions: [0, substr(aoc10_input.i (#64), 1, CAST(locate('\n', aoc10_input.i (#64)) - 1 AS UInt64)), substr(aoc10_input.i (#64), CAST(locate('\n', aoc10_input.i (#64)) + 1 AS Int64))]
+    │                                           │   ├── estimated rows: 1.00
+    │                                           │   └── EvalScalar
+    │                                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#64)]
+    │                                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
+    │                                           │       ├── estimated rows: 1.00
+    │                                           │       └── DummyTableScan
+    │                                           └── EvalScalar
+    │                                               ├── output columns: [y + 1::UInt64 (#71), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#72), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#73)]
+    │                                               ├── expressions: [lines.y (#68) + 1, substr(lines.rest (#70), 1, CAST(locate('\n', lines.rest (#70)) - 1 AS UInt64)), substr(lines.rest (#70), CAST(locate('\n', lines.rest (#70)) + 1 AS Int64))]
+    │                                               ├── estimated rows: 0.00
+    │                                               └── Filter
+    │                                                   ├── output columns: [y (#68), rest (#70)]
+    │                                                   ├── filters: [locate('\n', lines.rest (#70)) > 0]
+    │                                                   ├── estimated rows: 0.00
+    │                                                   └── RecursiveCteScan
     └── HashJoin(Probe)
-        ├── output columns: [COUNT(*) (#43)]
+        ├── output columns: [COUNT(*) (#45)]
         ├── join type: LEFT SINGLE
         ├── build keys: []
         ├── probe keys: []
@@ -1933,7 +1917,7 @@ EvalScalar
         ├── filters: []
         ├── estimated rows: 1.00
         ├── AggregateFinal(Build)
-        │   ├── output columns: [COUNT(*) (#43)]
+        │   ├── output columns: [COUNT(*) (#45)]
         │   ├── group by: []
         │   ├── aggregate functions: [count()]
         │   ├── estimated rows: 1.00
@@ -1942,134 +1926,118 @@ EvalScalar
         │       ├── aggregate functions: [count()]
         │       ├── estimated rows: 1.00
         │       └── AggregateFinal
-        │           ├── output columns: [x (#38), y (#39), 9 (#40), x (#41), y (#42)]
+        │           ├── output columns: [x (#40), y (#41), 9 (#42), x (#43), y (#44)]
         │           ├── group by: [x, y, 9, x, y]
         │           ├── aggregate functions: []
-        │           ├── estimated rows: 1.07
+        │           ├── estimated rows: 1.00
         │           └── AggregatePartial
         │               ├── group by: [x, y, 9, x, y]
         │               ├── aggregate functions: []
-        │               ├── estimated rows: 1.07
+        │               ├── estimated rows: 1.00
         │               └── Filter
-        │                   ├── output columns: [x (#38), y (#39), 9 (#40), x (#41), y (#42)]
-        │                   ├── filters: [results.v (#40) = 0]
-        │                   ├── estimated rows: 3.20
+        │                   ├── output columns: [x (#40), y (#41), 9 (#42), x (#43), y (#44)]
+        │                   ├── filters: [results.v (#42) = 0]
+        │                   ├── estimated rows: 0.15
         │                   └── UnionAll(recursive cte)
-        │                       ├── output columns: [x (#38), y (#39), 9 (#40), x (#41), y (#42)]
-        │                       ├── estimated rows: 6.40
+        │                       ├── output columns: [x (#40), y (#41), 9 (#42), x (#43), y (#44)]
+        │                       ├── estimated rows: 0.30
         │                       ├── EvalScalar
-        │                       │   ├── output columns: [0 (#10), x (#14), 9 (#16)]
+        │                       │   ├── output columns: [0 (#10), x (#15), 9 (#17)]
         │                       │   ├── expressions: [9]
-        │                       │   ├── estimated rows: 6.40
+        │                       │   ├── estimated rows: 0.30
         │                       │   └── EvalScalar
-        │                       │       ├── output columns: [0 (#10), x (#14)]
-        │                       │       ├── expressions: [n.number (#13) + 1]
-        │                       │       ├── estimated rows: 6.40
-        │                       │       └── Filter
-        │                       │           ├── output columns: [0 (#10), n.number (#13)]
-        │                       │           ├── filters: [CAST(ascii(substr(l.line (#11), CAST(n.number (#13) + 1 AS Int64), 1)) - 48 AS UInt64) = 9]
-        │                       │           ├── estimated rows: 6.40
-        │                       │           └── MergeJoin
-        │                       │               ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11), n.number (#13)]
-        │                       │               ├── join type: INNER
-        │                       │               ├── range join conditions: [length(l.line (#11)) "gt" n.number (#13)]
-        │                       │               ├── other conditions: []
-        │                       │               ├── estimated rows: 32.00
-        │                       │               ├── Filter(Left)
-        │                       │               │   ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11)]
-        │                       │               │   ├── filters: [l.line (#11) <> '']
-        │                       │               │   ├── estimated rows: 0.50
-        │                       │               │   └── UnionAll(recursive cte)
-        │                       │               │       ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#12)]
-        │                       │               │       ├── estimated rows: 1.00
-        │                       │               │       ├── EvalScalar
-        │                       │               │       │   ├── output columns: [0 (#1), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#2), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#3)]
-        │                       │               │       │   ├── expressions: [0, substr(aoc10_input.i (#0), 1, CAST(locate('\n', aoc10_input.i (#0)) - 1 AS UInt64)), substr(aoc10_input.i (#0), CAST(locate('\n', aoc10_input.i (#0)) + 1 AS Int64))]
-        │                       │               │       │   ├── estimated rows: 1.00
-        │                       │               │       │   └── EvalScalar
-        │                       │               │       │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#0)]
-        │                       │               │       │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-        │                       │               │       │       ├── estimated rows: 1.00
-        │                       │               │       │       └── DummyTableScan
-        │                       │               │       └── EvalScalar
-        │                       │               │           ├── output columns: [y + 1::UInt64 (#7), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#8), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#9)]
-        │                       │               │           ├── expressions: [lines.y (#4) + 1, substr(lines.rest (#6), 1, CAST(locate('\n', lines.rest (#6)) - 1 AS UInt64)), substr(lines.rest (#6), CAST(locate('\n', lines.rest (#6)) + 1 AS Int64))]
-        │                       │               │           ├── estimated rows: 0.00
-        │                       │               │           └── Filter
-        │                       │               │               ├── output columns: [y (#4), rest (#6)]
-        │                       │               │               ├── filters: [locate('\n', lines.rest (#6)) > 0]
-        │                       │               │               ├── estimated rows: 0.00
-        │                       │               │               └── RecursiveCteScan
-        │                       │               └── TableScan(Right)
-        │                       │                   ├── table: default.system.numbers
-        │                       │                   ├── scan id: 0
-        │                       │                   ├── output columns: [number (#13)]
-        │                       │                   ├── read rows: 64
-        │                       │                   ├── read size: < 1 KiB
-        │                       │                   ├── partitions total: 1
-        │                       │                   ├── partitions scanned: 1
-        │                       │                   ├── push downs: [filters: [], limit: NONE]
-        │                       │                   └── estimated rows: 64.00
+        │                       │       ├── output columns: [0 (#10), x (#15)]
+        │                       │       ├── expressions: [CAST(g.x (#14) AS UInt64 NULL)]
+        │                       │       ├── estimated rows: 0.30
+        │                       │       └── EvalScalar
+        │                       │           ├── output columns: [0 (#10), generate_series(1, length(line)) (#14)]
+        │                       │           ├── expressions: [get(1)(generate_series(1, length(s.line (#11))) (#13))]
+        │                       │           ├── estimated rows: 0.30
+        │                       │           └── Filter
+        │                       │               ├── output columns: [0 (#10), generate_series(1, length(s.line (#11))) (#13)]
+        │                       │               ├── filters: [is_true(CAST(ascii(substr(CAST(s.line (#11) AS String NULL), get(1)(generate_series(1, length(s.line (#11))) (#13)), 1)) - 48 AS UInt64 NULL) = 9)]
+        │                       │               ├── estimated rows: 0.30
+        │                       │               └── ProjectSet
+        │                       │                   ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11), generate_series(1, length(s.line (#11))) (#13)]
+        │                       │                   ├── estimated rows: 1.50
+        │                       │                   ├── set returning functions: generate_series(1, length(s.line (#11)))
+        │                       │                   └── Filter
+        │                       │                       ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11)]
+        │                       │                       ├── filters: [l.line (#11) <> '']
+        │                       │                       ├── estimated rows: 0.50
+        │                       │                       └── UnionAll(recursive cte)
+        │                       │                           ├── output columns: [0 (#10), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#11), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#12)]
+        │                       │                           ├── estimated rows: 1.00
+        │                       │                           ├── EvalScalar
+        │                       │                           │   ├── output columns: [0 (#1), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#2), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#3)]
+        │                       │                           │   ├── expressions: [0, substr(aoc10_input.i (#0), 1, CAST(locate('\n', aoc10_input.i (#0)) - 1 AS UInt64)), substr(aoc10_input.i (#0), CAST(locate('\n', aoc10_input.i (#0)) + 1 AS Int64))]
+        │                       │                           │   ├── estimated rows: 1.00
+        │                       │                           │   └── EvalScalar
+        │                       │                           │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#0)]
+        │                       │                           │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
+        │                       │                           │       ├── estimated rows: 1.00
+        │                       │                           │       └── DummyTableScan
+        │                       │                           └── EvalScalar
+        │                       │                               ├── output columns: [y + 1::UInt64 (#7), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#8), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#9)]
+        │                       │                               ├── expressions: [lines.y (#4) + 1, substr(lines.rest (#6), 1, CAST(locate('\n', lines.rest (#6)) - 1 AS UInt64)), substr(lines.rest (#6), CAST(locate('\n', lines.rest (#6)) + 1 AS Int64))]
+        │                       │                               ├── estimated rows: 0.00
+        │                       │                               └── Filter
+        │                       │                                   ├── output columns: [y (#4), rest (#6)]
+        │                       │                                   ├── filters: [locate('\n', lines.rest (#6)) > 0]
+        │                       │                                   ├── estimated rows: 0.00
+        │                       │                                   └── RecursiveCteScan
         │                       └── Filter
-        │                           ├── output columns: [0 (#27), x (#31), v (#32), sx (#36), sy (#37)]
-        │                           ├── filters: [f.x (#31) = p.x (#33) and abs(f.y (#27) - p.y (#34)) = 1 or f.y (#27) = p.y (#34) and abs(f.x (#31) - p.x (#33)) = 1]
+        │                           ├── output columns: [0 (#28), x (#33), v (#34), sx (#38), sy (#39)]
+        │                           ├── filters: [f.x (#33) = p.x (#35) and abs(f.y (#28) - p.y (#36)) = 1 or f.y (#28) = p.y (#36) and abs(f.x (#33) - p.x (#35)) = 1]
         │                           ├── estimated rows: 0.00
         │                           └── HashJoin
-        │                               ├── output columns: [0 (#27), x (#31), v (#32), x (#33), y (#34), sx (#36), sy (#37)]
+        │                               ├── output columns: [0 (#28), x (#33), v (#34), x (#35), y (#36), sx (#38), sy (#39)]
         │                               ├── join type: INNER
-        │                               ├── build keys: [p.v (#35) - 1]
-        │                               ├── probe keys: [CAST(f.v (#32) AS Int64)]
+        │                               ├── build keys: [CAST(p.v (#37) - 1 AS Int64 NULL)]
+        │                               ├── probe keys: [CAST(f.v (#34) AS Int64 NULL)]
         │                               ├── keys is null equal: [false]
         │                               ├── filters: []
         │                               ├── estimated rows: 0.00
         │                               ├── Filter(Build)
-        │                               │   ├── output columns: [x (#33), y (#34), v (#35), sx (#36), sy (#37)]
-        │                               │   ├── filters: [p.v (#35) > 0]
+        │                               │   ├── output columns: [x (#35), y (#36), v (#37), sx (#38), sy (#39)]
+        │                               │   ├── filters: [p.v (#37) > 0]
         │                               │   ├── estimated rows: 0.00
         │                               │   └── RecursiveCteScan
         │                               └── EvalScalar(Probe)
-        │                                   ├── output columns: [0 (#27), x (#31), v (#32)]
-        │                                   ├── expressions: [n.number (#30) + 1, CAST(ascii(substr(l.line (#28), CAST(n.number (#30) + 1 AS Int64), 1)) - 48 AS UInt64)]
-        │                                   ├── estimated rows: 32.00
-        │                                   └── MergeJoin
-        │                                       ├── output columns: [0 (#27), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#28), n.number (#30)]
-        │                                       ├── join type: INNER
-        │                                       ├── range join conditions: [length(l.line (#28)) "gt" n.number (#30)]
-        │                                       ├── other conditions: []
-        │                                       ├── estimated rows: 32.00
-        │                                       ├── Filter(Left)
-        │                                       │   ├── output columns: [0 (#27), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#28)]
-        │                                       │   ├── filters: [l.line (#28) <> '']
-        │                                       │   ├── estimated rows: 0.50
-        │                                       │   └── UnionAll(recursive cte)
-        │                                       │       ├── output columns: [0 (#27), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#28), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#29)]
-        │                                       │       ├── estimated rows: 1.00
-        │                                       │       ├── EvalScalar
-        │                                       │       │   ├── output columns: [0 (#18), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#19), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#20)]
-        │                                       │       │   ├── expressions: [0, substr(aoc10_input.i (#17), 1, CAST(locate('\n', aoc10_input.i (#17)) - 1 AS UInt64)), substr(aoc10_input.i (#17), CAST(locate('\n', aoc10_input.i (#17)) + 1 AS Int64))]
-        │                                       │       │   ├── estimated rows: 1.00
-        │                                       │       │   └── EvalScalar
-        │                                       │       │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#17)]
-        │                                       │       │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
-        │                                       │       │       ├── estimated rows: 1.00
-        │                                       │       │       └── DummyTableScan
-        │                                       │       └── EvalScalar
-        │                                       │           ├── output columns: [y + 1::UInt64 (#24), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#25), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#26)]
-        │                                       │           ├── expressions: [lines.y (#21) + 1, substr(lines.rest (#23), 1, CAST(locate('\n', lines.rest (#23)) - 1 AS UInt64)), substr(lines.rest (#23), CAST(locate('\n', lines.rest (#23)) + 1 AS Int64))]
-        │                                       │           ├── estimated rows: 0.00
-        │                                       │           └── Filter
-        │                                       │               ├── output columns: [y (#21), rest (#23)]
-        │                                       │               ├── filters: [locate('\n', lines.rest (#23)) > 0]
-        │                                       │               ├── estimated rows: 0.00
-        │                                       │               └── RecursiveCteScan
-        │                                       └── TableScan(Right)
-        │                                           ├── table: default.system.numbers
-        │                                           ├── scan id: 1
-        │                                           ├── output columns: [number (#30)]
-        │                                           ├── read rows: 64
-        │                                           ├── read size: < 1 KiB
-        │                                           ├── partitions total: 1
-        │                                           ├── partitions scanned: 1
-        │                                           ├── push downs: [filters: [], limit: NONE]
-        │                                           └── estimated rows: 64.00
+        │                                   ├── output columns: [0 (#28), x (#33), v (#34)]
+        │                                   ├── expressions: [CAST(g.x (#32) AS UInt64 NULL), CAST(ascii(substr(CAST(s.line (#29) AS String NULL), g.x (#32), 1)) - 48 AS UInt64 NULL)]
+        │                                   ├── estimated rows: 1.50
+        │                                   └── EvalScalar
+        │                                       ├── output columns: [0 (#28), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#29), generate_series(1, length(line)) (#32)]
+        │                                       ├── expressions: [get(1)(generate_series(1, length(s.line (#29))) (#31))]
+        │                                       ├── estimated rows: 1.50
+        │                                       └── ProjectSet
+        │                                           ├── output columns: [0 (#28), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#29), generate_series(1, length(s.line (#29))) (#31)]
+        │                                           ├── estimated rows: 1.50
+        │                                           ├── set returning functions: generate_series(1, length(s.line (#29)))
+        │                                           └── Filter
+        │                                               ├── output columns: [0 (#28), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#29)]
+        │                                               ├── filters: [l.line (#29) <> '']
+        │                                               ├── estimated rows: 0.50
+        │                                               └── UnionAll(recursive cte)
+        │                                                   ├── output columns: [0 (#28), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#29), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#30)]
+        │                                                   ├── estimated rows: 1.00
+        │                                                   ├── EvalScalar
+        │                                                   │   ├── output columns: [0 (#19), SUBSTRING(i FROM 1 FOR POSITION('\n' IN i) - 1) (#20), SUBSTRING(i FROM POSITION('\n' IN i) + 1) (#21)]
+        │                                                   │   ├── expressions: [0, substr(aoc10_input.i (#18), 1, CAST(locate('\n', aoc10_input.i (#18)) - 1 AS UInt64)), substr(aoc10_input.i (#18), CAST(locate('\n', aoc10_input.i (#18)) + 1 AS Int64))]
+        │                                                   │   ├── estimated rows: 1.00
+        │                                                   │   └── EvalScalar
+        │                                                   │       ├── output columns: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n' (#18)]
+        │                                                   │       ├── expressions: ['\n89010123\n78121874\n87430965\n96549874\n45678903\n32019012\n01329801\n10456732\n']
+        │                                                   │       ├── estimated rows: 1.00
+        │                                                   │       └── DummyTableScan
+        │                                                   └── EvalScalar
+        │                                                       ├── output columns: [y + 1::UInt64 (#25), SUBSTRING(rest FROM 1 FOR POSITION('\n' IN rest) - 1) (#26), SUBSTRING(rest FROM POSITION('\n' IN rest) + 1) (#27)]
+        │                                                       ├── expressions: [lines.y (#22) + 1, substr(lines.rest (#24), 1, CAST(locate('\n', lines.rest (#24)) - 1 AS UInt64)), substr(lines.rest (#24), CAST(locate('\n', lines.rest (#24)) + 1 AS Int64))]
+        │                                                       ├── estimated rows: 0.00
+        │                                                       └── Filter
+        │                                                           ├── output columns: [y (#22), rest (#24)]
+        │                                                           ├── filters: [locate('\n', lines.rest (#24)) > 0]
+        │                                                           ├── estimated rows: 0.00
+        │                                                           └── RecursiveCteScan
         └── DummyTableScan(Probe)
