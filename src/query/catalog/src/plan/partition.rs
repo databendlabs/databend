@@ -93,7 +93,7 @@ pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 /// For cache affinity, we consider some strategies when reshuffle partitions.
 /// For example:
 /// Under PartitionsShuffleKind::Mod, the same partition is always routed to the same executor.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum PartitionsShuffleKind {
     // Bind the Partition to executor one by one with order.
     Seq,
