@@ -95,6 +95,7 @@ async fn apply_snapshot_pruning(
         segment_locs.len(),
         0,
         None, // block_slot
+        None, // shuffle_kind
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {

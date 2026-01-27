@@ -112,6 +112,7 @@ impl StageTable {
             partitions_total: files.len(),
             is_exact: false,
             pruning_stats: Default::default(),
+            shuffle_kind: None,
         };
 
         let partitions = files

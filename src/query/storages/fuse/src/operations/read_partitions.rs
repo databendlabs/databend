@@ -192,14 +192,17 @@ impl FuseTable {
                             PartitionsShuffleKind::Mod
                         };
 
+                    let mut part_stats = PartStatistics::new_estimated(
+                        Some(snapshot_loc),
+                        snapshot.summary.row_count as usize,
+                        snapshot.summary.compressed_byte_size as usize,
+                        segment_len,
+                        segment_len,
+                    );
+                    part_stats.shuffle_kind = Some(shuffle_kind.clone());
+
                     return Ok((
-                        PartStatistics::new_estimated(
-                            Some(snapshot_loc),
-                            snapshot.summary.row_count as usize,
-                            snapshot.summary.compressed_byte_size as usize,
-                            segment_len,
-                            segment_len,
-                        ),
+                        part_stats,
                         Partitions::create(shuffle_kind, segments),
                     ));
                 }
@@ -319,9 +322,10 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
+                    plan.statistics.partitions_total,
                     plan_id,
                     block_slot,
+                    plan.statistics.shuffle_kind.clone(),
                 )?;
             }
             FuseSegmentFormat::Column => {
@@ -448,6 +452,7 @@ impl FuseTable {
         partitions_total: usize,
         plan_id: u32,
         block_slot: Option<BlockSlotDescription>,
+        shuffle_kind: Option<PartitionsShuffleKind>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -571,6 +576,7 @@ impl FuseTable {
             pruner.clone(),
             self.data_metrics.clone(),
             partitions_total,
+            shuffle_kind,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
