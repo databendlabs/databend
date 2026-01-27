@@ -129,6 +129,20 @@ impl SpawnApi for TokioRuntime {
     fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
         request
     }
+
+    /// No-op for TokioRuntime - just calls the closure without tracing.
+    fn trace_request<'a, T, F, Fut, R>(
+        _name: &'static str,
+        request: tonic::Request<T>,
+        f: F,
+    ) -> BoxFuture<'a, R>
+    where
+        F: FnOnce(tonic::Request<T>) -> Fut,
+        Fut: Future<Output = R> + Send + 'a,
+        R: Send + 'a,
+    {
+        Box::pin(f(request))
+    }
 }
 
 #[expect(clippy::disallowed_methods)]

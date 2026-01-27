@@ -11,6 +11,7 @@ edition = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-tracing = { workspace = true }
+fastrace = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 
