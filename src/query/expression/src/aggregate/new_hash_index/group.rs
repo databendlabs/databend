@@ -58,9 +58,9 @@ mod portable_simd {
         #[inline]
         pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
             let ptr = unsafe { ctrls.as_ptr().add(index) as *const u8 };
-            Group(u8x8::from_array(unsafe {
-                ptr.cast::<[u8; 8]>().read_unaligned()
-            }))
+            // SAFETY: ctrl array has a tail padding, which is mirror to the head ctrl
+            // so it is safe to read any valid index in the ctrl array
+            Group(unsafe { ptr.cast::<u8x8>().read_unaligned() })
         }
     }
 

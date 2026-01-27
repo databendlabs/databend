@@ -23,41 +23,9 @@ use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
 use crate::aggregate::row_ptr::RowPtr;
 
-/// Compressed pointer storage using 48 bits (6 bytes) instead of 64 bits.
-#[derive(Clone, Copy)]
-struct RawRowPtr([u8; 6]);
-
-impl RawRowPtr {
-    #[inline]
-    const fn null() -> Self {
-        RawRowPtr([0u8; 6])
-    }
-}
-
-impl From<RowPtr> for RawRowPtr {
-    #[inline]
-    fn from(value: RowPtr) -> Self {
-        let bytes = (value.as_ptr() as u64).to_le_bytes();
-        let mut truncated = [0u8; 6];
-        truncated.copy_from_slice(&bytes[0..6]);
-
-        RawRowPtr(truncated)
-    }
-}
-
-impl From<RawRowPtr> for RowPtr {
-    #[inline]
-    fn from(value: RawRowPtr) -> Self {
-        let mut bytes = [0u8; 8];
-        bytes[0..6].copy_from_slice(&value.0);
-        let ptr_val = u64::from_le_bytes(bytes);
-        RowPtr::new(ptr_val as *mut u8)
-    }
-}
-
 pub struct ExperimentalHashIndex {
     ctrls: Vec<Tag>,
-    pointers: Vec<RawRowPtr>,
+    pointers: Vec<RowPtr>,
     capacity: usize,
     bucket_mask: usize,
     count: usize,
@@ -71,7 +39,7 @@ impl ExperimentalHashIndex {
         debug_assert!(capacity >= Group::WIDTH);
         let bucket_mask = capacity - 1;
         let ctrls = vec![Tag::EMPTY; capacity + Group::WIDTH];
-        let pointers = vec![RawRowPtr::null(); capacity];
+        let pointers = vec![RowPtr::null(); capacity];
         Self {
             ctrls,
             pointers,
@@ -227,8 +195,7 @@ impl ExperimentalHashIndex {
 
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
                     let slot = state.slots[row];
-                    self.set_ctrl(slot, Tag::full(state.group_hashes[row]));
-                    self.pointers[slot] = RawRowPtr::from(state.addresses[row]);
+                    self.pointers[slot] = state.addresses[row];
                 }
             }
 
@@ -238,7 +205,7 @@ impl ExperimentalHashIndex {
                     .copied()
                 {
                     let slot = state.slots[row];
-                    state.addresses[row] = RowPtr::from(self.pointers[slot]);
+                    state.addresses[row] = self.pointers[slot];
                 }
 
                 no_match_count = adapter.compare(state, need_compare_count, no_match_count);
@@ -271,7 +238,7 @@ impl ExperimentalHashIndex {
     }
 
     pub fn allocated_bytes(&self) -> usize {
-        self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RawRowPtr>()
+        self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RowPtr>()
     }
 
     pub fn reset(&mut self) {
@@ -280,44 +247,14 @@ impl ExperimentalHashIndex {
         }
         self.count = 0;
         self.ctrls.fill(Tag::EMPTY);
-        self.pointers.fill(RawRowPtr::null());
+        self.pointers.fill(RowPtr::null());
     }
 
     pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
         let index = self.probe_empty(hash);
         unsafe {
-            *self.pointers.get_unchecked_mut(index) = RawRowPtr::from(row_ptr);
+            *self.pointers.get_unchecked_mut(index) = row_ptr;
         }
         self.count += 1;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_raw_row_ptr_basic() {
-        let raw = RawRowPtr::null();
-        let row_ptr = RowPtr::from(raw);
-        assert!(row_ptr.as_ptr().is_null());
-        assert_eq!(size_of::<RawRowPtr>(), 6);
-    }
-
-    #[test]
-    fn test_raw_row_ptr_roundtrip() {
-        let test_values: Vec<u64> = vec![0x0000_FFFF_FFFF_FFFF, 0x1234_5678_9ABC];
-
-        for val in test_values {
-            let original = RowPtr::new(val as *mut u8);
-            let raw = RawRowPtr::from(original);
-            let recovered = RowPtr::from(raw);
-            assert_eq!(
-                original.as_ptr(),
-                recovered.as_ptr(),
-                "Roundtrip failed for value 0x{:X}",
-                val
-            );
-        }
     }
 }
