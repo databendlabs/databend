@@ -56,18 +56,14 @@ watcher = { workspace = true }
 [dev-dependencies]
 databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-schema-api-test-suite = { workspace = true }
-databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-test-harness = { workspace = true }
-env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
-temp-env = { workspace = true }
-tempfile = { workspace = true }
 test-harness = { workspace = true }
 
 [lints]
