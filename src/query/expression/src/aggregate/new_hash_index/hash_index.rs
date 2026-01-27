@@ -178,7 +178,7 @@ impl ExperimentalHashIndex {
         let mut pos = self.h1(hash);
         loop {
             let ctrl = unsafe { *self.ctrl(pos) };
-            if likely(ctrl.is_empty()) {
+            if ctrl.is_empty() {
                 self.set_ctrl(pos, tag_hash);
                 return pos;
             }

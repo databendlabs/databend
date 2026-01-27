@@ -57,16 +57,19 @@ mod portable_simd {
 
         #[inline]
         pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
-            let ptr = ctrls.as_ptr().add(index) as *const u8;
-            Group(u8x8::from_array(ptr.cast::<[u8; 8]>().read_unaligned()))
+            let ptr = unsafe { ctrls.as_ptr().add(index) as *const u8 };
+            Group(u8x8::from_array(unsafe {
+                ptr.cast::<[u8; 8]>().read_unaligned()
+            }))
         }
     }
 
     #[cfg(all(test, not(miri)))]
     mod tests {
+        use rand::RngCore;
+
         use super::Group;
         use crate::aggregate::new_hash_index::bitmask::Tag;
-        use rand::RngCore;
 
         #[test]
         fn test_fuzz_portable_simd() {
@@ -116,9 +119,9 @@ mod portable_simd {
 }
 
 mod generic {
-    use crate::aggregate::new_hash_index::bitmask::repeat;
     use crate::aggregate::new_hash_index::bitmask::BitMask;
     use crate::aggregate::new_hash_index::bitmask::Tag;
+    use crate::aggregate::new_hash_index::bitmask::repeat;
 
     #[derive(Copy, Clone)]
     pub struct Group(u64);
