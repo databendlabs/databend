@@ -200,7 +200,7 @@ impl ExperimentalHashIndex {
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
-
+        let mut round = 0;
         while remaining_entries > 0 {
             let mut new_entry_count = 0;
             let mut need_compare_count = 0;
@@ -250,6 +250,10 @@ impl ExperimentalHashIndex {
             }
 
             remaining_entries = no_match_count;
+            round += 1;
+        }
+        if round > 1 {
+            dbg!(round);
         }
 
         self.count += new_group_count;

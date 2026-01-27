@@ -15,11 +15,9 @@
 
 use std::num::NonZeroU64;
 
-use crate::aggregate::new_hash_index::group::Group;
+const BITMASK_ITER_MASK: u64 = 0x8000_8000_8000_8000;
 
-const BITMASK_ITER_MASK: u64 = 0x8080_8080_8080_8080;
-
-const BITMASK_STRIDE: usize = 8;
+const BITMASK_STRIDE: usize = 16;
 
 type NonZeroBitMaskWord = NonZeroU64;
 
@@ -80,16 +78,16 @@ impl Iterator for BitMaskIter {
 /// Single tag in a control group.
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
-pub(super) struct Tag(pub(super) u8);
+pub(super) struct Tag(pub(super) u16);
 impl Tag {
     /// Control tag value for an empty bucket.
-    pub(super) const EMPTY: Tag = Tag(0b1111_1111);
+    pub(super) const EMPTY: Tag = Tag(0xFFFF);
 
     /// Creates a control tag representing a full bucket with the given hash.
     #[inline]
     pub(super) const fn full(hash: u64) -> Tag {
-        let top7 = hash >> (8 * 8 - 7);
-        Tag((top7 & 0x7f) as u8) // truncation
+        let top15 = hash >> (8 * 8 - 15);
+        Tag((top15 & 0x7FFF) as u16) // truncation
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -99,5 +97,8 @@ impl Tag {
 /// Helper function to replicate a tag across a `GroupWord`.
 #[inline]
 pub(super) fn repeat(tag: Tag) -> u64 {
-    u64::from_ne_bytes([tag.0; Group::WIDTH])
+    // 0x0001_0001_0001_0001
+    const BROADCAST_MULTIPLIER: u64 = u64::MAX / u16::MAX as u64;
+
+    (tag.0 as u64).wrapping_mul(BROADCAST_MULTIPLIER)
 }
