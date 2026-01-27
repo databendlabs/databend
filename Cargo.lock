@@ -5616,7 +5616,6 @@ name = "databend-meta-test-harness"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "databend-base",
  "databend-common-meta-client",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
