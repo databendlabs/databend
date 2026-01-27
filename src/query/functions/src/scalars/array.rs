@@ -42,6 +42,8 @@ use databend_common_expression::aggregate::AggregateFunctionRef;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
 use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
@@ -136,14 +138,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     FunctionDomain::Domain(
                         args_domain.iter().fold(Domain::Array(None), |acc, x| {
                             acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
                         }),
                     )
                 }),
-                eval: Box::new(|args, ctx| {
+                eval: scalar_evaluator(|args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -211,7 +213,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     let inner_domains = args_domain
                         .iter()
                         .map(|arg_domain| match arg_domain {
@@ -232,7 +234,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         inner_domains,
                     )))))
                 }),
-                eval: Box::new(move |args, ctx| {
+                eval: scalar_evaluator(move |args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -441,12 +443,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
             |lhs, rhs, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 output.builder.append_column(&lhs);
                 output.builder.append_column(&rhs);
                 output.commit_row()
@@ -475,11 +476,11 @@ pub fn register(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<ArrayType<StringType>, StringType, StringType>(
                 |lhs, rhs, output, ctx| {
-                    if let Some(validity) = &ctx.validity {
-                        if !validity.get_bit(output.len()) {
-                            output.commit_row();
-                            return;
-                        }
+                    if let Some(validity) = &ctx.validity
+                        && !validity.get_bit(output.len())
+                    {
+                        output.commit_row();
+                        return;
                     }
                     for (i, d) in lhs.iter().enumerate() {
                         if i != 0 {
@@ -498,12 +499,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<StringType>>, StringType, StringType>(
             |lhs, rhs, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 for (i, d) in lhs.iter().filter(|x| x.is_some()).enumerate() {
                     if i != 0  {
                         output.put_str(rhs);
@@ -1058,12 +1058,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let hash128 = hasher.finish128();
                     let key = hash128.into();
 
-                    if let Some(v) = map.get_mut(&key) {
-                        if *v > 0 {
+                    if let Some(v) = map.get_mut(&key)
+                        && *v > 0 {
                             *v -= 1;
                             builder.push(val);
                         }
-                    }
                 }
                 output.commit_row()
             },
@@ -1107,12 +1106,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let hash128 = hasher.finish128();
                     let key = hash128.into();
 
-                    if let Some(v) = map.get_mut(&key) {
-                        if *v > 0 {
+                    if let Some(v) = map.get_mut(&key)
+                        && *v > 0 {
                             *v -= 1;
                             continue;
                         }
-                    }
                     builder.push(val);
                 }
                 output.commit_row()
@@ -1397,8 +1395,8 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     return_type,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
-                    eval: Box::new(move |args, ctx| impl_info.eval(args, ctx)),
+                    calc_domain: domain_evaluator(move |_, _| FunctionDomain::MayThrow),
+                    eval: scalar_evaluator(move |args, ctx| impl_info.eval(args, ctx)),
                 },
             }))
         }));
@@ -1416,11 +1414,11 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
             fn_name,
             |_, _| FunctionDomain::MayThrow,
             vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 match array_val.array_values() {

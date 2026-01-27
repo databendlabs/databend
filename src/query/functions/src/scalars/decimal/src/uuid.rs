@@ -19,6 +19,7 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactoryHelper;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64As128Type;
 use databend_common_expression::types::Decimal128Type;
@@ -51,8 +52,8 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                eval: Box::new(|args, ctx| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, ctx| {
                     let arg = args[0].clone();
                     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
                     match decimal_type {

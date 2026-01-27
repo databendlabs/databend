@@ -314,10 +314,10 @@ impl AggregateFunctionFactory {
 
         // find suffix
         for (suffix, _) in &self.case_insensitive_combinator_desc {
-            if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
-                if self.case_insensitive_desc.contains_key(nested_name) {
-                    return true;
-                }
+            if let Some(nested_name) = lowercase_name.strip_suffix(suffix)
+                && self.case_insensitive_desc.contains_key(nested_name)
+            {
+                return true;
             }
         }
 

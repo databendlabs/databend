@@ -205,7 +205,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_ellipses_fn),
             },
         }))
@@ -253,7 +253,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
@@ -301,7 +301,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))
@@ -351,7 +351,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
             },
         }))

@@ -29,6 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::generate_like_pattern;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
@@ -757,8 +758,8 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                    eval: Box::new(move |args, _| {
+                    calc_domain: Box::new(FunctionDomain::Full),
+                    eval: scalar_evaluator(move |args, _| {
                         let len = args.iter().find_map(|arg| match arg {
                             Value::Column(col) => Some(col.len()),
                             _ => None,
@@ -869,99 +870,58 @@ fn register_like(registry: &mut FunctionRegistry) {
        },
     );
 
-    registry.register_function_factory("like_any", FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 2 || args_type.len() > 3 {
-            return None;
-        }
-        let is_nullable = args_type[0].is_nullable();
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_string() && !arg_type.is_variant() {
-            return None;
-        }
-        let mut new_args_type =  match &args_type[1] {
-            DataType::Tuple(patterns_ty) => {
-                if patterns_ty.iter().any(|ty| !ty.is_string() && !ty.is_variant()) {
-                    return None;
-                }
-                vec![arg_type, DataType::Tuple(vec![DataType::String; patterns_ty.len()])]
+    registry.register_function_factory(
+        "like_any",
+        FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+            if args_type.len() < 2 || args_type.len() > 3 {
+                return None;
             }
-            DataType::String =>
-                vec![arg_type, DataType::String],
-            _ => return None,
-        };
-        if args_type.len() > 2 {
-            new_args_type.push(DataType::String);
-        }
+            let is_nullable = args_type[0].is_nullable();
+            let arg_type = args_type[0].remove_nullable();
+            if !arg_type.is_string() && !arg_type.is_variant() {
+                return None;
+            }
+            let mut new_args_type = match &args_type[1] {
+                DataType::Tuple(patterns_ty) => {
+                    if patterns_ty
+                        .iter()
+                        .any(|ty| !ty.is_string() && !ty.is_variant())
+                    {
+                        return None;
+                    }
+                    vec![
+                        arg_type,
+                        DataType::Tuple(vec![DataType::String; patterns_ty.len()]),
+                    ]
+                }
+                DataType::String => vec![arg_type, DataType::String],
+                _ => return None,
+            };
+            if args_type.len() > 2 {
+                new_args_type.push(DataType::String);
+            }
 
-        let function = Function {
-            signature: FunctionSignature {
+            let signature = FunctionSignature {
                 name: "like_any".to_string(),
                 args_type: new_args_type,
                 return_type: DataType::Boolean,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    let arg = &args[0];
-                    let input_all_scalars = arg.as_scalar().is_some();
-                    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
-
-                    let patterns = match args[1].as_scalar() {
-                        Some(Scalar::Tuple(patterns)) => patterns.clone(),
-                        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
-                        _ => {
-                            ctx.set_error(1, "The second parameter of `like_any` must be of Tuple or String type");
-                            return Value::Scalar(Scalar::Boolean(Default::default()));
-                        }
-                    };
-                    let escape: Value<StringType> = args
-                        .get(2)
-                        .cloned()
-                        .and_then(|value| value.try_downcast().ok())
-                        .unwrap_or(Value::Scalar("".to_string()));
-
-                    let result = if let Ok(value) = arg.try_downcast::<StringType>() {
-                        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
-                            .collect::<Vec<_>>()
-                    } else if let Ok(value) = arg.try_downcast::<VariantType>() {
-                        let like = variant_vectorize_like_jsonb();
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
-                            .collect::<Vec<_>>()
-                    } else {
-                        ctx.set_error(1, "The first parameter of 'like_any' can only be of type String or Variant");
-                        return Value::Scalar(Scalar::Boolean(Default::default()));
-                    };
-
-                    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
-
-                    let patterns_len = patterns.len();
-                    for row in 0..process_rows {
-                        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
-                    }
-                    if input_all_scalars {
-                        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
-                    } else {
-                        Value::<BooleanType>::Column(BooleanType::build_column(builder))
-                    }.upcast()
-                }),
-            },
-        };
-
-        if is_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
-    })));
+            };
+            Some(Arc::new(Function::with_passthrough_nullable(
+                signature,
+                FunctionDomain::Full,
+                like_any_fn,
+                is_nullable,
+            )))
+        })),
+    );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         |_, lhs, rhs| {
-            if rhs.max.as_ref() == Some(&rhs.min) {
-                if let Some(value) = calc_like_domain(lhs, rhs.min.to_string()) {
-                    return value;
-                }
+            if rhs.max.as_ref() == Some(&rhs.min)
+                && let Some(value) = calc_like_domain(lhs, rhs.min.to_string())
+            {
+                return value;
             }
             FunctionDomain::Full
         },
@@ -1169,6 +1129,77 @@ fn vectorize_like(
             }
         }
     }
+}
+
+fn like_any_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg = &args[0];
+    let input_all_scalars = arg.as_scalar().is_some();
+    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+
+    let patterns = match args[1].as_scalar() {
+        Some(Scalar::Tuple(patterns)) => patterns.clone(),
+        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
+        _ => {
+            ctx.set_error(
+                1,
+                "The second parameter of `like_any` must be of Tuple or String type",
+            );
+            return Value::Scalar(Scalar::Boolean(Default::default()));
+        }
+    };
+
+    let escape: Value<StringType> = args
+        .get(2)
+        .cloned()
+        .and_then(|value| value.try_downcast().ok())
+        .unwrap_or(Value::Scalar("".to_string()));
+
+    let result = if let Ok(value) = arg.try_downcast::<StringType>() {
+        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
+        patterns
+            .iter()
+            .map(|pattern| {
+                like(
+                    value.clone(),
+                    Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()),
+                    escape.clone(),
+                    ctx,
+                )
+            })
+            .collect::<Vec<_>>()
+    } else if let Ok(value) = arg.try_downcast::<VariantType>() {
+        let like = variant_vectorize_like_jsonb();
+        patterns
+            .iter()
+            .map(|pattern| {
+                like(
+                    value.clone(),
+                    Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()),
+                    escape.clone(),
+                    ctx,
+                )
+            })
+            .collect::<Vec<_>>()
+    } else {
+        ctx.set_error(
+            1,
+            "The first parameter of 'like_any' can only be of type String or Variant",
+        );
+        return Value::Scalar(Scalar::Boolean(Default::default()));
+    };
+
+    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
+    let patterns_len = patterns.len();
+    for row in 0..process_rows {
+        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
+    }
+
+    if input_all_scalars {
+        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
+    } else {
+        Value::<BooleanType>::Column(BooleanType::build_column(builder))
+    }
+    .upcast()
 }
 
 fn variant_vectorize_like(

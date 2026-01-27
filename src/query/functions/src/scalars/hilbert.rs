@@ -25,6 +25,7 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::hilbert_index;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
@@ -66,8 +67,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Binary,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, ctx| {
                     // Determine if we're processing scalar values or columns
                     let input_all_scalars = args.iter().all(|arg| arg.as_scalar().is_some());
                     let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };

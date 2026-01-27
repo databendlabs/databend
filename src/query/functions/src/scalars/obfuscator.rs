@@ -143,12 +143,11 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             let mut code_points = Vec::new();
             for index in 0..process_rows {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(index) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(index) {
                         output.commit_row();
                         continue;
                     }
-                }
 
                 let table = match &table {
                     Some(table) => table.clone(),

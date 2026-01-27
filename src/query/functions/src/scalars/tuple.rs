@@ -25,6 +25,8 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
@@ -42,10 +44,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(args_type.clone()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     FunctionDomain::Domain(Domain::Tuple(args_domain.to_vec()))
                 }),
-                eval: Box::new(move |args, _| {
+                eval: scalar_evaluator(move |args, _| {
                     let len = args.iter().find_map(|arg| match arg {
                         Value::Column(col) => Some(col.len()),
                         _ => None,
@@ -100,10 +102,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(idx),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, args_domain| {
+                calc_domain: domain_evaluator(move |_, args_domain| {
                     FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
                 }),
-                eval: Box::new(move |args, _| match &args[0] {
+                eval: scalar_evaluator(move |args, _| match &args[0] {
                     Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                     Value::Column(Column::Tuple(fields)) => Value::Column(fields[idx].to_owned()),
                     _ => unreachable!(),
@@ -135,7 +137,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Generic(idx))),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, args_domain| {
+                calc_domain: domain_evaluator(move |_, args_domain| {
                     let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
                     match value {
                         Some(value) => {
@@ -154,7 +156,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         })),
                     }
                 }),
-                eval: Box::new(move |args, _| match &args[0] {
+                eval: scalar_evaluator(move |args, _| match &args[0] {
                     Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
                     Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
                     Value::Column(Column::Nullable(box NullableColumn {
@@ -202,8 +204,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Null,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                eval: Box::new(move |_, _| Value::Scalar(Scalar::Null)),
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |_, _| Value::Scalar(Scalar::Null)),
             },
         }))
     }));

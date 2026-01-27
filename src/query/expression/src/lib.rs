@@ -85,6 +85,7 @@ pub use crate::constant_folder::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::filter::*;
+pub use crate::function::function_factory::*;
 pub use crate::function::*;
 pub use crate::hilbert::*;
 pub use crate::kernels::*;
