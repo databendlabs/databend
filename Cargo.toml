@@ -29,6 +29,7 @@ members = [
     "src/meta/protos",
     "src/meta/runtime",
     "src/meta/schema-api-test-suite",
+    "src/meta/schema-api-tests",
     "src/meta/semaphore",
     "src/query/codegen",
     "src/tests/sqlsmith",
@@ -55,6 +56,7 @@ default-members = [
     "src/meta/protos",
     "src/meta/runtime",
     "src/meta/schema-api-test-suite",
+    "src/meta/schema-api-tests",
     "src/meta/semaphore",
     "src/query/codegen",
     "src/tests/sqlsmith",
@@ -101,6 +103,7 @@ databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/core/raft-store" }
 databend-common-meta-runtime-api = { path = "src/meta/core/runtime-api" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
+databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/core/sled-store" }
 databend-common-meta-store = { path = "src/meta/core/store" }

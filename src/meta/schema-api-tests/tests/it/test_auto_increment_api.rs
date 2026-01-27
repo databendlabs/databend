@@ -12,39 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test metasrv SchemaApi on a single node.
+//! Test AutoIncrementApiTestSuite against metasrv.
 
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_api::AutoIncrementApiTestSuite;
-use databend_common_meta_schema_api_test_suite::SchemaApiTestSuite;
+use databend_meta_test_harness::meta_service_test_harness;
 use test_harness::test;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
+use crate::metasrv_builder::MetaSrvBuilder;
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
-async fn test_meta_grpc_client_single() -> anyhow::Result<()> {
+async fn test_auto_increment_api_single_node() -> anyhow::Result<()> {
     let builder = MetaSrvBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    SchemaApiTestSuite::test_single_node(builder.clone()).await?;
     AutoIncrementApiTestSuite::test_single_node(builder).await?;
-
-    Ok(())
-}
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
-async fn test_meta_grpc_client_cluster() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    SchemaApiTestSuite::test_cluster(builder).await?;
 
     Ok(())
 }
