@@ -5527,6 +5527,7 @@ name = "databend-meta-admin"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "async-trait",
  "databend-base",
  "databend-common-http",
@@ -5536,7 +5537,9 @@ dependencies = [
  "databend-common-meta-types",
  "databend-meta",
  "databend-meta-runtime",
+ "databend-meta-test-harness",
  "env_logger 0.11.8",
+ "fastrace",
  "futures",
  "http 1.3.1",
  "log",
