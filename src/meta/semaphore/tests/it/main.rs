@@ -12,21 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-use std::time::SystemTime;
-
-pub use databend_meta_test_harness::meta_service_test_harness;
-
-pub fn since_epoch_sec() -> u64 {
-    since_epoch().as_secs()
-}
-
-pub fn since_epoch_millis() -> u64 {
-    since_epoch().as_millis() as u64
-}
-
-pub fn since_epoch() -> Duration {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-}
+mod grpc_semaphore;

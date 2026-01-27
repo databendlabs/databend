@@ -158,6 +158,7 @@ databend-meta = { path = "src/meta/core/service" }
 databend-meta-admin = { path = "src/meta/admin" }
 databend-meta-cli-config = { path = "src/meta/cli-config" }
 databend-meta-runtime = { path = "src/meta/runtime" }
+databend-meta-test-harness = { path = "src/meta/core/test-harness" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
