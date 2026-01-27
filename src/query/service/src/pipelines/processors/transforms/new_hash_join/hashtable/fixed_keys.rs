@@ -356,7 +356,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
 
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
-            _ => Ok(OpenAddressingProbeStream::<true, UNIQUE>::create(hashes)),
+            _ => Ok(OpenAddressingProbeStream::<T, true, UNIQUE>::create(hashes)),
         }
     }
 
@@ -381,29 +381,39 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
 
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-            _ => Ok(OpenAddressingProbeStream::<false, UNIQUE>::create(hashes)),
+            _ => Ok(OpenAddressingProbeStream::<T, false, UNIQUE>::create(
+                hashes,
+            )),
         }
     }
 }
 
-struct OpenAddressingProbeStream<const MATCHED: bool, const MATCH_FIRST: bool> {
+struct OpenAddressingProbeStream<
+    Key: HashtableKeyable + 'static,
+    const MATCHED: bool,
+    const MATCH_FIRST: bool,
+> {
     key_idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
+    _phantom: std::marker::PhantomData<Key>,
 }
 
-impl<const MATCHED: bool, const MATCH_FIRST: bool> OpenAddressingProbeStream<MATCHED, MATCH_FIRST> {
+impl<Key: HashtableKeyable + 'static, const MATCHED: bool, const MATCH_FIRST: bool>
+    OpenAddressingProbeStream<Key, MATCHED, MATCH_FIRST>
+{
     pub fn create(pointers: Vec<u64>) -> Box<dyn ProbeStream> {
-        Box::new(OpenAddressingProbeStream::<MATCHED, MATCH_FIRST> {
+        Box::new(OpenAddressingProbeStream::<Key, MATCHED, MATCH_FIRST> {
             pointers,
             key_idx: 0,
             probe_entry_ptr: 0,
+            _phantom: std::marker::PhantomData,
         })
     }
 }
 
-impl<const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
-    for OpenAddressingProbeStream<MATCHED, MATCH_FIRST>
+impl<Key: HashtableKeyable + 'static, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
+    for OpenAddressingProbeStream<Key, MATCHED, MATCH_FIRST>
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.pointers.len() {
@@ -415,24 +425,25 @@ impl<const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
                 break;
             }
 
+            if self.pointers[self.key_idx] == 0 {
+                self.key_idx += 1;
+
+                if !MATCHED {
+                    res.unmatched.push(self.key_idx as u64);
+                }
+
+                continue;
+            }
+
             if self.probe_entry_ptr == 0 {
                 self.probe_entry_ptr = self.pointers[self.key_idx];
-
-                if self.probe_entry_ptr == 0 {
-                    if !MATCHED {
-                        res.unmatched.push(self.key_idx as u64);
-                    }
-                    self.key_idx += 1;
-                    continue;
-                }
             }
 
             // In open addressing, all entries in the chain have the same key
             // (they were chained during insert because key matched)
             // So we don't need to compare keys here, and matched_num_rows >= 1 is guaranteed
             while self.probe_entry_ptr != 0 {
-                // Type doesn't matter here since we only access row_ptr and next
-                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<u64>) };
+                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
 
                 res.matched_probe.push(self.key_idx as u64);
                 res.matched_build.push(raw_entry.row_ptr);
