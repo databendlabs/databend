@@ -18,6 +18,7 @@
 use std::io;
 use std::sync::Arc;
 
+use databend_base::counter::Counter;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -48,7 +49,6 @@ use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_metrics::count::Count;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::TryStreamExt;
@@ -147,7 +147,7 @@ impl<SP: SpawnApi> RaftServiceImpl<SP> {
     ) -> Result<Response<InstallSnapshotResponseV004>, Status> {
         let addr = remote_addr(&request);
 
-        let _guard = snapshot_recv_inflight(&addr).counter_guard();
+        let _guard = snapshot_recv_inflight(&addr).counted_guard();
 
         let mut strm = request.into_inner();
 
@@ -266,7 +266,7 @@ impl<SP: SpawnApi> RaftServiceImpl<SP> {
     ) -> Result<Received, Status> {
         let addr = remote_addr(&request);
 
-        let _guard = snapshot_recv_inflight(&addr).counter_guard();
+        let _guard = snapshot_recv_inflight(&addr).counted_guard();
 
         let ss_store = self.meta_node.raft_store.state_machine().snapshot_store();
 
