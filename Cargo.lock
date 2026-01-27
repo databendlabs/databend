@@ -4327,7 +4327,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "databend-base",
  "databend-common-grpc",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
