@@ -87,6 +87,8 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
 
     let addresses = addresses.into_iter().collect::<Vec<_>>();
 
+    let leader_address = tcs[0].config.grpc.api_address.clone();
+
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
@@ -121,7 +123,7 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
     // Current leader endpoint updated, will connect to a0.
     {
         let eclient = client.make_established_client().await?;
-        assert_eq!(a0(), eclient.target_endpoint(),);
+        assert_eq!(leader_address, eclient.target_endpoint(),);
     }
 
     Ok(())
