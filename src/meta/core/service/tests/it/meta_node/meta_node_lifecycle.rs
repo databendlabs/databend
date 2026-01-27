@@ -426,15 +426,11 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Initial membership log, leader blank log, add node-0 log.
     let mut log_index = 3;
 
-    let res = n1
-        .join_cluster(&tc0.config.raft_config, tc0.config.grpc.advertise_address())
-        .await?;
+    let res = n1.join_cluster(&tc0.config).await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
     let n1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
-    let res = n1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
-        .await?;
+    let res = n1.join_cluster(&tc1.config).await?;
     assert_eq!(Ok(()), res);
 
     // Two membership logs, one add-node log;
@@ -456,9 +452,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     info!("--- Allow to join node-2 with initialized store");
     {
         let n2 = MetaNode::<TokioRuntime>::start(&tc2.config).await?;
-        let res = n2
-            .join_cluster(&tc2.config.raft_config, tc2.config.grpc.advertise_address())
-            .await?;
+        let res = n2.join_cluster(&tc2.config).await?;
         assert_eq!(Ok(()), res);
 
         // Two membership logs, one add-node log;
@@ -481,9 +475,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     info!("--- Not allowed to join node-2 with store with membership");
     {
         let n2 = MetaNode::<TokioRuntime>::start(&tc2.config).await?;
-        let res = n2
-            .join_cluster(&tc2.config.raft_config, tc2.config.grpc.advertise_address())
-            .await?;
+        let res = n2.join_cluster(&tc2.config).await?;
         assert_eq!(
             Err("Did not join: node 2 already in cluster".to_string()),
             res
@@ -740,7 +732,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     info!("restart all");
 
     // restart
-    let config = configs::Config::default();
+    let config = configs::MetaServiceConfig::default();
     let mn0 = MetaNode::<TokioRuntime>::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)

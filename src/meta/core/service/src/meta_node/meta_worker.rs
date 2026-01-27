@@ -21,7 +21,7 @@ use log::info;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use crate::configs::Config;
+use crate::configs::MetaServiceConfig;
 use crate::meta_node::meta_handle::MetaFnOnce;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
@@ -42,7 +42,7 @@ impl<RT: RuntimeApi> MetaWorker<RT> {
     /// The returned `MetaHandle` keeps the runtime alive and provides
     /// an interface to communicate with the `MetaNode`.
     pub async fn create_meta_worker(
-        config: Config,
+        config: MetaServiceConfig,
         runtime: Arc<RT>,
     ) -> Result<MetaHandle<RT>, MetaStartupError> {
         let rt_for_handle = runtime.clone();

@@ -104,7 +104,7 @@ use watcher::watch_stream::WatchStreamSender;
 
 use crate::analysis::request_histogram;
 use crate::api::grpc::grpc_service::try_remove_sender;
-use crate::configs::Config as MetaConfig;
+use crate::configs::MetaServiceConfig;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
@@ -776,7 +776,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[fastrace::trace]
-    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    pub async fn start(config: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config).await?;
         info!("Done starting MetaNode: {:?}", config);
@@ -869,10 +869,9 @@ impl<SP: SpawnApi> MetaNode<SP> {
     #[fastrace::trace]
     pub async fn join_cluster(
         &self,
-        conf: &RaftConfig,
-        grpc_api_advertise_address: Option<String>,
+        config: &MetaServiceConfig,
     ) -> Result<Result<(), String>, MetaManagementError> {
-        if conf.join.is_empty() {
+        if config.raft_config.join.is_empty() {
             info!("'--join' is empty, do not need joining cluster");
             return Ok(Err("Did not join: --join is empty".to_string()));
         }
@@ -889,29 +888,24 @@ impl<SP: SpawnApi> MetaNode<SP> {
             return Ok(Err(format!("Did not join: {}", reason)));
         }
 
-        self.do_join_cluster(conf, grpc_api_advertise_address)
-            .await?;
+        self.do_join_cluster(config).await?;
         Ok(Ok(()))
     }
 
     #[fastrace::trace]
-    async fn do_join_cluster(
-        &self,
-        conf: &RaftConfig,
-        grpc_api_advertise_address: Option<String>,
-    ) -> Result<(), MetaManagementError> {
+    async fn do_join_cluster(&self, config: &MetaServiceConfig) -> Result<(), MetaManagementError> {
         let mut errors = vec![];
-        let addrs = &conf.join;
+        let addrs = &config.raft_config.join;
 
         #[allow(clippy::never_loop)]
         for addr in addrs {
-            if addr == &conf.raft_api_advertise_host_string() {
+            if addr == &config.raft_config.raft_api_advertise_host_string() {
                 info!("avoid join via self: {}", addr);
                 continue;
             }
 
             for _i in 0..3 {
-                let res = self.join_via(conf, &grpc_api_advertise_address, addr).await;
+                let res = self.join_via(config, addr).await;
                 match res {
                     Ok(x) => return Ok(x),
                     Err(api_err) => {
@@ -941,12 +935,11 @@ impl<SP: SpawnApi> MetaNode<SP> {
     #[fastrace::trace]
     async fn join_via(
         &self,
-        conf: &RaftConfig,
-        grpc_api_advertise_address: &Option<String>,
+        config: &MetaServiceConfig,
         addr: &String,
     ) -> Result<(), MetaAPIError> {
         // Joining cluster has to use advertise host instead of listen host.
-        let advertise_endpoint = conf.raft_api_advertise_host_endpoint();
+        let advertise_endpoint = config.raft_config.raft_api_advertise_host_endpoint();
 
         let timeout = Some(Duration::from_millis(10_000));
         info!(
@@ -966,12 +959,12 @@ impl<SP: SpawnApi> MetaNode<SP> {
         let mut raft_client = RaftServiceClient::new(chan);
 
         let join_req = JoinRequest::new(
-            conf.id,
+            config.raft_config.id,
             advertise_endpoint.clone(),
-            grpc_api_advertise_address.clone(),
+            config.grpc.advertise_address(),
         );
 
-        let join_req = if conf.learner {
+        let join_req = if config.raft_config.learner {
             join_req.with_role_learner()
         } else {
             join_req
@@ -1054,7 +1047,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
         )))
     }
 
-    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    async fn do_start(conf: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
@@ -1070,7 +1063,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
-    pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
+    pub async fn boot(config: &MetaServiceConfig) -> Result<Arc<MetaNode<SP>>, MetaStartupError> {
         let mn = Self::open(&config.raft_config).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)

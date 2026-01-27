@@ -238,7 +238,6 @@ cron = "0.12.0"
 crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
-ctrlc = { version = "3.2.3", features = ["termination"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
 databend-base = "0.2.3"
 deepsize = { version = "0.2.0" }
@@ -372,7 +371,6 @@ openraft = { version = "0.10.0", features = [
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.10.0", features = ["tls"] }
 orc-rust = "0.6.0"
 ordered-float = { version = "5.1.0", default-features = false }
-ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "56", features = ["async"] }
@@ -449,7 +447,6 @@ smallvec = "1.13.2"
 snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
-span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 stacker = "0.1"
 state = "0.6.0"

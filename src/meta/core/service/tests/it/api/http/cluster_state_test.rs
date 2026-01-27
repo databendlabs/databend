@@ -68,10 +68,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let res = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
@@ -114,9 +111,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
-    let _ = mn1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
-        .await?;
+    let _ = mn1.join_cluster(&tc1.config).await?;
 
     info!("--- write sample data to the cluster ---");
     {
@@ -263,9 +258,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    tc1.config.admin.api_address = addr_str.to_owned();
-    tc1.config.admin.tls.key = TEST_SERVER_KEY.to_owned();
-    tc1.config.admin.tls.cert = TEST_SERVER_CERT.to_owned();
+    tc1.admin.api_address = addr_str.to_owned();
+    tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
+    tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
     let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
@@ -277,16 +272,13 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let _ = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
 
     let http_cfg = HttpServiceConfig {
-        admin: tc1.config.admin.clone(),
+        admin: tc1.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
     let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);

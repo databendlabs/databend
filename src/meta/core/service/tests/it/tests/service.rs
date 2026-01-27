@@ -60,20 +60,12 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     let c = tc.config.clone();
     let _ = mh
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
 
-    let mut srv = GrpcServer::create(
-        tc.config.raft_config.id,
-        tc.config.grpc.clone(),
-        BUILD_INFO.semver(),
-        mh,
-    );
+    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh);
     srv.do_start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 
@@ -130,7 +122,12 @@ pub fn next_port() -> u16 {
 pub struct MetaSrvTestContext {
     pub _temp_dir: tempfile::TempDir,
 
-    pub config: configs::Config,
+    pub config: configs::MetaServiceConfig,
+
+    /// Admin API configuration for HTTP service tests.
+    /// This is separate from the core `MetaServiceConfig` because admin config
+    /// is a CLI-level concern, not a service-level concern.
+    pub admin: configs::AdminConfig,
 
     pub meta_node: Option<Arc<MetaNode<TokioRuntime>>>,
 
@@ -150,7 +147,7 @@ impl MetaSrvTestContext {
 
         let config_id = next_port();
 
-        let mut config = configs::Config::default();
+        let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = id;
 
@@ -178,15 +175,19 @@ impl MetaSrvTestContext {
             config.grpc.advertise_host = Some(host.to_string());
         }
 
-        {
+        let admin = {
             let http_port = next_port();
-            config.admin.api_address = format!("{}:{}", host, http_port);
-        }
+            configs::AdminConfig {
+                api_address: format!("{}:{}", host, http_port),
+                tls: configs::TlsConfig::default(),
+            }
+        };
 
         info!("new test context config: {:?}", config);
 
         let c = MetaSrvTestContext {
             config,
+            admin,
             meta_node: None,
             grpc_srv: None,
             _temp_dir: temp_dir,

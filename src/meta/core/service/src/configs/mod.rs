@@ -15,6 +15,6 @@
 mod inner;
 
 pub use inner::AdminConfig;
-pub use inner::Config;
 pub use inner::GrpcConfig;
+pub use inner::MetaServiceConfig;
 pub use inner::TlsConfig;
