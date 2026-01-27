@@ -253,7 +253,7 @@ impl FuseTable {
                 table_info.meta.schema = Arc::new(snapshot.schema.clone());
                 table_info.meta.cluster_key =
                     snapshot.cluster_key_meta.as_ref().map(|v| v.1.clone());
-                table_info.meta.cluster_key_id = snapshot.cluster_key_meta.as_ref().map(|v| v.0);
+                table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
                 table_info
                     .meta
                     .options

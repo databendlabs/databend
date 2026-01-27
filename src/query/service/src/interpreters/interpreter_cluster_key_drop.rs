@@ -74,7 +74,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
                 if plan.branch.is_none() {
                     meta.options.remove(OPT_KEY_CLUSTER_TYPE);
                     meta.cluster_key = None;
-                    meta.cluster_key_id = None;
+                    meta.cluster_key_v2 = None;
                 }
             },
         )

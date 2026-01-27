@@ -78,7 +78,10 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.cluster_key_id, Some(1));
+    assert_eq!(
+        table_info.meta.cluster_key_v2,
+        Some((1, "(id)".to_string()))
+    );
     assert_eq!(table_info.meta.cluster_key_seq, 1);
     assert_eq!(
         table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE).unwrap(),
@@ -99,8 +102,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let table_info = table.get_table_info();
-    assert_eq!(table_info.meta.cluster_key, None);
-    assert_eq!(table_info.meta.cluster_key_id, None);
+    assert_eq!(table_info.meta.cluster_key_v2, None);
     assert_eq!(table_info.meta.cluster_key_seq, 1);
 
     Ok(())

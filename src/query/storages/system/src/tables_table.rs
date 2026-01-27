@@ -950,9 +950,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 v.get_table_info()
                     .meta
-                    .cluster_key
-                    .clone()
-                    .unwrap_or_else(|| "".to_owned())
+                    .cluster_key_str()
+                    .cloned()
+                    .unwrap_or_default()
             })
             .collect();
         let is_transients: Vec<String> = database_tables

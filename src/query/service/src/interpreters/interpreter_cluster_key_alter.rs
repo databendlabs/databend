@@ -75,7 +75,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
 
         let mut new_table_meta = fuse_table.get_table_info().meta.clone();
         new_table_meta.cluster_key_seq += 1;
-        let cluster_key_id = new_table_meta.cluster_key_seq;
+        let cluster_key_meta = Some((new_table_meta.cluster_key_seq, cluster_key_str.clone()));
         commit_table_meta(
             self.ctx.as_ref(),
             table.as_ref(),
@@ -83,11 +83,11 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
             catalog,
             |snapshot_opt, meta| {
                 if let Some(snapshot) = snapshot_opt {
-                    snapshot.cluster_key_meta = Some((cluster_key_id, cluster_key_str.clone()));
+                    snapshot.cluster_key_meta = cluster_key_meta.clone();
                 }
                 if plan.branch.is_none() {
+                    meta.cluster_key_v2 = cluster_key_meta;
                     meta.cluster_key = Some(cluster_key_str);
-                    meta.cluster_key_id = Some(cluster_key_id);
                     meta.options
                         .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
                 }

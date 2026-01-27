@@ -156,19 +156,12 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
+    /// Deprecated, will be removed later.
+    /// Original cluster key as a string. Use `cluster_key_v2` instead.
     pub cluster_key: Option<String>,
-    /// Identifier of the cluster key defined on the **main branch** of the table.
-    ///
-    /// This ID is assigned from the global `cluster_key_seq`, which is shared by
-    /// both the main branch and all table branches. However, `cluster_key_id`
-    /// always reflects **only the cluster key of the main branch**.
-    ///
-    /// Branch-specific cluster keys are stored in branch snapshots and do NOT
-    /// update this field.
-    ///
-    /// As a result, `cluster_key_id` and `cluster_key_seq` may diverge when
-    /// branches define or modify their own cluster keys.
-    pub cluster_key_id: Option<u32>,
+    /// Cluster key for the main branch, including an id.
+    /// The `u32` is the cluster key id of the main branch, uniquely identifying each version.
+    pub cluster_key_v2: Option<(u32, String)>,
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
     ///
@@ -272,6 +265,36 @@ impl BranchInfo {
 
     pub fn branch_type(&self) -> SnapshotRefType {
         self.info.typ.clone()
+    }
+}
+
+impl TableMeta {
+    /// Returns the cluster key defined on the main branch, if any.
+    pub fn cluster_key_meta(&self) -> Option<(u32, String)> {
+        // - Prefer `cluster_key_v2` if present (branch-aware)
+        // - Otherwise fallback to old `cluster_key` + global `cluster_key_seq`
+        self.cluster_key_v2.clone().or_else(|| {
+            self.cluster_key
+                .as_ref()
+                .map(|k| (self.cluster_key_seq, k.clone()))
+        })
+    }
+
+    pub fn cluster_key_str(&self) -> Option<&String> {
+        self.cluster_key_v2
+            .as_ref()
+            .map(|(_, s)| s)
+            .or(self.cluster_key.as_ref())
+    }
+
+    pub fn cluster_key_id(&self) -> Option<u32> {
+        if let Some((id, _)) = &self.cluster_key_v2 {
+            Some(*id)
+        } else if self.cluster_key.is_some() {
+            Some(self.cluster_key_seq)
+        } else {
+            None
+        }
     }
 }
 
@@ -401,13 +424,8 @@ impl TableInfo {
     }
 
     /// Returns the cluster key defined on the main branch, if any.
-    ///
-    /// NOTE:
-    /// This function relies on the invariant that `cluster_key_id`
-    /// is always present when `cluster_key` is present.
-    /// That invariant is enforced when constructing `TableMeta`.
     pub fn cluster_key(&self) -> Option<(u32, String)> {
-        self.meta.cluster_key_id.zip(self.meta.cluster_key.clone())
+        self.meta.cluster_key_meta()
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
@@ -460,7 +478,7 @@ impl Default for TableMeta {
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
             cluster_key: None,
-            cluster_key_id: None,
+            cluster_key_v2: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),

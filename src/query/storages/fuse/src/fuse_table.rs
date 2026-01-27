@@ -503,19 +503,19 @@ impl FuseTable {
     }
 
     pub fn cluster_key_str(&self) -> Option<&String> {
-        self.branch_info
-            .as_ref()
-            .map_or(self.table_info.meta.cluster_key.as_ref(), |v| {
-                v.cluster_key_meta.as_ref().map(|(_, key)| key)
-            })
+        if let Some(branch) = &self.branch_info {
+            branch.cluster_key_meta.as_ref().map(|(_, key)| key)
+        } else {
+            self.table_info.meta.cluster_key_str()
+        }
     }
 
     pub fn cluster_key_id(&self) -> Option<u32> {
-        self.branch_info
-            .as_ref()
-            .map_or(self.table_info.meta.cluster_key_id, |v| {
-                v.cluster_key_meta.as_ref().map(|(id, _)| *id)
-            })
+        if let Some(branch) = &self.branch_info {
+            branch.cluster_key_meta.as_ref().map(|(id, _)| *id)
+        } else {
+            self.table_info.meta.cluster_key_id()
+        }
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {

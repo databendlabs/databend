@@ -158,8 +158,11 @@ impl Interpreter for RenameTableColumnInterpreter {
                 }
                 if self.plan.branch.is_none() {
                     meta.schema = Arc::new(self.plan.schema.clone());
-                    if new_cluster_key.is_some() {
-                        meta.cluster_key = new_cluster_key;
+                    if let Some(cluster_key) = &new_cluster_key {
+                        if let Some((_, ref mut key)) = meta.cluster_key_v2 {
+                            *key = cluster_key.clone();
+                        }
+                        meta.cluster_key = new_cluster_key.clone();
                     }
                 }
             },

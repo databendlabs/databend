@@ -79,7 +79,7 @@ fn test_decode_v94_table_meta() -> anyhow::Result<()> {
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
         cluster_key: Some("(a + 2, b)".to_string()),
-        cluster_key_id: Some(0),
+        cluster_key_v2: Some((0, "(a + 2, b)".to_string())),
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
