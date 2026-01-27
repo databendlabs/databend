@@ -14,6 +14,7 @@
 
 //! Test kv_read_v1() API, which handles kv-read request and return result in a stream.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -82,7 +83,9 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
     let addresses = tcs
         .iter()
         .map(|tc| tc.config.grpc.api_address.clone())
-        .collect::<Vec<_>>();
+        .collect::<BTreeSet<_>>();
+
+    let addresses = addresses.into_iter().collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();

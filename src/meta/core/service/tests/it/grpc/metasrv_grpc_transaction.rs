@@ -14,6 +14,7 @@
 
 //! Test special cases of grpc API: transaction().
 
+use std::collections::BTreeSet;
 use databend_common_meta_types::TxnRequest;
 use test_harness::test;
 
@@ -29,7 +30,9 @@ async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<
     let addresses = tcs
         .iter()
         .map(|tc| tc.config.grpc.api_address.clone())
-        .collect::<Vec<_>>();
+        .collect::<BTreeSet<_>>();
+
+    let addresses = addresses.into_iter().collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
