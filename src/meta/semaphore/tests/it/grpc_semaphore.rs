@@ -21,18 +21,18 @@ use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::UpsertKV;
+use databend_meta_test_harness::make_grpc_client;
+use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_test_harness::start_metasrv_cluster;
 use log::info;
 use test_harness::test;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::make_grpc_client;
-
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_simple() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -83,7 +83,7 @@ async fn test_semaphore_simple() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_guard_future() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -123,7 +123,7 @@ async fn test_semaphore_guard_future() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_time_based() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -174,7 +174,7 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -206,7 +206,7 @@ async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_permit_removal_notification() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -249,7 +249,7 @@ async fn test_permit_removal_notification() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -282,7 +282,7 @@ async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -353,7 +353,7 @@ async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -389,7 +389,7 @@ async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_stream_resilience() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -424,7 +424,7 @@ async fn test_watch_stream_resilience() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -468,7 +468,7 @@ async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -507,7 +507,7 @@ async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
-    let mut tcs = crate::tests::start_metasrv_cluster(&[0]).await?;
+    let mut tcs = start_metasrv_cluster(&[0]).await?;
 
     let tc = tcs.remove(0);
 
@@ -576,7 +576,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
-    let mut tcs = crate::tests::start_metasrv_cluster(&[0]).await?;
+    let mut tcs = start_metasrv_cluster(&[0]).await?;
 
     let mut tc = tcs.remove(0);
 
