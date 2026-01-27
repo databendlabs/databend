@@ -88,7 +88,7 @@ impl RangeTable {
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
 
-        let mut step = if table_args.positioned.len() == 3 {
+        let step = if table_args.positioned.len() == 3 {
             table_args.positioned[2].clone()
         } else {
             Scalar::Number(NumberScalar::Int64(1))
