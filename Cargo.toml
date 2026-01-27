@@ -32,6 +32,7 @@ members = [
     "src/meta/schema-api-test-suite",
     "src/meta/schema-api-tests",
     "src/meta/semaphore",
+    "src/meta/store",
     "src/query/codegen",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
@@ -60,6 +61,7 @@ default-members = [
     "src/meta/schema-api-test-suite",
     "src/meta/schema-api-tests",
     "src/meta/semaphore",
+    "src/meta/store",
     "src/query/codegen",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
@@ -109,7 +111,7 @@ databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-
 databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/core/sled-store" }
-databend-common-meta-store = { path = "src/meta/core/store" }
+databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/core/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
