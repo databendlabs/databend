@@ -73,9 +73,15 @@
 //! [sbbf-paper]: https://arxiv.org/pdf/2101.01719
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
-use core::simd::Simd;
-use core::simd::cmp::SimdPartialEq;
+// Use NEON intrinsics on aarch64 for better performance
+#[cfg(target_arch = "aarch64")]
+use std::arch::aarch64::*;
 use std::mem::size_of;
+// Use portable SIMD on other platforms
+#[cfg(not(target_arch = "aarch64"))]
+use std::simd::Simd;
+#[cfg(not(target_arch = "aarch64"))]
+use std::simd::cmp::SimdPartialEq;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
@@ -83,7 +89,11 @@ use std::sync::atomic::Ordering;
 use databend_common_base::runtime::Runtime;
 
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
-const SALT: [u32; 8] = [
+/// 32-byte aligned for optimal SIMD load performance.
+#[repr(C, align(32))]
+struct AlignedSalt([u32; 8]);
+
+static SALT: AlignedSalt = AlignedSalt([
     0x47b6137b_u32,
     0x44974d91_u32,
     0x8824ad5b_u32,
@@ -92,14 +102,20 @@ const SALT: [u32; 8] = [
     0x2df1424b_u32,
     0x9efc4947_u32,
     0x5c6bfb31_u32,
-];
+]);
+
+/// Shift amount for extracting bit index: (hash * salt) >> 27 gives 5 bits (0-31)
+const SHIFT_NUM: i32 = 27;
 
 /// Each block is 256 bits, broken up into eight contiguous "words", each consisting of 32 bits.
 /// Each word is thought of as an array of bits; each bit is either "set" or "not set".
+///
+/// The 32-byte alignment ensures optimal SIMD load performance on both x86 (AVX) and ARM (NEON).
 #[derive(Debug, Copy, Clone)]
-#[repr(transparent)]
+#[repr(C, align(32))]
 struct Block([u32; 8]);
 
+#[cfg(not(target_arch = "aarch64"))]
 type U32x8 = Simd<u32, 8>;
 
 impl Block {
@@ -107,6 +123,33 @@ impl Block {
 
     /// takes as its argument a single unsigned 32-bit integer and returns a block in which each
     /// word has exactly one bit set.
+    #[cfg(target_arch = "aarch64")]
+    #[inline]
+    fn mask(x: u32) -> Self {
+        unsafe {
+            let (mask_lo, mask_hi) = Self::mask_neon(x);
+            let mut result = [0u32; 8];
+            vst1q_u32_x2(result.as_mut_ptr(), uint32x4x2_t(mask_lo, mask_hi));
+            Self(result)
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[inline(always)]
+    unsafe fn mask_neon(x: u32) -> (uint32x4_t, uint32x4_t) {
+        unsafe {
+            let ones = vdupq_n_u32(1);
+            let hash_data = vdupq_n_u32(x);
+            let salt = vld1q_u32_x2(SALT.0.as_ptr());
+            let bit_index_lo =
+                vreinterpretq_s32_u32(vshrq_n_u32::<SHIFT_NUM>(vmulq_u32(salt.0, hash_data)));
+            let bit_index_hi =
+                vreinterpretq_s32_u32(vshrq_n_u32::<SHIFT_NUM>(vmulq_u32(salt.1, hash_data)));
+            (vshlq_u32(ones, bit_index_lo), vshlq_u32(ones, bit_index_hi))
+        }
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
     fn mask(x: u32) -> Self {
         Self(Self::mask_simd(x).to_array())
     }
@@ -132,6 +175,18 @@ impl Block {
     }
 
     /// Setting every bit in the block that was also set in the result from mask
+    #[cfg(target_arch = "aarch64")]
+    #[inline]
+    fn insert(&mut self, hash: u32) {
+        unsafe {
+            let (mask_lo, mask_hi) = Self::mask_neon(hash);
+            let data = vld1q_u32_x2(self.0.as_ptr());
+            let result = uint32x4x2_t(vorrq_u32(data.0, mask_lo), vorrq_u32(data.1, mask_hi));
+            vst1q_u32_x2(self.0.as_mut_ptr(), result);
+        }
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
     fn insert(&mut self, hash: u32) {
         let mask = Self::mask(hash);
         for i in 0..8 {
@@ -140,16 +195,30 @@ impl Block {
     }
 
     /// Returns true when every bit that is set in the result of mask is also set in the block.
+    #[cfg(target_arch = "aarch64")]
+    #[inline]
+    fn check(&self, hash: u32) -> bool {
+        unsafe {
+            let (mask_lo, mask_hi) = Self::mask_neon(hash);
+            let data = vld1q_u32_x2(self.0.as_ptr());
+            // vbicq_u32(a, b) = a & !b: bits set in mask but not in data
+            let miss = vorrq_u32(vbicq_u32(mask_lo, data.0), vbicq_u32(mask_hi, data.1));
+            vmaxvq_u32(miss) == 0
+        }
+    }
+
+    #[cfg(not(target_arch = "aarch64"))]
     fn check(&self, hash: u32) -> bool {
         let mask = Self::mask_simd(hash);
         let block_vec = U32x8::from_array(self.0);
         (block_vec & mask).simd_ne(U32x8::splat(0)).all()
     }
 
+    #[cfg(not(target_arch = "aarch64"))]
     #[inline(always)]
     fn mask_simd(x: u32) -> U32x8 {
         let hash_vec = U32x8::splat(x);
-        let salt_vec = U32x8::from_array(SALT);
+        let salt_vec = U32x8::from_array(SALT.0);
         let bit_index = (hash_vec * salt_vec) >> U32x8::splat(27);
         U32x8::splat(1) << bit_index
     }
