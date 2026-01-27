@@ -15,10 +15,10 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_meta_test_harness::meta_service_test_harness;
 use test_harness::test;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
+use crate::metasrv_builder::MetaSrvBuilder;
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
