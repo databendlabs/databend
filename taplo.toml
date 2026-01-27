@@ -58,6 +58,7 @@ exclude = [
     "src/meta/binaries/Cargo.toml",
     "src/meta/cli-config/Cargo.toml",
     "src/meta/core/service/Cargo.toml",
+    "src/meta/core/test-harness/Cargo.toml",
     "src/query/ee/Cargo.toml",
     "src/query/service/Cargo.toml",
 ]
