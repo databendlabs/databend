@@ -280,7 +280,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         .admin
         .api_address
         .split(':')
-        .last()
+        .next_back()
         .expect("admin address should have port")
         .to_string();
 
