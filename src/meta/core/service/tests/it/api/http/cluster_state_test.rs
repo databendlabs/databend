@@ -251,14 +251,12 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let addr_str = "127.0.0.1:30003";
-
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    tc1.admin.api_address = addr_str.to_owned();
+    // tc1.admin already has an OS-assigned port from MetaSrvTestContext::new()
     tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
     tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
@@ -277,6 +275,15 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         })
         .await??;
 
+    // Extract port from the OS-assigned address for URL construction
+    let admin_port = tc1
+        .admin
+        .api_address
+        .split(':')
+        .last()
+        .expect("admin address should have port")
+        .to_string();
+
     let http_cfg = HttpServiceConfig {
         admin: tc1.admin.clone(),
         config_display: format!("{:?}", tc1.config),
@@ -284,8 +291,8 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);
 
     // test cert is issued for "localhost"
-    let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
-    let node_url = || format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
+    let state_url = format!("https://{}:{}/v1/cluster/status", TEST_CN_NAME, admin_port);
+    let node_url = format!("https://{}:{}/v1/cluster/nodes", TEST_CN_NAME, admin_port);
 
     // load cert
     let mut buf = Vec::new();
@@ -304,7 +311,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     {
         let timeout_at = Instant::now() + Duration::from_secs(5);
         while Instant::now() < timeout_at {
-            let resp = client.get(state_url()).send().await;
+            let resp = client.get(&state_url).send().await;
             if resp.is_ok() {
                 break;
             }
@@ -313,7 +320,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         }
     }
 
-    let resp = client.get(state_url()).send().await;
+    let resp = client.get(&state_url).send().await;
     assert!(resp.is_ok());
 
     let resp = resp.unwrap();
@@ -325,7 +332,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
     assert_ne!(state_json["leader"].as_object(), None);
 
-    let resp_nodes = client.get(node_url()).send().await;
+    let resp_nodes = client.get(&node_url).send().await;
     assert!(resp_nodes.is_ok());
 
     let resp_nodes = resp_nodes.unwrap();
