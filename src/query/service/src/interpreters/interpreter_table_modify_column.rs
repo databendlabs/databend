@@ -756,7 +756,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let table = catalog
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &self.ctx.get_tenant(),
                 db_name,
                 tbl_name,

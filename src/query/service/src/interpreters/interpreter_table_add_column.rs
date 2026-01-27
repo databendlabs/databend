@@ -79,7 +79,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let tbl = catalog
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &self.ctx.get_tenant(),
                 db_name,
                 tbl_name,

@@ -125,7 +125,7 @@ impl TableRefHandler for RealTableRefHandler {
             // must strictly inherit cluster_key_meta from the base snapshot.
             // We intentionally do NOT override it with table-level cluster key metadata.
             // Table-level cluster_key_meta is only used as a fallback when no base snapshot exists.
-            debug_assert_eq!(new_snapshot.cluster_key_meta, snapshot.cluster_key_meta);
+            assert_eq!(new_snapshot.cluster_key_meta, snapshot.cluster_key_meta);
             new_snapshot.prev_snapshot_id = None;
             (new_snapshot, snapshot.timestamp)
         } else {

@@ -53,7 +53,7 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
         let table = catalog
-            .get_table_with_batch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+            .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
             .await?;
         // check mutability
         table.check_mutable()?;

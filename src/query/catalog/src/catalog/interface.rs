@@ -296,7 +296,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    async fn get_table_with_batch(
+    async fn get_table_with_branch(
         &self,
         tenant: &Tenant,
         db_name: &str,

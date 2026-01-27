@@ -157,10 +157,23 @@ pub struct TableMeta {
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
     pub cluster_key: Option<String>,
+    /// Identifier of the cluster key defined on the **main branch** of the table.
+    ///
+    /// This ID is assigned from the global `cluster_key_seq`, which is shared by
+    /// both the main branch and all table branches. However, `cluster_key_id`
+    /// always reflects **only the cluster key of the main branch**.
+    ///
+    /// Branch-specific cluster keys are stored in branch snapshots and do NOT
+    /// update this field.
+    ///
+    /// As a result, `cluster_key_id` and `cluster_key_seq` may diverge when
+    /// branches define or modify their own cluster keys.
     pub cluster_key_id: Option<u32>,
-    /// A sequential number that uniquely identifies changes to the cluster key.
-    /// This value increments by 1 each time the cluster key is created or modified,
-    /// ensuring a unique identifier for each version of the cluster key.
+    /// Global monotonically increasing sequence for cluster key changes, to
+    /// ensuring a unique identifier for each version of cluster key.
+    ///
+    /// This sequence is shared across the main branch and all branches, and is
+    /// incremented whenever a cluster key is created or altered on any branch.
     /// It remains unchanged when the cluster key is dropped.
     pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
@@ -387,6 +400,12 @@ impl TableInfo {
         self
     }
 
+    /// Returns the cluster key defined on the main branch, if any.
+    ///
+    /// NOTE:
+    /// This function relies on the invariant that `cluster_key_id`
+    /// is always present when `cluster_key` is present.
+    /// That invariant is enforced when constructing `TableMeta`.
     pub fn cluster_key(&self) -> Option<(u32, String)> {
         self.meta.cluster_key_id.zip(self.meta.cluster_key.clone())
     }
