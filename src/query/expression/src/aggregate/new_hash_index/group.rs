@@ -28,41 +28,38 @@ mod portable_simd {
     use std::simd::cmp::SimdPartialEq;
     use std::simd::num::SimdInt;
     use std::simd::num::SimdUint;
-    use std::simd::u16x4;
+    use std::simd::u8x8;
 
     use crate::aggregate::new_hash_index::bitmask::BitMask;
     use crate::aggregate::new_hash_index::bitmask::Tag;
 
     #[derive(Copy, Clone)]
-    pub struct Group(u16x4);
-
-    #[inline]
-    fn u16x4_to_u64(values: [u16; 4]) -> u64 {
-        unsafe { std::mem::transmute(values) }
-    }
+    pub struct Group(u8x8);
 
     impl Group {
-        pub const WIDTH: usize = u16x4::LEN;
+        pub const WIDTH: usize = u8x8::LEN;
 
         #[inline]
         pub fn match_tag(self, tag: Tag) -> BitMask {
-            let cmp = self.0.simd_eq(u16x4::splat(tag.0));
-            let vec_mask = cmp.to_int().cast::<u16>();
-            BitMask(u16x4_to_u64(vec_mask.to_array()))
+            let cmp = self.0.simd_eq(u8x8::splat(tag.0));
+            let vec_mask = cmp.to_int().cast::<u8>();
+
+            unsafe { BitMask(u64::from_ne_bytes(vec_mask.to_array())) }
         }
 
         #[inline]
         pub fn match_empty(self) -> BitMask {
-            let mask = self.0.cast::<i16>().is_negative();
-            let vec_mask = mask.to_int().cast::<u16>();
-            BitMask(u16x4_to_u64(vec_mask.to_array()))
+            let mask = self.0.cast::<i8>().is_negative();
+            let vec_mask = mask.to_int().cast::<u8>();
+
+            unsafe { BitMask(u64::from_ne_bytes(vec_mask.to_array())) }
         }
 
         #[inline]
         pub unsafe fn load(ctrls: &[Tag], index: usize) -> Self {
-            let ptr = unsafe { ctrls.as_ptr().add(index) as *const u16 };
-            Group(u16x4::from_array(unsafe {
-                ptr.cast::<[u16; 4]>().read_unaligned()
+            let ptr = unsafe { ctrls.as_ptr().add(index) as *const u8 };
+            Group(u8x8::from_array(unsafe {
+                ptr.cast::<[u8; 8]>().read_unaligned()
             }))
         }
     }
@@ -72,7 +69,6 @@ mod portable_simd {
         use rand::RngCore;
 
         use super::Group;
-        use super::u16x4_to_u64;
         use crate::aggregate::new_hash_index::bitmask::Tag;
 
         #[test]
@@ -82,46 +78,40 @@ mod portable_simd {
             for _ in 0..4096 {
                 let mut bytes = [0u8; 8];
                 rng.fill_bytes(&mut bytes);
-                let words = [
-                    u16::from_ne_bytes([bytes[0], bytes[1]]),
-                    u16::from_ne_bytes([bytes[2], bytes[3]]),
-                    u16::from_ne_bytes([bytes[4], bytes[5]]),
-                    u16::from_ne_bytes([bytes[6], bytes[7]]),
-                ];
 
-                let ctrls = words.map(Tag);
+                let ctrls = bytes.map(Tag);
                 let group = unsafe { Group::load(&ctrls, 0) };
 
-                let tag = Tag((rng.next_u32() & 0xFFFF) as u16);
-                let mut expected_tag_words = [0u16; 4];
-                let mut expected_empty_words = [0u16; 4];
+                let tag = Tag((rng.next_u32() & 0xFF) as u8);
+                let mut expected_tag_bytes = [0u8; 8];
+                let mut expected_empty_bytes = [0u8; 8];
 
-                for i in 0..4 {
+                for i in 0..8 {
                     if ctrls[i].0 == tag.0 {
-                        expected_tag_words[i] = 0xFFFF;
+                        expected_tag_bytes[i] = 0xFF;
                     }
-                    if (ctrls[i].0 as i16) < 0 {
-                        expected_empty_words[i] = 0xFFFF;
+                    if (ctrls[i].0 as i8) < 0 {
+                        expected_empty_bytes[i] = 0xFF;
                     }
                 }
 
-                let expected_tag = u16x4_to_u64(expected_tag_words);
-                let expected_empty = u16x4_to_u64(expected_empty_words);
+                let expected_tag = u64::from_ne_bytes(expected_tag_bytes);
+                let expected_empty = u64::from_ne_bytes(expected_empty_bytes);
 
                 assert_eq!(
                     group.match_tag(tag).0,
                     expected_tag,
-                    "ctrls={:?} tag=0x{:04X} expected_tag_words={:?}",
-                    words,
+                    "ctrls={:?} tag=0x{:02X} expected_tag_bytes={:?}",
+                    bytes,
                     tag.0,
-                    expected_tag_words
+                    expected_tag_bytes
                 );
                 assert_eq!(
                     group.match_empty().0,
                     expected_empty,
-                    "ctrls={:?} expected_empty_words={:?}",
-                    words,
-                    expected_empty_words
+                    "ctrls={:?} expected_empty_bytes={:?}",
+                    bytes,
+                    expected_empty_bytes
                 );
             }
         }
@@ -137,20 +127,20 @@ mod generic {
     pub struct Group(u64);
 
     impl Group {
-        /// Number of tags in the group.
-        pub const WIDTH: usize = 4;
+        /// Number of bytes in the group.
+        pub const WIDTH: usize = 8;
 
         #[inline]
         pub fn match_tag(self, tag: Tag) -> BitMask {
             // This algorithm is derived from
             // https://graphics.stanford.edu/~seander/bithacks.html##ValueInWord
             let cmp = self.0 ^ repeat(tag);
-            BitMask((cmp.wrapping_sub(repeat(Tag(0x0001))) & !cmp & repeat(Tag(0x8000))).to_le())
+            BitMask((cmp.wrapping_sub(repeat(Tag(0x01))) & !cmp & repeat(Tag(0x80))).to_le())
         }
 
         #[inline]
         pub fn match_empty(self) -> BitMask {
-            BitMask((self.0 & repeat(Tag(0x8000))).to_le())
+            BitMask((self.0 & repeat(Tag(0x80))).to_le())
         }
 
         #[inline]
