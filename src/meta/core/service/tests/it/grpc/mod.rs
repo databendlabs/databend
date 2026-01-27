@@ -23,7 +23,6 @@ pub mod metasrv_grpc_kv_get_many;
 pub mod metasrv_grpc_kv_list;
 pub mod metasrv_grpc_kv_read_v1;
 pub mod metasrv_grpc_member_list;
-pub mod metasrv_grpc_schema_api;
 pub mod metasrv_grpc_schema_api_follower_follower;
 pub mod metasrv_grpc_schema_api_leader_follower;
 pub mod metasrv_grpc_tls;
