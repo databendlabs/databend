@@ -162,7 +162,6 @@ impl Interpreter for RenameTableColumnInterpreter {
                         if let Some((_, ref mut key)) = meta.cluster_key_v2 {
                             *key = cluster_key.clone();
                         }
-                        meta.cluster_key = new_cluster_key.clone();
                     }
                 }
             },

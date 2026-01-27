@@ -951,8 +951,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 v.get_table_info()
                     .meta
                     .cluster_key_str()
-                    .cloned()
                     .unwrap_or_default()
+                    .to_string()
             })
             .collect();
         let is_transients: Vec<String> = database_tables

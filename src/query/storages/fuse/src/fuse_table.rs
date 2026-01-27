@@ -502,9 +502,12 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
-    pub fn cluster_key_str(&self) -> Option<&String> {
+    pub fn cluster_key_str(&self) -> Option<&str> {
         if let Some(branch) = &self.branch_info {
-            branch.cluster_key_meta.as_ref().map(|(_, key)| key)
+            branch
+                .cluster_key_meta
+                .as_ref()
+                .map(|(_, key)| key.as_str())
         } else {
             self.table_info.meta.cluster_key_str()
         }

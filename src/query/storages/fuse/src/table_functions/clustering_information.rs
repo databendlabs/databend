@@ -186,7 +186,7 @@ impl<'a> ClusteringInformationImpl<'a> {
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
-                if a.is_some() && a.unwrap() == &cluster_key {
+                if a.is_some() && a.unwrap() == cluster_key {
                     default_cluster_key_id = self.table.cluster_key_id();
                 }
                 (cluster_key, exprs)
@@ -198,7 +198,7 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
                     .collect();
                 default_cluster_key_id = self.table.cluster_key_id();
-                (a.clone(), exprs)
+                (a.to_string(), exprs)
             }
             _ => {
                 unreachable!("Unclustered table {}", self.table.table_info.desc);

@@ -280,11 +280,12 @@ impl TableMeta {
         })
     }
 
-    pub fn cluster_key_str(&self) -> Option<&String> {
-        self.cluster_key_v2
-            .as_ref()
-            .map(|(_, s)| s)
-            .or(self.cluster_key.as_ref())
+    pub fn cluster_key_str(&self) -> Option<&str> {
+        if let Some((_, ref key)) = self.cluster_key_v2 {
+            Some(key.as_str())
+        } else {
+            self.cluster_key.as_deref()
+        }
     }
 
     pub fn cluster_key_id(&self) -> Option<u32> {
@@ -1453,6 +1454,7 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableMeta;
 
     #[test]
     fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {
@@ -1497,6 +1499,62 @@ mod tests {
                 table_id: 2,
                 file: "".to_string(),
             });
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_cluster_key_meta() -> databend_common_exception::Result<()> {
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+
+            assert_eq!(table_meta.cluster_key_meta(), None);
+            assert_eq!(table_meta.cluster_key_id(), None);
+            assert_eq!(table_meta.cluster_key_str(), None);
+        }
+
+        // only cluster_key
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((2, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(2));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // both cluster_key and cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
         }
         Ok(())
     }

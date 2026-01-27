@@ -51,7 +51,7 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
         part_prefix: s(""),
         engine_options: btreemap! {},
         options: btreemap! {},
-        cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_key: None,
         cluster_key_v2: Some((2, "(a + 2, b)".to_string())),
         cluster_key_seq: 3,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),

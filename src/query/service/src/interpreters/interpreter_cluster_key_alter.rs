@@ -65,7 +65,7 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = fuse_table.cluster_key_str()
-            && *old_cluster_key_str == cluster_key_str
+            && old_cluster_key_str == cluster_key_str
         {
             let old_cluster_type = fuse_table.cluster_type();
             if old_cluster_type.is_some_and(|v| v.to_string().to_lowercase() == plan.cluster_type) {
@@ -87,7 +87,6 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
                 }
                 if plan.branch.is_none() {
                     meta.cluster_key_v2 = cluster_key_meta;
-                    meta.cluster_key = Some(cluster_key_str);
                     meta.options
                         .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
                 }
