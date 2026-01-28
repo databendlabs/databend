@@ -167,14 +167,14 @@ pub fn build_fuse_parquet_source_pipeline(
     }
     let unfinished_processors_count = Arc::new(AtomicU64::new(pipeline.output_len() as u64));
 
-    pipeline.add_transform(|input, output| {
-        Ok(TransformRuntimeFilterWait::create(
-            ctx.clone(),
-            plan.scan_id,
-            input,
-            output,
-        ))
-    })?;
+    // pipeline.add_transform(|input, output| {
+    //     Ok(TransformRuntimeFilterWait::create(
+    //         ctx.clone(),
+    //         plan.scan_id,
+    //         input,
+    //         output,
+    //     ))
+    // })?;
 
     pipeline.add_transform(|input, output| {
         ReadParquetDataTransform::create(
