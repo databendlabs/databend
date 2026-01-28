@@ -104,7 +104,8 @@ pub enum PartitionsShuffleKind {
     // Bind the Partition to executor by partition.rand() order.
     Rand,
     // Bind the Partition to executor by block-level modulo (block_idx % num_executors)
-    BlockMod,
+    // Carries optional slot description for filtering blocks at each executor
+    BlockMod(Option<databend_storages_common_table_meta::meta::BlockSlotDescription>),
     // Bind the Partition to executor by broadcast
     BroadcastCluster,
     // Bind the Partition to warehouse executor by broadcast
@@ -199,15 +200,20 @@ impl Partitions {
             // - BlockMod: Each executor filters blocks using block_idx % num_executors during execution
             // - BroadcastCluster/BroadcastWarehouse: Each executor processes all blocks
             // The actual filtering logic is handled during partition processing, not here.
-            PartitionsShuffleKind::BlockMod
+            PartitionsShuffleKind::BlockMod(_)
             | PartitionsShuffleKind::BroadcastCluster
             | PartitionsShuffleKind::BroadcastWarehouse => {
+                // For BlockMod, preserve the kind (without slot info) so it can be set later
+                let result_kind = match &self.kind {
+                    PartitionsShuffleKind::BlockMod(_) => PartitionsShuffleKind::BlockMod(None),
+                    other => other.clone(),
+                };
                 return Ok(executors_sorted
                     .into_iter()
                     .map(|executor| {
                         (
                             executor.id.clone(),
-                            Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
+                            Partitions::create(result_kind.clone(), self.partitions.clone()),
                         )
                     })
                     .collect());

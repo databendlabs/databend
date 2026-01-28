@@ -273,7 +273,7 @@ fn test_partition_reshuffle() {
 
     // BlockMod.
     {
-        let partitions = gen_parts(PartitionsShuffleKind::BlockMod, 3);
+        let partitions = gen_parts(PartitionsShuffleKind::BlockMod(None), 3);
         let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
 
         writeln!(
