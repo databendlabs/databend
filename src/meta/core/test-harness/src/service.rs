@@ -19,6 +19,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use databend_base::testutil::next_port;
+use tokio::net::TcpListener;
+use tonic::transport::server::TcpIncoming;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -50,6 +52,15 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
+    // Bind the gRPC port before creating MetaWorker so the correct address is advertised.
+    // Use the existing address if port is non-zero (restart scenario),
+    // otherwise bind to port 0 for OS-assigned port.
+    let bind_addr: std::net::SocketAddr = tc.config.grpc.api_address.parse()?;
+    let std_listener = std::net::TcpListener::bind(bind_addr)?;
+    std_listener.set_nonblocking(true)?;
+    let addr = std_listener.local_addr()?;
+    tc.config.grpc.api_address = addr.to_string();
+
     let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
@@ -62,8 +73,12 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         })
         .await??;
 
+    // Convert to TcpIncoming and start server
+    let tokio_listener = TcpListener::from_std(std_listener)?;
+    let incoming = TcpIncoming::from(tokio_listener);
+
     let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh);
-    srv.do_start().await?;
+    srv.do_start_with_incoming(incoming).await?;
     tc.grpc_srv = Some(Box::new(srv));
 
     Ok(())
@@ -162,11 +177,9 @@ impl MetaSrvTestContext {
 
         let host = "127.0.0.1";
 
-        {
-            let grpc_port = next_port();
-            config.grpc.api_address = format!("{}:{}", host, grpc_port);
-            config.grpc.advertise_host = Some(host.to_string());
-        }
+        // gRPC port will be assigned when server starts with OS-assigned port
+        config.grpc.api_address = format!("{}:0", host);
+        config.grpc.advertise_host = Some(host.to_string());
 
         let admin = {
             let http_port = next_port();
