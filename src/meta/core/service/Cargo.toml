@@ -51,6 +51,7 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
+watcher = { workspace = true }
 
 [dev-dependencies]
 databend-common-version = { workspace = true }

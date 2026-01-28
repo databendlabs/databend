@@ -34,7 +34,7 @@ use crate::tests::service::MetaSrvTestContext;
 pub(crate) async fn start_meta_node_cluster(
     voters: BTreeSet<NodeId>,
     non_voters: BTreeSet<NodeId>,
-) -> anyhow::Result<(u64, Vec<MetaSrvTestContext>)> {
+) -> anyhow::Result<(u64, Vec<MetaSrvTestContext<TokioRuntime>>)> {
     // leader is always node-0
     assert!(voters.contains(&0));
     assert!(!non_voters.contains(&0));
@@ -147,12 +147,13 @@ pub(crate) async fn start_meta_node_cluster(
     Ok((log_index, test_contexts))
 }
 
-pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
+pub(crate) async fn start_meta_node_leader()
+-> anyhow::Result<(NodeId, MetaSrvTestContext<TokioRuntime>)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
     let nid = 0;
-    let mut tc = MetaSrvTestContext::new(nid);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(nid);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
     dbg!(&tc.config.raft_config.raft_dir);
@@ -187,8 +188,8 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 pub(crate) async fn start_meta_node_non_voter(
     leader: Arc<MetaNode<TokioRuntime>>,
     id: NodeId,
-) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
-    let mut tc = MetaSrvTestContext::new(id);
+) -> anyhow::Result<(NodeId, MetaSrvTestContext<TokioRuntime>)> {
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(id);
     let addr = tc.config.raft_config.raft_api_addr().await?;
 
     let raft_conf = &tc.config.raft_config;

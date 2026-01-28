@@ -18,10 +18,10 @@ use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_version::BUILD_INFO;
 use test_harness::test;
 
@@ -36,12 +36,12 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_tls_server() -> anyhow::Result<()> {
-    let mut tc = MetaSrvTestContext::new(0);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
     tc.config.grpc.tls.key = TEST_SERVER_KEY.to_owned();
     tc.config.grpc.tls.cert = TEST_SERVER_CERT.to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_metasrv_with_context::<TokioRuntime>(&mut tc).await;
     assert!(r.is_ok());
 
     let addr = tc.config.grpc.api_address().unwrap();
@@ -72,12 +72,12 @@ async fn test_tls_server() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
-    let mut tc = MetaSrvTestContext::new(0);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
     tc.config.grpc.tls.key = "../tests/data/certs/not_exist.key".to_owned();
     tc.config.grpc.tls.cert = "../tests/data/certs/not_exist.pem".to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_metasrv_with_context::<TokioRuntime>(&mut tc).await;
     assert!(r.is_err());
     Ok(())
 }

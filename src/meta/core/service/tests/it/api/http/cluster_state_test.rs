@@ -53,8 +53,8 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
@@ -102,8 +102,8 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
@@ -251,12 +251,12 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    // tc1.admin already has an OS-assigned port from MetaSrvTestContext::new()
+    // tc1.admin already has an OS-assigned port from MetaSrvTestContext::<TokioRuntime>::new()
     tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
     tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 

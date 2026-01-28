@@ -56,7 +56,9 @@ impl<SP: SpawnApi> HttpService<SP> {
         let id = metrics.id;
         info!("id={id} Received list_feature request");
 
-        let response = Self::features_state(&meta_handle).await.map_err(internal_err)?;
+        let response = Self::features_state(&meta_handle)
+            .await
+            .map_err(internal_err)?;
         Ok(Json(response).into_response())
     }
 
@@ -109,7 +111,9 @@ impl<SP: SpawnApi> HttpService<SP> {
             .map_err(internal_err)?
             .map_err(internal_err)?;
 
-        let response = Self::features_state(&meta_handle).await.map_err(internal_err)?;
+        let response = Self::features_state(&meta_handle)
+            .await
+            .map_err(internal_err)?;
         Ok(Json(response).into_response())
     }
 

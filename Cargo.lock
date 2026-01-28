@@ -5531,6 +5531,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.13.1",
  "tonic-reflection",
+ "watcher",
 ]
 
 [[package]]
@@ -5650,7 +5651,6 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
- "databend-meta-runtime",
  "fastrace",
  "log",
  "tempfile",
@@ -14924,6 +14924,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "span-map"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9374d7f3fc7a34774575f8ebf4f55d7c19ccd09e77e7bd40d33064fe728e3926"
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17553,6 +17559,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "watcher"
+version = "0.5.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.5.0#4508a803df787f525ebd9b91729a7c5b31931916"
+dependencies = [
+ "futures",
+ "log",
+ "span-map",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18597,8 +18615,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "watcher"
-version = "0.5.0"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.5.0#4508a803df787f525ebd9b91729a7c5b31931916"

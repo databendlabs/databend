@@ -34,7 +34,7 @@ use crate::tls_constants::TEST_SERVER_KEY;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_tls_server() -> anyhow::Result<()> {
-    let tc = MetaSrvTestContext::new(0);
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
     let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;

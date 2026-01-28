@@ -131,7 +131,7 @@ async fn test_watch_txn_main(
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_single_key() -> anyhow::Result<()> {
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let seq: u64 = 1;
 
@@ -169,7 +169,7 @@ async fn test_watch() -> anyhow::Result<()> {
     // - Write some data.
     // - Assert watcher get all the update.
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let mut seq: u64 = 1;
     // 1.update some events
@@ -335,7 +335,7 @@ async fn test_watch() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_initialization_flush() -> anyhow::Result<()> {
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
     let updates = vec![
         UpsertKV::update("a", b"a"),
         UpsertKV::update("b", b"b"),
@@ -437,7 +437,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         Duration::from_secs(x)
     }
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let watch_prefix = "w_";
     let now_sec = now();
@@ -581,7 +581,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 
-    let (tc, addr) = crate::tests::start_metasrv().await?;
+    let (tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let watch_req = || WatchRequest::new("a".to_string(), Some("z".to_string()));
 
