@@ -70,54 +70,79 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
-    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1]).await?;
 
-    tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-
-    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
-
-    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
-    let _ = mn1.join_cluster(&tc1.config).await?;
+    let meta_handle_0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
 
     info!("--- write sample data to the cluster ---");
     {
-        mn0.write(LogEntry::new(Cmd::UpsertKV(
-            UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
-        )))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo2", b"foo2",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo3", b"foo3",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo4", b"foo4",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo5", b"foo5",
-        ))))
-        .await?;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(
+                        UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
+                    )))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo2", b"foo2",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo3", b"foo3",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo4", b"foo4",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo5", b"foo5",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
     }
 
     info!("--- trigger snapshot ---");
     {
-        mn0.raft.trigger().snapshot().await?;
-        mn0.raft
-            .wait(Some(Duration::from_secs(1)))
-            .snapshot(new_log_id(1, 0, 11), "trigger build snapshot")
-            .await?;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.raft.trigger().snapshot().await?;
+                    mn.raft
+                        .wait(Some(Duration::from_secs(1)))
+                        .snapshot(new_log_id(1, 0, 11), "trigger build snapshot")
+                        .await?;
+                    Ok::<_, anyhow::Error>(())
+                })
+            })
+            .await??;
     }
-
-    // Create MetaHandle from mn0 to test handle_get_status
-    let runtime0 = TokioRuntime::new_testing("meta-io-rt-ut-0");
-    let meta_handle_0 =
-        MetaWorker::create_meta_worker(tc0.config.clone(), Arc::new(runtime0)).await?;
 
     let version = BUILD_INFO.semver().to_string();
     let status = meta_handle_0.handle_get_status(&version).await?;
