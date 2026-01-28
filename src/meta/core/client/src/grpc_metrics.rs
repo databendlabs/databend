@@ -24,21 +24,21 @@ use databend_common_base::runtime::metrics::register_histogram_family_in_millise
 use databend_common_meta_types::MetaError;
 use databend_common_metrics::VecLabels;
 
-pub static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<FamilyHistogram<VecLabels>> =
+static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| {
         register_histogram_family_in_milliseconds("meta_grpc_client_request_duration_ms")
     });
 
-pub static META_GRPC_CLIENT_REQUEST_INFLIGHT: LazyLock<Gauge> =
+static META_GRPC_CLIENT_REQUEST_INFLIGHT: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("meta_grpc_client_request_inflight"));
 
-pub static META_GRPC_CLIENT_REQUEST_SUCCESS: LazyLock<FamilyCounter<VecLabels>> =
+static META_GRPC_CLIENT_REQUEST_SUCCESS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_client_request_success"));
 
-pub static META_GRPC_CLIENT_REQUEST_FAILED: LazyLock<FamilyCounter<VecLabels>> =
+static META_GRPC_CLIENT_REQUEST_FAILED: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_client_request_fail"));
 
-pub static META_GRPC_MAKE_CLIENT_FAIL: LazyLock<FamilyCounter<VecLabels>> =
+static META_GRPC_MAKE_CLIENT_FAIL: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family("meta_grpc_make_client_fail"));
 
 const LABEL_ENDPOINT: &str = "endpoint";
