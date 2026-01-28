@@ -97,19 +97,13 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     /// Binds a TCP listener for the gRPC server.
     ///
     /// If `listen_port` is `None`, binds to port 0 for OS-assigned port.
-    /// Updates `self.config.grpc.listen_port` with the actual bound port.
-    pub fn bind(&mut self) -> Result<TcpIncoming, MetaNetworkError> {
+    /// The actual bound port is NOT updated in config here; it will be set in `do_start_with_incoming()`.
+    pub fn bind(&self) -> Result<TcpIncoming, MetaNetworkError> {
         let port = self.config.grpc.listen_port.unwrap_or(0);
         let addr: SocketAddr = format!("{}:{}", self.config.grpc.listen_host, port).parse()?;
 
         let incoming = TcpIncoming::bind(addr)
             .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
-
-        let actual_addr = incoming
-            .local_addr()
-            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
-
-        self.config.grpc.listen_port = Some(actual_addr.port());
 
         Ok(incoming)
     }
@@ -126,6 +120,9 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         let addr = incoming
             .local_addr()
             .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
+        // Update config with actual bound port
+        self.config.grpc.listen_port = Some(addr.port());
 
         info!("GrpcServer::start");
 

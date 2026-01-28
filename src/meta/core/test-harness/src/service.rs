@@ -14,12 +14,14 @@
 
 use std::fmt;
 use std::fs;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use databend_base::testutil::next_port;
 use databend_base::uniq_id::GlobalUniq;
+use tonic::transport::server::TcpIncoming;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -55,24 +57,20 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    // In tests, listen_port must be None so the OS assigns an ephemeral port.
-    // This prevents port conflicts between concurrent tests.
-    assert!(
-        tc.config.grpc.listen_port.is_none(),
-        "listen_port must be None in tests; OS will assign an ephemeral port"
-    );
+    // Bind first to get the actual port before creating MetaWorker.
+    // This ensures init_cluster (for single=true) uses the correct port.
+    let port = tc.config.grpc.listen_port.unwrap_or(0);
+    let addr: SocketAddr = format!("{}:{}", tc.config.grpc.listen_host, port).parse()?;
+    let incoming = TcpIncoming::bind(addr)?;
+    let actual_port = incoming.local_addr()?.port();
+    tc.config.grpc.listen_port = Some(actual_port);
 
+    // Now create MetaWorker with the correct config (including the actual port)
     let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
 
-    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh.clone());
-
-    // Bind first to get the actual port, then update tc.config
-    let incoming = srv.bind()?;
-    tc.config.grpc = srv.grpc_config().clone();
-
-    // Join cluster with the updated config that has the actual port
+    // Join cluster if needed (for nodes joining an existing cluster)
     let c = tc.config.clone();
     let _ = mh
         .request(move |mn| {
@@ -81,6 +79,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         })
         .await??;
 
+    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh.clone());
     srv.do_start_with_incoming(incoming).await?;
     tc.grpc_srv = Some(Box::new(srv));
 
