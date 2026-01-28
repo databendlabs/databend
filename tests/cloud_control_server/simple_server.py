@@ -3,10 +3,8 @@ import os
 import shutil
 import socket
 import subprocess
-import tempfile
 import threading
 import time
-import urllib.request
 
 import grpc
 import json
@@ -20,8 +18,8 @@ import task_pb2_grpc
 import notification_pb2
 import notification_pb2_grpc
 import timestamp_pb2
-import udf_pb2
-import udf_pb2_grpc
+import resource_pb2
+import resource_pb2_grpc
 
 # Simple in-memory database
 TASK_DB = {}
@@ -96,14 +94,6 @@ def _docker_available():
     return shutil.which("docker") is not None
 
 
-def _docker_image_exists(image_tag):
-    try:
-        _run_command(["docker", "image", "inspect", image_tag])
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
 def _docker_container_running(container_name):
     try:
         result = _run_command(
@@ -131,42 +121,6 @@ def _wait_for_port(host, port, timeout_secs):
         except OSError:
             time.sleep(0.2)
     return False
-
-
-def _import_basename(location, index):
-    name = location.strip().rstrip("/").split("/")[-1]
-    if not name:
-        return f"import_{index}"
-    return name
-
-
-def _download_udf_imports(imports, target_dir):
-    if not imports:
-        return
-    os.makedirs(target_dir, exist_ok=True)
-    for index, item in enumerate(imports):
-        name = _import_basename(item.location, index)
-        dest = os.path.join(target_dir, name)
-        if UDF_DOCKER_LOG_COMMANDS:
-            _log("UDF import download:", item.location, "->", dest)
-        try:
-            headers = dict(item.headers)
-            req = urllib.request.Request(item.url, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as f:
-                shutil.copyfileobj(resp, f)
-        except Exception as exc:
-            raise RuntimeError(f"failed to download UDF import '{item.location}': {exc}") from exc
-
-
-def _build_udf_image(dockerfile, image_tag, imports):
-    if UDF_DOCKER_LOG_COMMANDS:
-        _log(f"UDF docker build image={image_tag}")
-    with tempfile.TemporaryDirectory(prefix="udf-cloud-") as temp_dir:
-        dockerfile_path = os.path.join(temp_dir, "Dockerfile")
-        with open(dockerfile_path, "w") as f:
-            f.write(dockerfile)
-        _download_udf_imports(imports, os.path.join(temp_dir, "imports"))
-        _run_command(["docker", "build", "-t", image_tag, "-f", dockerfile_path, temp_dir])
 
 
 def _start_resource_container(
@@ -273,160 +227,6 @@ def _ensure_resource_endpoint(resource_type, script):
         )
 
     return endpoint, status_endpoint
-
-
-def _spec_to_dockerfile(spec):
-    if not spec.code:
-        raise ValueError("spec missing code")
-    if not spec.handler:
-        raise ValueError("spec missing handler")
-    if not spec.result_type:
-        raise ValueError("spec missing result_type")
-    return _build_udf_cloud_dockerfile(
-        spec.code,
-        spec.handler,
-        list(spec.input_types),
-        spec.result_type,
-        list(spec.imports),
-        list(spec.packages),
-    )
-
-
-def _build_udf_cloud_dockerfile(
-    code, handler, input_types, result_type, imports, packages
-):
-
-    server_stub = _build_udf_cloud_server_stub(handler, input_types, result_type)
-    code_marker = _unique_heredoc_marker("UDF_CODE", [code, server_stub])
-    server_marker = _unique_heredoc_marker("UDF_SERVER", [code, server_stub])
-    pyproject = _build_udf_cloud_pyproject(packages)
-    pyproject_marker = _unique_heredoc_marker(
-        "UDF_PYPROJECT", [code, server_stub, pyproject]
-    )
-
-    lines = [
-        f"FROM {UDF_DOCKER_BASE_IMAGE}",
-        "WORKDIR /app",
-        "RUN python -m pip install --no-cache-dir uv",
-        f"RUN cat <<'{pyproject_marker}' > /app/pyproject.toml",
-        pyproject.rstrip("\n"),
-        pyproject_marker,
-        "RUN uv sync",
-    ]
-    if imports:
-        lines.extend(
-            [
-                "RUN mkdir -p /app/imports",
-                "COPY imports/ /app/imports/",
-            ]
-        )
-    lines.extend(
-        [
-            f"RUN cat <<'{code_marker}' > /app/udf.py",
-            code.rstrip("\n"),
-            code_marker,
-            f"RUN cat <<'{server_marker}' > /app/server.py",
-            server_stub.rstrip("\n"),
-            server_marker,
-            "EXPOSE 8815",
-            'CMD ["uv","run","--project","/app","python","/app/server.py"]',
-        ]
-    )
-    return "\n".join(lines) + "\n"
-
-
-def _build_udf_cloud_server_stub(handler, input_types, result_type):
-    handler_literal = _escape_python_double_quoted(handler)
-    input_types_literal = _python_string_list(input_types)
-    result_type_literal = _escape_python_double_quoted(result_type)
-    lines = [
-        "import importlib",
-        "import os",
-        "import sys",
-        "from databend_udf import UDFServer, udf as udf_decorator",
-        "",
-        'IMPORTS_DIR = "/app/imports"',
-        "",
-        "def _add_imports():",
-        "    if not os.path.isdir(IMPORTS_DIR):",
-        "        return",
-        "    sys.path.insert(0, IMPORTS_DIR)",
-        "    for name in os.listdir(IMPORTS_DIR):",
-        "        path = os.path.join(IMPORTS_DIR, name)",
-        "        if os.path.isfile(path):",
-        "            ext = os.path.splitext(name)[1].lower()",
-        '            if ext in (".zip", ".whl", ".egg"):',
-        "                sys.path.insert(0, path)",
-        "",
-        "def _load_udf():",
-        '    return importlib.import_module("udf")',
-        "",
-        "def _wrap_udf(func):",
-        (
-            f'    return udf_decorator(name="{handler_literal}", '
-            f"input_types={input_types_literal}, result_type=\"{result_type_literal}\")(func)"
-        ),
-        "",
-        "def main():",
-        "    _add_imports()",
-        "    udf = _load_udf()",
-        '    address = os.getenv("UDF_SERVER_ADDR", "0.0.0.0:8815")',
-        "    server = UDFServer(location=address)",
-        f'    func = getattr(udf, "{handler_literal}")',
-        '    if not hasattr(func, "_name"):',
-        "        func = _wrap_udf(func)",
-        "    server.add_function(func)",
-        "    server.serve()",
-        "",
-        'if __name__ == "__main__":',
-        "    main()",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _build_udf_cloud_pyproject(packages):
-    dependencies = ["databend-udf"]
-    for pkg in packages:
-        trimmed = pkg.strip()
-        if trimmed:
-            dependencies.append(trimmed)
-    deps_literal = ", ".join(
-        f'"{_escape_toml_double_quoted(dep)}"' for dep in dependencies
-    )
-    return "\n".join(
-        [
-            "[project]",
-            'name = "databend-udf-app"',
-            'version = "0.1.0"',
-            f"dependencies = [{deps_literal}]",
-            "",
-        ]
-    )
-
-
-def _python_string_list(values):
-    items = ", ".join(f'"{_escape_python_double_quoted(v)}"' for v in values)
-    return f"[{items}]"
-
-
-def _escape_python_double_quoted(value):
-    return value.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def _escape_toml_double_quoted(value):
-    return value.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def _unique_heredoc_marker(base, contents):
-    suffix = 0
-    marker = base
-    while any(marker in content for content in contents):
-        suffix += 1
-        marker = f"{base}_{suffix}"
-    return marker
-
-
 
 
 def load_data_from_json():
@@ -861,9 +661,9 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         )
 
 
-class UdfService(udf_pb2_grpc.UdfServiceServicer):
-    def ApplyUdfResource(self, request, context):
-        _log("ApplyUdfResource", request)
+class ResourceService(resource_pb2_grpc.ResourceServiceServicer):
+    def ApplyResource(self, request, context):
+        _log("ApplyResource", request)
         if not _docker_available():
             context.abort(
                 grpc.StatusCode.FAILED_PRECONDITION,
@@ -884,14 +684,9 @@ class UdfService(udf_pb2_grpc.UdfServiceServicer):
                 f"failed to provision sandbox container: {exc}",
             )
 
-        return udf_pb2.ApplyUdfResourceResponse(
+        return resource_pb2.ApplyResourceResponse(
             endpoint=endpoint, headers=UDF_HEADERS
         )
-
-
-def timestamp_to_datetime(timestamp):
-    # Convert google.protobuf.Timestamp to Python datetime
-    return datetime.fromtimestamp(timestamp.seconds + timestamp.nanos / 1e9)
 
 
 def serve():
@@ -900,12 +695,14 @@ def serve():
     notification_pb2_grpc.add_NotificationServiceServicer_to_server(
         NotificationService(), server
     )
-    udf_pb2_grpc.add_UdfServiceServicer_to_server(UdfService(), server)
+    resource_pb2_grpc.add_ResourceServiceServicer_to_server(
+        ResourceService(), server
+    )
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
         notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
-        udf_pb2.DESCRIPTOR.services_by_name["UdfService"].full_name,
+        resource_pb2.DESCRIPTOR.services_by_name["ResourceService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
