@@ -69,9 +69,10 @@ pub fn normalize_series_params(
     inclusive: bool,
 ) -> Result<NormalizedSeries> {
     if matches!(series_type.remove_nullable(), DataType::Timestamp) {
-        if step < 1000 {
+        let abs_step = step.checked_abs().unwrap_or(i64::MAX);
+        if abs_step < 1000 {
             step *= 1_000_000;
-        } else if step < 1_000_000 {
+        } else if abs_step < 1_000_000 {
             step *= 1000;
         }
     }
