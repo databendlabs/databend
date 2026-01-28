@@ -18,11 +18,13 @@ use std::sync::Arc;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarFunction;
+use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::Value;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::compute_view::Compute;
@@ -373,6 +375,86 @@ fn domain_mul<T: Decimal>(
     })
 }
 
+struct DecimalBinaryCalcDomain {
+    left_size: DecimalSize,
+    right_size: DecimalSize,
+    return_size: DecimalSize,
+    arithmetic_op: ArithmeticOp,
+}
+
+impl ScalarFunctionDomain for DecimalBinaryCalcDomain {
+    fn calc_domain(&self, ctx: &FunctionContext, d: &[Domain]) -> FunctionDomain<AnyType> {
+        let (left, right) = (
+            DecimalDataType::Decimal256(self.left_size),
+            DecimalDataType::Decimal256(self.right_size),
+        );
+        let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left);
+        let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right);
+
+        let (lhs, rhs) = match (lhs, rhs) {
+            (Some(lhs), Some(rhs)) => (lhs, rhs),
+            _ => return FunctionDomain::Full,
+        };
+
+        let size = self.return_size;
+
+        let default_domain = if self.arithmetic_op == ArithmeticOp::Divide {
+            FunctionDomain::MayThrow
+        } else {
+            FunctionDomain::Full
+        };
+        {
+            match (lhs, rhs) {
+                (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal256(d2, _)) => self
+                    .arithmetic_op
+                    .calc_domain(&d1, &d2, size.precision())
+                    .map(|d| match size.data_kind() {
+                        DecimalDataKind::Decimal64 => DecimalDomain::Decimal64(
+                            SimpleDomain {
+                                min: d.min.as_i64(),
+                                max: d.max.as_i64(),
+                            },
+                            size,
+                        ),
+                        DecimalDataKind::Decimal128 => DecimalDomain::Decimal128(
+                            SimpleDomain {
+                                min: d.min.as_i128(),
+                                max: d.max.as_i128(),
+                            },
+                            size,
+                        ),
+                        DecimalDataKind::Decimal256 => DecimalDomain::Decimal256(d, size),
+                    }),
+                _ => unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs),
+            }
+        }
+        .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
+        .unwrap_or(default_domain)
+    }
+}
+
+struct DecimalBinaryFunctionEvaluator {
+    args_type: Vec<DataType>,
+    left_size: DecimalSize,
+    right_size: DecimalSize,
+    return_size: DecimalSize,
+    arithmetic_op: ArithmeticOp,
+}
+
+impl ScalarFunction for DecimalBinaryFunctionEvaluator {
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        let return_decimal_type = DecimalDataType::from(self.return_size);
+
+        op_decimal(
+            (&args[0], &self.args_type[0], self.left_size),
+            (&args[1], &self.args_type[1], self.right_size),
+            ctx,
+            return_decimal_type,
+            self.arithmetic_op,
+        )
+    }
+}
+
 fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: ArithmeticOp) {
     let name = format!("{:?}", arithmetic_op).to_lowercase();
 
@@ -397,149 +479,101 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
         let (left_size, right_size, return_size) =
             arithmetic_op.result_size(&decimal_a, &decimal_b)?;
 
-        let function = Function {
-            signature: FunctionSignature {
-                name: format!("{:?}", arithmetic_op).to_lowercase(),
-                args_type: args_type.clone(),
-                return_type: DataType::Decimal(return_size),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |ctx, d| {
-                    let (left, right) = (
-                        DecimalDataType::Decimal256(left_size),
-                        DecimalDataType::Decimal256(right_size),
-                    );
-                    let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left);
-                    let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right);
-
-                    let (lhs, rhs) = match (lhs, rhs) {
-                        (Some(lhs), Some(rhs)) => (lhs, rhs),
-                        _ => return FunctionDomain::Full,
-                    };
-
-                    let size = return_size;
-
-                    let default_domain = if arithmetic_op == ArithmeticOp::Divide {
-                        FunctionDomain::MayThrow
-                    } else {
-                        FunctionDomain::Full
-                    };
-                    {
-                        match (lhs, rhs) {
-                            (
-                                DecimalDomain::Decimal256(d1, _),
-                                DecimalDomain::Decimal256(d2, _),
-                            ) => arithmetic_op
-                                .calc_domain(&d1, &d2, size.precision())
-                                .map(|d| match size.data_kind() {
-                                    DecimalDataKind::Decimal64 => DecimalDomain::Decimal64(
-                                        SimpleDomain {
-                                            min: d.min.as_i64(),
-                                            max: d.max.as_i64(),
-                                        },
-                                        size,
-                                    ),
-                                    DecimalDataKind::Decimal128 => DecimalDomain::Decimal128(
-                                        SimpleDomain {
-                                            min: d.min.as_i128(),
-                                            max: d.max.as_i128(),
-                                        },
-                                        size,
-                                    ),
-                                    DecimalDataKind::Decimal256 => {
-                                        DecimalDomain::Decimal256(d, size)
-                                    }
-                                }),
-                            _ => {
-                                unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)
-                            }
-                        }
-                    }
-                    .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
-                    .unwrap_or(default_domain)
-                }),
-                eval: Box::new(move |args, ctx| {
-                    let return_decimal_type = DecimalDataType::from(return_size);
-
-                    op_decimal(
-                        (&args[0], &args_type[0], left_size),
-                        (&args[1], &args_type[1], right_size),
-                        ctx,
-                        return_decimal_type,
-                        arithmetic_op,
-                    )
-                }),
-            },
+        let signature = FunctionSignature {
+            name: format!("{:?}", arithmetic_op).to_lowercase(),
+            args_type: args_type.clone(),
+            return_type: DataType::Decimal(return_size),
         };
-        if has_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
+
+        let calc_domain = DecimalBinaryCalcDomain {
+            left_size,
+            right_size,
+            return_size,
+            arithmetic_op,
+        };
+        let eval = {
+            let args_type = args_type.clone();
+            DecimalBinaryFunctionEvaluator {
+                args_type,
+                left_size,
+                right_size,
+                return_size,
+                arithmetic_op,
+            }
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            calc_domain,
+            eval,
+            has_nullable,
+        )))
     }));
 
     registry.register_function_factory(&name, factory);
 }
 
 pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("minus", FunctionFactory::Closure(Box::new(|_params, args_type| {
-        if args_type.len() != 1 {
-            return None;
-        }
+    registry.register_function_factory(
+        "minus",
+        FunctionFactory::Closure(Box::new(|_params, args_type| {
+            if args_type.len() != 1 {
+                return None;
+            }
 
-        let is_nullable = args_type[0].is_nullable();
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_decimal() {
-            return None;
-        }
+            let is_nullable = args_type[0].is_nullable();
+            let arg_type = args_type[0].remove_nullable();
+            if !arg_type.is_decimal() {
+                return None;
+            }
 
-        let function = Function {
-            signature: FunctionSignature {
+            let signature = FunctionSignature {
                 name: "minus".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: arg_type.clone(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, d| match &d[0] {
-                    Domain::Decimal(DecimalDomain::Decimal64(d, size)) => {
-                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal64(
-                            SimpleDomain {
-                                min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i64::DECIMAL_MAX), // Only -MIN could overflow
-                            },
-                            *size,
-                        )))
-                    }
-                    Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
-                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
-                            SimpleDomain {
-                                min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i128::DECIMAL_MAX), // Only -MIN could overflow
-                            },
-                            *size,
-                        )))
-                    }
-                    Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
-                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
-                            SimpleDomain {
-                                min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i256::DECIMAL_MAX), // Only -MIN could overflow
-                            },
-                            *size,
-                        )))
-                    }
-                    _ => unreachable!(),
-                }),
-                eval: Box::new(unary_minus_decimal),
-            },
-        };
+            };
 
-        if is_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
+            Some(Arc::new(Function::with_passthrough_nullable(
+                signature,
+                minus_domain,
+                unary_minus_decimal,
+                is_nullable,
+            )))
+        })),
+    );
+}
+
+fn minus_domain(_: &FunctionContext, d: &[Domain]) -> FunctionDomain<AnyType> {
+    match &d[0] {
+        Domain::Decimal(DecimalDomain::Decimal64(d, size)) => {
+            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal64(
+                SimpleDomain {
+                    min: -d.max,
+                    max: d.min.checked_neg().unwrap_or(i64::DECIMAL_MAX),
+                },
+                *size,
+            )))
         }
-    })));
+        Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
+            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+                SimpleDomain {
+                    min: -d.max,
+                    max: d.min.checked_neg().unwrap_or(i128::DECIMAL_MAX),
+                },
+                *size,
+            )))
+        }
+        Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
+            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+                SimpleDomain {
+                    min: -d.max,
+                    max: d.min.checked_neg().unwrap_or(i256::DECIMAL_MAX),
+                },
+                *size,
+            )))
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

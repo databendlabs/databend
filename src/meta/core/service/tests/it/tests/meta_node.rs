@@ -23,7 +23,6 @@ use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::NodeId;
-use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use maplit::btreeset;
@@ -159,7 +158,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
     dbg!(&tc.config.raft_config.raft_dir);
 
     // boot up a single-node cluster
-    let mn = MetaNode::<TokioRuntime>::boot(&tc.config, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::boot(&tc.config).await?;
 
     tc.meta_node = Some(mn.clone());
 
@@ -194,7 +193,7 @@ pub(crate) async fn start_meta_node_non_voter(
 
     let raft_conf = &tc.config.raft_config;
 
-    let mn = MetaNode::<TokioRuntime>::open(raft_conf, BUILD_INFO.semver()).await?;
+    let mn = MetaNode::<TokioRuntime>::open(raft_conf).await?;
 
     // // Disable heartbeat, because in openraft v0.8 heartbeat is a blank log.
     // // Log index becomes non-deterministic.

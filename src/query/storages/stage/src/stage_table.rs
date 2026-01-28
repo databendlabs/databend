@@ -34,6 +34,7 @@ use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::init_stage_operator;
@@ -60,6 +61,10 @@ impl StageTable {
         let table_info_placeholder = TableInfo {
             // `system.stage` is used to forbid the user to select * from text files.
             name: "stage".to_string(),
+            meta: TableMeta {
+                engine: "STAGE".to_string(),
+                ..Default::default()
+            },
             ..Default::default()
         }
         .set_schema(table_info.schema());

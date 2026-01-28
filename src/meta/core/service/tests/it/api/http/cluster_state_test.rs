@@ -59,7 +59,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
     let mn1 = MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
@@ -68,10 +68,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let res = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
@@ -111,12 +108,10 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
-    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config, BUILD_INFO.semver()).await?;
-    let _ = mn1
-        .join_cluster(&tc1.config.raft_config, tc1.config.grpc.advertise_address())
-        .await?;
+    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
+    let _ = mn1.join_cluster(&tc1.config).await?;
 
     info!("--- write sample data to the cluster ---");
     {
@@ -151,7 +146,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
             .await?;
     }
 
-    let status = mn0.get_status().await;
+    let status = mn0
+        .get_status(BUILD_INFO.semver().to_string().as_str())
+        .await;
 
     println!(
         "status = {}",
@@ -254,18 +251,16 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let addr_str = "127.0.0.1:30003";
-
     let tc0 = MetaSrvTestContext::new(0);
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    tc1.config.admin.api_address = addr_str.to_owned();
-    tc1.config.admin.tls.key = TEST_SERVER_KEY.to_owned();
-    tc1.config.admin.tls.cert = TEST_SERVER_CERT.to_owned();
+    // tc1.admin already has an OS-assigned port from MetaSrvTestContext::new()
+    tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
+    tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config, BUILD_INFO.semver()).await?;
+    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
     let meta_handle_1 =
@@ -275,23 +270,29 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let c = tc1.config.clone();
     let _ = meta_handle_1
         .request(move |mn| {
-            let fu = async move {
-                mn.join_cluster(&c.raft_config, c.grpc.advertise_address())
-                    .await
-            };
+            let fu = async move { mn.join_cluster(&c).await };
             Box::pin(fu)
         })
         .await??;
 
+    // Extract port from the OS-assigned address for URL construction
+    let admin_port = tc1
+        .admin
+        .api_address
+        .split(':')
+        .next_back()
+        .expect("admin address should have port")
+        .to_string();
+
     let http_cfg = HttpServiceConfig {
-        admin: tc1.config.admin.clone(),
+        admin: tc1.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
-    let mut srv = HttpService::create(http_cfg, meta_handle_1);
+    let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);
 
     // test cert is issued for "localhost"
-    let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
-    let node_url = || format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
+    let state_url = format!("https://{}:{}/v1/cluster/status", TEST_CN_NAME, admin_port);
+    let node_url = format!("https://{}:{}/v1/cluster/nodes", TEST_CN_NAME, admin_port);
 
     // load cert
     let mut buf = Vec::new();
@@ -310,7 +311,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     {
         let timeout_at = Instant::now() + Duration::from_secs(5);
         while Instant::now() < timeout_at {
-            let resp = client.get(state_url()).send().await;
+            let resp = client.get(&state_url).send().await;
             if resp.is_ok() {
                 break;
             }
@@ -319,7 +320,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         }
     }
 
-    let resp = client.get(state_url()).send().await;
+    let resp = client.get(&state_url).send().await;
     assert!(resp.is_ok());
 
     let resp = resp.unwrap();
@@ -331,7 +332,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
     assert_ne!(state_json["leader"].as_object(), None);
 
-    let resp_nodes = client.get(node_url()).send().await;
+    let resp_nodes = client.get(&node_url).send().await;
     assert!(resp_nodes.is_ok());
 
     let resp_nodes = resp_nodes.unwrap();

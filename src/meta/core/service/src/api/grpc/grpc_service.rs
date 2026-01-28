@@ -20,6 +20,8 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
+use databend_base::counter::Counted;
+use databend_base::counter::Counter;
 use databend_base::futures::ElapsedFutureExt;
 use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
@@ -50,13 +52,9 @@ use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
-use databend_common_metrics::count::Count;
-use databend_common_metrics::count::WithCount;
-use databend_common_tracing::start_trace_for_remote_request;
 use display_more::DisplayOptionExt;
 use fastrace::func_name;
 use fastrace::func_path;
-use fastrace::prelude::*;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::TryChunksError;
@@ -87,7 +85,7 @@ use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 
 /// Guard type for in-flight read requests.
-type InFlightReadGuard = WithCount<InFlightRead, ()>;
+type InFlightReadGuard = Counted<InFlightRead, ()>;
 
 /// A request that is currently being processed.
 ///
@@ -183,9 +181,9 @@ impl<SP: SpawnApi> Drop for MetaServiceImpl<SP> {
 }
 
 impl<SP: SpawnApi> MetaServiceImpl<SP> {
-    pub fn create(meta_handle: Weak<MetaHandle<SP>>) -> Self {
+    pub fn create(version: Version, meta_handle: Weak<MetaHandle<SP>>) -> Self {
         Self {
-            version: meta_handle.upgrade().unwrap().version.clone(),
+            version,
             token: GrpcToken::create(),
             meta_handle,
         }
@@ -399,20 +397,22 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
         self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = start_trace_for_remote_request(func_path!(), &request);
-        let query_id = get_query_id(&request);
+        let query_id = get_query_id(&request).map(|s| s.to_owned());
 
-        let fu = async move {
-            let _guard = InFlightWrite::guard();
+        SP::trace_request(func_path!(), request, |request| async move {
+            let fu = async move {
+                let _guard = InFlightWrite::guard();
 
-            let reply = self.handle_kv_api(request).await?;
+                let reply = self.handle_kv_api(request).await?;
 
-            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+                network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-            Ok(Response::new(reply))
-        };
+                Ok(Response::new(reply))
+            };
 
-        SP::track_future(fu.in_span(root), vec![TrackingData::new_query_id(query_id)]).await
+            SP::track_future(fu, vec![TrackingData::new_query_id(query_id)]).await
+        })
+        .await
     }
 
     type KvReadV1Stream = BoxStream<StreamItem>;
@@ -424,24 +424,25 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
         self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = start_trace_for_remote_request(func_path!(), &request);
-        let query_id = get_query_id(&request);
-        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
-        let in_flight = InFlightRequest::new(req.type_name(), format!("ReadRequest: {:?}", req));
+        let query_id = get_query_id(&request).map(|s| s.to_owned());
 
-        let fut = async {
-            let (endpoint, strm) = self.handle_kv_read_v1(req).await?;
+        SP::trace_request(func_path!(), request, |request| async move {
+            let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+            let in_flight =
+                InFlightRequest::new(req.type_name(), format!("ReadRequest: {:?}", req));
 
-            let strm = in_flight.track(strm);
+            let fut = async {
+                let (endpoint, strm) = self.handle_kv_read_v1(req).await?;
 
-            let mut resp = Response::new(strm.boxed());
-            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
-            Ok(resp)
-        };
+                let strm = in_flight.track(strm);
 
-        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
-            query_id,
-        )])
+                let mut resp = Response::new(strm.boxed());
+                GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+                Ok(resp)
+            };
+
+            SP::track_future(fut, vec![TrackingData::new_query_id(query_id)]).await
+        })
         .await
     }
 
@@ -459,28 +460,28 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
         self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = start_trace_for_remote_request(func_path!(), &request);
-        let query_id = get_query_id(&request);
-        let in_flight = InFlightRequest::new(
-            "kv_list",
-            format!(
-                "KvList: prefix={}, limit={}",
-                request.get_ref().prefix,
-                request.get_ref().limit.display()
-            ),
-        );
-        let req = request.into_inner();
+        let query_id = get_query_id(&request).map(|s| s.to_owned());
 
-        let fut = async {
-            let strm = self.handle_kv_list(req.prefix, req.limit).await?;
+        SP::trace_request(func_path!(), request, |request| async move {
+            let in_flight = InFlightRequest::new(
+                "kv_list",
+                format!(
+                    "KvList: prefix={}, limit={}",
+                    request.get_ref().prefix,
+                    request.get_ref().limit.display()
+                ),
+            );
+            let req = request.into_inner();
 
-            let strm = in_flight.track(strm);
-            Ok(Response::new(strm.boxed()))
-        };
+            let fut = async {
+                let strm = self.handle_kv_list(req.prefix, req.limit).await?;
 
-        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
-            query_id,
-        )])
+                let strm = in_flight.track(strm);
+                Ok(Response::new(strm.boxed()))
+            };
+
+            SP::track_future(fut, vec![TrackingData::new_query_id(query_id)]).await
+        })
         .await
     }
 
@@ -497,24 +498,23 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
     ) -> Result<Response<Self::KvGetManyStream>, Status> {
         self.check_token(request.metadata())?;
 
-        let root = start_trace_for_remote_request(func_path!(), &request);
-        let query_id = get_query_id(&request);
+        let query_id = get_query_id(&request).map(|s| s.to_owned());
 
-        let in_flight = InFlightRequest::new("kv_get_many", "KvGetMany".to_string());
-        let input = request
-            .into_inner()
-            .inspect_ok(|req| network_metrics::incr_recv_bytes(req.encoded_len() as u64));
+        SP::trace_request(func_path!(), request, |request| async move {
+            let in_flight = InFlightRequest::new("kv_get_many", "KvGetMany".to_string());
+            let input = request
+                .into_inner()
+                .inspect_ok(|req| network_metrics::incr_recv_bytes(req.encoded_len() as u64));
 
-        let fut = async {
-            let strm = self.handle_kv_get_many(input).await?;
+            let fut = async {
+                let strm = self.handle_kv_get_many(input).await?;
 
-            let strm = in_flight.track(strm);
-            Ok(Response::new(strm.boxed()))
-        };
+                let strm = in_flight.track(strm);
+                Ok(Response::new(strm.boxed()))
+            };
 
-        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
-            query_id,
-        )])
+            SP::track_future(fut, vec![TrackingData::new_query_id(query_id)]).await
+        })
         .await
     }
 
@@ -524,26 +524,25 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
     ) -> Result<Response<TxnReply>, Status> {
         self.check_token(request.metadata())?;
 
-        let root = start_trace_for_remote_request(func_path!(), &request);
-        let query_id = get_query_id(&request);
+        let query_id = get_query_id(&request).map(|s| s.to_owned());
 
-        let fut = async move {
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = InFlightWrite::guard();
+        SP::trace_request(func_path!(), request, |request| async move {
+            let fut = async move {
+                network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+                let _guard = InFlightWrite::guard();
 
-            let (endpoint, reply) = self.handle_txn(request).await?;
+                let (endpoint, reply) = self.handle_txn(request).await?;
 
-            network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
+                network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-            let mut resp = Response::new(reply);
-            GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
+                let mut resp = Response::new(reply);
+                GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
 
-            Ok(resp)
-        };
+                Ok(resp)
+            };
 
-        SP::track_future(fut.in_span(root), vec![TrackingData::new_query_id(
-            query_id,
-        )])
+            SP::track_future(fut, vec![TrackingData::new_query_id(query_id)]).await
+        })
         .await
     }
 
@@ -678,7 +677,9 @@ impl<SP: SpawnApi> MetaService for MetaServiceImpl<SP> {
 
         let meta_handle = self.try_get_meta_handle()?;
 
-        let status = meta_handle.handle_get_status().await?;
+        let status = meta_handle
+            .handle_get_status(&self.version.to_string())
+            .await?;
 
         let resp = ClusterStatus {
             id: status.id,

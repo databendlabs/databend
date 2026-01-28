@@ -365,12 +365,11 @@ fn get_partitions(
 }
 
 fn get_positive_integer(val: &Scalar, display_name: &str) -> Result<usize> {
-    if let Scalar::Number(number) = val {
-        if let Some(number) = number.integer_to_i128() {
-            if number > 0 {
-                return Ok(number as usize);
-            }
-        }
+    if let Scalar::Number(number) = val
+        && let Some(number) = number.integer_to_i128()
+        && number > 0
+    {
+        return Ok(number as usize);
     }
     Err(ErrorCode::BadDataValueType(format!(
         "The argument of aggregate function {} must be positive int",

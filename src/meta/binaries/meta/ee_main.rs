@@ -15,10 +15,10 @@
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 mod entry;
-mod kvapi;
 
 use databend_common_base::mem_allocator::DefaultGlobalAllocator;
-use databend_meta::configs::Config;
+use databend_meta_cli_config::Config;
+use databend_meta_cli_config::MetaConfig;
 use databend_meta_runtime::DatabendRuntime;
 
 #[global_allocator]
@@ -26,7 +26,9 @@ pub static GLOBAL_ALLOCATOR: DefaultGlobalAllocator = DefaultGlobalAllocator::cr
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-    let conf = Config::load()?;
-    conf.validate()?;
+    let conf: MetaConfig = Config::load(true)?
+        .try_into()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
+    conf.service.validate()?;
     entry::entry::<DatabendRuntime>(conf).await
 }

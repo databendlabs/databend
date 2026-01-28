@@ -17,10 +17,6 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(associated_type_defaults)]
-#![allow(clippy::let_and_return)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::manual_is_multiple_of)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;

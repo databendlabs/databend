@@ -14,15 +14,16 @@
 
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarFunction;
 use databend_common_expression::Value;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
@@ -58,13 +59,13 @@ pub fn register_decimal_hash_with_seed<H: HashFunctionWithSeed>(registry: &mut F
     );
 }
 
-pub trait HashFunction {
+pub trait HashFunction: 'static {
     type Hasher: Hasher + Default;
     const IS_HASH_32: bool = false;
     fn name() -> &'static str;
 }
 
-pub trait HashFunctionWithSeed: Hasher {
+pub trait HashFunctionWithSeed: Hasher + 'static {
     fn name() -> &'static str;
 
     fn with_seed(seed: u64) -> Self;
@@ -78,34 +79,23 @@ fn decimal_hash_factory_1_arg<H: HashFunction>(args_type: &[DataType]) -> Option
         _ => return None,
     };
 
-    let function = Function {
-        signature: FunctionSignature {
-            name: H::name().to_string(),
-            args_type: [DataType::Decimal(size)].into(),
-            return_type: if H::IS_HASH_32 {
-                DataType::Number(u32::data_type())
-            } else {
-                DataType::Number(u64::data_type())
-            },
-        },
-        eval: FunctionEval::Scalar {
-            calc_domain: Box::new(|_, _| FunctionDomain::Full),
-            eval: Box::new(move |args, ctx| {
-                let arg = args[0].clone();
-                if H::IS_HASH_32 {
-                    decimal_hash::<H::Hasher, UInt32Type>(arg, ctx, |res| res.try_into().unwrap())
-                } else {
-                    decimal_hash::<H::Hasher, UInt64Type>(arg, ctx, |res| res)
-                }
-            }),
+    let signature = FunctionSignature {
+        name: H::name().to_string(),
+        args_type: [DataType::Decimal(size)].into(),
+        return_type: if H::IS_HASH_32 {
+            DataType::Number(u32::data_type())
+        } else {
+            DataType::Number(u64::data_type())
         },
     };
 
-    if nullable {
-        Some(Arc::new(function.passthrough_nullable()))
-    } else {
-        Some(Arc::new(function))
-    }
+    let eval = DecimalHash::<H> { _h: PhantomData };
+    Some(Arc::new(Function::with_passthrough_nullable(
+        signature,
+        FunctionDomain::Full,
+        eval,
+        nullable,
+    )))
 }
 
 fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
@@ -133,34 +123,22 @@ fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
         _ => return None,
     };
 
-    let function = Function {
-        signature: FunctionSignature {
-            name: H::name().to_string(),
-            args_type: [DataType::Decimal(size), DataType::Number(seed_type)].into(),
-            return_type: DataType::Number(u64::data_type()),
-        },
-        eval: FunctionEval::Scalar {
-            calc_domain: Box::new(|_, _| FunctionDomain::Full),
-            eval: Box::new(move |args, ctx| {
-                let arg = args[0].clone();
-                let seed = args[1].clone();
-                with_integer_mapped_type!(|NUM| match seed_type {
-                    NumberDataType::NUM =>
-                        decimal_hash_with_seed::<H, NumberType<NUM>>(arg, seed, ctx, |s| s as _),
-                    NumberDataType::Float32 =>
-                        decimal_hash_with_seed::<H, NumberType<F32>>(arg, seed, ctx, |s| s.0 as _),
-                    NumberDataType::Float64 =>
-                        decimal_hash_with_seed::<H, NumberType<F64>>(arg, seed, ctx, |s| s.0 as _),
-                })
-            }),
-        },
+    let signature = FunctionSignature {
+        name: H::name().to_string(),
+        args_type: [DataType::Decimal(size), DataType::Number(seed_type)].into(),
+        return_type: DataType::Number(u64::data_type()),
     };
 
-    if nullable {
-        Some(Arc::new(function.passthrough_nullable()))
-    } else {
-        Some(Arc::new(function))
-    }
+    let eval = DecimalHashWithSeed::<H> {
+        seed_type,
+        _h: PhantomData,
+    };
+    Some(Arc::new(Function::with_passthrough_nullable(
+        signature,
+        FunctionDomain::Full,
+        eval,
+        nullable,
+    )))
 }
 
 fn decimal_hash_typed<H, R, D, T>(
@@ -299,5 +277,55 @@ where
                 decimal_hash_typed_with_seed::<H, S, _, _>(arg, seed, ctx, size.scale(), cast)
             }
         }
+    }
+}
+
+#[derive(Clone)]
+struct DecimalHash<H> {
+    _h: PhantomData<fn(H)>,
+}
+
+impl<H> ScalarFunction for DecimalHash<H>
+where H: HashFunction
+{
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        let arg = args[0].clone();
+        if H::IS_HASH_32 {
+            decimal_hash::<H::Hasher, UInt32Type>(arg, ctx, |res| res.try_into().unwrap())
+        } else {
+            decimal_hash::<H::Hasher, UInt64Type>(arg, ctx, |res| res)
+        }
+    }
+}
+
+#[derive(Clone)]
+struct DecimalHashWithSeed<H> {
+    seed_type: NumberDataType,
+    _h: PhantomData<fn(H)>,
+}
+
+impl<H> ScalarFunction for DecimalHashWithSeed<H>
+where H: HashFunctionWithSeed
+{
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        let arg = &args[0];
+        let seed = &args[1];
+        with_integer_mapped_type!(|NUM| match self.seed_type {
+            NumberDataType::NUM =>
+                decimal_hash_with_seed::<H, NumberType<NUM>>(arg.clone(), seed.clone(), ctx, |s| s
+                    as _),
+            NumberDataType::Float32 => decimal_hash_with_seed::<H, NumberType<F32>>(
+                arg.clone(),
+                seed.clone(),
+                ctx,
+                |s| s.0 as _
+            ),
+            NumberDataType::Float64 => decimal_hash_with_seed::<H, NumberType<F64>>(
+                arg.clone(),
+                seed.clone(),
+                ctx,
+                |s| s.0 as _
+            ),
+        })
     }
 }

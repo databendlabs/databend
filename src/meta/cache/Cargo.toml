@@ -32,6 +32,18 @@ sub-cache = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-meta-test-harness = { workspace = true }
+fastrace = { workspace = true }
+log = { workspace = true }
+test-harness = { workspace = true }
+tokio = { workspace = true }
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
 
 [lints]
 workspace = true

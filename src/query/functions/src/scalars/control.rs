@@ -21,7 +21,9 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::ImplByEvaluator;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
@@ -33,7 +35,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
     let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 3 || args_type.len() % 2 == 0 {
+        if args_type.len() < 3 || args_type.len().is_multiple_of(2) {
             return None;
         }
         let sig_args_type = (0..(args_type.len() - 1) / 2)
@@ -53,7 +55,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(0),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| {
+                calc_domain: domain_evaluator(|_, args_domain| {
                     let mut domain = None;
                     for cond_idx in (0..args_domain.len() - 1).step_by(2) {
                         let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
@@ -98,7 +100,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         None => args_domain.last().unwrap().clone(),
                     })
                 }),
-                eval: Box::new(|_, _| unreachable!("`if` should be handled by the `Evaluator`")),
+                eval: Box::new(ImplByEvaluator("if")),
             },
         }))
     }));

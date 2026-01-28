@@ -37,34 +37,30 @@ async fn test_features() -> anyhow::Result<()> {
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg0 = HttpServiceConfig {
-        admin: tcs[0].config.admin.clone(),
+        admin: tcs[0].admin.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
-    let mut srv0 = HttpService::create(http_cfg0, meta0.clone());
+    let mut srv0 = HttpService::create(http_cfg0, "test-version".to_string(), meta0.clone());
     srv0.do_start().await.expect("HTTP: admin api error");
 
     let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
     let http_cfg1 = HttpServiceConfig {
-        admin: tcs[1].config.admin.clone(),
+        admin: tcs[1].admin.clone(),
         config_display: format!("{:?}", tcs[1].config),
     };
-    let mut srv1 = HttpService::create(http_cfg1, meta1.clone());
+    let mut srv1 = HttpService::create(http_cfg1, "test-version".to_string(), meta1.clone());
     srv1.do_start().await.expect("HTTP: admin api error");
 
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(0));
 
-    let list_features_url = |i: usize| {
-        format!(
-            "http://{}/v1/features/list",
-            &tcs[i].config.admin.api_address
-        )
-    };
+    let list_features_url =
+        |i: usize| format!("http://{}/v1/features/list", &tcs[i].admin.api_address);
 
     let set_feature_url = |i: usize, feature: &str, enable: bool| {
         format!(
             "http://{}/v1/features/set?feature={}&enable={}",
-            &tcs[i].config.admin.api_address, feature, enable
+            &tcs[i].admin.api_address, feature, enable
         )
     };
 

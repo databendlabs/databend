@@ -18,11 +18,11 @@ use std::sync::Arc;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarFunction;
 use databend_common_expression::Value;
 use databend_common_expression::types::compute_view::Compute;
 use databend_common_expression::types::compute_view::ComputeView;
@@ -61,34 +61,23 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
 
         let mut sig_args_type = args_type.to_owned();
         sig_args_type[0] = from_type.clone();
-        let f = Function {
-            signature: FunctionSignature {
-                name,
-                args_type: sig_args_type,
-                return_type: DataType::Decimal(return_size),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    let dest_type = DecimalDataType::from(return_size);
-
-                    decimal_rounds(
-                        &args[0],
-                        ctx,
-                        dest_type,
-                        from_size.scale() as _,
-                        scale as _,
-                        round_mode,
-                    )
-                }),
-            },
+        let signature = FunctionSignature {
+            name,
+            args_type: sig_args_type,
+            return_type: DataType::Decimal(return_size),
         };
-
-        if args_type[0].is_nullable() {
-            Some(f.passthrough_nullable())
-        } else {
-            Some(f)
-        }
+        let eval = DecimalRound {
+            dest_type: DecimalDataType::from(return_size),
+            source_scale: from_size.scale() as i64,
+            target_scale: scale as i64,
+            mode: round_mode,
+        };
+        Some(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::Full,
+            eval,
+            args_type[0].is_nullable(),
+        ))
     };
 
     for m in [
@@ -115,23 +104,18 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         if !matches!(from_type, DataType::Decimal(_)) {
             return None;
         }
-        let f = Function {
-            signature: FunctionSignature {
-                name: "abs".to_string(),
-                args_type: vec![from_type.clone()],
-                return_type: from_type.clone(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| decimal_abs(&args[0], ctx)),
-            },
+        let signature = FunctionSignature {
+            name: "abs".to_string(),
+            args_type: vec![from_type.clone()],
+            return_type: from_type,
         };
 
-        if args_type[0].is_nullable() {
-            Some(f.passthrough_nullable())
-        } else {
-            Some(f)
-        }
+        Some(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::Full,
+            decimal_abs,
+            args_type[0].is_nullable(),
+        ))
     };
 
     registry.register_function_factory(
@@ -307,35 +291,42 @@ where
     })(value, ctx)
 }
 
-fn decimal_rounds(
-    arg: &Value<AnyType>,
-    ctx: &mut EvalContext,
+#[derive(Clone)]
+struct DecimalRound {
     dest_type: DecimalDataType,
     source_scale: i64,
     target_scale: i64,
     mode: RoundMode,
-) -> Value<AnyType> {
-    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
+}
 
-    if from_type.data_kind() == dest_type.data_kind() && source_scale < target_scale {
-        return arg.to_owned();
-    }
+impl ScalarFunction for DecimalRound {
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        let arg = &args[0];
+        let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
 
-    with_decimal_mapped_type!(|IN| match from_type {
-        DecimalDataType::IN(_) => {
-            let arg = arg.try_downcast().unwrap();
-            with_decimal_mapped_type!(|OUT| match dest_type {
-                DecimalDataType::OUT(size) => decimal_rounds_type::<DecimalConvert<IN, OUT>, _, _>(
-                    arg,
-                    ctx,
-                    source_scale,
-                    target_scale,
-                    mode
-                )
-                .upcast_with_type(&DataType::Decimal(size)),
-            })
+        if from_type.data_kind() == self.dest_type.data_kind()
+            && self.source_scale < self.target_scale
+        {
+            return arg.to_owned();
         }
-    })
+
+        with_decimal_mapped_type!(|IN| match from_type {
+            DecimalDataType::IN(_) => {
+                let arg = arg.try_downcast().unwrap();
+                with_decimal_mapped_type!(|OUT| match self.dest_type {
+                    DecimalDataType::OUT(size) =>
+                        decimal_rounds_type::<DecimalConvert<IN, OUT>, _, _>(
+                            arg,
+                            ctx,
+                            self.source_scale,
+                            self.target_scale,
+                            self.mode
+                        )
+                        .upcast_with_type(&DataType::Decimal(size)),
+                })
+            }
+        })
+    }
 }
 
 fn decimal_rounds_type<C, T, U>(
@@ -377,7 +368,8 @@ where
     }
 }
 
-fn decimal_abs(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
+fn decimal_abs(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg: &Value<AnyType> = &args[0];
     let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
 
     let dest_type = DecimalDataType::from(from_type.size());

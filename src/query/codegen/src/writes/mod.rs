@@ -14,8 +14,6 @@
 
 mod arithmetics_type;
 mod hilbert_lut;
-mod register;
 
 pub use arithmetics_type::*;
 pub use hilbert_lut::*;
-pub use register::*;

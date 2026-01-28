@@ -12,62 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Once;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_tracing::Config;
-use databend_common_tracing::closure_name;
-use databend_common_tracing::init_logging;
-use fastrace::prelude::*;
-
-pub fn meta_service_test_harness<F, Fut>(test: F)
-where
-    F: FnOnce() -> Fut + 'static,
-    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
-{
-    setup_test();
-
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(3)
-        .enable_all()
-        .build()
-        .unwrap();
-    let root = Span::root(closure_name::<F>(), SpanContext::random());
-    let test = test().in_span(root);
-    rt.block_on(test).unwrap();
-
-    shutdown_test();
-}
-
-#[allow(dead_code)]
-pub fn meta_service_test_harness_sync<F>(test: F)
-where F: FnOnce() -> anyhow::Result<()> + 'static {
-    setup_test();
-
-    let root = Span::root(closure_name::<F>(), SpanContext::random());
-    let _guard = root.set_local_parent();
-
-    test().unwrap();
-
-    shutdown_test();
-}
-
-fn setup_test() {
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        let mut config = Config::new_testing();
-        config.file.level = "DEBUG".to_string();
-
-        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
-        Box::leak(Box::new(guards));
-    });
-}
-
-fn shutdown_test() {
-    fastrace::flush();
-}
+pub use databend_meta_test_harness::meta_service_test_harness;
 
 pub fn since_epoch_sec() -> u64 {
     since_epoch().as_secs()

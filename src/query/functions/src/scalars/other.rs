@@ -32,7 +32,9 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::domain_evaluator;
 use databend_common_expression::error_to_null;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -187,13 +189,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| {
+                calc_domain: domain_evaluator(|_, _| {
                     FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
                         has_true: false,
                         has_false: true,
                     }))
                 }),
-                eval: Box::new(|_, _| Value::Scalar(Scalar::Boolean(false))),
+                eval: scalar_evaluator(|_, _| Value::Scalar(Scalar::Boolean(false))),
             },
         }))
     }));
@@ -374,8 +376,8 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt32),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, _| match &args[0] {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, _| match &args[0] {
                     Value::Scalar(Scalar::Number(NumberScalar::UInt32(v))) => Value::Scalar(
                         Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
                     ),
@@ -403,8 +405,8 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt32),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, _| {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(move |args, _| {
                     unreachable!(
                         "grouping function must be rewritten in type_checker, but got: {:?}",
                         args
@@ -423,11 +425,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry
@@ -452,11 +454,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry
@@ -482,11 +484,11 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
             |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
 
                 // TODO: We should cache FmtCacheEntry

@@ -17,9 +17,6 @@ use std::net::SocketAddr;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::node::Node;
-use databend_common_tracing::Config as LogConfig;
-
-use super::outer_v0::Config as OuterV0Config;
 
 /// TLS configuration for server endpoints.
 ///
@@ -76,25 +73,6 @@ impl GrpcConfig {
     }
 }
 
-/// Arguments for KV API commands.
-///
-/// This struct holds the parameters needed to execute KV API operations
-/// like upsert, get, mget, and list.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
-pub struct KvApiArgs {
-    /// Keys to operate on.
-    pub key: Vec<String>,
-
-    /// Value to store (for upsert operations).
-    pub value: String,
-
-    /// Optional TTL in seconds for the key.
-    pub expire_after: Option<u64>,
-
-    /// Prefix for list operations.
-    pub prefix: String,
-}
-
 /// Configuration for the Admin HTTP API server.
 ///
 /// This struct holds settings for the HTTP endpoint that serves administrative
@@ -108,32 +86,20 @@ pub struct AdminConfig {
     pub tls: TlsConfig,
 }
 
+/// Configuration for the meta service.
+///
+/// This struct contains only the configuration needed by the service library
+/// to run a meta node. CLI-specific fields (cmd, config_file, log, admin)
+/// are kept in the cli-config crate's `MetaConfig`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct Config {
-    pub cmd: String,
-    pub kv_api: KvApiArgs,
-    pub username: String,
-    pub password: String,
-    pub config_file: String,
-    pub log: LogConfig,
-    pub admin: AdminConfig,
+pub struct MetaServiceConfig {
     pub grpc: GrpcConfig,
     pub raft_config: RaftConfig,
 }
 
-impl Default for Config {
+impl Default for MetaServiceConfig {
     fn default() -> Self {
         Self {
-            cmd: "".to_string(),
-            kv_api: KvApiArgs::default(),
-            username: "".to_string(),
-            password: "".to_string(),
-            config_file: "".to_string(),
-            log: LogConfig::default(),
-            admin: AdminConfig {
-                api_address: "127.0.0.1:28002".to_string(),
-                tls: TlsConfig::default(),
-            },
             grpc: GrpcConfig {
                 api_address: "127.0.0.1:9191".to_string(),
                 advertise_host: None,
@@ -144,18 +110,7 @@ impl Default for Config {
     }
 }
 
-impl Config {
-    /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`OuterV0Config`] and then convert from [`OuterV0Config`] to [`Config`].
-    ///
-    /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub fn load() -> Result<Self, MetaStartupError> {
-        let cfg = OuterV0Config::load(true)?
-            .try_into()
-            .map_err(MetaStartupError::InvalidConfig)?;
-
-        Ok(cfg)
-    }
-
+impl MetaServiceConfig {
     pub fn validate(&self) -> Result<(), MetaStartupError> {
         let _a: SocketAddr = self.grpc.api_address.parse().map_err(|e| {
             MetaStartupError::InvalidConfig(format!(
@@ -164,29 +119,6 @@ impl Config {
             ))
         })?;
         Ok(())
-    }
-
-    /// # NOTE
-    ///
-    /// This function is served for tests only.
-    pub fn load_for_test() -> Result<Self, MetaStartupError> {
-        let cfg: Self = OuterV0Config::load(false)?
-            .try_into()
-            .map_err(MetaStartupError::InvalidConfig)?;
-        Ok(cfg)
-    }
-
-    /// Transform config into the outer style.
-    ///
-    /// This function should only be used for end-users.
-    ///
-    /// For examples:
-    ///
-    /// - system config table
-    /// - HTTP Handler
-    /// - tests
-    pub fn into_outer(self) -> OuterV0Config {
-        OuterV0Config::from(self)
     }
 
     /// Create `Node` from config

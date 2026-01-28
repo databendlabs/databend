@@ -16,13 +16,12 @@ use std::sync::Arc;
 
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_types::MetaStartupError;
-use databend_common_version::BUILD_INFO;
 use log::error;
 use log::info;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use crate::configs::Config;
+use crate::configs::MetaServiceConfig;
 use crate::meta_node::meta_handle::MetaFnOnce;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
@@ -43,7 +42,7 @@ impl<RT: RuntimeApi> MetaWorker<RT> {
     /// The returned `MetaHandle` keeps the runtime alive and provides
     /// an interface to communicate with the `MetaNode`.
     pub async fn create_meta_worker(
-        config: Config,
+        config: MetaServiceConfig,
         runtime: Arc<RT>,
     ) -> Result<MetaHandle<RT>, MetaStartupError> {
         let rt_for_handle = runtime.clone();
@@ -55,7 +54,7 @@ impl<RT: RuntimeApi> MetaWorker<RT> {
             async move {
                 let (handle_tx, worker_rx) = mpsc::channel(1024);
 
-                let res = MetaNode::<RT>::start(&config, BUILD_INFO.semver()).await;
+                let res = MetaNode::<RT>::start(&config).await;
                 let meta_node = match res {
                     Ok(x) => x,
                     Err(e) => {
@@ -65,14 +64,13 @@ impl<RT: RuntimeApi> MetaWorker<RT> {
                 };
 
                 let id = meta_node.raft_store.id;
-                let version = meta_node.version.clone();
 
                 let worker = MetaWorker::<RT> {
                     worker_rx,
                     meta_node,
                 };
 
-                let handle = MetaHandle::<RT>::new(id, version, handle_tx, rt_for_handle);
+                let handle = MetaHandle::<RT>::new(id, handle_tx, rt_for_handle);
 
                 ret_tx
                     .send(handle)

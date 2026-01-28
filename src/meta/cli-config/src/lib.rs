@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! CLI configuration parsing layer for databend-meta.
+//!
+//! This crate provides the "outer" configuration struct that maps to CLI arguments
+//! and config files, then converts to the inner [`databend_meta::configs::MetaServiceConfig`].
+//!
+//! The separation allows the service library (`databend-meta`) to remain free of
+//! CLI-specific dependencies like `clap` and `serfig`.
+
 use std::env;
 use std::sync::LazyLock;
 
@@ -39,18 +47,16 @@ use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::VERGEN_BUILD_TIMESTAMP;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_common_version::VERGEN_RUSTC_SEMVER;
+use databend_meta::configs::AdminConfig;
+use databend_meta::configs::GrpcConfig;
+use databend_meta::configs::MetaServiceConfig;
+use databend_meta::configs::TlsConfig;
+use databend_meta::version::MIN_METACLI_SEMVER;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
-
-use super::inner::AdminConfig;
-use super::inner::Config as InnerConfig;
-use super::inner::GrpcConfig;
-use super::inner::KvApiArgs;
-use super::inner::TlsConfig;
-use crate::version::MIN_METACLI_SEMVER;
 
 /// Full version string for databend-meta including build info, min client version, and data version
 static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
@@ -81,42 +87,8 @@ pub struct Config {
     /// - `ver`: print version and quit.
     ///
     /// - `show-config`: print effective config and quit.
-    ///
-    /// - `kvapi::<cmd>`: run kvapi command. The command can be `upsert`, `delete`, `get`, `mget` and `list`:
-    ///
-    /// -    `--cmd kvapi::upsert --key    foo --value bar`
-    ///
-    /// -    `--cmd kvapi::delete --key    foo`
-    ///
-    /// -    `--cmd kvapi::get    --key    foo`
-    ///
-    /// -    `--cmd kvapi::mget   --key    foo bar`
-    ///
-    /// -    `--cmd kvapi::list   --prefix foo/`
     #[clap(long, default_value = "")]
     pub cmd: String,
-
-    /// The key sent to databend-meta server and is only used when running with `--cmd kvapi::*`
-    #[clap(long, default_value = "")]
-    pub key: Vec<String>,
-
-    /// The value sent to databend-meta server and is only used when running with `--cmd kvapi::upsert`
-    #[clap(long, default_value = "")]
-    pub value: String,
-
-    /// The seconds after which the value should expire. Only used when running with `--cmd kvapi::upsert`
-    #[clap(long)]
-    pub expire_after: Option<u64>,
-
-    /// The prefix sent to databend-meta server and is only used when running with `--cmd kvapi::list`
-    #[clap(long, default_value = "")]
-    pub prefix: String,
-
-    #[clap(long, default_value = "root")]
-    pub username: String,
-
-    #[clap(long, default_value = "")]
-    pub password: String,
 
     #[clap(long, short = 'c', default_value = "")]
     pub config_file: String,
@@ -166,11 +138,45 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        InnerConfig::default().into()
+        MetaConfig::default().into()
     }
 }
 
-impl TryFrom<Config> for InnerConfig {
+/// Full startup configuration for databend-meta.
+///
+/// This struct combines CLI-specific fields (cmd, config_file, log, admin)
+/// with the core service configuration. It's used by the binary entry point,
+/// while the inner `MetaServiceConfig` is used by the service library.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct MetaConfig {
+    /// Command to run (e.g., "ver", "show-config")
+    pub cmd: String,
+    /// Path to the config file
+    pub config_file: String,
+    /// Logging configuration
+    pub log: InnerLogConfig,
+    /// Admin HTTP API configuration
+    pub admin: AdminConfig,
+    /// Core service configuration (grpc + raft)
+    pub service: MetaServiceConfig,
+}
+
+impl Default for MetaConfig {
+    fn default() -> Self {
+        Self {
+            cmd: "".to_string(),
+            config_file: "".to_string(),
+            log: InnerLogConfig::default(),
+            admin: AdminConfig {
+                api_address: "127.0.0.1:28002".to_string(),
+                tls: TlsConfig::default(),
+            },
+            service: MetaServiceConfig::default(),
+        }
+    }
+}
+
+impl TryFrom<Config> for MetaConfig {
     type Error = String;
 
     fn try_from(outer: Config) -> Result<Self, Self::Error> {
@@ -182,16 +188,8 @@ impl TryFrom<Config> for InnerConfig {
             log.file.dir = outer.log_dir.to_string();
         }
 
-        Ok(InnerConfig {
+        Ok(MetaConfig {
             cmd: outer.cmd,
-            kv_api: KvApiArgs {
-                key: outer.key,
-                value: outer.value,
-                expire_after: outer.expire_after,
-                prefix: outer.prefix,
-            },
-            username: outer.username,
-            password: outer.password,
             config_file: outer.config_file,
             log,
             admin: AdminConfig {
@@ -201,29 +199,25 @@ impl TryFrom<Config> for InnerConfig {
                     key: outer.admin_tls_server_key,
                 },
             },
-            grpc: GrpcConfig {
-                api_address: outer.grpc_api_address,
-                advertise_host: outer.grpc_api_advertise_host,
-                tls: TlsConfig {
-                    cert: outer.grpc_tls_server_cert,
-                    key: outer.grpc_tls_server_key,
+            service: MetaServiceConfig {
+                grpc: GrpcConfig {
+                    api_address: outer.grpc_api_address,
+                    advertise_host: outer.grpc_api_advertise_host,
+                    tls: TlsConfig {
+                        cert: outer.grpc_tls_server_cert,
+                        key: outer.grpc_tls_server_key,
+                    },
                 },
+                raft_config: outer.raft_config.into(),
             },
-            raft_config: outer.raft_config.into(),
         })
     }
 }
 
-impl From<InnerConfig> for Config {
-    fn from(inner: InnerConfig) -> Self {
+impl From<MetaConfig> for Config {
+    fn from(inner: MetaConfig) -> Self {
         Self {
             cmd: inner.cmd,
-            key: inner.kv_api.key,
-            value: inner.kv_api.value,
-            expire_after: inner.kv_api.expire_after,
-            prefix: inner.kv_api.prefix,
-            username: inner.username,
-            password: inner.password,
             config_file: inner.config_file,
             log_level: inner.log.file.level.clone(),
             log_dir: inner.log.file.dir.clone(),
@@ -231,11 +225,11 @@ impl From<InnerConfig> for Config {
             admin_api_address: inner.admin.api_address,
             admin_tls_server_cert: inner.admin.tls.cert,
             admin_tls_server_key: inner.admin.tls.key,
-            grpc_api_address: inner.grpc.api_address,
-            grpc_api_advertise_host: inner.grpc.advertise_host,
-            grpc_tls_server_cert: inner.grpc.tls.cert,
-            grpc_tls_server_key: inner.grpc.tls.key,
-            raft_config: inner.raft_config.into(),
+            grpc_api_address: inner.service.grpc.api_address,
+            grpc_api_advertise_host: inner.service.grpc.advertise_host,
+            grpc_tls_server_cert: inner.service.grpc.tls.cert,
+            grpc_tls_server_key: inner.service.grpc.tls.key,
+            raft_config: inner.service.raft_config.into(),
         }
     }
 }
@@ -784,5 +778,84 @@ impl From<InnerLogHistoryConfig> for StorageLogConfig {
             log_storage_level: value.level,
             log_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::io::Write;
+
+    use tempfile::tempdir;
+
+    use crate::Config;
+    use crate::MetaConfig;
+
+    #[test]
+    fn test_load_config() -> anyhow::Result<()> {
+        let _ = env_logger::try_init();
+
+        let d = tempdir()?;
+        let file_path = d.path().join("foo.toml");
+        let mut file = File::create(&file_path)?;
+        write!(
+            file,
+            r#"
+log_level = "ERROR"
+log_dir = "foo/logs"
+metric_api_address = "127.0.0.1:8000"
+admin_api_address = "127.0.0.1:9000"
+admin_tls_server_cert = "admin tls cert"
+admin_tls_server_key = "admin tls key"
+grpc_api_address = "127.0.0.1:10000"
+grpc_tls_server_cert = "grpc server cert"
+grpc_tls_server_key = "grpc server key"
+
+[raft_config]
+config_id = "raft config id"
+raft_api_host = "127.0.0.1"
+raft_listen_host = "127.0.0.1"
+raft_api_port = 11000
+raft_dir = "raft dir"
+no_sync = true
+snapshot_logs_since_last = 1000
+heartbeat_interval = 2000
+install_snapshot_timeout = 3000
+wait_leader_timeout = 3000
+single = false
+join = ["j1", "j2"]
+id = 20
+sled_tree_prefix = "sled_foo"
+cluster_name = "foo_cluster"
+             "#
+        )?;
+
+        temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
+            let cfg: MetaConfig = Config::load(false)
+                .expect("load must success")
+                .try_into()
+                .expect("conversion must success");
+            assert_eq!(cfg.log.file.level, "ERROR");
+            assert_eq!(cfg.log.file.dir, "foo/logs");
+            assert_eq!(cfg.admin.api_address, "127.0.0.1:9000");
+            assert_eq!(cfg.admin.tls.cert, "admin tls cert");
+            assert_eq!(cfg.admin.tls.key, "admin tls key");
+            assert_eq!(cfg.service.grpc.api_address, "127.0.0.1:10000");
+            assert_eq!(cfg.service.grpc.tls.cert, "grpc server cert");
+            assert_eq!(cfg.service.grpc.tls.key, "grpc server key");
+            assert_eq!(cfg.service.raft_config.raft_listen_host, "127.0.0.1");
+            assert_eq!(cfg.service.raft_config.raft_api_port, 11000);
+            assert_eq!(cfg.service.raft_config.raft_dir, "raft dir");
+            assert_eq!(cfg.service.raft_config.snapshot_logs_since_last, 1000);
+            assert_eq!(cfg.service.raft_config.heartbeat_interval, 2000);
+            assert_eq!(cfg.service.raft_config.install_snapshot_timeout, 3000);
+            assert_eq!(cfg.service.raft_config.wait_leader_timeout, 3000);
+            assert!(!cfg.service.raft_config.single);
+            assert_eq!(cfg.service.raft_config.join, vec!["j1", "j2"]);
+            assert_eq!(cfg.service.raft_config.id, 20);
+            assert_eq!(cfg.service.raft_config.cluster_name, "foo_cluster");
+        });
+
+        Ok(())
     }
 }

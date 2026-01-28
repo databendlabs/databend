@@ -117,6 +117,22 @@ impl SpawnApi for DatabendRuntime {
 
         req
     }
+
+    fn trace_request<'a, T, F, Fut, R>(
+        name: &'static str,
+        request: tonic::Request<T>,
+        f: F,
+    ) -> BoxFuture<'a, R>
+    where
+        F: FnOnce(tonic::Request<T>) -> Fut,
+        Fut: Future<Output = R> + Send + 'a,
+        R: Send + 'a,
+    {
+        use fastrace::prelude::*;
+
+        let span = databend_common_tracing::start_trace_for_remote_request(name, &request);
+        Box::pin(f(request).in_span(span))
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

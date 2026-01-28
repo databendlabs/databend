@@ -21,17 +21,17 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
+use databend_meta_test_harness::make_grpc_client;
+use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_test_harness::start_metasrv_cluster;
 use log::debug;
 use test_harness::test;
 use tokio::time::sleep;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::make_grpc_client;
-
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cache_basic() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -93,7 +93,7 @@ async fn test_cache_basic() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cache_when_leader_down() -> anyhow::Result<()> {
-    let mut tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
     debug!("foofoo");
 

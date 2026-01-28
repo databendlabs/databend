@@ -47,7 +47,7 @@ pub struct LocalMetaService {
     /// For debugging
     name: String,
 
-    pub config: configs::Config,
+    pub config: configs::MetaServiceConfig,
 
     /// Kept alive for shutdown; dropped when `LocalMetaService` is dropped.
     _grpc_server: Option<Box<dyn Send + Sync>>,
@@ -113,7 +113,7 @@ impl LocalMetaService {
         };
 
         let raft_port = next_port();
-        let mut config = configs::Config::default();
+        let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = 0;
 
@@ -137,11 +137,6 @@ impl LocalMetaService {
             config.grpc.advertise_host = Some(host.to_string());
         }
 
-        {
-            let http_port = next_port();
-            config.admin.api_address = format!("{}:{}", host, http_port);
-        }
-
         info!("new LocalMetaService({}) with config: {:?}", name, config);
 
         // Clean up the raft dir if it exists.
@@ -153,8 +148,7 @@ impl LocalMetaService {
         let runtime = RT::new_embedded("meta-io-rt-embedded");
         let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
-        let mut grpc_server =
-            GrpcServer::create(config.raft_config.id, config.grpc.clone(), meta_handle);
+        let mut grpc_server = GrpcServer::create(&config, version.clone(), meta_handle);
         grpc_server.do_start().await?;
 
         let client = Self::grpc_client(&config, version).await?;
@@ -172,7 +166,7 @@ impl LocalMetaService {
 }
 
 impl LocalMetaService {
-    pub fn rm_raft_dir(config: &configs::Config, msg: impl fmt::Display + Copy) {
+    pub fn rm_raft_dir(config: &configs::MetaServiceConfig, msg: impl fmt::Display + Copy) {
         let raft_dir = &config.raft_config.raft_dir;
 
         info!("{}: about to remove raft_dir: {:?}", msg, raft_dir);
@@ -186,7 +180,7 @@ impl LocalMetaService {
     }
 
     async fn grpc_client(
-        config: &configs::Config,
+        config: &configs::MetaServiceConfig,
         version: Version,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         let addr = config.grpc.api_address.clone();

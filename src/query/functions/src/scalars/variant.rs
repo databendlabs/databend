@@ -35,6 +35,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::domain_evaluator;
+use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
@@ -111,18 +113,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "parse_json",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data) {
-                if !ctx.func_ctx.disable_variant_check {
-                    ctx.set_error(output.len(), err.to_string());
-                }
+            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data)
+                && !ctx.func_ctx.disable_variant_check
+            {
+                ctx.set_error(output.len(), err.to_string());
             }
             output.commit_row();
         }),
@@ -132,16 +134,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         "parse_json",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
-            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data) {
-                if !ctx.func_ctx.disable_variant_check {
-                    ctx.set_error(output.len(), err.to_string());
-                }
+            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data)
+                && !ctx.func_ctx.disable_variant_check
+            {
+                ctx.set_error(output.len(), err.to_string());
             }
             output.commit_row();
         }),
@@ -151,11 +153,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_parse_json",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
@@ -173,11 +175,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_parse_json",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.builder.data) {
                 Ok(_) => {
@@ -193,11 +195,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "check_json",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             // Variant value may be an invalid JSON, convert them to string and then check.
             let val = RawJsonb::new(s).to_string();
@@ -212,11 +214,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "check_json",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<StringType>>(|s, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match parse_owned_jsonb(s.as_bytes()) {
                 Ok(_) => output.push_null(),
@@ -270,8 +272,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Variant)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, false)),
             },
         }))
     }));
@@ -294,8 +296,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, true)),
             },
         }))
     }));
@@ -306,11 +308,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(val).get_by_name(name, false) {
                     Ok(Some(v)) => {
@@ -333,11 +335,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<VariantType>>(
             |val, idx, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
@@ -364,11 +366,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(val).get_by_name(name, true) {
                     Ok(Some(v)) => output.push(v.as_ref()),
@@ -387,11 +389,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
             |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(val).get_by_name(name, false) {
                     Ok(Some(v)) => {
@@ -422,11 +424,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<StringType>>(
             |val, idx, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 if idx < 0 || idx > i32::MAX as i64 {
                     output.push_null();
@@ -461,11 +463,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |v, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => match RawJsonb::new(v).select_array_by_path(&json_path) {
@@ -494,11 +496,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |v, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => match RawJsonb::new(v).select_first_by_path(&json_path) {
@@ -544,8 +546,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, true)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, true)),
             },
         }))
     }));
@@ -568,8 +570,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, ctx| path_predicate_fn(args, ctx, false)),
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, false)),
             },
         }))
     }));
@@ -580,11 +582,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |v, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match parse_json_path(path.as_bytes()) {
                     Ok(json_path) => match RawJsonb::new(v).select_value_by_path(&json_path) {
@@ -618,11 +620,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<StringType>>(
             |s, path, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match parse_owned_jsonb(s.as_bytes()) {
                     Ok(owned_jsonb) => match parse_json_path(path.as_bytes()) {
@@ -672,11 +674,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_boolean",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_bool() {
                 Ok(Some(res)) => output.push(res),
@@ -693,11 +695,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_integer",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_i64() {
                 Ok(Some(res)) => output.push(res),
@@ -714,11 +716,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_float",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_f64() {
                 Ok(Some(res)) => output.push(res.into()),
@@ -735,11 +737,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_str() {
                 Ok(Some(res)) => output.push(&res),
@@ -756,11 +758,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_binary",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_binary() {
                 Ok(res) => output.push(res),
@@ -776,11 +778,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_binary",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_binary() {
                 Ok(Some(res)) => output.push(&res),
@@ -797,11 +799,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_date",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_date() {
                 Ok(res) => output.push(res),
@@ -817,11 +819,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_date",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).as_date() {
                 Ok(Some(res)) => output.push(res.value),
@@ -838,11 +840,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_timestamp",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_timestamp() {
                 Ok(res) => output.push(res),
@@ -858,11 +860,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_timestamp_tz",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_timestamp_tz() {
                 Ok(res) => output.push(res),
@@ -879,11 +881,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |v, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(v).as_timestamp() {
                     Ok(Some(res)) => output.push(res.value),
@@ -902,11 +904,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
             |v, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(v).as_timestamp_tz() {
                     Ok(Some(res)) => {
@@ -926,11 +928,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_interval",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_interval() {
                 Ok(res) => output.push(res),
@@ -947,11 +949,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
             |v, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match RawJsonb::new(v).as_interval() {
                     Ok(Some(res)) => {
@@ -971,11 +973,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_array",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).is_array() {
                 Ok(true) => output.push(v.as_bytes()),
@@ -992,11 +994,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "as_object",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).is_object() {
                 Ok(true) => output.push(v.as_bytes()),
@@ -1013,11 +1015,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_null_value",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_null() {
                 Ok(res) => output.push(res),
@@ -1033,11 +1035,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_boolean",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_boolean() {
                 Ok(res) => output.push(res),
@@ -1053,11 +1055,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_integer",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_i64() {
                 Ok(res) => output.push(res),
@@ -1073,11 +1075,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_float",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_f64() {
                 Ok(res) => output.push(res),
@@ -1093,11 +1095,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_decimal",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).as_number() {
                 Ok(Some(num)) => match num {
@@ -1117,11 +1119,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_string() {
                 Ok(res) => output.push(res),
@@ -1137,11 +1139,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_array",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_array() {
                 Ok(res) => output.push(res),
@@ -1157,11 +1159,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_object",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(false);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(false);
+                return;
             }
             match RawJsonb::new(v).is_object() {
                 Ok(res) => output.push(res),
@@ -1190,7 +1192,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, args_domain| match &args_domain[0] {
+                calc_domain: domain_evaluator(|_, args_domain| match &args_domain[0] {
                     Domain::Nullable(nullable_domain) => {
                         FunctionDomain::Domain(Domain::Nullable(NullableDomain {
                             has_null: nullable_domain.has_null,
@@ -1199,7 +1201,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     _ => FunctionDomain::Domain(Domain::Undefined),
                 }),
-                eval: Box::new(|args, ctx| match &args[0] {
+                eval: scalar_evaluator(|args, ctx| match &args[0] {
                     Value::Scalar(scalar) => match scalar {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         _ => {
@@ -1275,11 +1277,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 if RawJsonb::new(val).is_null().unwrap_or_default() {
                     output.push_null();
@@ -1300,11 +1302,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_boolean",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match RawJsonb::new(v).to_bool() {
                 Ok(res) => output.push(res),
@@ -1318,11 +1320,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 let raw_jsonb = RawJsonb::new(val);
                 if let Ok(Some(s)) = raw_jsonb.as_str() {
@@ -1342,11 +1344,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 let raw_jsonb = RawJsonb::new(val);
                 if let Ok(Some(s)) = raw_jsonb.as_str() {
@@ -1365,11 +1367,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_date",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match cast_to_date(val, &ctx.func_ctx.tz) {
                 Ok(Some(date)) => output.push(date),
@@ -1386,11 +1388,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_date",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push_null();
+                return;
             }
             match cast_to_date(val, &ctx.func_ctx.tz) {
                 Ok(Some(date)) => output.push(date),
@@ -1404,11 +1406,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_timestamp(val, &ctx.func_ctx.tz) {
                     Ok(Some(ts)) => output.push(ts),
@@ -1427,11 +1429,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_timestamp(val, &ctx.func_ctx.tz) {
                     Ok(Some(ts)) => output.push(ts),
@@ -1446,11 +1448,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
                     Ok(Some(ts)) => output.push(ts),
@@ -1469,11 +1471,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampTzType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
                     Ok(Some(ts)) => output.push(ts),
@@ -1592,11 +1594,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_interval(val) {
                     Ok(Some(interval)) => output.push(months_days_micros::new(
@@ -1619,11 +1621,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_interval(val) {
                     Ok(Some(interval)) => output.push(months_days_micros::new(
@@ -1642,11 +1644,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_binary(val) {
                     Ok(Some(bin)) => output.push(&bin),
@@ -1665,11 +1667,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(
             |val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 match cast_to_binary(val) {
                     Ok(Some(bin)) => output.push(&bin),
@@ -1683,11 +1685,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "json_pretty",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let s = RawJsonb::new(val).to_pretty_string();
             output.put_str(&s);
@@ -1699,11 +1701,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "json_strip_nulls",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             match RawJsonb::new(val).strip_nulls() {
                 Ok(owned_jsonb) => {
@@ -1722,11 +1724,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -1748,11 +1750,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int32Type, VariantType>(
             |val, index, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 match RawJsonb::new(val).delete_by_index(index) {
                     Ok(owned_jsonb) => {
@@ -1772,11 +1774,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, VariantType>(
             |val, name, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 match RawJsonb::new(val).delete_by_name(name) {
                     Ok(owned_jsonb) => {
@@ -1796,12 +1798,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
             |val, pos, new_val, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 let new_value = RawJsonb::new(new_val);
                 match RawJsonb::new(val).array_insert(pos, &new_value) {
                     Ok(owned_jsonb) => {
@@ -1820,11 +1821,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_distinct",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             match RawJsonb::new(val).array_distinct() {
                 Ok(owned_jsonb) => {
@@ -1843,11 +1844,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -1869,11 +1870,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -1895,11 +1896,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -1921,11 +1922,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, GenericType<0>, BooleanType>(
             |val, item, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
@@ -1955,11 +1956,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, VariantType>(
             |val, start, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 let vals = match array_val.array_values() {
@@ -2005,12 +2006,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<VariantType, Int64Type, Int64Type, VariantType>(
             |val, start, end, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len()) {
                         output.commit_row();
                         return;
                     }
-                }
                 let array_val = RawJsonb::new(val);
                 let vals = match array_val.array_values() {
                     Ok(Some(vals)) => {
@@ -2075,11 +2075,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, GenericType<0>, NullableType<UInt64Type>>(
             |val, item, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push_null();
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
@@ -2109,11 +2109,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, GenericType<0>, VariantType>(
             |val, item, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
@@ -2150,11 +2150,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_remove_first",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2181,11 +2181,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_remove_last",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2293,11 +2293,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_compact",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2337,11 +2337,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_unique",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, UInt64Type>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(0);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.push(0);
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2367,11 +2367,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_flatten",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2424,11 +2424,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "array_reverse",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             let val = RawJsonb::new(val);
             match val.array_values() {
@@ -2468,7 +2468,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Variant)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(delete_by_keypath_fn),
             },
         }))
@@ -2479,11 +2479,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "json_typeof",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             match RawJsonb::new(v).type_of() {
                 Ok(result) => output.put_str(result),
@@ -2499,11 +2499,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "typeof",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(output.len())
+            {
+                output.commit_row();
+                return;
             }
             match RawJsonb::new(v).type_of() {
                 Ok(result) => output.put_str(result),
@@ -2523,7 +2523,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_fn),
             },
         }))
@@ -2538,7 +2538,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_fn),
             },
         };
@@ -2554,7 +2554,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_keep_null_fn),
             },
         }))
@@ -2569,7 +2569,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_keep_null_fn),
             },
         };
@@ -2588,7 +2588,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(array_construct_fn),
             },
         }))
@@ -2600,11 +2600,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -2624,11 +2624,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
             |left, right, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
@@ -2648,11 +2648,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
             |v, keys, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 match RawJsonb::new(v).exists_any_keys(keys.iter()) {
                     Ok(res) => output.push(res),
@@ -2670,11 +2670,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, ArrayType<StringType>, BooleanType>(
             |v, keys, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 match RawJsonb::new(v).exists_all_keys(keys.iter()) {
                     Ok(res) => output.push(res),
@@ -2692,11 +2692,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
             |v, key, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.push(false);
+                    return;
                 }
                 match RawJsonb::new(v).exists_all_keys(once(key)) {
                     Ok(res) => output.push(res),
@@ -2735,8 +2735,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
             },
         }))
     }));
@@ -2767,8 +2767,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| {
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, true, is_nullable)
                 }),
             },
@@ -2801,8 +2801,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| {
+                calc_domain: Box::new(FunctionDomain::MayThrow),
+                eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, false, is_nullable)
                 }),
             },

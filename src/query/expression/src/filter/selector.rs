@@ -520,7 +520,7 @@ impl<'a> Selector<'a> {
                     strict_eval: eval_options.strict_eval,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(&args, &mut ctx);
+                let result = eval.eval(&args, &mut ctx);
                 if !ctx.suppress_error {
                     EvalContext::render_error(
                         *span,

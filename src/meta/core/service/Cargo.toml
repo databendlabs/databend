@@ -7,13 +7,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[features]
-default = []
-io-uring = [
-    "databend-common-meta-sled-store/io-uring",
-    "databend-common-meta-raft-store/io-uring",
-]
-
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
@@ -21,9 +14,7 @@ arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 chrono = { workspace = true }
-clap = { workspace = true }
 databend-base = { workspace = true }
-databend-common-config = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-client = { workspace = true }
@@ -32,10 +23,6 @@ databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-metrics = { workspace = true }
-databend-common-storage = { workspace = true }
-databend-common-tracing = { workspace = true }
-databend-common-version = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -58,7 +45,6 @@ semver = { workspace = true }
 seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serfig = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -68,13 +54,13 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
-databend-common-meta-cache = { workspace = true }
 databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-schema-api-test-suite = { workspace = true }
-databend-common-meta-semaphore = { workspace = true }
+databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }
+databend-meta-test-harness = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }

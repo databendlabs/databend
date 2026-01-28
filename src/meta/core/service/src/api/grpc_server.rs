@@ -28,6 +28,7 @@ use futures::future::BoxFuture;
 use futures::future::Either;
 use futures::future::select;
 use log::info;
+use semver::Version;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tonic::transport::Identity;
@@ -35,14 +36,14 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
-use crate::configs::GrpcConfig;
+use crate::configs::MetaServiceConfig;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
 
 pub struct GrpcServer<SP: SpawnApi> {
-    node_id: u64,
-    grpc_config: GrpcConfig,
+    config: MetaServiceConfig,
+    version: Version,
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
@@ -53,15 +54,19 @@ pub struct GrpcServer<SP: SpawnApi> {
 
 impl<SP: SpawnApi> Drop for GrpcServer<SP> {
     fn drop(&mut self) {
-        info!("GrpcServer::drop: id={}", self.node_id);
+        info!("GrpcServer::drop: id={}", self.config.raft_config.id);
     }
 }
 
 impl<SP: SpawnApi> GrpcServer<SP> {
-    pub fn create(node_id: u64, grpc_config: GrpcConfig, meta_handle: Arc<MetaHandle<SP>>) -> Self {
+    pub fn create(
+        config: &MetaServiceConfig,
+        version: Version,
+        meta_handle: Arc<MetaHandle<SP>>,
+    ) -> Self {
         Self {
-            node_id,
-            grpc_config,
+            config: config.clone(),
+            version,
             meta_handle: Some(meta_handle),
             join_handle: None,
             stop_grpc_tx: None,
@@ -101,7 +106,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         // Setting to None disables the limit entirely.
         let builder = Server::builder().http2_max_pending_accept_reset_streams(Some(4096));
 
-        let tls_conf = Self::tls_config(&self.grpc_config)
+        let tls_conf = Self::tls_config(&self.config.grpc)
             .await
             .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
 
@@ -116,18 +121,19 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         };
 
         let addr = self
-            .grpc_config
+            .config
+            .grpc
             .api_address
             .parse::<std::net::SocketAddr>()?;
 
         info!("start gRPC listening: {}", addr);
 
-        let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_handle));
+        let grpc_impl = MetaServiceImpl::create(self.version.clone(), Arc::downgrade(&meta_handle));
         let grpc_srv = MetaServiceServer::new(grpc_impl)
             .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
 
-        let id = self.node_id;
+        let id = self.config.raft_config.id;
 
         let j = SP::spawn(
             async move {
@@ -215,7 +221,7 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     }
 
     async fn tls_config(
-        grpc_config: &GrpcConfig,
+        grpc_config: &crate::configs::GrpcConfig,
     ) -> Result<Option<ServerTlsConfig>, std::io::Error> {
         if grpc_config.tls.enabled() {
             let cert = tokio::fs::read(grpc_config.tls.cert.as_str()).await?;

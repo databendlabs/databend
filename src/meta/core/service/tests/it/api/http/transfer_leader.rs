@@ -38,16 +38,16 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
     assert_eq!(metrics.current_leader, Some(0));
 
     let http_cfg = HttpServiceConfig {
-        admin: tcs[0].config.admin.clone(),
+        admin: tcs[0].admin.clone(),
         config_display: format!("{:?}", tcs[0].config),
     };
-    let mut srv = HttpService::create(http_cfg, meta0.clone());
+    let mut srv = HttpService::create(http_cfg, "test-version".to_string(), meta0.clone());
     srv.do_start().await.expect("HTTP: admin api error");
 
     let transfer_url = || {
         format!(
             "http://{}/v1/ctrl/trigger_transfer_leader?to=2",
-            &tcs[0].config.admin.api_address
+            &tcs[0].admin.api_address
         )
     };
 

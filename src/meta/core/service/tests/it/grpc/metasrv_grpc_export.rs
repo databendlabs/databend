@@ -98,23 +98,33 @@ async fn test_export() -> anyhow::Result<()> {
         r#"["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":{"proposed_at_ms":1111111111111},"data":[119,111,119]}}}]"#,
     ];
 
-    // The addresses are built from random number.
-    // Wash them.
+    // The addresses are built from OS-assigned ports.
+    // Normalize them for comparison.
     let lines = lines
         .iter()
         .map(|x| {
-            Regex::new(r"29\d\d\d")
+            // Normalize port numbers in JSON "port":XXXXX format
+            Regex::new(r#""port":\d+"#)
                 .unwrap()
-                .replace_all(x, "29000")
+                .replace_all(x, r#""port":29000"#)
                 .to_string()
         })
         .map(|x| {
-            Regex::new(r"test-29\d\d\d")
+            // Normalize port numbers in address 127.0.0.1:XXXXX format
+            Regex::new(r"127\.0\.0\.1:\d+")
                 .unwrap()
-                .replace_all(&x, "test-29000")
+                .replace_all(&x, "127.0.0.1:29000")
                 .to_string()
         })
         .map(|x| {
+            // Normalize port numbers in address localhost:XXXXX format
+            Regex::new(r"localhost:\d+")
+                .unwrap()
+                .replace_all(&x, "localhost:29000")
+                .to_string()
+        })
+        .map(|x| {
+            // Normalize timestamps
             Regex::new(r"\d{13}")
                 .unwrap()
                 .replace_all(&x, "1111111111111")

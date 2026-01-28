@@ -47,11 +47,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_bitmap",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.commit_row();
+                return;
             }
             match parse_bitmap(s.as_bytes()) {
                 Ok(rb) => {
@@ -69,11 +69,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_bitmap",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.commit_row();
+                return;
             }
             let mut rb = HybridBitmap::new();
             rb.insert(arg);
@@ -149,11 +149,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_count",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|arg, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.push(0_u64);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.push(0_u64);
+                return;
             }
 
             match bitmap_len(arg) {
@@ -174,11 +174,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, StringType>(|b, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.commit_row();
+                return;
             }
             match deserialize_bitmap(b) {
                 Ok(rb) => {
@@ -199,11 +199,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, ArrayType<NumberType<u64>>>(
             |b, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.commit_row();
+                    return;
                 }
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
@@ -224,11 +224,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, UInt64Type, BooleanType>(
             |b, item, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.push(false);
+                    return;
                 }
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
@@ -248,12 +248,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, range_start, limit, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len()) {
                         builder.commit_row();
                         return;
                     }
-                }
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
@@ -274,12 +273,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, start, end, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len()) {
                         builder.commit_row();
                         return;
                     }
-                }
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let collection = rb.iter().filter(|x| x >= &start && x < &end);
@@ -300,12 +298,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
             |b, offset, length, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len()) {
                         builder.commit_row();
                         return;
                     }
-                }
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let subset_start = offset;
@@ -334,11 +331,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.push(false);
+                    return;
                 }
                 let rb = match deserialize_bitmap(b) {
                     Ok(rb) => rb,
@@ -366,11 +363,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
             |b, items, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.push(false);
-                        return;
-                    }
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(builder.len())
+                {
+                    builder.push(false);
+                    return;
                 }
                 let rb = match deserialize_bitmap(b) {
                     Ok(rb) => rb,
@@ -397,11 +394,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_max",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.push(0);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.push(0);
+                return;
             }
             let val = match deserialize_bitmap(b) {
                 Ok(rb) => match rb.max() {
@@ -424,11 +421,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_min",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.push(0);
-                    return;
-                }
+            if let Some(validity) = &ctx.validity
+                && !validity.get_bit(builder.len())
+            {
+                builder.push(0);
+                return;
             }
             let val = match deserialize_bitmap(b) {
                 Ok(rb) => match rb.min() {
@@ -497,11 +494,11 @@ fn bitmap_logic_operate(
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {
-    if let Some(validity) = &ctx.validity {
-        if !validity.get_bit(builder.len()) {
-            builder.commit_row();
-            return;
-        }
+    if let Some(validity) = &ctx.validity
+        && !validity.get_bit(builder.len())
+    {
+        builder.commit_row();
+        return;
     }
     let Some(rb1) = deserialize_bitmap(arg1)
         .map_err(|e| {

@@ -3268,8 +3268,8 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.3"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.3#71428e7e39971212eb1e2fea0a6f8f93d942ae66"
+version = "0.2.4"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.4#a0850782a466214494d97c1d761441a4af75bfea"
 dependencies = [
  "async-trait",
  "ctrlc",
@@ -3299,6 +3299,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-query",
  "databend-meta",
+ "databend-meta-cli-config",
  "databend-meta-runtime",
  "databend-query",
  "form_urlencoded",
@@ -3342,7 +3343,6 @@ name = "databend-codegen"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "itertools 0.13.0",
 ]
 
 [[package]]
@@ -4037,14 +4037,20 @@ dependencies = [
 name = "databend-common-meta-cache"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "databend-common-meta-client",
+ "databend-common-meta-kvapi",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
  "databend-meta-runtime",
+ "databend-meta-test-harness",
+ "fastrace",
  "futures",
  "log",
  "sub-cache",
+ "test-harness",
+ "tokio",
  "tonic 0.13.1",
 ]
 
@@ -4249,12 +4255,15 @@ dependencies = [
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
  "databend-meta-runtime",
+ "databend-meta-test-harness",
  "display-more 0.2.1",
+ "fastrace",
  "futures",
  "itertools 0.13.0",
  "log",
  "pretty_assertions",
  "seq-marked",
+ "test-harness",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
@@ -5446,27 +5455,22 @@ dependencies = [
  "async-trait",
  "backon",
  "chrono",
- "clap",
  "databend-base",
- "databend-common-config",
  "databend-common-grpc",
  "databend-common-meta-api",
- "databend-common-meta-cache",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
  "databend-common-meta-runtime-api",
  "databend-common-meta-schema-api-test-suite",
- "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
- "databend-common-metrics",
- "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta-admin",
  "databend-meta-runtime",
+ "databend-meta-test-harness",
  "deepsize",
  "derive_more",
  "display-more 0.2.1",
@@ -5493,7 +5497,6 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
- "serfig",
  "state-machine-api",
  "temp-env",
  "tempfile",
@@ -5546,7 +5549,6 @@ dependencies = [
  "clap",
  "databend-base",
  "databend-common-base",
- "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-client",
@@ -5556,13 +5558,13 @@ dependencies = [
  "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
- "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
  "databend-meta-admin",
+ "databend-meta-cli-config",
  "databend-meta-runtime",
  "display-more 0.2.1",
  "fastrace",
@@ -5578,12 +5580,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-meta-cli-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "databend-common-config",
+ "databend-common-meta-raft-store",
+ "databend-common-meta-types",
+ "databend-common-storage",
+ "databend-common-tracing",
+ "databend-common-version",
+ "databend-meta",
+ "env_logger 0.11.8",
+ "serde",
+ "serfig",
+ "temp-env",
+ "tempfile",
+]
+
+[[package]]
 name = "databend-meta-runtime"
 version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-meta-runtime-api",
  "databend-common-tracing",
+ "fastrace",
+ "tokio",
+ "tonic 0.13.1",
+]
+
+[[package]]
+name = "databend-meta-test-harness"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-meta-client",
+ "databend-common-meta-runtime-api",
+ "databend-common-meta-types",
+ "databend-common-tracing",
+ "databend-common-version",
+ "databend-meta",
+ "databend-meta-runtime",
+ "fastrace",
+ "log",
+ "tempfile",
  "tokio",
  "tonic 0.13.1",
 ]
@@ -13680,15 +13722,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eba9638e96ac5a324654f8d47fb71c5e21abef0f072740ed9c1d4b0801faa37"
 
 [[package]]
-name = "rio"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e98c25665909853c07874301124482754434520ab572ac6a22e90366de6685b"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "rkyv"
 version = "0.7.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14732,7 +14765,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
- "rio",
 ]
 
 [[package]]

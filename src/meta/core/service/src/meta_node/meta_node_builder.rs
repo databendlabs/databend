@@ -21,7 +21,6 @@ use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::raft_types::NodeId;
 use log::info;
-use semver::Version;
 use tokio::sync::Mutex;
 use tokio::sync::watch;
 use watcher::dispatch::Dispatcher;
@@ -39,7 +38,6 @@ pub struct MetaNodeBuilder<SP> {
     pub(crate) raft_config: Option<Config>,
     pub(crate) sto: Option<RaftStore<SP>>,
     pub(crate) raft_service_endpoint: Option<Endpoint>,
-    pub(crate) version: Option<Version>,
 }
 
 impl<SP: SpawnApi> MetaNodeBuilder<SP> {
@@ -57,10 +55,6 @@ impl<SP: SpawnApi> MetaNodeBuilder<SP> {
             .sto
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
-
-        let version = self
-            .version
-            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("version is not set")))?;
 
         let net = NetworkFactory::<SP>::new(sto.clone());
 
@@ -108,7 +102,6 @@ impl<SP: SpawnApi> MetaNodeBuilder<SP> {
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
             joined_tasks: AtomicI32::new(1),
-            version,
         });
 
         MetaNode::subscribe_metrics(meta_node.clone(), raft.metrics()).await;
@@ -144,12 +137,6 @@ impl<SP: SpawnApi> MetaNodeBuilder<SP> {
     #[must_use]
     pub fn raft_service_endpoint(mut self, endpoint: Endpoint) -> Self {
         self.raft_service_endpoint = Some(endpoint);
-        self
-    }
-
-    #[must_use]
-    pub fn version(mut self, version: Version) -> Self {
-        self.version = Some(version);
         self
     }
 }

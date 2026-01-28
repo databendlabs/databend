@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use anyerror::AnyError;
+use databend_base::counter::Counter;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
@@ -38,7 +39,6 @@ use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
-use databend_common_metrics::count::Count;
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;

@@ -17,6 +17,7 @@ members = [
     "src/meta/app-types",
     "src/meta/binaries",
     "src/meta/cache",
+    "src/meta/cli-config",
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
@@ -42,6 +43,7 @@ default-members = [
     "src/meta/app-types",
     "src/meta/binaries",
     "src/meta/cache",
+    "src/meta/cli-config",
     "src/meta/control",
     "src/meta/core/*",
     "src/meta/ee",
@@ -154,7 +156,9 @@ databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathe
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/core/service" }
 databend-meta-admin = { path = "src/meta/admin" }
+databend-meta-cli-config = { path = "src/meta/cli-config" }
 databend-meta-runtime = { path = "src/meta/runtime" }
+databend-meta-test-harness = { path = "src/meta/core/test-harness" }
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
@@ -235,9 +239,8 @@ cron = "0.12.0"
 crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
-ctrlc = { version = "3.2.3", features = ["termination"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
-databend-base = "0.2.3"
+databend-base = "0.2.4"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
 deltalake = "0.26"
@@ -369,7 +372,6 @@ openraft = { version = "0.10.0", features = [
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.10.0", features = ["tls"] }
 orc-rust = "0.6.0"
 ordered-float = { version = "5.1.0", default-features = false }
-ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "56", features = ["async"] }
@@ -446,7 +448,6 @@ smallvec = "1.13.2"
 snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
-span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 stacker = "0.1"
 state = "0.6.0"
@@ -610,7 +611,7 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "346f18c" }
-databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.3" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.4" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
