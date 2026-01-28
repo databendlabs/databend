@@ -21,20 +21,19 @@ use databend_common_meta_runtime_api::TokioRuntime;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
+use databend_meta_test_harness::MetaSrvTestContext;
+use databend_meta_test_harness::meta_service_test_harness;
 use test_harness::test;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvTestContext;
-use crate::tests::tls_constants::TEST_CA_CERT;
-use crate::tests::tls_constants::TEST_CN_NAME;
-use crate::tests::tls_constants::TEST_SERVER_CERT;
-use crate::tests::tls_constants::TEST_SERVER_KEY;
+use crate::tls_constants::TEST_CA_CERT;
+use crate::tls_constants::TEST_CN_NAME;
+use crate::tls_constants::TEST_SERVER_CERT;
+use crate::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_tls_server() -> anyhow::Result<()> {
-    let addr_str = "127.0.0.1:30002";
     let tc = MetaSrvTestContext::new(0);
 
     let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
@@ -43,7 +42,7 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
 
     let http_cfg = HttpServiceConfig {
         admin: databend_meta::configs::AdminConfig {
-            api_address: addr_str.to_string(),
+            api_address: tc.admin.api_address.clone(),
             tls: databend_meta::configs::TlsConfig {
                 cert: TEST_SERVER_CERT.to_owned(),
                 key: TEST_SERVER_KEY.to_owned(),
@@ -53,7 +52,11 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
     };
     let mut srv = HttpService::create(http_cfg, "test-version".to_string(), mh);
     // test cert is issued for "localhost"
-    let url = format!("https://{}:30002/v1/health", TEST_CN_NAME);
+    let url = format!(
+        "https://{}:{}/v1/health",
+        TEST_CN_NAME,
+        tc.admin.api_address.split(':').next_back().unwrap()
+    );
 
     // load cert
     let mut buf = Vec::new();

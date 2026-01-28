@@ -13,4 +13,3 @@
 // limitations under the License.
 
 mod http;
-mod http_service;

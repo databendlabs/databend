@@ -21,6 +21,7 @@
 //! CLI-specific dependencies like `clap` and `serfig`.
 
 use std::env;
+use std::net::SocketAddr;
 use std::sync::LazyLock;
 
 use clap::ArgAction;
@@ -176,6 +177,13 @@ impl Default for MetaConfig {
     }
 }
 
+fn parse_host_port(addr: &str) -> (String, Option<u16>) {
+    match addr.parse::<SocketAddr>() {
+        Ok(sa) => (sa.ip().to_string(), Some(sa.port())),
+        Err(_) => (addr.to_string(), None),
+    }
+}
+
 impl TryFrom<Config> for MetaConfig {
     type Error = String;
 
@@ -187,6 +195,8 @@ impl TryFrom<Config> for MetaConfig {
         if outer.log_dir != "./.databend/logs" {
             log.file.dir = outer.log_dir.to_string();
         }
+
+        let (listen_host, listen_port) = parse_host_port(&outer.grpc_api_address);
 
         Ok(MetaConfig {
             cmd: outer.cmd,
@@ -201,7 +211,8 @@ impl TryFrom<Config> for MetaConfig {
             },
             service: MetaServiceConfig {
                 grpc: GrpcConfig {
-                    api_address: outer.grpc_api_address,
+                    listen_host,
+                    listen_port,
                     advertise_host: outer.grpc_api_advertise_host,
                     tls: TlsConfig {
                         cert: outer.grpc_tls_server_cert,
@@ -216,6 +227,12 @@ impl TryFrom<Config> for MetaConfig {
 
 impl From<MetaConfig> for Config {
     fn from(inner: MetaConfig) -> Self {
+        let grpc_api_address = inner
+            .service
+            .grpc
+            .api_address()
+            .unwrap_or_else(|| inner.service.grpc.listen_host.clone());
+
         Self {
             cmd: inner.cmd,
             config_file: inner.config_file,
@@ -225,7 +242,7 @@ impl From<MetaConfig> for Config {
             admin_api_address: inner.admin.api_address,
             admin_tls_server_cert: inner.admin.tls.cert,
             admin_tls_server_key: inner.admin.tls.key,
-            grpc_api_address: inner.service.grpc.api_address,
+            grpc_api_address,
             grpc_api_advertise_host: inner.service.grpc.advertise_host,
             grpc_tls_server_cert: inner.service.grpc.tls.cert,
             grpc_tls_server_key: inner.service.grpc.tls.key,
@@ -840,7 +857,8 @@ cluster_name = "foo_cluster"
             assert_eq!(cfg.admin.api_address, "127.0.0.1:9000");
             assert_eq!(cfg.admin.tls.cert, "admin tls cert");
             assert_eq!(cfg.admin.tls.key, "admin tls key");
-            assert_eq!(cfg.service.grpc.api_address, "127.0.0.1:10000");
+            assert_eq!(cfg.service.grpc.listen_host, "127.0.0.1");
+            assert_eq!(cfg.service.grpc.listen_port, Some(10000));
             assert_eq!(cfg.service.grpc.tls.cert, "grpc server cert");
             assert_eq!(cfg.service.grpc.tls.key, "grpc server key");
             assert_eq!(cfg.service.raft_config.raft_listen_host, "127.0.0.1");

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Re-export from test-harness crate
-pub use databend_meta_test_harness::MetaSrvTestContext;
-pub use databend_meta_test_harness::make_grpc_client;
-pub use databend_meta_test_harness::start_metasrv;
-pub use databend_meta_test_harness::start_metasrv_cluster;
-pub use databend_meta_test_harness::start_metasrv_with_context;
+pub const TEST_CA_CERT: &str = "../../../tests/certs/ca.pem";
+pub const TEST_SERVER_CERT: &str = "../../../tests/certs/server.pem";
+pub const TEST_SERVER_KEY: &str = "../../../tests/certs/server.key";
+pub const TEST_CN_NAME: &str = "localhost";

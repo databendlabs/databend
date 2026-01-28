@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Re-export from test-harness crate
-pub use databend_meta_test_harness::MetaSrvTestContext;
-pub use databend_meta_test_harness::make_grpc_client;
-pub use databend_meta_test_harness::start_metasrv;
-pub use databend_meta_test_harness::start_metasrv_cluster;
-pub use databend_meta_test_harness::start_metasrv_with_context;
+//! Integration tests for SchemaApi and AutoIncrementApi against metasrv.
+//!
+//! This crate is test-only. The actual tests are in `tests/it/`.

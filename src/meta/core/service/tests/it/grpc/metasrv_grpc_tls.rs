@@ -44,7 +44,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     let r = start_metasrv_with_context(&mut tc).await;
     assert!(r.is_ok());
 
-    let addr = tc.config.grpc.api_address.clone();
+    let addr = tc.config.grpc.api_address().unwrap();
 
     let tls_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),

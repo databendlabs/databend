@@ -25,7 +25,6 @@ semver = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-version = { workspace = true }
