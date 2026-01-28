@@ -148,7 +148,7 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
 fn make_client(addresses: Vec<String>) -> Result<Arc<ClientHandle<TokioRuntime>>, CreationError> {
     let client = MetaGrpcClient::<TokioRuntime>::try_create(
         addresses, // a1() will be shut down
-        databend_common_version::BUILD_INFO.semver(),
+        databend_common_version::DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,

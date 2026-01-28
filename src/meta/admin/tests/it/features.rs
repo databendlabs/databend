@@ -22,13 +22,12 @@ use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiv
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_admin::v1::features::FeatureResponse;
+use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_test_harness::start_metasrv_cluster;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 use tokio::time::Instant;
-
-use crate::testing::meta_service_test_harness;
-use crate::tests::start_metasrv_cluster;
 
 /// Test features API.
 #[test(harness = meta_service_test_harness)]
