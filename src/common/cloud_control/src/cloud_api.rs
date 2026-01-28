@@ -20,8 +20,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::notification_client::NotificationClient;
-use crate::task_client::TaskClient;
 use crate::resource_client::ResourceClient;
+use crate::task_client::TaskClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
