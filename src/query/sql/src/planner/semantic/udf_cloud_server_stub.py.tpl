@@ -32,7 +32,14 @@ def _format_time(value):
 
 class StatusHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/health":
+        if self.path == "/health":
+            data = b"1"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if self.path != "/stats":
             self.send_response(404)
             self.end_headers()
             return

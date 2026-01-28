@@ -16,9 +16,9 @@ pub mod client_config;
 pub mod cloud_api;
 pub mod notification_client;
 pub mod notification_utils;
+pub mod resource_client;
 pub mod task_client;
 pub mod task_utils;
-pub mod resource_client;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[allow(clippy::large_enum_variant)]

@@ -7,27 +7,28 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
 
 if ! command -v uv >/dev/null 2>&1; then
-  echo "uv is required for tests/cloud_control_server" >&2
-  exit 1
+	echo "uv is required for tests/cloud_control_server" >&2
+	exit 1
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required for Sandbox UDF test" >&2
-  exit 1
+	echo "docker is required for Sandbox UDF test" >&2
+	exit 1
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required for Sandbox UDF test" >&2
-  exit 1
+	echo "jq is required for Sandbox UDF test" >&2
+	exit 1
 fi
 
 S3_ENDPOINT_URL="${S3_ENDPOINT_URL:-http://127.0.0.1:9900}"
 S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-minioadmin}"
 S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
-UDF_IMPORT_PRESIGN_EXPIRE_SECS="${UDF_IMPORT_PRESIGN_EXPIRE_SECS:-43200}"
+UDF_IMPORT_PRESIGN_EXPIRE_SECS="${UDF_IMPORT_PRESIGN_EXPIRE_SECS:-259200}"
 UDF_DOCKER_BASE_IMAGE="python:3.12-slim"
 UDF_DOCKER_RUNTIME_IMAGE="databend-udf-runtime:py312"
 UDF_QUERY_TIMEOUT_SECS="${UDF_QUERY_TIMEOUT_SECS:-180}"
+UDF_IMPORT_STAGE="${UDF_IMPORT_STAGE:-udf_import_stage}"
 
 echo "Cleaning up previous runs"
 
@@ -37,13 +38,12 @@ pkill -f "tests/cloud_control_server/simple_server.py" || true
 pkill -f "uv run --project tests/cloud_control_server" || true
 rm -rf .databend
 
-
 echo "Pre-pulling base image"
 docker pull "${UDF_DOCKER_BASE_IMAGE}"
 
 echo "Building runtime image"
 tmp_dir="$(mktemp -d)"
-cat <<EOF > "${tmp_dir}/Dockerfile"
+cat <<EOF >"${tmp_dir}/Dockerfile"
 FROM ${UDF_DOCKER_BASE_IMAGE}
 WORKDIR /app
 RUN python -m pip install --no-cache-dir uv
@@ -54,10 +54,10 @@ rm -rf "${tmp_dir}"
 UDF_DOCKER_BASE_IMAGE="${UDF_DOCKER_RUNTIME_IMAGE}"
 
 apply_query_settings() {
-  local config_file="$1"
-  local tmp_file
-  tmp_file="$(mktemp)"
-  awk '
+	local config_file="$1"
+	local tmp_file
+	tmp_file="$(mktemp)"
+	awk '
     BEGIN { added=0 }
     /^\[query\]$/ {
       print
@@ -78,13 +78,13 @@ apply_query_settings() {
         print "cloud_control_grpc_server_address = \"http://0.0.0.0:50051\""
       }
     }
-  ' "$config_file" > "$tmp_file"
-  mv "$tmp_file" "$config_file"
+  ' "$config_file" >"$tmp_file"
+	mv "$tmp_file" "$config_file"
 }
 
 for node in 1 2 3; do
-  CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
-  apply_query_settings "$CONFIG_FILE"
+	CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+	apply_query_settings "$CONFIG_FILE"
 done
 
 echo "Starting Databend Meta HA cluster (3 nodes)"
@@ -103,11 +103,11 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 
 sleep 1
 for node in 1 2 3; do
-  CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
-  PORT="909${node}"
-  echo "Starting databend-query node-${node}"
-  nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c "$CONFIG_FILE" >./.databend/query-${node}.out 2>&1 &
-  python3 scripts/ci/wait_tcp.py --timeout 30 --port "$PORT"
+	CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+	PORT="909${node}"
+	echo "Starting databend-query node-${node}"
+	nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c "$CONFIG_FILE" >./.databend/query-${node}.out 2>&1 &
+	python3 scripts/ci/wait_tcp.py --timeout 30 --port "$PORT"
 done
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
 
@@ -116,155 +116,25 @@ export UDF_DOCKER_BASE_IMAGE
 nohup env PYTHONUNBUFFERED=1 uv run --project tests/cloud_control_server python tests/cloud_control_server/simple_server.py >./.databend/cloud-control.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 50051
 
-check_response_error() {
-  local response="$1"
-  local error_msg
-  error_msg=$(echo "$response" | jq -r 'if .state == "Failed" then .error.message else empty end')
+source "$SCRIPT_PATH/test-sandbox-udf-lib.sh"
 
-  if [ -n "$error_msg" ]; then
-    echo "[Test Error] $error_msg" >&2
-    exit 1
-  fi
-}
+UDF_SETTINGS_JSON=$(jq -n --arg presign_secs "$UDF_IMPORT_PRESIGN_EXPIRE_SECS" \
+	'{udf_cloud_import_presign_expire_secs: $presign_secs}')
 
-collect_query_data() {
-  local response="$1"
-  local data next_uri page
-  local start_ts elapsed
-  data=$(echo "$response" | jq -c '.data // []')
-  next_uri=$(echo "$response" | jq -r '.next_uri // empty')
-  start_ts=$(date +%s)
-
-  while [ -n "$next_uri" ]; do
-    elapsed=$(( $(date +%s) - start_ts ))
-    if [ "$elapsed" -ge "$UDF_QUERY_TIMEOUT_SECS" ]; then
-      echo "[Test Error] query timed out after ${UDF_QUERY_TIMEOUT_SECS}s" >&2
-      exit 1
-    fi
-
-    response=$(curl -s -u root: "http://localhost:8000${next_uri}")
-    check_response_error "$response"
-    page=$(echo "$response" | jq -c '.data // []')
-    data=$(jq -c --argjson acc "$data" --argjson page "$page" -n '$acc + $page')
-    next_uri=$(echo "$response" | jq -r '.next_uri // empty')
-    if [ -n "$next_uri" ] && [ "$page" = "[]" ]; then
-      sleep 0.2
-    fi
-  done
-
-  echo "$data"
-}
-
-echo "Preparing stage imports"
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 9900
-
-create_stage_sql=$(cat <<SQL
-CREATE STAGE IF NOT EXISTS udf_import_stage
-URL = 's3://testbucket/udf-imports/'
-CONNECTION = (
-  access_key_id = '${S3_ACCESS_KEY_ID}',
-  secret_access_key = '${S3_SECRET_ACCESS_KEY}',
-  endpoint_url = '${S3_ENDPOINT_URL}'
-);
-SQL
+case_scripts=(
+	"$SCRIPT_PATH/sandbox_cases/00_prepare_imports.sh"
+	"$SCRIPT_PATH/sandbox_cases/10_metadata_imports.sh"
+	"$SCRIPT_PATH/sandbox_cases/20_numpy.sh"
+  "$SCRIPT_PATH/sandbox_cases/25_zip_whl_egg.sh"
+  "$SCRIPT_PATH/sandbox_cases/30_read_stage.sh"
+  "$SCRIPT_PATH/sandbox_cases/40_read_archive.sh"
+  "$SCRIPT_PATH/sandbox_cases/80_presign_errors.sh"
+  "$SCRIPT_PATH/sandbox_cases/90_health_stats.sh"
 )
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "$(jq -n --arg sql "$create_stage_sql" '{sql: $sql}')" )
-check_response_error "$response"
 
-tmp_dir="$(mktemp -d)"
-helper_file="${tmp_dir}/helper.py"
-cat <<'PY' > "$helper_file"
-def add_one(x: int) -> int:
-    return x + 1
-PY
-
-upload_response=$(curl -s -u root: -XPUT "http://localhost:8000/v1/upload_to_stage" \
-  -H "x-databend-stage-name: udf_import_stage" \
-  -H "x-databend-relative-path: imports" \
-  -F "file=@${helper_file}")
-upload_state=$(echo "$upload_response" | jq -r '.state')
-if [ "$upload_state" != "SUCCESS" ]; then
-  echo "[Test Error] upload to stage failed: $upload_response" >&2
-  exit 1
-fi
-
-echo "Creating python UDF"
-create_udf_sql=$(cat <<'SQL'
-CREATE OR REPLACE FUNCTION add_one(INT)
-RETURNS INT
-LANGUAGE PYTHON
-IMPORTS = ('@udf_import_stage/imports/helper.py')
-PACKAGES = ()
-HANDLER = 'add_one'
-AS $$
-# This metadata dependency is required for sandbox UDFs too; without parsing it
-# the cloud path misses the package and raises ModuleNotFoundError. TOML format
-# /// script
-# dependencies = ["humanize==4.9.0"]
-# ///
-import helper
-import humanize
-
-def add_one(x: int) -> int:
-    humanize.intcomma(x)
-    return helper.add_one(x)
-$$
-SQL
-)
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "$(jq -n --arg sql "$create_udf_sql" '{sql: $sql}')" )
-check_response_error "$response"
-
-echo "Executing python UDF"
-select_udf_sql="SELECT add_one(1) AS result"
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
-  -H 'Content-Type: application/json' \
-  -d "$(jq -n \
-    --arg sql "$select_udf_sql" \
-    --arg presign_secs "$UDF_IMPORT_PRESIGN_EXPIRE_SECS" \
-    '{sql: $sql, settings: {udf_cloud_import_presign_expire_secs: $presign_secs}}')" )
-check_response_error "$response"
-
-actual=$(collect_query_data "$response")
-expected='[["2"]]'
-
-if [ "$actual" = "$expected" ]; then
-  echo "✅ Query result matches expected"
-else
-  echo "❌ Mismatch"
-  echo "Expected: $expected"
-  echo "Actual  : $actual"
-  exit 1
-fi
-
-echo "Checking sandbox health endpoint"
-status_url=""
-for _ in $(seq 1 30); do
-  if command -v rg >/dev/null 2>&1; then
-    status_url=$(rg -o "http://[^ ]+/health" ./.databend/cloud-control.out | tail -n 1 || true)
-  else
-    status_url=$(grep -oE "http://[^ ]+/health" ./.databend/cloud-control.out | tail -n 1 || true)
-  fi
-  if [ -n "$status_url" ]; then
-    break
-  fi
-  sleep 1
+for case_script in "${case_scripts[@]}"; do
+	echo "Running $(basename "$case_script")"
+	source "$case_script"
 done
-
-if [ -z "$status_url" ]; then
-  echo "[Test Error] health endpoint not found in cloud-control.out" >&2
-  exit 1
-fi
-
-health_response=$(curl -s "$status_url")
-echo "Health response: $health_response"
-if ! echo "$health_response" | jq -e \
-  'has("request_count") and has("first_request_time") and has("last_request_time") and (.request_count >= 1)' >/dev/null; then
-  echo "[Test Error] health endpoint returned invalid payload: $health_response" >&2
-  exit 1
-fi
 
 echo "✅ Passed"
