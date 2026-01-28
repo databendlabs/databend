@@ -17,7 +17,7 @@ use std::hint::likely;
 use std::mem::size_of;
 
 use crate::ProbeState;
-use crate::aggregate::LOAD_FACTOR;
+use crate::aggregate::NEW_INDEX_LOAD_FACTOR;
 use crate::aggregate::legacy_hash_index::TableAdapter;
 use crate::aggregate::new_hash_index::bitmask::Tag;
 use crate::aggregate::new_hash_index::group::Group;
@@ -234,7 +234,7 @@ impl ExperimentalHashIndex {
     }
 
     pub fn resize_threshold(&self) -> usize {
-        (self.capacity as f64 / LOAD_FACTOR) as usize
+        (self.capacity as f64 / NEW_INDEX_LOAD_FACTOR) as usize
     }
 
     pub fn allocated_bytes(&self) -> usize {

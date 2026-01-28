@@ -49,7 +49,14 @@ use crate::aggregate::new_hash_index::ExperimentalHashIndex;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
+
 const LOAD_FACTOR: f64 = 1.5;
+
+// 75% of the capacity
+// new index can probe multiple ctrl byte by SIMD
+// we can make the hash index more
+const NEW_INDEX_LOAD_FACTOR: f64 = 1.35;
+
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
 // Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
