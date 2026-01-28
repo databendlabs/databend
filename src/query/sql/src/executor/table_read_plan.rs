@@ -168,7 +168,6 @@ impl ToReadDataSourcePlan for dyn Table {
             // Set a dummy id, will be set real id later
             table_index: usize::MAX,
             scan_id: usize::MAX,
-            block_slot: None,
         })
     }
 }

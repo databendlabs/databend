@@ -142,7 +142,6 @@ impl IPhysicalPlan for Recluster {
                     update_stream_columns: table.change_tracking_enabled(),
                     table_index: usize::MAX,
                     scan_id: usize::MAX,
-                    block_slot: None,
                 };
 
                 {
