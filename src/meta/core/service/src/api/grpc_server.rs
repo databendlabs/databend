@@ -34,6 +34,7 @@ use tokio::sync::oneshot::Sender;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tonic::transport::server::TcpIncoming;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::MetaServiceConfig;
@@ -88,6 +89,26 @@ impl<SP: SpawnApi> GrpcServer<SP> {
     }
 
     pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+        let addr = self
+            .config
+            .grpc
+            .api_address
+            .parse::<std::net::SocketAddr>()?;
+
+        let incoming = TcpIncoming::bind(addr)
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
+        self.do_start_with_incoming(incoming).await
+    }
+
+    pub async fn do_start_with_incoming(
+        &mut self,
+        incoming: TcpIncoming,
+    ) -> Result<(), MetaNetworkError> {
+        let addr = incoming
+            .local_addr()
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
         info!("GrpcServer::start");
 
         let meta_handle = self.meta_handle.clone().unwrap();
@@ -120,12 +141,6 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             builder
         };
 
-        let addr = self
-            .config
-            .grpc
-            .api_address
-            .parse::<std::net::SocketAddr>()?;
-
         info!("start gRPC listening: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(self.version.clone(), Arc::downgrade(&meta_handle));
@@ -150,7 +165,9 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         let fu = async move {
             let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
 
-            let res = router.serve_with_shutdown(addr, shutdown_fut).await;
+            let res = router
+                .serve_with_incoming_shutdown(incoming, shutdown_fut)
+                .await;
 
             info!(
                 "meta-service gRPC(on {}) task returned res: {:?}",
