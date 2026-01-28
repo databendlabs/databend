@@ -175,21 +175,22 @@ impl PlanFragment {
                 DataSource::Table(data_source_plan) => {
                     // Redistribute partitions of ReadDataSourcePlan.
                     let partitions = &data_source_plan.parts;
-                    let use_block_mod = partitions.kind == PartitionsShuffleKind::BlockMod;
+                    let use_block_mod = matches!(partitions.kind, PartitionsShuffleKind::BlockMod(_));
                     let partition_reshuffle = partitions.reshuffle(executors.clone())?;
 
                     for (executor_id, parts) in partition_reshuffle {
                         let mut source = data_source_plan.clone();
                         source.parts = parts;
 
-                        // For BlockMod shuffle, compute block_slot based on executor position
+                        // For BlockMod shuffle, set the slot info in the shuffle kind
                         if use_block_mod {
                             let num_slots = executors_sorted.len();
                             let slot = executors_sorted
                                 .iter()
                                 .position(|e| e.id == executor_id)
                                 .unwrap_or(0) as u32;
-                            source.block_slot = Some(BlockSlotDescription { num_slots, slot });
+                            let block_slot = BlockSlotDescription { num_slots, slot };
+                            source.parts.kind = PartitionsShuffleKind::BlockMod(Some(block_slot));
                         }
 
                         executor_partitions

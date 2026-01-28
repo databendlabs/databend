@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_table_meta::meta::BlockSlotDescription;
 
 use crate::plan::InternalColumn;
 use crate::plan::PartStatistics;
@@ -45,11 +44,6 @@ pub struct DataSourcePlan {
 
     pub table_index: usize,
     pub scan_id: usize,
-
-    /// Block slot for block-level shuffle (BlockMod).
-    /// Computed at coordinator and passed to executors.
-    #[serde(default)]
-    pub block_slot: Option<BlockSlotDescription>,
 }
 
 impl DataSourcePlan {

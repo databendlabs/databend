@@ -94,7 +94,7 @@ async fn apply_snapshot_pruning(
         cache_key,
         segment_locs.len(),
         0,
-        None, // block_slot
+        None, // block_slot (extracted from shuffle_kind if needed)
         None, // shuffle_kind
     )?;
     prune_pipeline.set_max_threads(1);

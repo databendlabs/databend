@@ -182,7 +182,7 @@ impl FuseTable {
                                 "Using BlockMod shuffle: segments={}, nodes={}, threshold={}",
                                 segment_len, nodes_num, threshold
                             );
-                            PartitionsShuffleKind::BlockMod
+                            PartitionsShuffleKind::BlockMod(None)
                         } else {
                             // Default: use Mod shuffle kind for cache affinity at segment level
                             info!(
@@ -307,8 +307,11 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        // Get block_slot from plan (computed at coordinator during redistribution)
-        let block_slot = plan.block_slot.clone();
+        // Extract block_slot from shuffle kind if it's BlockMod
+        let block_slot = match &plan.parts.kind {
+            PartitionsShuffleKind::BlockMod(slot) => slot.clone(),
+            _ => None,
+        };
 
         match segment_format {
             FuseSegmentFormat::Row => {
