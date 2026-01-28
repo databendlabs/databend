@@ -156,10 +156,17 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
+    /// Deprecated, will be removed later.
+    /// Original cluster key as a string. Use `cluster_key_v2` instead.
     pub cluster_key: Option<String>,
-    /// A sequential number that uniquely identifies changes to the cluster key.
-    /// This value increments by 1 each time the cluster key is created or modified,
-    /// ensuring a unique identifier for each version of the cluster key.
+    /// Cluster key for the main branch, including an id.
+    /// The `u32` is the cluster key id of the main branch, uniquely identifying each version.
+    pub cluster_key_v2: Option<(u32, String)>,
+    /// Global monotonically increasing sequence for cluster key changes, to
+    /// ensuring a unique identifier for each version of cluster key.
+    ///
+    /// This sequence is shared across the main branch and all branches, and is
+    /// incremented whenever a cluster key is created or altered on any branch.
     /// It remains unchanged when the cluster key is dropped.
     pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
@@ -237,10 +244,14 @@ impl Display for SnapshotRefType {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BranchInfo {
     pub name: String,
     pub info: SnapshotRef,
+    // Branch schema is derived from its snapshot
+    // and should not be persisted in table meta.
+    pub schema: Arc<TableSchema>,
+    pub cluster_key_meta: Option<(u32, String)>,
 }
 
 impl BranchInfo {
@@ -254,6 +265,37 @@ impl BranchInfo {
 
     pub fn branch_type(&self) -> SnapshotRefType {
         self.info.typ.clone()
+    }
+}
+
+impl TableMeta {
+    /// Returns the cluster key defined on the main branch, if any.
+    pub fn cluster_key_meta(&self) -> Option<(u32, String)> {
+        // - Prefer `cluster_key_v2` if present (branch-aware)
+        // - Otherwise fallback to old `cluster_key` + global `cluster_key_seq`
+        self.cluster_key_v2.clone().or_else(|| {
+            self.cluster_key
+                .as_ref()
+                .map(|k| (self.cluster_key_seq, k.clone()))
+        })
+    }
+
+    pub fn cluster_key_str(&self) -> Option<&str> {
+        if let Some((_, ref key)) = self.cluster_key_v2 {
+            Some(key.as_str())
+        } else {
+            self.cluster_key.as_deref()
+        }
+    }
+
+    pub fn cluster_key_id(&self) -> Option<u32> {
+        if let Some((id, _)) = &self.cluster_key_v2 {
+            Some(*id)
+        } else if self.cluster_key.is_some() {
+            Some(self.cluster_key_seq)
+        } else {
+            None
+        }
     }
 }
 
@@ -382,11 +424,9 @@ impl TableInfo {
         self
     }
 
+    /// Returns the cluster key defined on the main branch, if any.
     pub fn cluster_key(&self) -> Option<(u32, String)> {
-        self.meta
-            .cluster_key
-            .clone()
-            .map(|k| (self.meta.cluster_key_seq, k))
+        self.meta.cluster_key_meta()
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
@@ -396,46 +436,20 @@ impl TableInfo {
             .unwrap_or(default)
     }
 
-    pub fn get_table_ref(&self, typ: Option<&SnapshotRefType>, name: &str) -> Result<&SnapshotRef> {
+    pub fn get_table_ref(&self, name: &str) -> Result<&SnapshotRef> {
         let Some(table_ref) = self.meta.refs.get(name) else {
             return Err(ErrorCode::UnknownReference(format!(
                 "Unknown reference '{}' in table {}",
                 name, self.desc
             )));
         };
-        let ref_type = &table_ref.typ;
-        if let Some(typ) = typ {
-            if ref_type != typ {
-                return Err(ErrorCode::MismatchedReferenceType(format!(
-                    "'{}' is a {} reference, please use 'AT({} => {})' instead.",
-                    name, ref_type, ref_type, name,
-                )));
-            }
-        }
         if table_ref.expire_at.is_some_and(|v| v < Utc::now()) {
             return Err(ErrorCode::ReferenceExpired(format!(
                 "{} '{}' in table {} is expired",
-                ref_type, name, self.desc,
+                table_ref.typ, name, self.desc,
             )));
         }
         Ok(table_ref)
-    }
-
-    pub fn get_branch_info_by_id(&self, id: u64) -> Result<BranchInfo> {
-        self.meta
-            .refs
-            .iter()
-            .find(|(_, r)| r.id == id)
-            .map(|(name, info)| BranchInfo {
-                name: name.clone(),
-                info: info.clone(),
-            })
-            .ok_or_else(|| {
-                ErrorCode::UnknownReference(format!(
-                    "Unknown reference '{}' in table {}",
-                    id, self.desc
-                ))
-            })
     }
 }
 
@@ -465,6 +479,7 @@ impl Default for TableMeta {
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
             cluster_key: None,
+            cluster_key_v2: None,
             cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),
@@ -1439,6 +1454,7 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableMeta;
 
     #[test]
     fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {
@@ -1483,6 +1499,62 @@ mod tests {
                 table_id: 2,
                 file: "".to_string(),
             });
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_cluster_key_meta() -> databend_common_exception::Result<()> {
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+
+            assert_eq!(table_meta.cluster_key_meta(), None);
+            assert_eq!(table_meta.cluster_key_id(), None);
+            assert_eq!(table_meta.cluster_key_str(), None);
+        }
+
+        // only cluster_key
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: None,
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((2, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(2));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: None,
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
+        }
+
+        // both cluster_key and cluster_key_v2
+        {
+            let table_meta = TableMeta {
+                cluster_key: Some("(a)".to_string()),
+                cluster_key_v2: Some((1, "(a)".to_string())),
+                cluster_key_seq: 2,
+                ..Default::default()
+            };
+            assert_eq!(table_meta.cluster_key_meta(), Some((1, "(a)".to_string())));
+            assert_eq!(table_meta.cluster_key_id(), Some(1));
+            assert_eq!(table_meta.cluster_key_str(), Some("(a)"));
         }
         Ok(())
     }

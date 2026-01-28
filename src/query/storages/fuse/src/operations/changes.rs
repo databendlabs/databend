@@ -287,21 +287,15 @@ impl FuseTable {
         }
 
         let table_schema = self.schema_with_stream();
-        let (cluster_keys, cluster_key_meta) =
-            if !self.is_native() || self.cluster_key_meta().is_none() {
-                (vec![], None)
-            } else {
-                (
-                    self.linear_cluster_keys(ctx.clone()),
-                    self.cluster_key_meta(),
-                )
-            };
+        let cluster_key_meta = self.cluster_key_meta();
+        let (cluster_keys, cluster_key_meta) = if !self.is_native() || cluster_key_meta.is_none() {
+            (vec![], None)
+        } else {
+            (self.linear_cluster_keys(ctx.clone()), cluster_key_meta)
+        };
         let bloom_index_cols = self.bloom_index_cols();
-        let ngram_args = Self::create_ngram_index_args(
-            &self.table_info.meta,
-            &self.table_info.meta.schema,
-            false,
-        )?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
 
         info!(
             "[FUSE-CHANGE-TRACKING] prune snapshot block start, at node {}",

@@ -910,7 +910,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .collect();
         let total_columns: Vec<u64> = database_tables
             .iter()
-            .map(|v| v.get_table_info().schema().fields().len() as u64)
+            .map(|v| v.schema().fields().len() as u64)
             .collect();
         let engines: Vec<String> = database_tables
             .iter()
@@ -950,9 +950,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .map(|v| {
                 v.get_table_info()
                     .meta
-                    .cluster_key
-                    .clone()
-                    .unwrap_or_else(|| "".to_owned())
+                    .cluster_key_str()
+                    .unwrap_or_default()
+                    .to_string()
             })
             .collect();
         let is_transients: Vec<String> = database_tables

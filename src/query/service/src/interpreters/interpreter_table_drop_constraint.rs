@@ -20,11 +20,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::plans::DropTableConstraintPlan;
-use databend_common_storages_basic::view_table::VIEW_ENGINE;
-use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -59,35 +58,26 @@ impl Interpreter for DropTableConstraintInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        let mut table_info = tbl.get_table_info().clone();
+        let table_info = tbl.get_table_info();
         let engine = table_info.engine();
-        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-            return Err(ErrorCode::TableEngineNotSupported(format!(
+        let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
+            ErrorCode::TableEngineNotSupported(format!(
                 "{}.{} engine is {} that doesn't support alter",
                 &self.plan.database, &self.plan.table, engine
-            )));
-        }
+            ))
+        })?;
         if table_info.db_type != DatabaseType::NormalDB {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "{}.{} doesn't support alter",
                 &self.plan.database, &self.plan.table
             )));
         }
+
+        let mut new_table_meta = table_info.meta.clone();
+        new_table_meta.drop_constraint(&self.plan.constraint_name)?;
+
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-
-        table_info
-            .meta
-            .drop_constraint(&self.plan.constraint_name)?;
-
-        let new_table_meta = table_info.meta.clone();
-        commit_table_meta(
-            &self.ctx,
-            tbl.as_ref(),
-            &table_info,
-            new_table_meta,
-            catalog,
-        )
-        .await?;
+        update_table_meta(fuse_table, &new_table_meta, catalog).await?;
         Ok(PipelineBuildResult::create())
     }
 }

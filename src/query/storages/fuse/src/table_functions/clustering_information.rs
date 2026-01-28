@@ -19,9 +19,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -111,19 +111,20 @@ impl SimpleArgFunc for ClusteringInformation {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let tenant_id = ctx.get_tenant();
+        let (table_name, branch_name) = parse_table_name(args.table_name.as_str())?;
+        let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
+            .get_table_with_batch(
+                &current_catalog,
                 args.database_name.as_str(),
-                args.table_name.as_str(),
+                &table_name,
+                branch_name.as_deref(),
+                None,
             )
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         ClusteringInformationImpl::new(ctx.clone(), tbl)
-            .get_clustering_info(&args.cluster_key)
+            .get_clustering_info(&args.cluster_key, branch_name)
             .await
     }
 }
@@ -146,12 +147,19 @@ impl<'a> ClusteringInformationImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
+    async fn get_clustering_info(
+        &self,
+        cluster_key: &Option<String>,
+        branch_name: Option<String>,
+    ) -> Result<DataBlock> {
         match (self.table.cluster_type(), cluster_key) {
             (Some(ClusterType::Hilbert), None) => self.get_hilbert_clustering_info().await,
             (None, None) => Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table {}",
-                self.table.table_info.desc
+                "Unclustered table {}{}",
+                self.table.table_info.desc,
+                branch_name
+                    .map(|b| format!(" on branch '{}'", b))
+                    .unwrap_or_default(),
             ))),
             _ => {
                 // Enforces linear clustering evaluation of keys, allowing users to examine clustering
@@ -178,8 +186,8 @@ impl<'a> ClusteringInformationImpl<'a> {
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
-                if a.is_some() && a.unwrap() == &cluster_key {
-                    default_cluster_key_id = self.table.cluster_key_meta.clone().map(|v| v.0);
+                if a.is_some() && a.unwrap() == cluster_key {
+                    default_cluster_key_id = self.table.cluster_key_id();
                 }
                 (cluster_key, exprs)
             }
@@ -189,8 +197,8 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .iter()
                     .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
                     .collect();
-                default_cluster_key_id = self.table.cluster_key_meta.clone().map(|v| v.0);
-                (a.clone(), exprs)
+                default_cluster_key_id = self.table.cluster_key_id();
+                (a.to_string(), exprs)
             }
             _ => {
                 unreachable!("Unclustered table {}", self.table.table_info.desc);

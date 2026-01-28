@@ -1,0 +1,127 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_branch_alter
+
+statement ok
+CREATE DATABASE test_branch_alter
+
+statement ok
+USE test_branch_alter
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a')
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev
+
+## Branch can have different schema from main
+statement ok
+ALTER TABLE t1/dev ADD COLUMN c INT
+
+query I
+SELECT c FROM t1/dev ORDER BY a
+----
+NULL
+
+query error 1065
+SELECT c FROM t1
+
+statement ok
+ALTER TABLE t1/dev DROP COLUMN b
+
+query error 1065
+SELECT b FROM t1/dev
+
+query T
+SELECT b FROM t1 ORDER BY a
+----
+a
+
+## MODIFY COLUMN on branch
+statement ok
+ALTER TABLE t1/dev MODIFY COLUMN c VARCHAR
+
+statement ok
+INSERT INTO t1/dev VALUES (2, 'c2')
+
+query T
+SELECT c FROM t1/dev ORDER BY a
+----
+NULL
+c2
+
+statement ok
+ALTER TABLE t1/dev RENAME COLUMN a to b;
+
+query I
+SELECT b FROM t1/dev ORDER BY b;
+----
+1
+2
+
+statement ok
+ALTER TABLE t1/dev CLUSTER BY(c);
+
+query TT
+select cluster_key, type from clustering_information('test_branch_alter','t1/dev');
+----
+(c) linear
+
+query error 1118.*Unclustered table 'test_branch_alter'\.'t1'
+select cluster_key, type from clustering_information('test_branch_alter','t1');
+
+query error 1132.*Unsupported data type
+alter table t1/dev modify column c binary;
+
+statement ok
+ALTER TABLE t1/dev DROP CLUSTER KEY;
+
+query error 1118.*Unclustered table 'test_branch_alter'\.'t1' on branch 'dev'
+select cluster_key, type from clustering_information('test_branch_alter','t1/dev');
+
+statement ok
+alter table t1/dev modify column c binary;
+
+query error 1081.*Unsupported data type 'Binary NULL' for cluster by expression `c`
+ALTER TABLE t1/dev CLUSTER BY(c);
+
+## Tag references remain read-only for ALTER
+statement ok
+ALTER TABLE t1 CREATE TAG tag1;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 ADD COLUMN c INT;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 DROP COLUMN b;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 RENAME COLUMN b to c;
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 CLUSTER BY(b);
+
+statement error 3905.*READ ONLY
+ALTER TABLE t1/tag1 DROP CLUSTER KEY;
+
+statement ok
+DROP DATABASE test_branch_alter

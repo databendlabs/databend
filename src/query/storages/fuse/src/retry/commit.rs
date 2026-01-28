@@ -305,6 +305,7 @@ async fn try_rebuild_req(
             latest_table.schema().as_ref().clone(),
             merged_summary,
             merged_segments,
+            latest_table.cluster_key_meta(),
             latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;

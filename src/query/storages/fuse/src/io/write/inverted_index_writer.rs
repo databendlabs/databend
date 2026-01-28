@@ -29,13 +29,14 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::Location;
@@ -88,9 +89,12 @@ impl InvertedIndexBuilder {
     }
 }
 
-pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
-    let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
-    for index in table_meta.indexes.values() {
+pub fn create_inverted_index_builders(
+    indexes: &BTreeMap<String, TableIndex>,
+    schema: &TableSchema,
+) -> Vec<InvertedIndexBuilder> {
+    let mut inverted_index_builders = Vec::with_capacity(indexes.len());
+    for index in indexes.values() {
         if !matches!(index.index_type, TableIndexType::Inverted) {
             continue;
         }
@@ -99,7 +103,7 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
         }
         let mut index_fields = Vec::with_capacity(index.column_ids.len());
         for column_id in &index.column_ids {
-            for field in &table_meta.schema.fields {
+            for field in &schema.fields {
                 if field.column_id() == *column_id {
                     index_fields.push(DataField::from(field));
                     break;
