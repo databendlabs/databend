@@ -35,7 +35,7 @@ use crate::tests::start_metasrv_cluster;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let leader = tcs[0]
         .grpc_srv

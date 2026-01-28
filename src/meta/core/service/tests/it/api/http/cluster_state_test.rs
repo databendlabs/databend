@@ -13,48 +13,32 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_runtime_api::TokioRuntime;
+use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
-use databend_meta_admin::HttpService;
-use databend_meta_admin::HttpServiceConfig;
-use http::Method;
-use http::StatusCode;
-use http::Uri;
 use log::info;
-use poem::Endpoint;
-use poem::Request;
-use poem::Route;
-use poem::get;
-use pretty_assertions::assert_eq;
 use test_harness::test;
-use tokio::time::Instant;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
-use crate::tests::tls_constants::TEST_CA_CERT;
-use crate::tests::tls_constants::TEST_CN_NAME;
-use crate::tests::tls_constants::TEST_SERVER_CERT;
-use crate::tests::tls_constants::TEST_SERVER_KEY;
+use crate::tests::start_metasrv_cluster;
 
-/// Test http API "/cluster/nodes"
+/// Test MetaHandle::handle_get_nodes()
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
@@ -62,8 +46,9 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
     let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
-    let mn1 = MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
-    let meta_handle_1 = Arc::new(mn1);
+    let meta_handle_1 =
+        MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
+    let meta_handle_1 = Arc::new(meta_handle_1);
 
     let c = tc1.config.clone();
     let res = meta_handle_1
@@ -75,80 +60,92 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     assert!(res.is_ok());
 
-    let cluster_router = Route::new().at("/cluster/nodes", {
-        let mh = meta_handle_1.clone();
-        get(poem::endpoint::make(move |_req: Request| {
-            let mh = mh.clone();
-            async move { HttpService::<TokioRuntime>::nodes_handler(mh).await }
-        }))
-    });
-    let response = cluster_router
-        .call(
-            Request::builder()
-                .uri(Uri::from_static("/cluster/nodes"))
-                .method(Method::GET)
-                .finish(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let body = response.into_body().into_vec().await.unwrap();
-    let nodes: Vec<Node> = serde_json::from_slice(&body).unwrap();
+    let nodes = meta_handle_1.handle_get_nodes().await?;
     assert_eq!(nodes.len(), 2);
+
     Ok(())
 }
 
+/// Test MetaHandle::handle_get_status()
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1]).await?;
 
-    tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-
-    let mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
-
-    let mn1 = MetaNode::<TokioRuntime>::start(&tc1.config).await?;
-    let _ = mn1.join_cluster(&tc1.config).await?;
+    let meta_handle_0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
 
     info!("--- write sample data to the cluster ---");
     {
-        mn0.write(LogEntry::new(Cmd::UpsertKV(
-            UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
-        )))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo2", b"foo2",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo3", b"foo3",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo4", b"foo4",
-        ))))
-        .await?;
-        mn0.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
-            "foo5", b"foo5",
-        ))))
-        .await?;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(
+                        UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)),
+                    )))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo2", b"foo2",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo3", b"foo3",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo4", b"foo4",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                        "foo5", b"foo5",
+                    ))))
+                    .await
+                })
+            })
+            .await??;
     }
 
     info!("--- trigger snapshot ---");
     {
-        mn0.raft.trigger().snapshot().await?;
-        mn0.raft
-            .wait(Some(Duration::from_secs(1)))
-            .snapshot(new_log_id(1, 0, 11), "trigger build snapshot")
-            .await?;
+        meta_handle_0
+            .request(|mn| {
+                Box::pin(async move {
+                    mn.raft.trigger().snapshot().await?;
+                    mn.raft
+                        .wait(Some(Duration::from_secs(1)))
+                        .snapshot(new_log_id(1, 0, 11), "trigger build snapshot")
+                        .await?;
+                    Ok::<_, anyhow::Error>(())
+                })
+            })
+            .await??;
     }
 
-    let status = mn0
-        .get_status(BUILD_INFO.semver().to_string().as_str())
-        .await;
+    let version = BUILD_INFO.semver().to_string();
+    let status = meta_handle_0.handle_get_status(&version).await?;
 
     println!(
         "status = {}",
@@ -158,7 +155,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     // Assert key fields in the status response
     assert_eq!(status.id, 0);
     assert_eq!(status.state, "Leader");
-    assert_eq!(status.is_leader, true);
+    assert!(status.is_leader);
     assert_eq!(status.current_term, 1);
     assert_eq!(status.last_log_index, 11);
     assert_eq!(status.snapshot_key_count, 6);
@@ -193,153 +190,79 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     assert_eq!(status.raft_log.wal_closed_chunk_count, 0);
     assert_eq!(status.raft_log.wal_closed_chunk_total_size, 0);
 
-    // status = {
-    //     "id": 0,
-    //     "binary_version": "v1.2.757-nightly-9cd2f63257-simd(1.88.0-nightly-2025-06-18T01:24:12.760825000Z)",
-    //     "data_version": "V004",
-    //     "endpoint": "localhost:29000",
-    //     "raft_log": {
-    //       "cache_items": 7,
-    //       "cache_used_size": 578,
-    //       "wal_total_size": 1202,
-    //       "wal_open_chunk_size": 1202,
-    //       "wal_offset": 1202,
-    //       "wal_closed_chunk_count": 0,
-    //       "wal_closed_chunk_total_size": 0,
-    //       "wal_closed_chunk_sizes": {}
-    //     },
-    //     "snapshot_key_count": 0,
-    //     "snapshot_key_space_stat": {
-    //       "exp-": 1,
-    //       "kv--": 5
-    //     },
-    //     "state": "Leader",
-    //     "is_leader": true,
-    //     "current_term": 1,
-    //     "last_log_index": 6,
-    //     "last_applied": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 },
-    //     "snapshot_last_log_id": null,
-    //     "purged": null,
-    //     "leader": {
-    //       "name": "0",
-    //       "endpoint": { "addr": "localhost", "port": 29000 },
-    //       "grpc_api_advertise_address": "127.0.0.1:29001"
-    //     },
-    //     "replication": {
-    //       "0": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 },
-    //       "1": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 }
-    //     },
-    //     "voters": [
-    //       {
-    //         "name": "0",
-    //         "endpoint": { "addr": "localhost", "port": 29000 },
-    //         "grpc_api_advertise_address": "127.0.0.1:29001"
-    //       },
-    //       {
-    //         "name": "1",
-    //         "endpoint": { "addr": "localhost", "port": 29003 },
-    //         "grpc_api_advertise_address": "127.0.0.1:29004"
-    //       }
-    //     ],
-    //     "non_voters": [],
-    //     "last_seq": 0
-    //   }
+    Ok(())
+}
+
+/// Test MetaHandle::handle_raft_metrics()
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_handle_raft_metrics() -> anyhow::Result<()> {
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
+
+    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
+
+    assert_eq!(metrics.current_leader, Some(0));
+    assert_eq!(
+        metrics.membership_config.membership().voter_ids().count(),
+        3
+    );
 
     Ok(())
 }
 
+/// Test MetaHandle::handle_trigger_snapshot()
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
-async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+async fn test_handle_trigger_snapshot() -> anyhow::Result<()> {
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
-    tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
-    // tc1.admin already has an OS-assigned port from MetaSrvTestContext::new()
-    tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
-    tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
+    let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
+    let meta_handle = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
 
-    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
+    // Trigger snapshot
+    let result = meta_handle.handle_trigger_snapshot().await?;
+    assert!(result.is_ok());
 
-    let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
-    let meta_handle_1 =
-        MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
-    let meta_handle_1 = Arc::new(meta_handle_1);
+    Ok(())
+}
 
-    let c = tc1.config.clone();
-    let _ = meta_handle_1
-        .request(move |mn| {
-            let fu = async move { mn.join_cluster(&c).await };
-            Box::pin(fu)
-        })
-        .await??;
+/// Test MetaHandle::handle_trigger_transfer_leader()
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_handle_trigger_transfer_leader() -> anyhow::Result<()> {
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
-    // Extract port from the OS-assigned address for URL construction
-    let admin_port = tc1
-        .admin
-        .api_address
-        .split(':')
-        .next_back()
-        .expect("admin address should have port")
-        .to_string();
+    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
+    assert_eq!(metrics.current_leader, Some(0));
 
-    let http_cfg = HttpServiceConfig {
-        admin: tc1.admin.clone(),
-        config_display: format!("{:?}", tc1.config),
-    };
-    let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);
+    // Transfer leadership to node 2
+    let result = meta0.handle_trigger_transfer_leader(2).await?;
+    assert!(result.is_ok());
 
-    // test cert is issued for "localhost"
-    let state_url = format!("https://{}:{}/v1/cluster/status", TEST_CN_NAME, admin_port);
-    let node_url = format!("https://{}:{}/v1/cluster/nodes", TEST_CN_NAME, admin_port);
+    // Wait for leadership transfer
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // load cert
-    let mut buf = Vec::new();
-    File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
-    let cert = reqwest::Certificate::from_pem(&buf).unwrap();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
+    assert_eq!(metrics.current_leader, Some(2));
 
-    srv.do_start().await.expect("HTTP: admin api error");
+    Ok(())
+}
 
-    // kick off
-    let client = reqwest::Client::builder()
-        .add_root_certificate(cert)
-        .build()
-        .unwrap();
+/// Test MetaHandle::handle_get_sys_data()
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_handle_get_sys_data() -> anyhow::Result<()> {
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
-    info!("--- retry until service is ready or timeout ---");
-    {
-        let timeout_at = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < timeout_at {
-            let resp = client.get(&state_url).send().await;
-            if resp.is_ok() {
-                break;
-            }
+    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
 
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
-    }
+    let sys_data = meta0.handle_get_sys_data().await?;
 
-    let resp = client.get(&state_url).send().await;
-    assert!(resp.is_ok());
+    // Verify sys_data contains expected membership info
+    let membership = sys_data.last_membership_ref();
+    assert_eq!(membership.membership().voter_ids().count(), 3);
 
-    let resp = resp.unwrap();
-    assert!(resp.status().is_success());
-    assert_eq!("/v1/cluster/status", resp.url().path());
-
-    let state_json = resp.json::<serde_json::Value>().await.unwrap();
-    assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
-    assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
-    assert_ne!(state_json["leader"].as_object(), None);
-
-    let resp_nodes = client.get(&node_url).send().await;
-    assert!(resp_nodes.is_ok());
-
-    let resp_nodes = resp_nodes.unwrap();
-    assert!(resp_nodes.status().is_success());
-    assert_eq!("/v1/cluster/nodes", resp_nodes.url().path());
-
-    let result = resp_nodes.json::<Vec<Node>>().await.unwrap();
-    assert_eq!(result.len(), 2);
     Ok(())
 }

@@ -61,7 +61,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint + use<SP> {
+    pub fn build_router(&self) -> impl Endpoint + use<SP> {
         let mh = self.meta_handle.clone();
 
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]

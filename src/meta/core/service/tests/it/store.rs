@@ -51,13 +51,20 @@ use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
 
-impl StoreBuilder<TypeConfig, LogStore, SMStore<TokioRuntime>, MetaSrvTestContext>
+impl StoreBuilder<TypeConfig, LogStore, SMStore<TokioRuntime>, MetaSrvTestContext<TokioRuntime>>
     for MetaStoreBuilder
 {
     async fn build(
         &self,
-    ) -> Result<(MetaSrvTestContext, LogStore, SMStore<TokioRuntime>), StorageError> {
-        let tc = MetaSrvTestContext::new(555);
+    ) -> Result<
+        (
+            MetaSrvTestContext<TokioRuntime>,
+            LogStore,
+            SMStore<TokioRuntime>,
+        ),
+        StorageError,
+    > {
+        let tc = MetaSrvTestContext::<TokioRuntime>::new(555);
         let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config)
             .await
             .expect("fail to create store");
@@ -79,7 +86,7 @@ async fn test_impl_raft_storage() -> anyhow::Result<()> {
 #[fastrace::trace]
 async fn test_meta_store_purge_cache() -> anyhow::Result<()> {
     let id = 3;
-    let mut tc = MetaSrvTestContext::new(id);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(id);
     tc.config.raft_config.log_cache_max_items = 100;
     // Build with small chunk, because all entries in the last open chunk will be cached.
     tc.config.raft_config.log_wal_chunk_max_records = 5;
@@ -149,7 +156,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Test state is restored: hard state, log, state machine
 
     let id = 3;
-    let tc = MetaSrvTestContext::new(id);
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(id);
 
     info!("--- new meta store");
     {
@@ -208,7 +215,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a snapshot check snapshot state
 
     let id = 3;
-    let tc = MetaSrvTestContext::new(id);
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(id);
 
     let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
@@ -257,7 +264,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a snapshot check snapshot state
 
     let id = 3;
-    let tc = MetaSrvTestContext::new(id);
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(id);
 
     let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
@@ -310,7 +317,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let snap;
     {
-        let tc = MetaSrvTestContext::new(id);
+        let tc = MetaSrvTestContext::<TokioRuntime>::new(id);
 
         let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 
@@ -327,7 +334,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
     info!("--- reopen a new metasrv to install snapshot");
     {
-        let tc = MetaSrvTestContext::new(id);
+        let tc = MetaSrvTestContext::<TokioRuntime>::new(id);
 
         let sto = RaftStore::<TokioRuntime>::open(&tc.config.raft_config).await?;
 

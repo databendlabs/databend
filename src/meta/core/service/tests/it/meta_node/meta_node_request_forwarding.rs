@@ -82,6 +82,8 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode<TokioRuntime>>> {
+fn test_context_nodes(
+    tcs: &[MetaSrvTestContext<TokioRuntime>],
+) -> Vec<Arc<MetaNode<TokioRuntime>>> {
     tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }

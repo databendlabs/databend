@@ -21,9 +21,9 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use test_harness::test;
 use tokio::time::sleep;
@@ -40,13 +40,13 @@ use crate::tests::start_metasrv_with_context;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
-    fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
+    fn make_key(tc: &MetaSrvTestContext<TokioRuntime>, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
     }
 
     async fn test_write_read_on_every_node(
-        tcs: &[MetaSrvTestContext],
+        tcs: &[MetaSrvTestContext<TokioRuntime>],
         key_suffix: &str,
     ) -> anyhow::Result<()> {
         info!("--- test write on every node: {}", key_suffix);
@@ -68,7 +68,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         Ok(())
     }
 
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     info!("--- test write on a fresh cluster");
     test_write_read_on_every_node(&tcs, "1st").await?;
@@ -96,7 +96,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     let tcs = {
         let mut tcs = vec![];
         for mut tc in stopped_tcs {
-            start_metasrv_with_context(&mut tc).await?;
+            start_metasrv_with_context::<TokioRuntime>(&mut tc).await?;
             tcs.push(tc);
         }
 
@@ -129,14 +129,14 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
-    fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
+    fn make_key(tc: &MetaSrvTestContext<TokioRuntime>, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
     }
 
     async fn test_write_read_on_every_node(
-        tcs: &[MetaSrvTestContext],
-        client: &ClientHandle<DatabendRuntime>,
+        tcs: &[MetaSrvTestContext<TokioRuntime>],
+        client: &ClientHandle<TokioRuntime>,
         key_suffix: &str,
     ) -> anyhow::Result<()> {
         info!("--- test write on every node: {}", key_suffix);
@@ -161,8 +161,8 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         Ok(())
     }
 
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![tcs[0].config.grpc.api_address().unwrap()],
         BUILD_INFO.semver(),
         "root",
@@ -202,7 +202,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
                 "--- starting metasrv: {:?}",
                 tc.config.raft_config.raft_api_addr().await?
             );
-            start_metasrv_with_context(&mut tc).await?;
+            start_metasrv_with_context::<TokioRuntime>(&mut tc).await?;
 
             info!(
                 "--- started metasrv: {:?}",

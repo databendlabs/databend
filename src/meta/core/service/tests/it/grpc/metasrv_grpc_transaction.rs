@@ -16,6 +16,7 @@
 
 use std::collections::BTreeSet;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::TxnRequest;
 use test_harness::test;
 
@@ -26,7 +27,7 @@ use crate::tests::service::make_grpc_client;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -41,7 +42,7 @@ async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let client = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let client = make_grpc_client::<TokioRuntime>(vec![a1(), a2(), a0()])?;
     {
         let eclient = client.make_established_client().await?;
         assert_eq!(a0(), eclient.target_endpoint(),);

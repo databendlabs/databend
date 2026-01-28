@@ -28,13 +28,13 @@ use databend_meta_test_harness::start_metasrv_cluster;
 /// Build metasrv or metasrv cluster, returns the clients
 #[derive(Clone)]
 pub struct MetaSrvBuilder {
-    pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
+    pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext<DatabendRuntime>>>>,
 }
 
 #[async_trait]
 impl kvapi::ApiBuilder<Arc<ClientHandle<DatabendRuntime>>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle<DatabendRuntime>> {
-        let (tc, addr) = start_metasrv().await.unwrap();
+        let (tc, addr) = start_metasrv::<DatabendRuntime>().await.unwrap();
 
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
@@ -56,7 +56,9 @@ impl kvapi::ApiBuilder<Arc<ClientHandle<DatabendRuntime>>> for MetaSrvBuilder {
     }
 
     async fn build_cluster(&self) -> Vec<Arc<ClientHandle<DatabendRuntime>>> {
-        let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
+        let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2])
+            .await
+            .unwrap();
 
         let cluster = vec![
             tcs[0].grpc_client().await.unwrap(),
