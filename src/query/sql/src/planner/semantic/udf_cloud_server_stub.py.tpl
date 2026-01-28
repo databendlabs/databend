@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from databend_udf import UDFServer, udf as udf_decorator
 
 IMPORTS_DIR = "/app/imports"
+sys._xoptions["databend_import_directory"] = IMPORTS_DIR
 STATUS_ADDR = os.getenv("RESOURCE_STATUS_ADDR", "0.0.0.0:8080")
 _request_lock = threading.Lock()
 _request_count = 0

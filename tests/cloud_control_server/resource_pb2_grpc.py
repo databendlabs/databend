@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import udf_pb2 as udf__pb2
+import resource_pb2 as resource__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in udf_pb2_grpc.py depends on'
+        + ' but the generated code in resource_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class UdfServiceStub(object):
+class ResourceServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -34,43 +34,43 @@ class UdfServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.ApplyUdfResource = channel.unary_unary(
-                '/udfproto.UdfService/ApplyUdfResource',
-                request_serializer=udf__pb2.ApplyUdfResourceRequest.SerializeToString,
-                response_deserializer=udf__pb2.ApplyUdfResourceResponse.FromString,
+        self.ApplyResource = channel.unary_unary(
+                '/resourceproto.ResourceService/ApplyResource',
+                request_serializer=resource__pb2.ApplyResourceRequest.SerializeToString,
+                response_deserializer=resource__pb2.ApplyResourceResponse.FromString,
                 _registered_method=True)
 
 
-class UdfServiceServicer(object):
+class ResourceServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def ApplyUdfResource(self, request, context):
+    def ApplyResource(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_UdfServiceServicer_to_server(servicer, server):
+def add_ResourceServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'ApplyUdfResource': grpc.unary_unary_rpc_method_handler(
-                    servicer.ApplyUdfResource,
-                    request_deserializer=udf__pb2.ApplyUdfResourceRequest.FromString,
-                    response_serializer=udf__pb2.ApplyUdfResourceResponse.SerializeToString,
+            'ApplyResource': grpc.unary_unary_rpc_method_handler(
+                    servicer.ApplyResource,
+                    request_deserializer=resource__pb2.ApplyResourceRequest.FromString,
+                    response_serializer=resource__pb2.ApplyResourceResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'udfproto.UdfService', rpc_method_handlers)
+            'resourceproto.ResourceService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('udfproto.UdfService', rpc_method_handlers)
+    server.add_registered_method_handlers('resourceproto.ResourceService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class UdfService(object):
+class ResourceService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def ApplyUdfResource(request,
+    def ApplyResource(request,
             target,
             options=(),
             channel_credentials=None,
@@ -83,9 +83,9 @@ class UdfService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/udfproto.UdfService/ApplyUdfResource',
-            udf__pb2.ApplyUdfResourceRequest.SerializeToString,
-            udf__pb2.ApplyUdfResourceResponse.FromString,
+            '/resourceproto.ResourceService/ApplyResource',
+            resource__pb2.ApplyResourceRequest.SerializeToString,
+            resource__pb2.ApplyResourceResponse.FromString,
             options,
             channel_credentials,
             insecure,
