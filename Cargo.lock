@@ -5493,7 +5493,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
- "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
  "databend-common-meta-runtime-api",
  "databend-common-meta-schema-api-test-suite",

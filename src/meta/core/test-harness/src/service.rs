@@ -21,7 +21,6 @@ use std::time::Duration;
 use anyhow::Result;
 use databend_base::testutil::next_port;
 use databend_base::uniq_id::GlobalUniq;
-use tonic::transport::server::TcpIncoming;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -39,6 +38,7 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
+use tonic::transport::server::TcpIncoming;
 
 /// Start one random service and get the session manager.
 #[fastrace::trace]
