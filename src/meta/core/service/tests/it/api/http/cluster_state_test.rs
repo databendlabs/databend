@@ -130,7 +130,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     // Assert key fields in the status response
     assert_eq!(status.id, 0);
     assert_eq!(status.state, "Leader");
-    assert_eq!(status.is_leader, true);
+    assert!(status.is_leader);
     assert_eq!(status.current_term, 1);
     assert_eq!(status.last_log_index, 11);
     assert_eq!(status.snapshot_key_count, 6);

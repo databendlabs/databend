@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::node::Node;
+use databend_common_version::BUILD_INFO;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta_admin::HttpService;
@@ -31,6 +32,7 @@ use http::StatusCode;
 use http::Uri;
 use log::info;
 use poem::Endpoint;
+use poem::EndpointExt;
 use poem::Request;
 use test_harness::test;
 use tokio::time::Instant;
@@ -90,8 +92,8 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
@@ -118,7 +120,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
         config_display: format!("{:?}", tc1.config),
     };
     let srv = HttpService::create(http_cfg, "test-version".to_string(), meta_handle_1);
-    let router = srv.build_router();
+    let router = srv.build_router().map_to_response();
 
     let response = router
         .call(
@@ -140,8 +142,8 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
@@ -177,11 +179,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         admin: tc1.admin.clone(),
         config_display: format!("{:?}", tc1.config),
     };
-    let mut srv = HttpService::create(
-        http_cfg,
-        databend_common_version::BUILD_INFO.semver().to_string(),
-        meta_handle_1,
-    );
+    let mut srv = HttpService::create(http_cfg, BUILD_INFO.semver().to_string(), meta_handle_1);
 
     // test cert is issued for "localhost"
     let state_url = format!("https://{}:{}/v1/cluster/status", TEST_CN_NAME, admin_port);
