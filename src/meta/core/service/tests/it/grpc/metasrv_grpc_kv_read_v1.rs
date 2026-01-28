@@ -82,12 +82,12 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<BTreeSet<_>>();
 
     let addresses = addresses.into_iter().collect::<Vec<_>>();
 
-    let leader_address = tcs[0].config.grpc.api_address.clone();
+    let leader_address = tcs[0].config.grpc.api_address().unwrap();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();

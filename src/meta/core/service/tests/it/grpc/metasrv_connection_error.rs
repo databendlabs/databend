@@ -45,7 +45,7 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -92,7 +92,7 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a1 = || addresses[1].clone();
@@ -125,7 +125,7 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a1 = || addresses[1].clone();

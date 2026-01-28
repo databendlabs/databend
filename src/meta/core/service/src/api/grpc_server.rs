@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -78,6 +79,11 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         self.meta_handle.clone().unwrap()
     }
 
+    /// Returns the gRPC config, which includes the actual bound port after `bind()` or `do_start()`.
+    pub fn grpc_config(&self) -> &crate::configs::GrpcConfig {
+        &self.config.grpc
+    }
+
     // Only for test
     pub async fn get_meta_node(&self) -> Arc<MetaNode<SP>> {
         self.meta_handle
@@ -88,16 +94,28 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             .unwrap()
     }
 
-    pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
-        let addr = self
-            .config
-            .grpc
-            .api_address
-            .parse::<std::net::SocketAddr>()?;
+    /// Binds a TCP listener for the gRPC server.
+    ///
+    /// If `listen_port` is `None`, binds to port 0 for OS-assigned port.
+    /// Updates `self.config.grpc.listen_port` with the actual bound port.
+    pub fn bind(&mut self) -> Result<TcpIncoming, MetaNetworkError> {
+        let port = self.config.grpc.listen_port.unwrap_or(0);
+        let addr: SocketAddr = format!("{}:{}", self.config.grpc.listen_host, port).parse()?;
 
         let incoming = TcpIncoming::bind(addr)
             .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
 
+        let actual_addr = incoming
+            .local_addr()
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
+        self.config.grpc.listen_port = Some(actual_addr.port());
+
+        Ok(incoming)
+    }
+
+    pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+        let incoming = self.bind()?;
         self.do_start_with_incoming(incoming).await
     }
 

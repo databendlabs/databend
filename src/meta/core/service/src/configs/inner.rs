@@ -45,13 +45,18 @@ impl TlsConfig {
 /// This struct holds settings for the gRPC endpoint that serves client requests,
 /// including the listening address, optional advertise host for cluster communication,
 /// and TLS certificates for secure connections.
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct GrpcConfig {
-    /// The address the gRPC server listens on, e.g., "0.0.0.0:9191".
-    pub api_address: String,
+    /// The host the gRPC server listens on, e.g., "0.0.0.0" or "127.0.0.1".
+    pub listen_host: String,
+
+    /// The port the gRPC server listens on.
+    /// When `None`, `do_start()` is disallowed—only `do_start_with_incoming()` can be used.
+    /// This is typically `None` in tests where the OS assigns an ephemeral port.
+    pub listen_port: Option<u16>,
 
     /// Optional hostname to advertise to other nodes in the cluster.
-    /// If set, this host combined with the port from `api_address` forms the
+    /// If set, this host combined with the listen_port forms the
     /// address other nodes use to connect to this server.
     pub advertise_host: Option<String>,
 
@@ -59,17 +64,47 @@ pub struct GrpcConfig {
     pub tls: TlsConfig,
 }
 
-impl GrpcConfig {
-    /// Returns the advertise address if `advertise_host` is set.
-    /// The address is formed by combining `advertise_host` with the port from `api_address`.
-    pub fn advertise_address(&self) -> Option<String> {
-        if let Some(h) = &self.advertise_host {
-            // Safe unwrap(): Config::validate() ensures api_address is valid.
-            let a: SocketAddr = self.api_address.parse().unwrap();
-            Some(format!("{}:{}", h, a.port()))
-        } else {
-            None
+impl Default for GrpcConfig {
+    fn default() -> Self {
+        Self {
+            listen_host: "127.0.0.1".to_string(),
+            listen_port: Some(9191),
+            advertise_host: None,
+            tls: TlsConfig::default(),
         }
+    }
+}
+
+impl GrpcConfig {
+    /// Creates a config for local/embedded usage with OS-assigned port.
+    ///
+    /// The `listen_port` is set to `None`, meaning the OS will assign an ephemeral port
+    /// when binding. Use `do_start_with_incoming()` to start the server.
+    ///
+    /// This is used for embedded meta stores that don't serve publicly.
+    pub fn new_local(host: impl Into<String>) -> Self {
+        let host = host.into();
+        Self {
+            listen_host: host.clone(),
+            listen_port: None,
+            advertise_host: Some(host),
+            tls: TlsConfig::default(),
+        }
+    }
+
+    /// Returns "host:port" if port is known, None otherwise.
+    pub fn api_address(&self) -> Option<String> {
+        self.listen_port
+            .map(|p| format!("{}:{}", self.listen_host, p))
+    }
+
+    /// Returns the advertise address if `advertise_host` is set.
+    /// The address is formed by combining `advertise_host` with the listen_port.
+    pub fn advertise_address(&self) -> Option<String> {
+        let port = self.listen_port?;
+        self.advertise_host
+            .as_ref()
+            .map(|h| format!("{}:{}", h, port))
     }
 }
 
@@ -91,33 +126,21 @@ pub struct AdminConfig {
 /// This struct contains only the configuration needed by the service library
 /// to run a meta node. CLI-specific fields (cmd, config_file, log, admin)
 /// are kept in the cli-config crate's `MetaConfig`.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct MetaServiceConfig {
     pub grpc: GrpcConfig,
     pub raft_config: RaftConfig,
 }
 
-impl Default for MetaServiceConfig {
-    fn default() -> Self {
-        Self {
-            grpc: GrpcConfig {
-                api_address: "127.0.0.1:9191".to_string(),
-                advertise_host: None,
-                tls: TlsConfig::default(),
-            },
-            raft_config: Default::default(),
-        }
-    }
-}
-
 impl MetaServiceConfig {
     pub fn validate(&self) -> Result<(), MetaStartupError> {
-        let _a: SocketAddr = self.grpc.api_address.parse().map_err(|e| {
-            MetaStartupError::InvalidConfig(format!(
-                "{} while parsing {}",
-                e, self.grpc.api_address
-            ))
-        })?;
+        // For production, port should be set.
+        // For tests, port can be None (will use do_start_with_incoming).
+        if let Some(addr) = self.grpc.api_address() {
+            let _a: SocketAddr = addr.parse().map_err(|e| {
+                MetaStartupError::InvalidConfig(format!("{} while parsing {}", e, addr))
+            })?;
+        }
         Ok(())
     }
 

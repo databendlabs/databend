@@ -55,10 +55,15 @@ pub struct LocalMetaService {
 
 impl fmt::Display for LocalMetaService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let grpc_addr = self
+            .config
+            .grpc
+            .api_address()
+            .unwrap_or_else(|| "-".to_string());
         write!(
             f,
             "LocalMetaService({}: raft={} grpc={})",
-            self.name, self.config.raft_config.raft_api_port, self.config.grpc.api_address
+            self.name, self.config.raft_config.raft_api_port, grpc_addr
         )
     }
 }
@@ -129,11 +134,8 @@ impl LocalMetaService {
 
         let host = "127.0.0.1";
 
-        {
-            let grpc_port = next_port();
-            config.grpc.api_address = format!("{}:{}", host, grpc_port);
-            config.grpc.advertise_host = Some(host.to_string());
-        }
+        // Use OS-assigned port for gRPC
+        config.grpc = configs::GrpcConfig::new_local(host);
 
         info!("new LocalMetaService({}) with config: {:?}", name, config);
 
@@ -146,8 +148,12 @@ impl LocalMetaService {
         let runtime = RT::new_embedded("meta-io-rt-embedded");
         let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
+
         let mut grpc_server = GrpcServer::create(&config, version.clone(), meta_handle);
         grpc_server.do_start().await?;
+
+        // Update config with the actual bound port
+        config.grpc = grpc_server.grpc_config().clone();
 
         let client = Self::grpc_client(&config, version).await?;
 
@@ -181,7 +187,7 @@ impl LocalMetaService {
         config: &configs::MetaServiceConfig,
         version: Version,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-        let addr = config.grpc.api_address.clone();
+        let addr = config.grpc.api_address().expect("gRPC port should be set");
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
             version,

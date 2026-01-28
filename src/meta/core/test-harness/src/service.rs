@@ -19,8 +19,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use databend_base::testutil::next_port;
-use tokio::net::TcpListener;
-use tonic::transport::server::TcpIncoming;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -46,25 +44,34 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
     start_metasrv_with_context(&mut tc).await?;
 
-    let addr = tc.config.grpc.api_address.clone();
+    let addr = tc
+        .config
+        .grpc
+        .api_address()
+        .expect("gRPC port should be assigned after server start");
 
     Ok((tc, addr))
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    // Bind the gRPC port before creating MetaWorker so the correct address is advertised.
-    // Use the existing address if port is non-zero (restart scenario),
-    // otherwise bind to port 0 for OS-assigned port.
-    let bind_addr: std::net::SocketAddr = tc.config.grpc.api_address.parse()?;
-    let std_listener = std::net::TcpListener::bind(bind_addr)?;
-    std_listener.set_nonblocking(true)?;
-    let addr = std_listener.local_addr()?;
-    tc.config.grpc.api_address = addr.to_string();
+    // In tests, listen_port must be None so the OS assigns an ephemeral port.
+    // This prevents port conflicts between concurrent tests.
+    assert!(
+        tc.config.grpc.listen_port.is_none(),
+        "listen_port must be None in tests; OS will assign an ephemeral port"
+    );
 
     let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
 
+    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh.clone());
+
+    // Bind first to get the actual port, then update tc.config
+    let incoming = srv.bind()?;
+    tc.config.grpc = srv.grpc_config().clone();
+
+    // Join cluster with the updated config that has the actual port
     let c = tc.config.clone();
     let _ = mh
         .request(move |mn| {
@@ -73,11 +80,6 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         })
         .await??;
 
-    // Convert to TcpIncoming and start server
-    let tokio_listener = TcpListener::from_std(std_listener)?;
-    let incoming = TcpIncoming::from(tokio_listener);
-
-    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh);
     srv.do_start_with_incoming(incoming).await?;
     tc.grpc_srv = Some(Box::new(srv));
 
@@ -175,16 +177,13 @@ impl MetaSrvTestContext {
         config.raft_config.raft_listen_host = "127.0.0.1".to_string();
         config.raft_config.raft_advertise_host = "localhost".to_string();
 
-        let host = "127.0.0.1";
-
-        // gRPC port will be assigned when server starts with OS-assigned port
-        config.grpc.api_address = format!("{}:0", host);
-        config.grpc.advertise_host = Some(host.to_string());
+        // gRPC port will be assigned by OS when server starts
+        config.grpc = configs::GrpcConfig::new_local("127.0.0.1");
 
         let admin = {
             let http_port = next_port();
             configs::AdminConfig {
-                api_address: format!("{}:{}", host, http_port),
+                api_address: format!("127.0.0.1:{}", http_port),
                 tls: configs::TlsConfig::default(),
             }
         };
@@ -222,7 +221,11 @@ impl MetaSrvTestContext {
     }
 
     pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
-        let addr = self.config.grpc.api_address.clone();
+        let addr = self
+            .config
+            .grpc
+            .api_address()
+            .ok_or_else(|| anyhow::anyhow!("gRPC port not assigned yet"))?;
 
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
