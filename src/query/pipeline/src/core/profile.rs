@@ -18,6 +18,7 @@ use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::hints::assume;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::ScopedRegistry;
@@ -76,7 +77,7 @@ pub struct PlanProfile {
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
 
-    pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
+    pub statistics: Vec<usize>,
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[serde(default)]
     pub metrics: BTreeMap<String, Vec<MetricSample>>,
@@ -114,12 +115,13 @@ impl PlanProfile {
             title: profile.title.clone(),
             labels: profile.labels.clone(),
             metrics: BTreeMap::new(),
-            statistics: std::array::from_fn(|_| 0),
+            statistics: vec![0; std::mem::variant_count::<ProfileStatisticsName>()],
             errors: Self::get_profile_error(profile),
         }
     }
 
     pub fn accumulate(&mut self, profile: &Profile) {
+        assume(self.statistics.len() == std::mem::variant_count::<ProfileStatisticsName>());
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index].load(Ordering::SeqCst);
         }
@@ -132,6 +134,8 @@ impl PlanProfile {
             self.parent_id = profile.parent_id;
         }
 
+        assume(self.statistics.len() == std::mem::variant_count::<ProfileStatisticsName>());
+        assume(profile.statistics.len() == std::mem::variant_count::<ProfileStatisticsName>());
         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
             self.statistics[index] += profile.statistics[index];
         }

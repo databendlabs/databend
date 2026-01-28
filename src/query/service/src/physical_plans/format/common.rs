@@ -17,6 +17,8 @@ use std::fmt::Write;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
+use databend_common_base::hints::assume;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
@@ -230,6 +232,7 @@ pub fn append_output_rows_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
+        assume(prof.statistics.len() == std::mem::variant_count::<ProfileStatisticsName>());
         for (_, desc) in get_statistics_desc().iter() {
             if desc.display_name != "output rows" {
                 continue;
