@@ -133,40 +133,40 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
 
+        let router = builder.add_service(reflect_srv).add_service(grpc_srv);
+
         let id = self.config.raft_config.id;
 
-        let j = SP::spawn(
-            async move {
-                let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
+        let shutdown_fut = async move {
+            started_tx.send(()).ok();
+            info!(
+                "meta-service gRPC(on {}) starts to wait for stop signal",
+                addr
+            );
+            let _ = stop_rx.await;
+            info!("meta-service gRPC(on {}) receives stop signal", addr);
+        };
 
-                let res = builder
-                    .add_service(reflect_srv)
-                    .add_service(grpc_srv)
-                    .serve_with_shutdown(addr, async move {
-                        let _ = started_tx.send(());
-                        info!(
-                            "meta-service gRPC(on {}) starts to wait for stop signal",
-                            addr
-                        );
-                        let _ = stop_rx.await;
-                        info!("meta-service gRPC(on {}) receives stop signal", addr);
-                    })
-                    .await;
+        let fu = async move {
+            let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
 
-                info!(
-                    "meta-service gRPC(on {}) task returned res: {:?}",
-                    addr, res
-                );
-            }
-            .in_span(Span::enter_with_local_parent("spawn-grpc")),
-            Some("grpc-server".into()),
-        );
+            let res = router.serve_with_shutdown(addr, shutdown_fut).await;
+
+            info!(
+                "meta-service gRPC(on {}) task returned res: {:?}",
+                addr, res
+            );
+        };
+
+        let serving_fut = fu.in_span(Span::enter_with_local_parent("spawn-grpc"));
+
+        let join_handle = SP::spawn(serving_fut, Some("grpc-server".into()));
 
         started_rx
             .await
             .expect("maybe address already in use, try to use another port");
 
-        self.join_handle = Some(j);
+        self.join_handle = Some(join_handle);
         self.stop_grpc_tx = Some(stop_grpc_tx);
 
         info!("Done GrpcServer::start");
