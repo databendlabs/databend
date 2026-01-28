@@ -470,17 +470,21 @@ pub fn register(registry: &mut FunctionRegistry) {
                     };
                     let arena = Arena::default();
                     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-                    let modules = loader
-                        .load(&arena, File {
-                            path: (),
-                            code: jq_filter,
-                        })
-                        .unwrap();
+                    let Ok(modules) = loader.load(&arena, File {
+                        path: (),
+                        code: jq_filter,
+                    }) else {
+                        ctx.set_error(0, "Invalid jq filter load error");
+                        return vec![];
+                    };
 
-                    let filter = Compiler::default()
+                    let Ok(filter) = Compiler::default()
                         .with_funs(jaq_std::funs().chain(jaq_json::funs()))
                         .compile(modules)
-                        .unwrap();
+                    else {
+                        ctx.set_error(0, "Invalid jq filter compile error");
+                        return vec![];
+                    };
 
                     let jaq_args = vec![];
                     // You can pass additional scalar inputs as args to the jq filter.

@@ -458,7 +458,7 @@ pub fn st_extreme(geometry: &Geometry<f64>, axis: Axis, extremum: Extremum) -> O
             extreme_coord
         }
         Geometry::Polygon(polygon) => {
-            let bounding_rect = polygon.bounding_rect().unwrap();
+            let bounding_rect = polygon.bounding_rect()?;
             let coord = match axis {
                 Axis::X => match extremum {
                     Extremum::Max => bounding_rect.max().x,
