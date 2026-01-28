@@ -1006,7 +1006,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("udf_cloud_import_presign_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(3600),
+                    // 3 day
+                    value: UserSettingValue::UInt64(259200),
                     desc: "Presign expiry for cloud UDF stage imports",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
