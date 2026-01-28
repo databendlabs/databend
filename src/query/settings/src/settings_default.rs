@@ -425,6 +425,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_cse_optimizer", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables common subexpression elimination optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("force_eager_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Force apply rule eager aggregate.",
