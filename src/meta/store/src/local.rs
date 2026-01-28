@@ -200,38 +200,4 @@ impl LocalMetaService {
 
         Ok(client)
     }
-
-    pub async fn raft_client(
-        &self,
-    ) -> anyhow::Result<RaftServiceClient<tonic::transport::Channel>> {
-        let addr = self.config.raft_config.raft_api_addr().await?;
-
-        let mut last_error = None;
-
-        for _ in 0..6 {
-            let client = RaftServiceClient::connect(format!("http://{}", addr)).await;
-            match client {
-                Ok(x) => return Ok(x),
-                Err(err) => {
-                    warn!("can not yet connect to {}, {}, sleep a while", addr, err);
-                    last_error = Some(err);
-                    sleep(Duration::from_millis(50)).await;
-                }
-            }
-        }
-
-        Err(last_error.unwrap().into())
-    }
-
-    pub async fn assert_raft_server_connection(&self) -> anyhow::Result<()> {
-        let mut client = self.raft_client().await?;
-
-        let req = ForwardRequest {
-            forward_to_leader: 0,
-            body: ForwardRequestBody::Ping,
-        };
-
-        client.forward(req).await?;
-        Ok(())
-    }
 }

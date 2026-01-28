@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use databend_base::testutil::next_port;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
@@ -155,13 +156,13 @@ impl MetaSrvTestContext {
     pub fn new(id: u64) -> MetaSrvTestContext {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        let config_id = next_port();
+        let config_id = GlobalUniq::unique();
 
         let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = id;
 
-        config.raft_config.config_id = config_id.to_string();
+        config.raft_config.config_id = config_id.clone();
 
         // Use a unique dir for each test case.
         config.raft_config.raft_dir =
@@ -170,7 +171,7 @@ impl MetaSrvTestContext {
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
 
-        config.raft_config.raft_api_port = config_id;
+        config.raft_config.raft_api_port = next_port();
 
         // when running unit tests, set raft_listen_host to "127.0.0.1" and raft_advertise_host to localhost,
         // so if something wrong in raft meta nodes communication we will catch bug in unit tests.
