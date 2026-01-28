@@ -202,10 +202,7 @@ impl FuseTable {
                     );
                     part_stats.shuffle_kind = Some(shuffle_kind.clone());
 
-                    return Ok((
-                        part_stats,
-                        Partitions::create(shuffle_kind, segments),
-                    ));
+                    return Ok((part_stats, Partitions::create(shuffle_kind, segments)));
                 }
 
                 let snapshot_loc = Some(snapshot_loc);
@@ -442,6 +439,7 @@ impl FuseTable {
         Ok(result)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn prune_segments_with_pipeline(
         &self,
         pruner: Arc<FusePruner>,
