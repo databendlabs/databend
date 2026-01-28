@@ -27,8 +27,8 @@ use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::protobuf as pb;
-use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
 use futures::stream::StreamExt;
 use log::info;
@@ -133,7 +133,7 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
 ///
 /// Insert keys:
 /// a(meta), c, c1, c2
-async fn initialize_kvs(client: &Arc<ClientHandle<DatabendRuntime>>) -> anyhow::Result<()> {
+async fn initialize_kvs(client: &Arc<ClientHandle<TokioRuntime>>) -> anyhow::Result<()> {
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
@@ -152,7 +152,7 @@ async fn initialize_kvs(client: &Arc<ClientHandle<DatabendRuntime>>) -> anyhow::
 
 /// Test streamed mget on a grpc meta-service client
 async fn test_streamed_mget(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &Arc<ClientHandle<TokioRuntime>>,
     now_sec: u64,
 ) -> anyhow::Result<()> {
     info!("--- test streamed mget");
@@ -200,7 +200,7 @@ async fn test_streamed_mget(
 
 /// Test streamed list on a grpc meta-service client
 async fn test_streamed_list(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &Arc<ClientHandle<TokioRuntime>>,
     _now_sec: u64,
 ) -> anyhow::Result<()> {
     info!("--- test streamed list");

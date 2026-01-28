@@ -35,7 +35,6 @@ use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
 use tonic::transport::server::TcpIncoming;
@@ -114,8 +113,8 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
 
 pub fn make_grpc_client(
     addresses: Vec<String>,
-) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+) -> Result<Arc<ClientHandle<TokioRuntime>>, CreationError> {
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         addresses,
         BUILD_INFO.semver(),
         "root",
@@ -220,14 +219,14 @@ impl MetaSrvTestContext {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<TokioRuntime>>> {
         let addr = self
             .config
             .grpc
             .api_address()
             .ok_or_else(|| anyhow::anyhow!("gRPC port not assigned yet"))?;
 
-        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+        let client = MetaGrpcClient::<TokioRuntime>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",

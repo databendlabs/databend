@@ -54,7 +54,6 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
-databend-common-meta-schema-api-test-suite = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-runtime = { workspace = true }

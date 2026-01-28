@@ -45,7 +45,6 @@ use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use test_harness::test;
 use tokio::time::sleep;
@@ -661,8 +660,8 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
     }
 }
 
-fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<TokioRuntime>>> {
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![addr.to_string()],
         BUILD_INFO.semver(),
         "root",

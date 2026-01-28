@@ -5494,7 +5494,6 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
  "databend-common-meta-runtime-api",
- "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
  "databend-common-version",
