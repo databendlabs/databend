@@ -23,17 +23,13 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
-use databend_meta::message::ForwardRequest;
-use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
 use semver::Version;
-use tokio::time::sleep;
 
 /// A container for a locally started meta service, mainly for testing purpose.
 ///
