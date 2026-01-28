@@ -39,7 +39,7 @@ pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type RawBlockHLL = Vec<u8>;
 
 // Assigned to executors, describes that which blocks of given segment, an executor should take care of
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct BlockSlotDescription {
     // number of slots
     pub num_slots: usize,

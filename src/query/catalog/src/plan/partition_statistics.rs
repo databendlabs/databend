@@ -116,7 +116,7 @@ impl PartStatistics {
         let shuffle_kind = self.shuffle_kind.as_ref().or(other.shuffle_kind.as_ref());
         let use_max_for_counts = matches!(
             shuffle_kind,
-            Some(PartitionsShuffleKind::BlockMod)
+            Some(PartitionsShuffleKind::BlockMod(_))
                 | Some(PartitionsShuffleKind::BroadcastCluster)
                 | Some(PartitionsShuffleKind::BroadcastWarehouse)
         );
