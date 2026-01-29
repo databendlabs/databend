@@ -165,7 +165,8 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                //if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                if self.is_column_oriented() || distributed_pruning {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
