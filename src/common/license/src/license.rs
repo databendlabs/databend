@@ -116,19 +116,10 @@ impl Feature {
                 true => Ok(VerifyResult::Success),
                 false => Ok(VerifyResult::Failure),
             },
-            (Feature::Test, Feature::Test)
-            | (Feature::ComputedColumn, Feature::ComputedColumn)
-            | (Feature::Vacuum, Feature::Vacuum)
-            | (Feature::LicenseInfo, Feature::LicenseInfo)
-            | (Feature::Stream, Feature::Stream)
-            | (Feature::TableRef, Feature::TableRef)
-            | (Feature::DataMask, Feature::DataMask)
-            | (Feature::RowAccessPolicy, Feature::RowAccessPolicy)
-            | (Feature::VirtualColumn, Feature::VirtualColumn)
-            | (Feature::AttacheTable, Feature::AttacheTable)
-            | (Feature::StorageEncryption, Feature::StorageEncryption)
-            | (Feature::HilbertClustering, Feature::HilbertClustering) => Ok(VerifyResult::Success),
-            (_, _) => Ok(VerifyResult::MissMatch),
+            _ if std::mem::discriminant(self) == std::mem::discriminant(feature) => {
+                Ok(VerifyResult::Success)
+            }
+            _ => Ok(VerifyResult::MissMatch),
         }
     }
 }
@@ -310,5 +301,67 @@ mod tests {
             "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
+    }
+
+    #[test]
+    fn test_verify_feature_match() {
+        let carry_data = vec![Feature::MaxNodeQuota(3), Feature::MaxCpuQuota(16)];
+        let normal = vec![
+            Feature::LicenseInfo,
+            Feature::Vacuum,
+            Feature::Test,
+            Feature::VirtualColumn,
+            Feature::DataMask,
+            Feature::ComputedColumn,
+            Feature::StorageEncryption,
+            Feature::Stream,
+            Feature::TableRef,
+            Feature::AttacheTable,
+            Feature::AmendTable,
+            Feature::HilbertClustering,
+            Feature::WorkloadGroup,
+            Feature::SystemHistory,
+            Feature::PrivateTask,
+            Feature::RowAccessPolicy,
+        ];
+        for carry_feature in &carry_data {
+            for normal_feature in &normal {
+                assert!(matches!(
+                    carry_feature.verify(normal_feature).unwrap(),
+                    VerifyResult::MissMatch
+                ));
+                assert!(matches!(
+                    normal_feature.verify(carry_feature).unwrap(),
+                    VerifyResult::MissMatch
+                ));
+            }
+        }
+
+        for normal_feature in &normal {
+            assert!(matches!(
+                normal_feature.verify(normal_feature).unwrap(),
+                VerifyResult::Success
+            ));
+        }
+
+        let cpu_quota = Feature::MaxCpuQuota(16);
+        assert!(matches!(
+            cpu_quota.verify(&Feature::MaxCpuQuota(8)).unwrap(),
+            VerifyResult::Success
+        ));
+        assert!(matches!(
+            cpu_quota.verify(&Feature::MaxCpuQuota(16)).unwrap(),
+            VerifyResult::Failure
+        ));
+
+        let node_quota = Feature::MaxNodeQuota(3);
+        assert!(matches!(
+            node_quota.verify(&Feature::MaxNodeQuota(1)).unwrap(),
+            VerifyResult::Success
+        ));
+        assert!(matches!(
+            node_quota.verify(&Feature::MaxNodeQuota(3)).unwrap(),
+            VerifyResult::Failure
+        ));
     }
 }
