@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
+//! gRPC client metrics for DatabendRuntime.
+
 use std::sync::LazyLock;
 
 use databend_common_base::runtime::metrics::FamilyCounter;
@@ -21,7 +22,7 @@ use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
-use databend_common_meta_types::MetaError;
+use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_metrics::VecLabels;
 
 static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<FamilyHistogram<VecLabels>> =
@@ -45,48 +46,46 @@ const LABEL_ENDPOINT: &str = "endpoint";
 const LABEL_REQUEST: &str = "request";
 const LABEL_ERROR: &str = "error";
 
-pub fn record_meta_grpc_client_request_duration_ms(endpoint: &str, request: &str, duration: f64) {
-    let labels = vec![
-        (LABEL_ENDPOINT, endpoint.to_string()),
-        (LABEL_REQUEST, request.to_string()),
-    ];
-    META_GRPC_CLIENT_REQUEST_DURATION_MS
-        .get_or_create(&labels)
-        .observe(duration);
-}
+/// Real metrics implementation using Prometheus.
+#[derive(Clone, Copy, Debug)]
+pub struct DatabendMetrics;
 
-pub fn client_request_inflight(val: i64) {
-    META_GRPC_CLIENT_REQUEST_INFLIGHT.inc_by(val);
-}
+impl ClientMetricsApi for DatabendMetrics {
+    fn record_request_duration(endpoint: &str, request: &str, duration_ms: f64) {
+        let labels = vec![
+            (LABEL_ENDPOINT, endpoint.to_string()),
+            (LABEL_REQUEST, request.to_string()),
+        ];
+        META_GRPC_CLIENT_REQUEST_DURATION_MS
+            .get_or_create(&labels)
+            .observe(duration_ms);
+    }
 
-pub fn incr_meta_grpc_client_request_success(endpoint: &str, request: &str) {
-    let labels = vec![
-        (LABEL_ENDPOINT, endpoint.to_string()),
-        (LABEL_REQUEST, request.to_string()),
-    ];
-    META_GRPC_CLIENT_REQUEST_SUCCESS
-        .get_or_create(&labels)
-        .inc();
-}
+    fn request_inflight(delta: i64) {
+        META_GRPC_CLIENT_REQUEST_INFLIGHT.inc_by(delta);
+    }
 
-pub fn incr_meta_grpc_client_request_failed(
-    endpoint: &str,
-    request: &str,
-    err: &(dyn Error + 'static),
-) {
-    let err_name = err
-        .downcast_ref::<MetaError>()
-        .map(|e| e.name())
-        .unwrap_or("unknown");
-    let labels = vec![
-        (LABEL_ENDPOINT, endpoint.to_string()),
-        (LABEL_REQUEST, request.to_string()),
-        (LABEL_ERROR, err_name.to_string()),
-    ];
-    META_GRPC_CLIENT_REQUEST_FAILED.get_or_create(&labels).inc();
-}
+    fn record_request_success(endpoint: &str, request: &str) {
+        let labels = vec![
+            (LABEL_ENDPOINT, endpoint.to_string()),
+            (LABEL_REQUEST, request.to_string()),
+        ];
+        META_GRPC_CLIENT_REQUEST_SUCCESS
+            .get_or_create(&labels)
+            .inc();
+    }
 
-pub fn incr_meta_grpc_make_client_fail(endpoint: &str) {
-    let labels = vec![(LABEL_ENDPOINT, endpoint.to_string())];
-    META_GRPC_MAKE_CLIENT_FAIL.get_or_create(&labels).inc();
+    fn record_request_failed(endpoint: &str, request: &str, error_name: &str) {
+        let labels = vec![
+            (LABEL_ENDPOINT, endpoint.to_string()),
+            (LABEL_REQUEST, request.to_string()),
+            (LABEL_ERROR, error_name.to_string()),
+        ];
+        META_GRPC_CLIENT_REQUEST_FAILED.get_or_create(&labels).inc();
+    }
+
+    fn record_make_client_fail(endpoint: &str) {
+        let labels = vec![(LABEL_ENDPOINT, endpoint.to_string())];
+        META_GRPC_MAKE_CLIENT_FAIL.get_or_create(&labels).inc();
+    }
 }
