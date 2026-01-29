@@ -106,11 +106,7 @@ SELECT * FROM t2 ORDER BY a
 1100 main_only_branch_copy
 
 statement ok
-drop stage if exists test_table_ref_insert;
-
-## INSERT INTO branch FROM stage is not supported yet
-statement ok
-create stage test_table_ref_insert;
+create or replace stage test_table_ref_insert;
 
 statement ok
 copy into @test_table_ref_insert from (select 99, 'from_stage') file_format=(type=csv);
