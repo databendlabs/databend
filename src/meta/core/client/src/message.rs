@@ -15,7 +15,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::MetaClientError;
@@ -48,7 +47,7 @@ pub struct ClientWorkerRequest {
     /// Tracing span for this request
     pub(crate) span: Span,
 
-    pub(crate) tracking_payload: Option<TrackingPayload>,
+    pub(crate) tracking_fn: Option<Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send>>,
 }
 
 impl fmt::Debug for ClientWorkerRequest {

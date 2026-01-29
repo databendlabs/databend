@@ -199,7 +199,12 @@ impl<RT: SpawnApi> ClientHandle<RT> {
             resp_tx: tx,
             req: req.into(),
             span: Span::enter_with_local_parent(std::any::type_name::<ClientWorkerRequest>()),
-            tracking_payload: Some(ThreadTracker::new_tracking_payload()),
+            tracking_fn: Some({
+                let payload = ThreadTracker::new_tracking_payload();
+                Box::new(move || -> Box<dyn std::any::Any + Send> {
+                    Box::new(ThreadTracker::tracking(payload))
+                })
+            }),
         };
 
         debug!(
