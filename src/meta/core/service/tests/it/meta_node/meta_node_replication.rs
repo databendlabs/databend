@@ -64,7 +64,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // Create a snapshot every 10 logs
     let snap_logs = 10;
 
-    let mut tc = MetaSrvTestContext::new(0);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
     tc.config.raft_config.snapshot_logs_since_last = snap_logs;
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     tc.config.raft_config.max_applied_log_to_keep = 0;

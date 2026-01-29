@@ -47,7 +47,7 @@ def test_error_detail():
 
     # Upload CSV file to stage (select.csv has 2 columns, table has 3 columns)
     csv_file_path = os.path.join(
-        os.path.dirname(__file__), "../../../../data/csv/select.csv"
+        os.path.dirname(__file__), "../../../data/csv/select.csv"
     )
     upload_result = upload_to_stage("s1", csv_file_path)
     assert not "data" in upload_result

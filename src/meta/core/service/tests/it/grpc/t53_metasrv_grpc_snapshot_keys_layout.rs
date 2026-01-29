@@ -15,6 +15,7 @@
 use std::time::Duration;
 
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf as pb;
 use log::info;
@@ -28,7 +29,7 @@ use crate::testing::meta_service_test_harness;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_snapshot_keys_layout() -> anyhow::Result<()> {
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     // Small delay to let service fully initialize
     sleep(Duration::from_millis(500)).await;

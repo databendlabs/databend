@@ -17,6 +17,8 @@ use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
 use databend_meta::metrics::server_metrics;
 use databend_meta_admin::HttpService;
+use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_test_harness::start_metasrv_cluster;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
@@ -29,13 +31,10 @@ use poem::get;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 
-use crate::testing::meta_service_test_harness;
-use crate::tests::start_metasrv_cluster;
-
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let leader = tcs[0]
         .grpc_srv

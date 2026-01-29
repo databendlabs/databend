@@ -49,22 +49,16 @@ impl<SP: SpawnApi> HttpService<SP> {
         let metrics = meta_handle
             .handle_raft_metrics()
             .await
-            .map_err(|e| {
-                poem::Error::from_string(
-                    format!("Failed to get raft metrics: {}", e),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            })?
+            .map_err(internal_err)?
             .borrow_watched()
             .clone();
 
         let id = metrics.id;
-        info!("id={} Received list_feature request", id);
+        info!("id={id} Received list_feature request");
 
-        let response = Self::features_state(&meta_handle).await.map_err(|e| {
-            poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
-
+        let response = Self::features_state(&meta_handle)
+            .await
+            .map_err(internal_err)?;
         Ok(Json(response).into_response())
     }
 
@@ -75,12 +69,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         let metrics = meta_handle
             .handle_raft_metrics()
             .await
-            .map_err(|e| {
-                poem::Error::from_string(
-                    format!("Failed to get raft metrics: {}", e),
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                )
-            })?
+            .map_err(internal_err)?
             .borrow_watched()
             .clone();
 
@@ -95,25 +84,17 @@ impl<SP: SpawnApi> HttpService<SP> {
 
         let Some(query) = query else {
             return Err(poem::Error::from_string(
-                "'feature' and 'enable' query parameters are required".to_string(),
+                "'feature' and 'enable' query parameters are required",
                 StatusCode::BAD_REQUEST,
             ));
         };
 
         if current_leader != Some(id) {
-            warn!(
-                "This node is not leader, can not set feature; id={}; current_leader={:?}",
-                id, current_leader
+            let msg = format!(
+                "This node is not leader, cannot set feature; id={id}; current_leader={current_leader:?}"
             );
-
-            let mes = format!(
-                "This node is not leader, can not set feature;\n\
-                     id={}\n\
-                     current_leader={:?}",
-                id, current_leader
-            );
-
-            return Err(poem::Error::from_string(mes, StatusCode::NOT_FOUND));
+            warn!("{}", msg);
+            return Err(poem::Error::from_string(msg, StatusCode::NOT_FOUND));
         }
 
         info!(
@@ -125,40 +106,28 @@ impl<SP: SpawnApi> HttpService<SP> {
         let enable = query.enable;
 
         meta_handle
-            .request(move |mn| {
-                let fu = async move { mn.set_feature(f, enable).await };
-                Box::pin(fu)
-            })
+            .request(move |mn| Box::pin(async move { mn.set_feature(f, enable).await }))
             .await
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
+            .map_err(internal_err)?
+            .map_err(internal_err)?;
 
-        let response = Self::features_state(&meta_handle).await.map_err(|e| {
-            poem::Error::from_string(
-                format!("Failed to get feature: {}", e),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-        })?;
-
+        let response = Self::features_state(&meta_handle)
+            .await
+            .map_err(internal_err)?;
         Ok(Json(response).into_response())
     }
 
     async fn features_state(
         meta_handle: &Arc<MetaHandle<SP>>,
     ) -> Result<FeatureResponse, MetaNodeStopped> {
-        let enabled = {
-            let sys_data = meta_handle.handle_get_sys_data().await?;
-            let x = sys_data.features().clone();
-            x.into_iter().collect()
-        };
-
+        let sys_data = meta_handle.handle_get_sys_data().await?;
         Ok(FeatureResponse {
             features: StateMachineFeature::all(),
-            enabled,
+            enabled: sys_data.features().iter().cloned().collect(),
         })
     }
+}
+
+fn internal_err(e: impl std::fmt::Display) -> poem::Error {
+    poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
 }

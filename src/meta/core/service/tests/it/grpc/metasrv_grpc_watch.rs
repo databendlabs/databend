@@ -43,9 +43,8 @@ use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
-use databend_common_version::BUILD_INFO;
+use databend_common_version::DATABEND_SEMVER;
 use databend_meta::meta_service::MetaNode;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use test_harness::test;
 use tokio::time::sleep;
@@ -132,7 +131,7 @@ async fn test_watch_txn_main(
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_single_key() -> anyhow::Result<()> {
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let seq: u64 = 1;
 
@@ -170,7 +169,7 @@ async fn test_watch() -> anyhow::Result<()> {
     // - Write some data.
     // - Assert watcher get all the update.
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let mut seq: u64 = 1;
     // 1.update some events
@@ -336,7 +335,7 @@ async fn test_watch() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_initialization_flush() -> anyhow::Result<()> {
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
     let updates = vec![
         UpsertKV::update("a", b"a"),
         UpsertKV::update("b", b"b"),
@@ -438,7 +437,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         Duration::from_secs(x)
     }
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let watch_prefix = "w_";
     let now_sec = now();
@@ -582,7 +581,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 
-    let (tc, addr) = crate::tests::start_metasrv().await?;
+    let (tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let watch_req = || WatchRequest::new("a".to_string(), Some("z".to_string()));
 
@@ -661,10 +660,10 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
     }
 }
 
-fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<TokioRuntime>>> {
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![addr.to_string()],
-        BUILD_INFO.semver(),
+        DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,

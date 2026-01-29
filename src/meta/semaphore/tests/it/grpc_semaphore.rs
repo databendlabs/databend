@@ -18,9 +18,9 @@ use std::time::Duration;
 
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::UpsertKV;
+use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
@@ -32,18 +32,18 @@ use tokio::time::timeout;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_simple() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let cli = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![a1(), a2(), a0()])?;
 
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
@@ -83,18 +83,18 @@ async fn test_semaphore_simple() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_guard_future() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let cli = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![a1(), a2(), a0()])?;
 
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
@@ -123,18 +123,18 @@ async fn test_semaphore_guard_future() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_time_based() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let cli = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![a1(), a2(), a0()])?;
 
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
@@ -174,14 +174,15 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -206,14 +207,15 @@ async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_permit_removal_notification() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -249,14 +251,15 @@ async fn test_permit_removal_notification() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -282,14 +285,15 @@ async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -353,14 +357,15 @@ async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -389,14 +394,15 @@ async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_watch_stream_resilience() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -424,14 +430,15 @@ async fn test_watch_stream_resilience() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -468,14 +475,15 @@ async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
-    let cli = make_grpc_client(vec![addresses[0].clone(), addresses[1].clone()])?;
+    let cli =
+        make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone(), addresses[1].clone()])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -507,13 +515,13 @@ async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
-    let mut tcs = start_metasrv_cluster(&[0]).await?;
+    let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
 
     let tc = tcs.remove(0);
 
-    let address = tc.config.grpc.api_address.clone();
+    let address = tc.config.grpc.api_address().unwrap();
 
-    let cli = make_grpc_client(vec![address])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![address])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -527,7 +535,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
     let fu = Semaphore::new_acquired_by_time(client(), "time_seq", 1, "later", timestamp2, secs(1));
 
     let (tx, rx) = oneshot::channel();
-    TokioRuntime::spawn(
+    DatabendRuntime::spawn(
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;
@@ -576,13 +584,13 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
-    let mut tcs = start_metasrv_cluster(&[0]).await?;
+    let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
 
     let mut tc = tcs.remove(0);
 
-    let address = tc.config.grpc.api_address.clone();
+    let address = tc.config.grpc.api_address().unwrap();
 
-    let cli = make_grpc_client(vec![address])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![address])?;
     let client = || cli.clone();
     let secs = |n| Duration::from_secs(n);
 
@@ -591,7 +599,7 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
     let fu = Semaphore::new_acquired_by_time(client(), "time_seq", 0, "later", timestamp2, secs(1));
 
     let (tx, rx) = oneshot::channel();
-    TokioRuntime::spawn(
+    DatabendRuntime::spawn(
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;

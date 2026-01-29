@@ -30,13 +30,11 @@ fastrace = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
-http = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 map-api = { workspace = true }
 maplit = { workspace = true }
-poem = { workspace = true }
 prometheus-client = { workspace = true }
 prost = { workspace = true }
 raft-log = { workspace = true }
@@ -54,20 +52,11 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
-databend-common-meta-kvapi-test-suite = { workspace = true }
-databend-common-meta-schema-api-test-suite = { workspace = true }
-databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
-databend-meta-admin = { workspace = true }
-databend-meta-runtime = { workspace = true }
 databend-meta-test-harness = { workspace = true }
-env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true }
-temp-env = { workspace = true }
-tempfile = { workspace = true }
 test-harness = { workspace = true }
 
 [lints]

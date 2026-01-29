@@ -23,6 +23,7 @@ use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::from_digit_ver;
 use databend_common_meta_client::handshake;
 use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_version::DATABEND_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;
@@ -50,7 +51,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         }
     }
 
-    let (_tc, addr) = start_metasrv().await?;
+    let (_tc, addr) = start_metasrv::<TokioRuntime>().await?;
 
     let c =
         ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None, None)

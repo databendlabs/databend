@@ -20,6 +20,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::ErrorKind;
@@ -147,6 +148,15 @@ impl Binder {
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
+
+        if let FileFormatParams::Csv(fmt) = &stage_info.file_format_params {
+            if fmt.field_delimiter.len() != 1 {
+                return Err(ErrorCode::BadArguments(
+                    "It is not supported to unload CSV file with multi-bytes FIELD_DELIMITER",
+                ));
+            };
+        }
+
         let info = CopyIntoLocationInfo {
             stage: Box::new(stage_info),
             path,

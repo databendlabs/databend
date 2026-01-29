@@ -14,16 +14,16 @@
 
 use std::time::Duration;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
+use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_test_harness::start_metasrv_cluster;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 use tokio::time::Instant;
-
-use crate::testing::meta_service_test_harness;
-use crate::tests::start_metasrv_cluster;
 
 /// Start a cluster of 3 nodes,
 /// and send transfer leader command to the leader
@@ -31,7 +31,7 @@ use crate::tests::start_metasrv_cluster;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_transfer_leader() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
