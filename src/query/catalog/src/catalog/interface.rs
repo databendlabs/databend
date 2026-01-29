@@ -78,6 +78,8 @@ use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -91,8 +93,6 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
@@ -521,11 +521,19 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;
 
+    /// List copied file information for a specific table reference.
+    ///
+    /// The `_ref_id` is the **effective table reference id**:
+    /// - main branch: `table_id`
+    /// - branch:      `branch_id`
+    ///
+    /// It is used to distinguish copied files belonging to different
+    /// branches of the same physical table.
     async fn list_table_copied_file_info(
         &self,
         _tenant: &Tenant,
         _db_name: &str,
-        _table_id: u64,
+        _ref_id: u64,
     ) -> Result<ListTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "'list_table_copied_file_info' not implemented for catalog {}",
@@ -533,11 +541,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    async fn truncate_table(
+    async fn remove_table_copied_file_info(
         &self,
         table_info: &TableInfo,
-        req: TruncateTableReq,
-    ) -> Result<TruncateTableReply>;
+        req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply>;
 
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>>;
 

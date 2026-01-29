@@ -123,6 +123,7 @@ impl Binder {
                                 catalog_name.clone(),
                                 database_name.clone(),
                                 table_name.clone(),
+                                None,
                                 schema.clone(),
                                 &values_str,
                                 CopyIntoTableMode::Replace,

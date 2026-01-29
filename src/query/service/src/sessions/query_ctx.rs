@@ -101,6 +101,7 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
@@ -1554,6 +1555,7 @@ impl TableContext for QueryContext {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         files: &[StageFileInfo],
         path_prefix: Option<String>,
         max_files: Option<usize>,
@@ -1566,13 +1568,16 @@ impl TableContext for QueryContext {
         let collect_duplicated_files = self
             .get_settings()
             .get_enable_purge_duplicated_files_in_copy()?;
-
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
+
+        let table = self
+            .get_table_with_batch(catalog_name, database_name, table_name, branch_name, None)
             .await?;
-        let table_id = table.get_id();
+        let ref_id = TableRefId {
+            table_id: table.get_id(),
+            branch_id: table.get_branch_info().map(|b| b.branch_id()),
+        };
 
         let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
@@ -1593,7 +1598,7 @@ impl TableContext for QueryContext {
                 })
                 .collect::<Vec<_>>();
             let req = GetTableCopiedFileReq {
-                table_id,
+                ref_id: ref_id.clone(),
                 files: files.clone(),
             };
             let start_request = Instant::now();

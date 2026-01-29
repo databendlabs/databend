@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -292,7 +293,14 @@ impl FuseTable {
                 lvt_check: None,
             };
             update_table_metas.push((req, table_info.clone()));
-            copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
+            let ref_id = TableRefId {
+                table_id,
+                branch_id: self.get_branch_id(),
+            };
+            copied_files_req = copied_files
+                .iter()
+                .map(|c| (ref_id.clone(), c.clone()))
+                .collect();
         }
 
         // 3. let's roll

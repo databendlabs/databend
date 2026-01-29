@@ -34,8 +34,9 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
@@ -669,13 +670,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         if self.need_truncate() {
                             // Truncate table operation should be executed in the context of ddl,
                             // which implies auto commit mode.
-                            // Note that `catalog.truncate_table` may mutate table state in the meta server.
+                            // Note that `catalog.remove_table_copied_file_info` may mutate table state in the meta server.
                             assert!(!self.ctx.txn_mgr().lock().is_active());
                             catalog
-                                .truncate_table(&table_info, TruncateTableReq {
-                                    table_id: table_info.ident.table_id,
-                                    batch_size: None,
-                                })
+                                .remove_table_copied_file_info(
+                                    &table_info,
+                                    RemoveTableCopiedFileReq {
+                                        ref_id: TableRefId {
+                                            table_id: table_info.ident.table_id,
+                                            branch_id,
+                                        },
+                                        batch_size: None,
+                                    },
+                                )
                                 .await?;
                         }
 

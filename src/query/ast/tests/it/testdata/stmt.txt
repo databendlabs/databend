@@ -17852,15 +17852,18 @@ CopyIntoTable(
                 "~/mybucket/my data.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -17908,15 +17911,18 @@ CopyIntoTable(
                 "~/mybucket/data.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -17986,15 +17992,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18064,15 +18073,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18146,15 +18158,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18228,15 +18243,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18298,15 +18316,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18355,15 +18376,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18412,15 +18436,18 @@ CopyIntoTable(
                 "my_stage",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18480,15 +18507,18 @@ CopyIntoLocation(
         with: None,
         hints: None,
         src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    44..51,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        44..51,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             with_options: None,
         },
@@ -18542,15 +18572,18 @@ CopyIntoLocation(
         with: None,
         hints: None,
         src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    39..46,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        39..46,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             with_options: None,
         },
@@ -18589,15 +18622,18 @@ CopyIntoLocation(
         with: None,
         hints: None,
         src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    29..36,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        29..36,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             with_options: None,
         },
@@ -18668,15 +18704,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18737,15 +18776,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18806,15 +18848,18 @@ CopyIntoTable(
                 "external_stage/path/to/dir/",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18875,15 +18920,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -18953,15 +19001,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -19034,15 +19085,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..15,
-            ),
-            name: "books",
-            quote: None,
-            ident_type: None,
+        dst: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..15,
+                ),
+                name: "books",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -25139,15 +25193,18 @@ CreatePipe(
                     "~/MyStage1",
                 ),
             ),
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    98..106,
-                ),
-                name: "MyTable1",
-                quote: None,
-                ident_type: None,
+            dst: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        98..106,
+                    ),
+                    name: "MyTable1",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             dst_columns: None,
             hints: None,
@@ -25197,24 +25254,27 @@ CreatePipe(
                     "~/mybucket/data.csv",
                 ),
             ),
-            catalog: None,
-            database: Some(
-                Identifier {
+            dst: TableRef {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            31..34,
+                        ),
+                        name: "db1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
                     span: Some(
-                        31..34,
+                        35..43,
                     ),
-                    name: "db1",
+                    name: "MyTable1",
                     quote: None,
                     ident_type: None,
                 },
-            ),
-            table: Identifier {
-                span: Some(
-                    35..43,
-                ),
-                name: "MyTable1",
-                quote: None,
-                ident_type: None,
+                branch: None,
             },
             dst_columns: None,
             hints: None,

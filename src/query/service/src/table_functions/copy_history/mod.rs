@@ -14,4 +14,4 @@
 
 pub mod copy_history_table;
 
-pub use copy_history_table::CopyHistoryTable;
+pub use copy_history_table::CopyHistoryFunc;

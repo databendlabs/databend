@@ -40,6 +40,7 @@ pub struct HookOperator {
     catalog: String,
     database: String,
     table: String,
+    branch: Option<String>,
     mutation_kind: MutationKind,
     lock_opt: LockTableOption,
 }
@@ -50,6 +51,7 @@ impl HookOperator {
         catalog: String,
         database: String,
         table: String,
+        branch: Option<String>,
         mutation_kind: MutationKind,
         lock_opt: LockTableOption,
     ) -> Self {
@@ -58,6 +60,7 @@ impl HookOperator {
             catalog,
             database,
             table,
+            branch,
             mutation_kind,
             lock_opt,
         }
@@ -71,6 +74,17 @@ impl HookOperator {
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
+        if self.branch.is_some() {
+            // NOTE: HookOperator currently operates on the main table branch only.
+            // TODO(zhyass): make HookOperator branch-aware.
+            log::debug!(
+                "skip hook operator for branch {:?} on table {}.{}",
+                self.branch,
+                self.database,
+                self.table
+            );
+            return;
+        }
         self.execute_compact(pipeline).await;
         self.execute_refresh(pipeline).await;
         self.execute_analyze(pipeline).await;

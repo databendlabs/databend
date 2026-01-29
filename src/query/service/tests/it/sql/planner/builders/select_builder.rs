@@ -36,48 +36,48 @@ impl From<SelectBuilderCaseTuple<'_>> for SelectBuilderCase {
 #[test]
 fn test_select_builder() {
     let cases: Vec<SelectBuilderCase> = vec![
-        (vec![], vec![], vec![], "SELECT * FROM tbl   "),
+        (vec![], vec![], vec![], "SELECT * FROM tbl"),
         (
             vec!["col0", "col1"],
             vec![],
             vec![],
-            "SELECT col0,col1 FROM tbl   ",
+            "SELECT col0,col1 FROM tbl",
         ),
         (
             vec!["col0 AS Col"],
             vec![],
             vec![],
-            "SELECT col0 AS Col FROM tbl   ",
+            "SELECT col0 AS Col FROM tbl",
         ),
         (
             vec![],
             vec!["col0"],
             vec![],
-            "SELECT * FROM tbl  ORDER BY col0 ",
+            "SELECT * FROM tbl ORDER BY col0",
         ),
         (
             vec![],
             vec!["col0", "col1"],
             vec![],
-            "SELECT * FROM tbl  ORDER BY col0,col1 ",
+            "SELECT * FROM tbl ORDER BY col0,col1",
         ),
         (
             vec![],
             vec![],
             vec!["col0 = '1'"],
-            "SELECT * FROM tbl where col0 = '1'  ",
+            "SELECT * FROM tbl where col0 = '1'",
         ),
         (
             vec![],
             vec![],
             vec!["col0 = '1'", "col1 = '2'"],
-            "SELECT * FROM tbl where col0 = '1' and col1 = '2'  ",
+            "SELECT * FROM tbl where col0 = '1' and col1 = '2'",
         ),
         (
             vec!["col3", "col4"],
             vec!["col0", "col1", "col2"],
             vec!["col0 = '1'", "col1 = '2'"],
-            "SELECT col3,col4 FROM tbl where col0 = '1' and col1 = '2' ORDER BY col0,col1,col2 ",
+            "SELECT col3,col4 FROM tbl where col0 = '1' and col1 = '2' ORDER BY col0,col1,col2",
         ),
     ]
     .into_iter()
