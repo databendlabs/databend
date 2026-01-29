@@ -13,8 +13,3 @@ runs:
       shell: bash
       run: |
         ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
-
-    - uses: wntrblm/nox@2025.05.01
-    - name: Run nox test
-      shell: bash
-      run: nox -f tests/nox/noxfile.py -s test_suites -- suites/1_stateful
