@@ -27,7 +27,7 @@ use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app_types::non_empty::NonEmptyString;
+use databend_base::non_empty::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 

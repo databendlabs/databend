@@ -40,7 +40,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_app_types::non_empty::NonEmptyString;
+use databend_base::non_empty::NonEmptyString;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
