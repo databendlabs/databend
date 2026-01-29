@@ -4070,7 +4070,6 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
- "databend-common-metrics",
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta-runtime",
@@ -5632,6 +5631,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-meta-runtime-api",
+ "databend-common-metrics",
  "databend-common-tracing",
  "fastrace",
  "tokio",
