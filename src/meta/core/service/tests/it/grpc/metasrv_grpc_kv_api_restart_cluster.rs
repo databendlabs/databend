@@ -23,7 +23,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
-use databend_common_version::BUILD_INFO;
+use databend_common_version::DATABEND_SEMVER;
 use log::info;
 use test_harness::test;
 use tokio::time::sleep;
@@ -164,7 +164,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
     let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![tcs[0].config.grpc.api_address().unwrap()],
-        BUILD_INFO.semver(),
+        DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         // Without timeout, the client will not be able to reconnect.

@@ -21,9 +21,22 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::BoxFuture;
+use crate::ClientMetricsApi;
 use crate::RuntimeApi;
 use crate::SpawnApi;
 use crate::TrackingData;
+
+/// No-op metrics implementation for lightweight/testing scenarios.
+#[derive(Clone, Copy, Debug)]
+pub struct NoopMetrics;
+
+impl ClientMetricsApi for NoopMetrics {
+    fn record_request_duration(_: &str, _: &str, _: f64) {}
+    fn request_inflight(_: i64) {}
+    fn record_request_success(_: &str, _: &str) {}
+    fn record_request_failed(_: &str, _: &str, _: &str) {}
+    fn record_make_client_fail(_: &str) {}
+}
 
 /// Tokio runtime that can spawn tasks.
 ///
@@ -90,6 +103,8 @@ impl std::fmt::Debug for TokioRuntime {
 
 #[expect(clippy::disallowed_methods)]
 impl SpawnApi for TokioRuntime {
+    type ClientMetrics = NoopMetrics;
+
     fn spawn<F>(future: F, _name: Option<String>) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,

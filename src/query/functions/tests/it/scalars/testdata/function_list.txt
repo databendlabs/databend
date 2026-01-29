@@ -1976,6 +1976,7 @@ Functions overloads:
 0 from_hex(String) :: Binary
 1 from_hex(String NULL) :: Binary NULL
 0 gen_random_uuid() :: String
+0 generate_series FACTORY
 0 geo_distance(Float64, Float64, Float64, Float64) :: Float32
 1 geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 geo_to_h3(Float64, Float64, UInt8) :: UInt64

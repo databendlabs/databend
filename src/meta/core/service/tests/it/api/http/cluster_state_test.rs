@@ -23,7 +23,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::raft_types::new_log_id;
-use databend_common_version::BUILD_INFO;
+use databend_common_version::DATABEND_SEMVER;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use log::info;
@@ -144,7 +144,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
             .await??;
     }
 
-    let version = BUILD_INFO.semver().to_string();
+    let version = DATABEND_SEMVER.clone().to_string();
     let status = meta_handle_0.handle_get_status(&version).await?;
 
     println!(
