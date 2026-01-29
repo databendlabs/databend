@@ -386,7 +386,7 @@ impl RuleEliminateSelfJoin {
             return None;
         };
         Some(GroupKeyItemSignature {
-            column_id: base_col.column_id,
+            column_id: Some(base_col.column_id),
             column_position: base_col.column_position,
             column_name: base_col.column_name.clone(),
         })
@@ -406,7 +406,7 @@ impl RuleEliminateSelfJoin {
                 return None;
             };
             args.push(GroupKeyItemSignature {
-                column_id: base_col.column_id,
+                column_id: Some(base_col.column_id),
                 column_position: base_col.column_position,
                 column_name: base_col.column_name.clone(),
             });

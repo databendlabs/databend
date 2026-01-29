@@ -18,8 +18,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::parser::token::TokenKind;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -42,7 +40,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -70,8 +67,6 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
-use jsonb::keypath::KeyPath;
-use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
@@ -820,45 +815,6 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    fn parse_virtual_column_name(name: &str) -> Result<Scalar> {
-        let tokens = tokenize_sql(name)?;
-        let mut i = 0;
-        let mut key_paths = Vec::new();
-        while i < tokens.len() {
-            let token = &tokens[i];
-            if token.kind == TokenKind::LBracket {
-                i += 1;
-                if i >= tokens.len() {
-                    return Err(ErrorCode::Internal(format!(
-                        "Invalid virtual column name {}",
-                        name
-                    )));
-                }
-                let path_token = &tokens[i];
-                let path = path_token.text();
-                let key_path = if path_token.kind == TokenKind::LiteralString {
-                    let s = &path[1..path.len() - 1];
-                    KeyPath::QuotedName(std::borrow::Cow::Borrowed(s))
-                } else if path_token.kind == TokenKind::LiteralInteger {
-                    let idx = path.parse::<i32>().unwrap();
-                    KeyPath::Index(idx)
-                } else {
-                    return Err(ErrorCode::Internal(format!(
-                        "Invalid virtual column name {}",
-                        name
-                    )));
-                };
-                key_paths.push(key_path);
-                // skip TokenKind::RBracket
-                i += 1;
-            }
-            i += 1;
-        }
-        let keypaths = KeyPaths { paths: key_paths };
-
-        Ok(Scalar::String(format!("{}", keypaths)))
-    }
-
     fn build_virtual_column(
         &self,
         virtual_columns: BTreeMap<IndexType, VirtualColumn>,
@@ -872,8 +828,6 @@ impl PhysicalPlanBuilder {
         for (_, virtual_column) in virtual_columns.into_iter() {
             source_column_ids.insert(virtual_column.source_column_id);
             let target_type = virtual_column.data_type.remove_nullable();
-
-            let key_paths = Self::parse_virtual_column_name(&virtual_column.column_name)?;
             let cast_func_name = if target_type != TableDataType::Variant {
                 Some(format!("to_{}", target_type.to_string().to_lowercase()))
             } else {
@@ -885,7 +839,7 @@ impl PhysicalPlanBuilder {
                 source_name: virtual_column.source_column_name.clone(),
                 column_id: virtual_column.column_id,
                 name: virtual_column.column_name.clone(),
-                key_paths,
+                key_paths: virtual_column.key_paths.clone(),
                 cast_func_name,
                 data_type: Box::new(virtual_column.data_type.clone()),
             };

@@ -86,8 +86,8 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert!(!result.data.is_empty());
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
-        5
-    ); // Expect a, b.c, b.d, e[0].f, e[1]
+        4
+    ); // Expect a, b.c, b.d, e
 
     // Check v['a']
     let meta_a = find_virtual_col(
@@ -122,27 +122,16 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert_eq!(meta_bd.name, "['b']['d']");
     assert_eq!(meta_bd.data_type, VariantDataType::Boolean);
 
-    // Check v['e'][0]['f']
+    // Check v['e']
     let meta_bd = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
-        "['e'][0]['f']",
+        "['e']",
     )
-    .expect("Virtual column ['e'][0]['f'] not found");
+    .expect("Virtual column ['e'] not found");
     assert_eq!(meta_bd.source_column_id, 1);
-    assert_eq!(meta_bd.name, "['e'][0]['f']");
-    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
-
-    // Check v['e'][1]
-    let meta_bd = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "['e'][1]",
-    )
-    .expect("Virtual column ['e'][1] not found");
-    assert_eq!(meta_bd.source_column_id, 1);
-    assert_eq!(meta_bd.name, "['e'][1]");
-    assert_eq!(meta_bd.data_type, VariantDataType::UInt64);
+    assert_eq!(meta_bd.name, "['e']");
+    assert_eq!(meta_bd.data_type, VariantDataType::Jsonb);
 
     let block = DataBlock::new(
         vec![
@@ -196,7 +185,7 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // Expected columns: id, create, text, user.id, replies, geo.lat
+    // Expected columns: id, create, text, user.id, replies, geo.lat, shared_data
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
         6
@@ -304,8 +293,14 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // all columns should be discarded due to > 70% nulls
-    assert!(result.data.is_empty());
+    // all columns should be add to shared_column due to > 70% nulls
+    assert!(!result.data.is_empty());
+    assert!(
+        result
+            .draft_virtual_block_meta
+            .virtual_column_metas
+            .is_empty()
+    );
 
     // Test consecutive blocks with different JSON virtual columns
     // This test verifies that when adding consecutive blocks with completely different
@@ -561,17 +556,6 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
     assert_eq!(meta_user_active.source_column_id, 1);
     assert_eq!(meta_user_active.name, "['user']['active']");
     assert_eq!(meta_user_active.data_type, VariantDataType::Boolean);
-
-    // Check tags[0] column (only present in the third block)
-    let meta_tags = find_virtual_col(
-        &result.draft_virtual_block_meta.virtual_column_metas,
-        1,
-        "['tags'][0]",
-    )
-    .expect("Virtual column ['tags'][0] not found");
-    assert_eq!(meta_tags.source_column_id, 1);
-    assert_eq!(meta_tags.name, "['tags'][0]");
-    assert_eq!(meta_tags.data_type, VariantDataType::String);
 
     Ok(())
 }

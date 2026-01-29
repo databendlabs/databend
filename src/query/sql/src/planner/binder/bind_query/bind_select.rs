@@ -259,6 +259,8 @@ impl Binder {
         // add internal column binding into expr
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
+        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
+
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context

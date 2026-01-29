@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 pub use hnsw::HNSWIndex;
 use parquet::format::FileMetaData;
 pub use quantization::DistanceType;
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct VectorIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
@@ -147,7 +148,7 @@ impl TryFrom<FileMetaData> for VectorIndexMeta {
                 }
                 None => {
                     panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
+                        "expecting chunk meta data while converting ThriftFileMetaData to VectorIndexMeta"
                     )
                 }
             }

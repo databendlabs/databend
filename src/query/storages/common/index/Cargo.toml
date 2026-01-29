@@ -20,6 +20,9 @@ databend-common-functions = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
+arrow-ipc = { workspace = true }
+arrow-schema = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
 bitvec = { workspace = true }
 bytemuck = { workspace = true }

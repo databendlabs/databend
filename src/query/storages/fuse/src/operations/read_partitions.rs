@@ -453,6 +453,7 @@ impl FuseTable {
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
         if pruner.pruning_ctx.bloom_pruner.is_some()
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
+            || pruner.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {

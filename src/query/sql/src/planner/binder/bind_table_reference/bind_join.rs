@@ -855,7 +855,41 @@ impl<'a> JoinConditionResolver<'a> {
                 non_equi_conditions.push(predicate);
             }
         }
+        self.merge_bound_virtual_columns(&join_context);
         Ok(())
+    }
+
+    fn merge_bound_virtual_columns(&mut self, join_context: &BindContext) {
+        if join_context.bound_virtual_columns.is_empty() {
+            return;
+        }
+        for (virtual_name, (column_id, column_index)) in join_context.bound_virtual_columns.iter() {
+            if self
+                .join_context
+                .bound_virtual_columns
+                .contains_key(virtual_name)
+            {
+                continue;
+            }
+            self.join_context
+                .bound_virtual_columns
+                .insert(virtual_name.clone(), (*column_id, *column_index));
+            if self
+                .join_context
+                .columns
+                .iter()
+                .any(|binding| binding.index == *column_index)
+            {
+                continue;
+            }
+            if let Some(binding) = join_context
+                .columns
+                .iter()
+                .find(|binding| binding.index == *column_index)
+            {
+                self.join_context.columns.push(binding.clone());
+            }
+        }
     }
 
     fn resolve_using(

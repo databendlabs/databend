@@ -1138,4 +1138,26 @@ impl Binder {
         }
         Ok(s_expr)
     }
+
+    pub(crate) fn add_virtual_column_into_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context.bound_virtual_columns.is_empty() {
+            return Ok(s_expr);
+        }
+        let bound_virtual_columns = &bind_context.bound_virtual_columns;
+
+        let mut s_expr = s_expr;
+        for (virtual_column_name, (_, column_index)) in bound_virtual_columns.iter() {
+            s_expr = s_expr.add_column_index_to_scans(
+                virtual_column_name.table_index,
+                *column_index,
+                &None,
+                &None,
+            );
+        }
+        Ok(s_expr)
+    }
 }

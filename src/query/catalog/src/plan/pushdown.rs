@@ -21,13 +21,13 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::table::ChangeType;
+use jsonb::keypath::OwnedKeyPaths;
 
 use super::AggIndexInfo;
 use crate::plan::Projection;
@@ -57,7 +57,7 @@ pub struct VirtualColumnField {
     /// The virtual column name.
     pub name: String,
     /// Paths to generate virtual column from source column.
-    pub key_paths: Scalar,
+    pub key_paths: OwnedKeyPaths,
     /// optional cast function name, used to cast value to other type.
     pub cast_func_name: Option<String>,
     /// Virtual column data type.

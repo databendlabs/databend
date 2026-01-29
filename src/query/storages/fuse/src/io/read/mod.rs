@@ -49,3 +49,4 @@ pub use vector_index::load_vector_index_files;
 pub use vector_index::load_vector_index_meta;
 pub use virtual_column::VirtualBlockReadResult;
 pub use virtual_column::VirtualColumnReader;
+pub use virtual_column::load_virtual_column_file_meta;

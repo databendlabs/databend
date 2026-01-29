@@ -22,6 +22,7 @@ pub use databend_storages_common_index::InvertedIndexFile;
 pub use databend_storages_common_index::InvertedIndexMeta;
 pub use databend_storages_common_index::VectorIndexFile;
 pub use databend_storages_common_index::VectorIndexMeta;
+pub use databend_storages_common_index::VirtualColumnFileMeta;
 pub use databend_storages_common_index::filters::FilterImpl;
 pub use databend_storages_common_table_meta::meta::BlockMeta;
 pub use databend_storages_common_table_meta::meta::CompactSegmentInfo;

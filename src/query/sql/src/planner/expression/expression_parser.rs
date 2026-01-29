@@ -24,6 +24,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -68,7 +69,6 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         false,
         false,
         None,
-        false,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
@@ -212,7 +212,7 @@ pub fn parse_computed_expr(
             table_field.data_type().clone(),
             0,
             None,
-            None,
+            index as ColumnId,
             None,
             None,
         );
@@ -267,7 +267,7 @@ pub fn parse_computed_expr_to_string(
             field.data_type().clone(),
             0,
             None,
-            Some(field.column_id),
+            field.column_id,
             None,
             None,
         );

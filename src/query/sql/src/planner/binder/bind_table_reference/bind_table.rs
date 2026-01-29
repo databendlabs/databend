@@ -188,7 +188,6 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
-                    false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -275,7 +274,6 @@ impl Binder {
                         false,
                         false,
                         None,
-                        bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -309,7 +307,6 @@ impl Binder {
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
-                    bind_context.allow_virtual_column,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(

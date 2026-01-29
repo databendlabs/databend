@@ -1273,7 +1273,7 @@ impl TryFrom<FileMetaData> for InvertedIndexMeta {
                 }
                 None => {
                     panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
+                        "expecting chunk meta data while converting ThriftFileMetaData to InvertedIndexMeta"
                     )
                 }
             }

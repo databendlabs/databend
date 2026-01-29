@@ -57,8 +57,8 @@ pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 pub const VECTOR_SCORE_COLUMN_ID: u32 = u32::MAX - 9;
 
 pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_000;
-pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_002_000;
-pub const VIRTUAL_COLUMNS_LIMIT: usize = 2000;
+pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_001_000;
+pub const VIRTUAL_COLUMNS_LIMIT: usize = 1000;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -184,7 +184,7 @@ pub struct VirtualDataSchema {
     pub metadata: BTreeMap<String, String>,
     // next column id that assign to VirtualDataField.column_id
     #[serde(default = "uninit_virtual_column_id")]
-    pub next_column_id: u32,
+    pub next_column_id: ColumnId,
     pub number_of_blocks: u64,
 }
 

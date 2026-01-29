@@ -178,7 +178,7 @@ impl PruningContext {
         let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner = VirtualColumnPruner::try_create(push_down)?;
+        let virtual_column_pruner = VirtualColumnPruner::try_create(dal.clone(), push_down)?;
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.

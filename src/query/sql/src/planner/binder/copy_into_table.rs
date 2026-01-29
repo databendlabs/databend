@@ -525,6 +525,7 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
+        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
