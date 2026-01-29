@@ -33,7 +33,6 @@ pub(crate) mod rpc_handler;
 
 pub use channel_manager::MetaChannelManager;
 pub use client_handle::ClientHandle;
-pub use databend_common_meta_api::reply::reply_to_api_result;
 pub use grpc_action::GetKVReply;
 pub use grpc_action::GetKVReq;
 pub use grpc_action::ListKVReply;
