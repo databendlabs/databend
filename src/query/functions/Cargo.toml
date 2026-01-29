@@ -35,6 +35,7 @@ hex = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
 jaq-interpret = { workspace = true }
+jaq-json = { workspace = true }
 jaq-parse = { workspace = true }
 jaq-std = { workspace = true }
 jiff = { workspace = true }

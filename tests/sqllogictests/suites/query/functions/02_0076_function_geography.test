@@ -35,3 +35,254 @@ SELECT a, g FROM t1
 ----
 1 POINT(38.986635 58.1900303)
 2 POINT(4.500212 -52.16117)
+
+statement ok
+SET geometry_output_format='EWKT'
+
+query T
+SELECT to_string(st_geographyfromwkb('0101000020E6100000000000000000F03F0000000000000040'));
+----
+POINT(1 2)
+
+query T
+SELECT st_asgeojson(st_geogfromwkt('POINT(1 2)'));
+----
+{"coordinates":[1,2],"type":"Point"}
+
+query T
+SELECT UPPER(TO_HEX(st_asewkb(st_geogfromwkt('POINT(1 2)'))));
+----
+0101000020E6100000000000000000F03F0000000000000040
+
+query T
+SELECT UPPER(TO_HEX(st_aswkb(st_geogfromwkt('POINT(1 2)'))));
+----
+0101000000000000000000F03F0000000000000040
+
+query T
+SELECT st_asewkt(st_geogfromwkt('POINT(1 2)'));
+----
+SRID=4326;POINT(1 2)
+
+query T
+SELECT st_aswkt(st_geogfromwkt('POINT(1 2)'));
+----
+POINT(1 2)
+
+query R
+SELECT st_distance(st_geogfromwkt('POINT(0 0)'), st_geogfromwkt('POINT(1 0)'));
+----
+111195.080233533
+
+query R
+SELECT st_length(st_geogfromwkt('LINESTRING(0 0, 1 0)'));
+----
+111319.490793274
+
+query R
+SELECT st_area(st_geogfromwkt('POINT(0 0)'));
+----
+0.0
+
+query B
+SELECT st_area(st_geogfromwkt('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))')) > 0;
+----
+1
+
+statement ok
+SET geometry_output_format='WKT'
+
+query T
+SELECT to_string(st_startpoint(st_geogfromwkt('LINESTRING(1 1, 2 2, 3 3)')));
+----
+POINT(1 1)
+
+query T
+SELECT to_string(st_endpoint(st_geogfromwkt('LINESTRING(1 1, 2 2, 3 3)')));
+----
+POINT(3 3)
+
+query T
+SELECT to_string(st_pointn(st_geogfromwkt('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 2));
+----
+POINT(2 2)
+
+query T
+SELECT to_string(st_pointn(st_geogfromwkt('LINESTRING(1 1, 2 2, 3 3, 4 4)'), -2));
+----
+POINT(3 3)
+
+query T
+SELECT to_string(st_makeline(st_geogfromwkt('POINT(1 2)'), st_geogfromwkt('POINT(3 4)')));
+----
+LINESTRING(1 2,3 4)
+
+query T
+SELECT st_geohash(st_geogfromwkt('POINT(-122.306100 37.554162)'));
+----
+9q9j8ue2v71y
+
+query T
+SELECT st_geohash(st_geogfromwkt('POINT(-122.306100 37.554162)'), 10);
+----
+9q9j8ue2v7
+
+query RR
+SELECT st_x(st_geogfromwkt('POINT(37.5 45.5)')), st_y(st_geogfromwkt('POINT(37.5 45.5)'));
+----
+37.5 45.5
+
+query ?
+SELECT st_x(st_geogfromwkt(NULL)), st_y(st_geogfromwkt(NULL));
+----
+NULL NULL
+
+query I
+SELECT st_srid(st_geogfromwkt('POINT(1 2)'));
+----
+4326
+
+query ?
+SELECT st_srid(NULL);
+----
+NULL
+
+query R
+SELECT st_xmax(st_geogfromwkt('POINT(-180 0)'));
+----
+-180.0
+
+query R
+SELECT st_xmax(st_geogfromwkt('LINESTRING(-179 0, 179 0)'));
+----
+179.0
+
+query R
+SELECT st_xmin(st_geogfromwkt('POINT(-180 0)'));
+----
+-180.0
+
+query R
+SELECT st_xmin(st_geogfromwkt('LINESTRING(-179 0, 179 0)'));
+----
+-179.0
+
+query R
+SELECT st_ymax(st_geogfromwkt('POINT(-180 0)'));
+----
+0.0
+
+query R
+SELECT st_ymax(st_geogfromwkt('LINESTRING(-179 10, 179 22)'));
+----
+22.0
+
+query R
+SELECT st_ymin(st_geogfromwkt('POINT(-180 0)'));
+----
+0.0
+
+query R
+SELECT st_ymin(st_geogfromwkt('LINESTRING(-179 10, 179 22)'));
+----
+10.0
+
+statement ok
+CREATE OR REPLACE TABLE geography_shapes (g GEOGRAPHY);
+
+statement ok
+INSERT INTO geography_shapes VALUES
+    ('POINT(66 12)'),
+    ('MULTIPOINT((45 21), (12 54))'),
+    ('LINESTRING(40 60, 50 50, 60 40)'),
+    ('MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))'),
+    ('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'),
+    ('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'),
+    ('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))')
+    ;
+
+query I
+SELECT st_dimension(g) FROM geography_shapes;
+----
+0
+0
+1
+1
+2
+2
+2
+
+query IT
+SELECT st_npoints(g), st_aswkt(g) FROM geography_shapes;
+----
+1 POINT(66 12)
+2 MULTIPOINT(45 21,12 54)
+3 LINESTRING(40 60,50 50,60 40)
+5 MULTILINESTRING((1 1,32 17),(33 12,73 49,87.1 6.1))
+5 POLYGON((17 17,17 30,30 30,30 17,17 17))
+8 MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))
+8 GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))
+
+statement ok
+SET geometry_output_format='GeoJSON'
+
+query T
+SELECT to_string(st_geogpointfromgeohash('s02equ0'))
+----
+{"type": "Point", "coordinates": [1.0004425048828125,2.0001983642578125]}
+
+statement ok
+CREATE OR REPLACE TABLE t1 (s varchar);
+
+statement ok
+INSERT INTO t1 VALUES('9q60y60rhs');
+
+query T
+SELECT to_string(st_geogfromgeohash(s)) FROM t1;
+----
+{"type": "Polygon", "coordinates": [[[-120.66229462623596,35.30029535293579],[-120.66229462623596,35.30030071735382],[-120.66230535507202,35.30030071735382],[-120.66230535507202,35.30029535293579],[-120.66229462623596,35.30029535293579]]]}
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE OR REPLACE TABLE t1 (g GEOGRAPHY)
+
+statement ok
+INSERT INTO t1 VALUES
+    ('LINESTRING(0.0 0.0, 1.0 0.0, 1.0 2.0, 0.0 2.0, 0.0 0.0)'),
+    ('LINESTRING(0.0 0.2, 1.4 5, 1.9 2, 0 2, 0.0 0.2)')
+
+query T
+SELECT to_string(st_makepolygon(g)) FROM t1
+----
+{"type": "Polygon", "coordinates": [[[0,0],[1,0],[1,2],[0,2],[0,0]]]}
+{"type": "Polygon", "coordinates": [[[0,0.2],[1.4,5],[1.9,2],[0,2],[0,0.2]]]}
+
+statement ok
+SET geometry_output_format='WKT'
+
+query T
+SELECT to_string(to_geography(parse_json('{"type":"Point","coordinates":[1,2]}')));
+----
+POINT(1 2)
+
+query T
+SELECT to_string(to_geography('POINT(1 2)'));
+----
+POINT(1 2)
+
+query T
+SELECT to_string(to_geography(UNHEX('0101000000000000000000F03F0000000000000040')));
+----
+POINT(1 2)
+
+query T
+SELECT to_string(try_to_geography(parse_json('{"type":"Point","coordinates":[1,2]}')));
+----
+POINT(1 2)
+
+query ?
+SELECT to_string(try_to_geography('invalid'));
+----
+NULL

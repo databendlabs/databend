@@ -277,11 +277,11 @@ output         : 0101000020797F000066666666A9CB17411F85EBC19E325641
 
 ast            : to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
-checked expr   : CAST<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary)
-optimized expr : 0101000020E61000006666666666965EC06666666666C64240
+checked expr   : CAST<Geography>(st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary)
+optimized expr : 01010000006666666666965EC06666666666C64240
 output type    : Binary
 output domain  : Undefined
-output         : 0101000020E61000006666666666965EC06666666666C64240
+output         : 01010000006666666666965EC06666666666C64240
 
 
 ast            : TRY_from_base64('QWJj')::String
@@ -410,10 +410,10 @@ output         : 0101000020797F000066666666A9CB17411F85EBC19E325641
 
 ast            : TRY_to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : TRY_to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
-checked expr   : TRY_CAST<Geography>(st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary NULL)
-optimized expr : 0101000020E61000006666666666965EC06666666666C64240
+checked expr   : TRY_CAST<Geography>(st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)") AS Binary NULL)
+optimized expr : 01010000006666666666965EC06666666666C64240
 output type    : Binary NULL
 output domain  : Undefined
-output         : 0101000020E61000006666666666965EC06666666666C64240
+output         : 01010000006666666666965EC06666666666C64240
 
 
