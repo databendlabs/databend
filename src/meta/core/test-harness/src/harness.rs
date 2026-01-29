@@ -62,8 +62,7 @@ fn init_logging() -> impl Any {
     let mut config = databend_common_tracing::Config::new_testing();
     config.file.level = "DEBUG".to_string();
 
-    let guards = databend_common_tracing::init_logging("meta_unittests", &config, BTreeMap::new());
-    guards
+    databend_common_tracing::init_logging("meta_unittests", &config, BTreeMap::new())
 }
 
 fn shutdown_test() {
