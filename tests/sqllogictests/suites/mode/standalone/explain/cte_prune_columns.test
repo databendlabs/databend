@@ -99,5 +99,69 @@ Sequence
         ├── cte_schema: [a (#4), b (#5), c (#6)]
         └── estimated rows: 3.00
 
+query T nosort
+explain
+with inner_cte as (select a, b, c, d from cte_prune_t),
+     outer_cte as (
+         select x.a, y.c
+         from inner_cte x
+         join inner_cte y on x.a = y.a
+     )
+select x.a
+from outer_cte x
+join outer_cte y on x.a = y.a;
+----
+Sequence
+├── MaterializedCTE: inner_cte
+│   └── TableScan
+│       ├── table: default.default.cte_prune_t
+│       ├── scan id: 0
+│       ├── output columns: [a (#0)]
+│       ├── read rows: 3
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 3.00
+└── Sequence
+    ├── MaterializedCTE: outer_cte
+    │   └── HashJoin
+    │       ├── output columns: [cte_prune_t.a (#4)]
+    │       ├── join type: INNER
+    │       ├── build keys: [y.a (#8)]
+    │       ├── probe keys: [x.a (#4)]
+    │       ├── keys is null equal: [false]
+    │       ├── filters: []
+    │       ├── build join filters:
+    │       │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
+    │       ├── estimated rows: 3.00
+    │       ├── MaterializeCTERef(Build)
+    │       │   ├── cte_name: inner_cte
+    │       │   ├── cte_schema: [a (#8)]
+    │       │   └── estimated rows: 3.00
+    │       └── MaterializeCTERef(Probe)
+    │           ├── cte_name: inner_cte
+    │           ├── cte_schema: [a (#4)]
+    │           └── estimated rows: 3.00
+    └── HashJoin
+        ├── output columns: [cte_prune_t.a (#12)]
+        ├── join type: INNER
+        ├── build keys: [y.a (#20)]
+        ├── probe keys: [x.a (#12)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters:
+        │   └── filter id:1, build key:y.a (#20), probe targets:[x.a (#12)@scan3], filter type:bloom,inlist,min_max
+        ├── estimated rows: 3.00
+        ├── MaterializeCTERef(Build)
+        │   ├── cte_name: outer_cte
+        │   ├── cte_schema: [a (#20)]
+        │   └── estimated rows: 3.00
+        └── MaterializeCTERef(Probe)
+            ├── cte_name: outer_cte
+            ├── cte_schema: [a (#12)]
+            └── estimated rows: 3.00
+
 statement ok
 drop table cte_prune_t;

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_meta_app::schema::TableInfo;
@@ -396,6 +397,29 @@ impl PhysicalPlanBuilder {
                         *cols = cols.union(&required_mapped).cloned().collect();
                     })
                     .or_insert(required_mapped);
+                Ok(())
+            }
+            RelOperator::Sequence(_) => {
+                // The right child contains all consumers for the left CTE definition.
+                self.collect_cte_required_columns(s_expr.child(1)?, required.clone())?;
+
+                let left_child = s_expr.child(0)?;
+                let RelOperator::MaterializedCTE(cte) = left_child.plan() else {
+                    return Err(ErrorCode::Internal(
+                        "Sequence left child is expected to be MaterializedCTE".to_string(),
+                    ));
+                };
+                let cte_required = self
+                    .cte_required_columns
+                    .get(&cte.cte_name)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "CTE required columns not found for CTE name: {}",
+                            cte.cte_name
+                        ))
+                    })?
+                    .clone();
+                self.collect_cte_required_columns(left_child.child(0)?, cte_required)?;
                 Ok(())
             }
             _ => {
