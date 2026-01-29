@@ -15,8 +15,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
@@ -33,6 +31,8 @@ use tokio::sync::oneshot::Sender;
 use tonic::codegen::BoxStream;
 
 use crate::established_client::EstablishedClient;
+use crate::grpc_action::ListKVReq;
+use crate::grpc_action::MGetKVReq;
 
 /// A request that is sent by a meta-client handle to its worker.
 pub struct ClientWorkerRequest {

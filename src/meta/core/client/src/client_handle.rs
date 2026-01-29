@@ -23,13 +23,12 @@ use std::sync::atomic::Ordering;
 
 use anyerror::AnyError;
 use databend_base::counter::Counter;
-use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -51,6 +50,11 @@ use crate::InitFlag;
 use crate::RequestFor;
 use crate::Streamed;
 use crate::established_client::EstablishedClient;
+use crate::grpc_action::GetKVReply;
+use crate::grpc_action::ListKVReq;
+use crate::grpc_action::MGetKVReply;
+use crate::grpc_action::MGetKVReq;
+use crate::grpc_action::UpsertKVReply;
 use crate::message;
 use crate::message::Response;
 
@@ -136,6 +140,36 @@ impl<RT: SpawnApi> ClientHandle<RT> {
 
         let reply = resp.into_upsert_reply()?;
         Ok(reply)
+    }
+
+    pub async fn upsert_kv(&self, upsert: UpsertKV) -> Result<UpsertKVReply, MetaError> {
+        self.upsert_via_txn(upsert).await.map_err(MetaError::from)
+    }
+
+    pub async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+        self.request(txn).await.map_err(MetaError::from)
+    }
+
+    pub async fn get_kv(&self, key: &str) -> Result<GetKVReply, MetaError> {
+        let mut res = self.mget_kv(&[key.to_string()]).await?;
+        Ok(res.pop().flatten())
+    }
+
+    pub async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, MetaError> {
+        use futures::TryStreamExt;
+
+        let strm = self
+            .request(Streamed(MGetKVReq {
+                keys: keys.to_vec(),
+            }))
+            .await?;
+
+        let res: MGetKVReply = strm
+            .map_ok(|item| item.value.map(|v| v.into()))
+            .try_collect()
+            .await?;
+
+        Ok(res)
     }
 
     /// Send a request to the internal worker task, which will be running in another runtime.

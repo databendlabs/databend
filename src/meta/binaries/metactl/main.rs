@@ -48,8 +48,6 @@ use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_tracing::Config as LogConfig;

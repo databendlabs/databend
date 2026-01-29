@@ -17,9 +17,9 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_base::non_empty::NonEmptyString;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::tenant::Tenant;
-use databend_base::non_empty::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
