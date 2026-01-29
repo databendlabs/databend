@@ -138,6 +138,11 @@ impl SpawnApi for DatabendRuntime {
         let span = databend_common_tracing::start_trace_for_remote_request(name, &request);
         Box::pin(f(request).in_span(span))
     }
+
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send> {
+        let payload = runtime::ThreadTracker::new_tracking_payload();
+        Box::new(move || Box::new(runtime::ThreadTracker::tracking(payload)))
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

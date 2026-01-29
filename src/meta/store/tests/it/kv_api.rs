@@ -15,21 +15,19 @@
 use async_trait::async_trait;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_runtime_api::TokioRuntime;
-use databend_common_meta_store::LocalMetaService;
+use databend_common_meta_store::MetaStore;
 use databend_common_version::BUILD_INFO;
 
 #[derive(Clone)]
 struct MetaNodeUnitTestBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
-    async fn build(&self) -> LocalMetaService {
-        LocalMetaService::new::<TokioRuntime>("UT-Meta", BUILD_INFO.semver())
-            .await
-            .unwrap()
+impl kvapi::ApiBuilder<MetaStore> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> MetaStore {
+        MetaStore::new_local_testing::<TokioRuntime>(BUILD_INFO.semver()).await
     }
 
-    async fn build_cluster(&self) -> Vec<LocalMetaService> {
+    async fn build_cluster(&self) -> Vec<MetaStore> {
         todo!()
     }
 }

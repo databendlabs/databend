@@ -158,6 +158,10 @@ impl SpawnApi for TokioRuntime {
     {
         Box::pin(f(request))
     }
+
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send> {
+        Box::new(|| Box::new(()))
+    }
 }
 
 #[expect(clippy::disallowed_methods)]

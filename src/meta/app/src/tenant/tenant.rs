@@ -17,7 +17,7 @@
 
 use std::fmt::Display;
 
-use databend_common_meta_app_types::non_empty::NonEmptyString;
+use databend_base::non_empty::NonEmptyString;
 
 use crate::app_error::TenantIsEmpty;
 

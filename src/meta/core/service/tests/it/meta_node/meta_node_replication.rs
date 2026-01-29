@@ -17,8 +17,8 @@
 use std::fs;
 use std::io::Read;
 
+use databend_common_meta_client::GetKVReq;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_runtime_api::TokioRuntime;

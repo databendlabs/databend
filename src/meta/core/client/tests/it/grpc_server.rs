@@ -184,6 +184,7 @@ pub fn start_grpc_server() -> (String, oneshot::Sender<()>, JoinHandle<()>) {
 }
 
 /// Returns a shutdown tx and a task handle.
+#[allow(clippy::disallowed_methods)]
 pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, JoinHandle<()>) {
     let addr = addr.to_string().parse().unwrap();
 

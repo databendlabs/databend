@@ -22,7 +22,6 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::ClientMetricsApi;
@@ -281,7 +280,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
 
             debug!(worker_request :? =(&worker_request); "{} worker handle request", self);
 
-            let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
+            let _guard = (worker_request.tracking_fn.take().unwrap())();
             let span = Span::enter_with_parent(func_path!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {

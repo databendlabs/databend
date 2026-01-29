@@ -15,9 +15,7 @@
 use std::time::Duration;
 
 use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_api::TableApi;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -61,10 +59,9 @@ async fn test_tls_server() -> anyhow::Result<()> {
         Some(tls_conf),
     )?;
 
-    let r = client
-        .get_table(("do not care", "do not care", "do not care").into())
-        .await;
-    assert!(r.is_err());
+    // Use get_cluster_status to verify TLS connection works (this connects to server)
+    let r = client.get_cluster_status().await;
+    assert!(r.is_ok());
 
     Ok(())
 }
