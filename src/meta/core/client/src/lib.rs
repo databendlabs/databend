@@ -17,8 +17,6 @@
 
 extern crate core;
 
-databend_common_tracing::register_module_tag!("[META_CLIENT]");
-
 mod channel_manager;
 mod client_handle;
 pub mod endpoints;

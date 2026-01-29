@@ -18,7 +18,6 @@ databend-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
