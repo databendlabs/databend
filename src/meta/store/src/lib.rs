@@ -23,7 +23,9 @@ use std::time::UNIX_EPOCH;
 
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::Streamed;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
@@ -275,16 +277,14 @@ impl kvapi::KVApi for MetaStore {
             }
         }
 
-        // Make batch request for successfully collected keys
-        let strm = self.inner().mget_kv(&collected).await?;
+        // Make batch request for successfully collected keys.
+        // Use the streaming request directly to preserve keys in the response.
+        let strm = self
+            .inner()
+            .request(Streamed(MGetKVReq { keys: collected }))
+            .await?;
 
-        // Convert to KVStream format
-        let strm = futures::stream::iter(strm.into_iter().map(|opt| {
-            Ok(databend_common_meta_types::protobuf::StreamItem {
-                key: String::new(),
-                value: opt.map(|v| v.into()),
-            })
-        }));
+        let strm = strm.map_err(MetaError::from);
 
         // If there was an input error, append it to the output stream
         match input_error {
