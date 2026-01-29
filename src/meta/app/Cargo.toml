@@ -12,13 +12,13 @@ storage-hdfs = []
 [dependencies]
 anyerror = { workspace = true }
 chrono = { workspace = true }
+databend-base = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app-storage = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
-databend-base = { workspace = true }
 databend-common-meta-types = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
