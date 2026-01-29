@@ -5632,6 +5632,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-meta-runtime-api",
+ "databend-common-metrics",
  "databend-common-tracing",
  "fastrace",
  "tokio",

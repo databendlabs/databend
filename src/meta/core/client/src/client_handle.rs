@@ -26,6 +26,7 @@ use databend_base::counter::Counter;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
@@ -51,7 +52,6 @@ use crate::InitFlag;
 use crate::RequestFor;
 use crate::Streamed;
 use crate::established_client::EstablishedClient;
-use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
 
@@ -155,7 +155,7 @@ impl<RT: SpawnApi> ClientHandle<RT> {
             .map_err(MetaClientError::from)?;
 
         let recv_res = RT::unlimited_future(async move {
-            let _g = grpc_metrics::client_request_inflight.counted_guard();
+            let _g = request_inflight::<RT>().counted_guard();
             rx.await
         })
         .await;
@@ -173,7 +173,7 @@ impl<RT: SpawnApi> ClientHandle<RT> {
         <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
     {
-        let _g = grpc_metrics::client_request_inflight.counted_guard();
+        let _g = request_inflight::<RT>().counted_guard();
 
         let rx = self
             .send_request_to_worker(req)
@@ -276,4 +276,9 @@ impl<RT: SpawnApi> ClientHandle<RT> {
     pub async fn get_cached_endpoints(&self) -> Result<Vec<String>, MetaError> {
         self.request(message::GetEndpoints {}).await
     }
+}
+
+/// Create a counter function for tracking in-flight requests.
+fn request_inflight<RT: SpawnApi>() -> impl FnMut(i64) {
+    |delta: i64| RT::ClientMetrics::request_inflight(delta)
 }

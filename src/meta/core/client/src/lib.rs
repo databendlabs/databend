@@ -26,7 +26,6 @@ pub mod errors;
 pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
-mod grpc_metrics;
 mod kv_api_impl;
 mod message;
 mod pool;
