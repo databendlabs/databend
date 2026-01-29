@@ -21,7 +21,6 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
-use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
@@ -106,8 +105,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo_to_json(geo) {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo_to_json(geo) {
                     Ok(json) => {
                         if let Err(e) =
                             parse_owned_jsonb_with_buf(json.as_bytes(), &mut builder.data)
@@ -138,8 +137,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo_to_ewkb(geo, Some(GEOGRAPHY_SRID)) {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo_to_ewkb(geo, Some(GEOGRAPHY_SRID)) {
                     Ok(ewkb) => {
                         builder.put_slice(ewkb.as_slice());
                     }
@@ -166,8 +165,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo_to_wkb(geo) {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo_to_wkb(geo) {
                     Ok(wkb) => {
                         builder.put_slice(wkb.as_slice());
                     }
@@ -194,8 +193,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)) {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)) {
                     Ok(ewkt) => {
                         builder.put_str(&ewkt);
                     }
@@ -222,8 +221,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo_to_wkt(geo) {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo_to_wkt(geo) {
                     Ok(wkt) => {
                         builder.put_str(&wkt);
                     }
@@ -252,11 +251,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
 
-                    match (
-                        ewkb_to_geo(&mut Ewkb(l_ewkb)),
-                        ewkb_to_geo(&mut Ewkb(r_ewkb)),
-                    ) {
-                        (Ok((l_geo, _)), Ok((r_geo, _))) => {
+                    match (Ewkb(l_ewkb).to_geo(), Ewkb(r_ewkb).to_geo()) {
+                        (Ok(l_geo), Ok(r_geo)) => {
                             let distance = haversine_distance_between_geometries(&l_geo, &r_geo);
                             match distance {
                                 Ok(distance) => {
@@ -290,8 +286,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => {
                     let area = geo.geodesic_area_unsigned();
                     let area = (area * 1_000_000_000_f64).round() / 1_000_000_000_f64;
                     builder.push(area.into());
@@ -316,8 +312,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                    Ok((geo, _)) => match geo {
+                match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => match geo {
                         Geometry::LineString(line_string) => {
                             let mut points = line_string.points();
                             if let Some(point) = points.next_back() {
@@ -364,8 +360,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                    Ok((geo, _)) => match geo {
+                match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => match geo {
                         Geometry::LineString(line_string) => {
                             let mut points = line_string.points();
                             if let Some(point) = points.next() {
@@ -412,8 +408,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                    Ok((geo, _)) => match geo {
+                match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => match geo {
                         Geometry::LineString(line_string) => {
                             let mut points = line_string.points();
                             let len = points.len() as i32;
@@ -566,8 +562,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo {
                     Geometry::LineString(line_string) => {
                         let points = line_string.into_points();
                         if points.len() < 4 {
@@ -624,8 +620,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                match (ewkb_to_geo(&mut Ewkb(l_ewkb)), ewkb_to_geo(&mut Ewkb(r_ewkb))) {
-                    (Ok((l_geo, _)), Ok((r_geo, _))) => {
+                match (Ewkb(l_ewkb).to_geo(), Ewkb(r_ewkb).to_geo()) {
+                    (Ok(l_geo), Ok(r_geo)) => {
                         let geos = [l_geo, r_geo];
                         let mut coords: Vec<Coord> = vec![];
                         for geo in geos.iter() {
@@ -853,8 +849,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo {
                     Geometry::Point(point) => {
                         builder.push(F64::from(AsPrimitive::<f64>::as_(point.x())));
                     }
@@ -888,8 +884,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            match ewkb_to_geo(&mut Ewkb(ewkb)) {
-                Ok((geo, _)) => match geo {
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geo {
                     Geometry::Point(point) => {
                         builder.push(F64::from(AsPrimitive::<f64>::as_(point.y())));
                     }
