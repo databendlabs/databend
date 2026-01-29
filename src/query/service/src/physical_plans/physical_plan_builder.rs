@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
@@ -39,6 +40,8 @@ pub struct PhysicalPlanBuilder {
     pub dry_run: bool,
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
+    pub cte_required_columns: HashMap<String, ColumnSet>,
+    pub is_cte_required_columns_collected: bool,
 }
 
 impl PhysicalPlanBuilder {
@@ -50,6 +53,8 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             mutation_build_info: None,
+            cte_required_columns: HashMap::new(),
+            is_cte_required_columns_collected: false,
         }
     }
 
@@ -63,6 +68,11 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        if !self.is_cte_required_columns_collected {
+            self.collect_cte_required_columns(s_expr, required.clone())?;
+            self.is_cte_required_columns_collected = true;
+        }
+
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
 
@@ -155,6 +165,247 @@ impl PhysicalPlanBuilder {
 
     pub fn set_metadata(&mut self, metadata: MetadataRef) {
         self.metadata = metadata;
+    }
+
+    pub(crate) fn derive_children_required_columns(
+        &self,
+        s_expr: &SExpr,
+        parent_required: &ColumnSet,
+    ) -> Result<Vec<ColumnSet>> {
+        let arity = s_expr.arity();
+        if arity == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut child_required: Vec<ColumnSet> =
+            (0..arity).map(|_| parent_required.clone()).collect();
+
+        match s_expr.plan() {
+            RelOperator::MaterializedCTE(cte) => {
+                let output_columns = if let Some(columns) = &cte.cte_output_columns {
+                    columns.iter().map(|c| c.index).collect::<ColumnSet>()
+                } else {
+                    RelExpr::with_s_expr(s_expr.child(0)?)
+                        .derive_relational_prop()?
+                        .output_columns
+                        .clone()
+                };
+                child_required[0] = output_columns;
+            }
+            RelOperator::EvalScalar(eval_scalar) => {
+                let req = &mut child_required[0];
+                for item in &eval_scalar.items {
+                    if parent_required.contains(&item.index) {
+                        for col in item.scalar.used_columns() {
+                            req.insert(col);
+                        }
+                    }
+                }
+            }
+            RelOperator::Filter(filter) => {
+                let req = &mut child_required[0];
+                for predicate in &filter.predicates {
+                    req.extend(predicate.used_columns());
+                }
+            }
+            RelOperator::SecureFilter(filter) => {
+                let req = &mut child_required[0];
+                for predicate in &filter.predicates {
+                    req.extend(predicate.used_columns());
+                }
+            }
+            RelOperator::Aggregate(agg) => {
+                let req = &mut child_required[0];
+                for item in &agg.group_items {
+                    req.insert(item.index);
+                    for col in item.scalar.used_columns() {
+                        req.insert(col);
+                    }
+                }
+                for item in &agg.aggregate_functions {
+                    if parent_required.contains(&item.index) {
+                        for col in item.scalar.used_columns() {
+                            req.insert(col);
+                        }
+                    }
+                }
+            }
+            RelOperator::Window(window) => {
+                let req = &mut child_required[0];
+                for item in &window.arguments {
+                    req.extend(item.scalar.used_columns());
+                    req.insert(item.index);
+                }
+                for item in &window.partition_by {
+                    req.extend(item.scalar.used_columns());
+                    req.insert(item.index);
+                }
+                for item in &window.order_by {
+                    req.extend(item.order_by_item.scalar.used_columns());
+                    req.insert(item.order_by_item.index);
+                }
+            }
+            RelOperator::Sort(sort) => {
+                let req = &mut child_required[0];
+                for item in &sort.items {
+                    req.insert(item.index);
+                }
+            }
+            RelOperator::Limit(_) => {
+                // no extra columns needed beyond parent_required
+            }
+            RelOperator::Join(join) => {
+                let mut others_required = join
+                    .non_equi_conditions
+                    .iter()
+                    .fold(parent_required.clone(), |acc, v| {
+                        acc.union(&v.used_columns()).cloned().collect()
+                    });
+                if let Some(cache_info) = &join.build_side_cache_info {
+                    for column in &cache_info.columns {
+                        others_required.insert(*column);
+                    }
+                }
+
+                let left_required: ColumnSet = join
+                    .equi_conditions
+                    .iter()
+                    .fold(parent_required.clone(), |acc, v| {
+                        acc.union(&v.left.used_columns()).cloned().collect()
+                    })
+                    .union(&others_required)
+                    .cloned()
+                    .collect();
+                let right_required: ColumnSet = join
+                    .equi_conditions
+                    .iter()
+                    .fold(parent_required.clone(), |acc, v| {
+                        acc.union(&v.right.used_columns()).cloned().collect()
+                    })
+                    .union(&others_required)
+                    .cloned()
+                    .collect();
+
+                child_required[0] = left_required.union(&others_required).cloned().collect();
+                child_required[1] = right_required.union(&others_required).cloned().collect();
+            }
+            RelOperator::UnionAll(union_all) => {
+                let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
+                    let left: ColumnSet = union_all
+                        .left_outputs
+                        .iter()
+                        .map(|(index, _)| *index)
+                        .collect();
+                    let right: ColumnSet = union_all
+                        .right_outputs
+                        .iter()
+                        .map(|(index, _)| *index)
+                        .collect();
+
+                    (left, right)
+                } else {
+                    let offset_indices: Vec<usize> = (0..union_all.left_outputs.len())
+                        .filter(|index| parent_required.contains(&union_all.output_indexes[*index]))
+                        .collect();
+
+                    if offset_indices.is_empty() {
+                        (
+                            ColumnSet::from([union_all.left_outputs[0].0]),
+                            ColumnSet::from([union_all.right_outputs[0].0]),
+                        )
+                    } else {
+                        offset_indices.iter().fold(
+                            (ColumnSet::default(), ColumnSet::default()),
+                            |(mut left, mut right), &index| {
+                                left.insert(union_all.left_outputs[index].0);
+                                right.insert(union_all.right_outputs[index].0);
+                                (left, right)
+                            },
+                        )
+                    }
+                };
+                child_required[0] = left_required;
+                child_required[1] = right_required;
+            }
+            RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
+                let req = &mut child_required[0];
+                for expr in exprs {
+                    req.extend(expr.used_columns());
+                }
+            }
+            RelOperator::Exchange(_) => {}
+            RelOperator::ProjectSet(project_set) => {
+                let req = &mut child_required[0];
+                for item in &project_set.srfs {
+                    if parent_required.contains(&item.index) {
+                        for col in item.scalar.used_columns() {
+                            req.insert(col);
+                        }
+                    }
+                }
+            }
+            RelOperator::Udf(udf) => {
+                let req = &mut child_required[0];
+                for item in &udf.items {
+                    if parent_required.contains(&item.index) {
+                        for col in item.scalar.used_columns() {
+                            req.insert(col);
+                        }
+                    }
+                }
+            }
+            RelOperator::AsyncFunction(async_func) => {
+                let req = &mut child_required[0];
+                for item in &async_func.items {
+                    if parent_required.contains(&item.index) {
+                        for col in item.scalar.used_columns() {
+                            req.insert(col);
+                        }
+                    }
+                }
+            }
+            RelOperator::Mutation(_) => {
+                // same as parent_required
+            }
+            RelOperator::Sequence(_) => {
+                // same as parent_required for each child
+            }
+            RelOperator::ExpressionScan(_) => {
+                // same as parent_required for single child
+            }
+            _ => {
+                // default: keep parent_required for all children
+            }
+        }
+
+        Ok(child_required)
+    }
+
+    fn collect_cte_required_columns(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<()> {
+        match s_expr.plan() {
+            RelOperator::MaterializedCTERef(cte_ref) => {
+                let mut required_mapped = ColumnSet::new();
+                for col in required {
+                    if let Some(mapped) = cte_ref.column_mapping.get(&col) {
+                        required_mapped.insert(*mapped);
+                    }
+                }
+                self.cte_required_columns
+                    .entry(cte_ref.cte_name.clone())
+                    .and_modify(|cols| {
+                        *cols = cols.union(&required_mapped).cloned().collect();
+                    })
+                    .or_insert(required_mapped);
+                Ok(())
+            }
+            _ => {
+                let child_required = self.derive_children_required_columns(s_expr, &required)?;
+                for (idx, columns) in child_required.into_iter().enumerate() {
+                    self.collect_cte_required_columns(s_expr.child(idx)?, columns)?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 

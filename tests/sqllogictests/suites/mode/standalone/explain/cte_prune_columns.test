@@ -1,0 +1,103 @@
+statement ok
+set enable_materialized_cte=1;
+
+statement ok
+set enable_auto_materialize_cte=1;
+
+statement ok
+set enable_cse_optimizer=0;
+
+statement ok
+create or replace table cte_prune_t as
+select number as a, number + 10 as b, number + 100 as c, number + 1000 as d
+from numbers(3);
+
+query T nosort
+explain
+with cte as (select a, b, c, d from cte_prune_t)
+select x.a, y.c
+from cte x
+join cte y on x.a = y.a
+where x.a > 0;
+----
+Sequence
+├── MaterializedCTE: cte
+│   └── TableScan
+│       ├── table: default.default.cte_prune_t
+│       ├── scan id: 0
+│       ├── output columns: [a (#0), c (#2)]
+│       ├── read rows: 3
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [cte_prune_t.a (#0) > 0 or cte_prune_t.a (#0) > 0], limit: NONE]
+│       └── estimated rows: 2.67
+└── HashJoin
+    ├── output columns: [cte_prune_t.a (#4), cte_prune_t.c (#10)]
+    ├── join type: INNER
+    ├── build keys: [y.a (#8)]
+    ├── probe keys: [x.a (#4)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
+    ├── estimated rows: 2.00
+    ├── Filter(Build)
+    │   ├── output columns: [cte_prune_t.a (#8), cte_prune_t.c (#10)]
+    │   ├── filters: [is_true(y.a (#8) > 0)]
+    │   ├── estimated rows: 2.00
+    │   └── MaterializeCTERef
+    │       ├── cte_name: cte
+    │       ├── cte_schema: [a (#8), c (#10)]
+    │       └── estimated rows: 3.00
+    └── Filter(Probe)
+        ├── output columns: [cte_prune_t.a (#4)]
+        ├── filters: [is_true(x.a (#4) > 0)]
+        ├── estimated rows: 2.00
+        └── MaterializeCTERef
+            ├── cte_name: cte
+            ├── cte_schema: [a (#4), c (#6)]
+            └── estimated rows: 3.00
+
+query T nosort
+explain
+with cte as (select a, b, c, d from cte_prune_t)
+select x.b, y.c
+from cte x
+join cte y on x.a = y.a;
+----
+Sequence
+├── MaterializedCTE: cte
+│   └── TableScan
+│       ├── table: default.default.cte_prune_t
+│       ├── scan id: 0
+│       ├── output columns: [a (#0), b (#1), c (#2)]
+│       ├── read rows: 3
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 3.00
+└── HashJoin
+    ├── output columns: [cte_prune_t.b (#5), cte_prune_t.c (#10)]
+    ├── join type: INNER
+    ├── build keys: [y.a (#8)]
+    ├── probe keys: [x.a (#4)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
+    ├── estimated rows: 3.00
+    ├── MaterializeCTERef(Build)
+    │   ├── cte_name: cte
+    │   ├── cte_schema: [a (#8), b (#9), c (#10)]
+    │   └── estimated rows: 3.00
+    └── MaterializeCTERef(Probe)
+        ├── cte_name: cte
+        ├── cte_schema: [a (#4), b (#5), c (#6)]
+        └── estimated rows: 3.00
+
+statement ok
+drop table cte_prune_t;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -93,10 +94,64 @@ impl PhysicalPlanBuilder {
         cte_consumer: &databend_common_sql::plans::MaterializedCTERef,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let mut fields = Vec::new();
-        let metadata = self.metadata.read();
+        let def_to_ref = cte_consumer
+            .column_mapping
+            .iter()
+            .map(|(k, v)| (*v, *k))
+            .collect::<HashMap<_, _>>();
+        let cte_required_columns = self
+            .cte_required_columns
+            .get(&cte_consumer.cte_name)
+            .ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(format!(
+                    "CTE required columns not found for CTE name: {}",
+                    cte_consumer.cte_name
+                ))
+            })?;
 
-        for index in &cte_consumer.output_columns {
+        let metadata = self.metadata.read();
+        let mut cte_output_columns = Vec::with_capacity(cte_required_columns.len());
+        for c in cte_required_columns.iter() {
+            let index = *def_to_ref.get(c).ok_or_else(|| {
+                // Build detailed error message with column names
+                let required_cols: Vec<String> = cte_required_columns
+                    .iter()
+                    .map(|idx| {
+                        let col = metadata.column(*idx);
+                        format!("{}({})", col.name(), idx)
+                    })
+                    .collect();
+
+                let available_mappings: Vec<String> = def_to_ref
+                    .iter()
+                    .map(|(def_idx, ref_idx)| {
+                        let def_col = metadata.column(*def_idx);
+                        let ref_col = metadata.column(*ref_idx);
+                        format!(
+                            "{}({}) -> {}({})",
+                            def_col.name(),
+                            def_idx,
+                            ref_col.name(),
+                            ref_idx
+                        )
+                    })
+                    .collect();
+
+                let current_col = metadata.column(*c);
+                databend_common_exception::ErrorCode::Internal(format!(
+                    "Column mapping not found for column {}({}) in CTE: {}.\nRequired columns: [{}]\nAvailable mappings: [{}]",
+                    current_col.name(),
+                    c,
+                    cte_consumer.cte_name,
+                    required_cols.join(", "),
+                    available_mappings.join(", ")
+                ))
+            })?;
+            cte_output_columns.push(index);
+        }
+        let mut fields = Vec::new();
+
+        for index in cte_output_columns.iter() {
             let column = metadata.column(*index);
             let data_type = column.data_type();
             fields.push(DataField::new(&index.to_string(), data_type));
