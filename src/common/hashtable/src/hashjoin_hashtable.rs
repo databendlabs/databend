@@ -117,6 +117,30 @@ impl<K: Keyable, const UNIQUE: bool> HashJoinHashTable<K, UNIQUE> {
         hashtable
     }
 
+    /// Get the pointers slice for open addressing.
+    #[inline]
+    pub fn pointers(&self) -> &[u64] {
+        &self.pointers
+    }
+
+    /// Get the atomic pointers for concurrent access.
+    #[inline]
+    pub fn atomic_pointers(&self) -> *mut AtomicU64 {
+        self.atomic_pointers
+    }
+
+    /// Get the hash shift value.
+    #[inline]
+    pub fn hash_shift(&self) -> usize {
+        self.hash_shift
+    }
+
+    /// Get the capacity (number of slots).
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.pointers.len()
+    }
+
     pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
