@@ -23,7 +23,6 @@ use std::sync::atomic::Ordering;
 
 use anyerror::AnyError;
 use databend_base::counter::Counter;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_runtime_api::ClientMetricsApi;
@@ -199,12 +198,7 @@ impl<RT: SpawnApi> ClientHandle<RT> {
             resp_tx: tx,
             req: req.into(),
             span: Span::enter_with_local_parent(std::any::type_name::<ClientWorkerRequest>()),
-            tracking_fn: Some({
-                let payload = ThreadTracker::new_tracking_payload();
-                Box::new(move || -> Box<dyn std::any::Any + Send> {
-                    Box::new(ThreadTracker::tracking(payload))
-                })
-            }),
+            tracking_fn: Some(RT::capture_tracking_context()),
         };
 
         debug!(

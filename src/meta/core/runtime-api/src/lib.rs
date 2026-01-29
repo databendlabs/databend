@@ -119,6 +119,18 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
         F: FnOnce(tonic::Request<T>) -> Fut,
         Fut: Future<Output = R> + Send + 'a,
         R: Send + 'a;
+
+    /// Capture the current tracking context, returning a guard creator.
+    ///
+    /// The tracking context is captured when this method is called. The returned
+    /// closure, when invoked, enters that captured context and returns a guard.
+    /// The guard must be held for the duration of the tracked operation - dropping
+    /// it ends the tracking scope.
+    ///
+    /// `TokioRuntime` returns a no-op closure.
+    /// `DatabendRuntime` captures ThreadTracker payload and returns tracking guard.
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.
