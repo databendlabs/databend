@@ -73,7 +73,7 @@ fn collect_table_signatures_rec(
         }
 
         let mut tables = BTreeSet::new();
-        tables.insert(table.get_id() as IndexType);
+        tables.insert(table.get_table_id() as IndexType);
         signature_to_exprs
             .entry(TableSignature { tables })
             .or_default()

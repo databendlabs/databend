@@ -553,12 +553,6 @@ impl QueryContext {
                     "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
                 ));
             }
-            // TODO(zhyass): Branch are currently not allowed inside a transaction.
-            if self.txn_mgr().lock().is_active() {
-                return Err(ErrorCode::StorageUnsupported(
-                    "Branch operations are not supported within an active transaction",
-                ));
-            }
             table.with_branch(branch)
         } else {
             Ok(table)
@@ -1572,7 +1566,7 @@ impl TableContext for QueryContext {
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
 
         let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
@@ -1876,7 +1870,7 @@ impl TableContext for QueryContext {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
         let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {

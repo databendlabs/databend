@@ -65,7 +65,7 @@ impl FuseTable {
                 let meta = CommitMeta {
                     conflict_resolve_context: ConflictResolveContext::None,
                     new_segment_locs: vec![],
-                    table_id: self.get_id(),
+                    table_ref_id: self.get_unique_id(),
                     virtual_schema: None,
                     hll: HashMap::new(),
                 };

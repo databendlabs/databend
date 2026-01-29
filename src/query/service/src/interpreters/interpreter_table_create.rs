@@ -49,6 +49,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::statistics::gen_table_statistics;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
@@ -339,19 +340,7 @@ impl CreateTableInterpreter {
                 };
 
                 let snapshot = reader.read(&params).await?;
-                stat = Some(TableStatistics {
-                    number_of_rows: snapshot.summary.row_count,
-                    data_bytes: snapshot.summary.uncompressed_byte_size,
-                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
-                    index_data_bytes: snapshot.summary.index_size,
-                    bloom_index_size: snapshot.summary.bloom_index_size,
-                    ngram_index_size: snapshot.summary.ngram_index_size,
-                    inverted_index_size: snapshot.summary.inverted_index_size,
-                    vector_index_size: snapshot.summary.vector_index_size,
-                    virtual_column_size: snapshot.summary.virtual_column_size,
-                    number_of_segments: Some(snapshot.segments.len() as u64),
-                    number_of_blocks: Some(snapshot.summary.block_count),
-                });
+                stat = Some(gen_table_statistics(&snapshot));
             }
         }
         let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {

@@ -13056,15 +13056,18 @@ InsertMultiTable(
                 },
                 into_clauses: [
                     IntoClause {
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                43..45,
-                            ),
-                            name: "t1",
-                            quote: None,
-                            ident_type: None,
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    43..45,
+                                ),
+                                name: "t1",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
                         },
                         target_columns: [],
                         source_columns: [],
@@ -13107,15 +13110,18 @@ InsertMultiTable(
                 },
                 into_clauses: [
                     IntoClause {
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                78..80,
-                            ),
-                            name: "t2",
-                            quote: None,
-                            ident_type: None,
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    78..80,
+                                ),
+                                name: "t2",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
                         },
                         target_columns: [],
                         source_columns: [],
@@ -13243,15 +13249,18 @@ InsertMultiTable(
                 },
                 into_clauses: [
                     IntoClause {
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                53..55,
-                            ),
-                            name: "t1",
-                            quote: None,
-                            ident_type: None,
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    53..55,
+                                ),
+                                name: "t1",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
                         },
                         target_columns: [],
                         source_columns: [],
@@ -13294,15 +13303,18 @@ InsertMultiTable(
                 },
                 into_clauses: [
                     IntoClause {
-                        catalog: None,
-                        database: None,
-                        table: Identifier {
-                            span: Some(
-                                88..90,
-                            ),
-                            name: "t2",
-                            quote: None,
-                            ident_type: None,
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    88..90,
+                                ),
+                                name: "t2",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
                         },
                         target_columns: [],
                         source_columns: [],

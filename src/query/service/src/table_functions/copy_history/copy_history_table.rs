@@ -227,7 +227,7 @@ impl CopyHistorySource {
         };
 
         let table = ctx.get_table(&current_catalog, &db_name, &tbl_name).await?;
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
         let catalog = ctx.get_default_catalog().unwrap();
         let copied_files = catalog
             .list_table_copied_file_info(&ctx.get_tenant(), &db_name, table_id)

@@ -132,7 +132,7 @@ impl IPhysicalPlan for MutationSource {
                     let meta = CommitMeta {
                         conflict_resolve_context: ConflictResolveContext::None,
                         new_segment_locs: vec![],
-                        table_id: table.get_id(),
+                        table_ref_id: table.get_unique_id(),
                         virtual_schema: None,
                         hll: HashMap::new(),
                     };

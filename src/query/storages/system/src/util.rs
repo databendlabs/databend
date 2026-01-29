@@ -302,7 +302,7 @@ async fn filter_visible_tables(
                     db_name,
                     table.name(),
                     db_id,
-                    table.get_id(),
+                    table.get_table_id(),
                 )
             })
             .collect()),
@@ -391,7 +391,7 @@ async fn filter_tables_with_grants_and_ownership(
             db_name,
             table.name(),
             db_id,
-            table.get_id(),
+            table.get_table_id(),
         ) {
             visible.push(table);
         } else {
@@ -405,7 +405,7 @@ async fn filter_tables_with_grants_and_ownership(
             .map(|t| OwnershipObject::Table {
                 catalog_name: catalog_name.to_string(),
                 db_id,
-                table_id: t.get_id(),
+                table_id: t.get_table_id(),
             })
             .collect();
 

@@ -125,6 +125,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
+                None,
                 MutationKind::Replace,
                 LockTableOption::NoLock,
             );

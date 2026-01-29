@@ -95,6 +95,7 @@ impl TableRefHandler for RealTableRefHandler {
             )));
         }
 
+        let operator = fuse_table.get_operator();
         let snapshot_loc = match &plan.navigation {
             Some(navigation) => {
                 fuse_table
@@ -104,9 +105,8 @@ impl TableRefHandler for RealTableRefHandler {
             None => fuse_table.snapshot_loc(),
         };
 
-        let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
-            .read_table_snapshot_with_location(snapshot_loc)
-            .await?
+        let (new_snapshot, prev_ts) = if let Some(snapshot) =
+            FuseTable::read_snapshot_with_opt_location(operator.clone(), snapshot_loc).await?
         {
             if snapshot.timestamp.is_none() {
                 return Err(ErrorCode::IllegalReference(format!(
@@ -149,10 +149,7 @@ impl TableRefHandler for RealTableRefHandler {
             new_snapshot.format_version,
         )?;
         let data = new_snapshot.to_bytes()?;
-        fuse_table
-            .get_operator_ref()
-            .write(&new_snapshot_location, data)
-            .await?;
+        operator.write(&new_snapshot_location, data).await?;
 
         let expire_at = plan.retain.map(|v| Utc::now() + v);
         let mut new_table_meta = table_info.meta.clone();
@@ -169,7 +166,7 @@ impl TableRefHandler for RealTableRefHandler {
             table_id,
             seq: MatchSeq::Exact(seq),
             new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
+            base_snapshot_locations: fuse_table.base_snapshot_locations(),
             // check least visible time
             lvt_check: prev_ts.map(|time| TableLvtCheck { tenant, time }),
         };
@@ -220,7 +217,7 @@ impl TableRefHandler for RealTableRefHandler {
             table_id: table_info.ident.table_id,
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
+            base_snapshot_locations: fuse_table.base_snapshot_locations(),
             lvt_check: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;

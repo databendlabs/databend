@@ -20,12 +20,11 @@ use derive_visitor::DriveMut;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::TableRef;
 use crate::ast::write_comma_separated_list;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct IntoClause {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub target_columns: Vec<Identifier>,
     pub source_columns: Vec<SourceExpr>,
 }
@@ -49,12 +48,6 @@ impl Display for SourceExpr {
 impl Display for IntoClause {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "INTO ")?;
-        if let Some(catalog) = &self.catalog {
-            write!(f, "{}.", catalog)?;
-        }
-        if let Some(database) = &self.database {
-            write!(f, "{}.", database)?;
-        }
         write!(f, "{}", self.table)?;
         if !self.target_columns.is_empty() {
             write!(f, " (")?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -130,7 +131,7 @@ pub async fn query_build_update_stream_req(
                 table_id: stream_info.ident.table_id,
                 seq: MatchSeq::Exact(stream_info.ident.seq),
                 new_table_meta,
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             },
             stream_info.clone(),

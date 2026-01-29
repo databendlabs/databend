@@ -185,7 +185,7 @@ impl Binder {
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
                     .await?
-                    .get_id();
+                    .get_table_id();
                 Ok(GrantObject::TableById(catalog_name, db_id, table_id))
             }
             AccountMgrLevel::Database(database_name) => {
@@ -272,7 +272,7 @@ impl Binder {
                 let table_id = catalog
                     .get_table(&tenant, &database_name, table_name)
                     .await?
-                    .get_id();
+                    .get_table_id();
                 Ok(vec![
                     GrantObject::TableById(catalog_name.clone(), db_id, table_id),
                     GrantObject::Table(catalog_name.clone(), database_name, table_name.clone()),

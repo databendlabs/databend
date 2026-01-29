@@ -354,7 +354,7 @@ pub(crate) async fn update_table_meta(
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta: new_table_meta.clone(),
-        base_snapshot_location: fuse_tbl.snapshot_loc(),
+        base_snapshot_locations: fuse_tbl.base_snapshot_locations(),
         lvt_check: None,
     };
     table_info.meta = new_table_meta.clone();

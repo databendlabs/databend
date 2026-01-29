@@ -39,6 +39,7 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::statistics::gen_table_statistics;
 
 impl FuseTable {
     #[fastrace::trace]
@@ -261,20 +262,7 @@ impl FuseTable {
         };
 
         // 3. The statistics
-        let summary = &snapshot.summary;
-        table_info.meta.statistics = TableStatistics {
-            number_of_rows: summary.row_count,
-            data_bytes: summary.uncompressed_byte_size,
-            compressed_data_bytes: summary.compressed_byte_size,
-            index_data_bytes: summary.index_size,
-            bloom_index_size: summary.bloom_index_size,
-            ngram_index_size: summary.ngram_index_size,
-            inverted_index_size: summary.inverted_index_size,
-            vector_index_size: summary.vector_index_size,
-            virtual_column_size: summary.virtual_column_size,
-            number_of_segments: Some(snapshot.segments.len() as u64),
-            number_of_blocks: Some(summary.block_count),
-        };
+        table_info.meta.statistics = gen_table_statistics(snapshot);
 
         // let's instantiate it
         let mut table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
