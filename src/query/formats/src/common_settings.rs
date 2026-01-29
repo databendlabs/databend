@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_meta_app::principal::BinaryFormat;
 use jiff::tz::TimeZone;
 
@@ -37,7 +38,7 @@ pub struct OutputCommonSettings {
     pub null_bytes: Vec<u8>,
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
-    pub binary_format: BinaryFormat,
+    pub binary_format: BinaryDisplayFormat,
 
     // from settings
     pub jiff_timezone: TimeZone,

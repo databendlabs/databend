@@ -51,6 +51,39 @@ impl BinaryDisplayFormat {
             BinaryDisplayFormat::Utf8Lossy => "UTF-8-LOSSY",
         }
     }
+    pub fn format<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, str>, ErrorCode> {
+        match self {
+            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value))),
+            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(general_purpose::STANDARD.encode(value))),
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
+                Ok(s) => Ok(Cow::Borrowed(s)),
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => {
+                Ok(Cow::Owned(String::from_utf8_lossy(value).into_owned()))
+            }
+        }
+    }
+
+    pub fn encode<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, [u8]>, ErrorCode> {
+        match self {
+            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value).into_bytes())),
+            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(
+                general_purpose::STANDARD.encode(value).into_bytes(),
+            )),
+            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
+                Ok(_) => Ok(Cow::Borrowed(value)),
+                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
+                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
+setting binary_output_format to 'UTF-8-LOSSY'."
+                ))),
+            },
+            BinaryDisplayFormat::Utf8Lossy => Ok(Cow::Borrowed(value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,19 +110,6 @@ impl Default for FormatSettings {
 
 impl FormatSettings {
     pub fn format_binary<'a>(&self, value: &'a [u8]) -> Result<Cow<'a, str>, ErrorCode> {
-        match self.binary_format {
-            BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value))),
-            BinaryDisplayFormat::Base64 => Ok(Cow::Owned(general_purpose::STANDARD.encode(value))),
-            BinaryDisplayFormat::Utf8 => match std::str::from_utf8(value) {
-                Ok(s) => Ok(Cow::Borrowed(s)),
-                Err(err) => Err(ErrorCode::InvalidUtf8String(format!(
-                    "Invalid UTF-8 sequence while formatting binary column: {err}. Consider \
-setting binary_output_format to 'UTF-8-LOSSY'."
-                ))),
-            },
-            BinaryDisplayFormat::Utf8Lossy => {
-                Ok(Cow::Owned(String::from_utf8_lossy(value).into_owned()))
-            }
-        }
+        self.binary_format.format(value)
     }
 }

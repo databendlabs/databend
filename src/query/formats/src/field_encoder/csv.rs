@@ -36,7 +36,6 @@ use geozero::wkb::Ewkb;
 
 use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
-use crate::binary::encode_binary;
 use crate::field_encoder::FieldEncoderValues;
 use crate::field_encoder::write_tsv_escaped_string;
 
@@ -99,7 +98,7 @@ impl FieldEncoderCSV {
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
                     inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                     jiff_timezone: options_ext.jiff_timezone.clone(),
-                    binary_format: params.binary_format,
+                    binary_format: params.binary_format.to_display_format(),
                     geometry_format: params.geometry_format,
                 },
                 escape_char: 0, // not used
@@ -161,10 +160,10 @@ impl FieldEncoderCSV {
 
             Column::Binary(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
-                let encoded = encode_binary(buf, self.simple.common_settings.binary_format);
+                let encoded = self.simple.common_settings.binary_format.encode(buf)?;
                 out_buf.extend_from_slice(&encoded);
             }
-            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
+            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf)?,
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf.as_bytes(), out_buf);
@@ -247,12 +246,16 @@ impl FieldEncoderCSV {
         }
     }
 
-    fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+    fn write_opaque(
+        &self,
+        column: &OpaqueColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
         let scalar = unsafe { column.index_unchecked(row_index) };
-        let encoded = encode_binary(
-            &scalar.to_le_bytes(),
-            self.simple.common_settings.binary_format,
-        );
+        let bytes = scalar.to_le_bytes();
+        let encoded = self.simple.common_settings.binary_format.encode(&bytes)?;
         out_buf.extend_from_slice(&encoded);
+        Ok(())
     }
 }
