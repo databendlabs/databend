@@ -30,3 +30,6 @@ PartitionsShuffleKind::Rand: 11 partitions of 2 executors
 PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors
 Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
 Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+PartitionsShuffleKind::BlockMod: 3 partitions of 2 executors
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
+Partitions { kind: Seq, partitions: [{"type":"fuse_lazy","loc":"0"}, {"type":"fuse_lazy","loc":"1"}, {"type":"fuse_lazy","loc":"2"}] }
