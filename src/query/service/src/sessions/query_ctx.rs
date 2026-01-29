@@ -1572,7 +1572,7 @@ impl TableContext for QueryContext {
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
 
         let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
@@ -1876,7 +1876,7 @@ impl TableContext for QueryContext {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
         let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {

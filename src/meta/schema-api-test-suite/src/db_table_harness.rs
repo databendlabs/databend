@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -269,7 +270,7 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             table_id: self.table_id,
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
-            base_snapshot_location: None,
+            base_snapshot_locations: HashMap::new(),
             lvt_check: None,
         };
 

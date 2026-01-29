@@ -69,7 +69,7 @@ impl Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-        let table_id = table.get_id();
+        let table_id = table.get_table_id();
 
         let schema = if columns.is_empty() {
             table.schema()

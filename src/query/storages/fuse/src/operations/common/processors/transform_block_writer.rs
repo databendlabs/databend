@@ -229,7 +229,7 @@ pub struct TransformBlockWriter {
     dal: Operator,
     ctx: Arc<dyn TableContext>,
     // Only used in multi table insert
-    table_id: Option<u64>,
+    table_ref_id: Option<u64>,
 }
 
 impl TransformBlockWriter {
@@ -242,7 +242,11 @@ impl TransformBlockWriter {
         Self {
             ctx,
             dal: table.get_operator(),
-            table_id: if with_tid { Some(table.get_id()) } else { None },
+            table_ref_id: if with_tid {
+                Some(table.get_unique_id())
+            } else {
+                None
+            },
             kind,
         }
     }
@@ -274,7 +278,7 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
                 });
 
                 // appending new data block
-                if let Some(tid) = self.table_id {
+                if let Some(tid) = self.table_ref_id {
                     self.ctx.update_multi_table_insert_status(
                         tid,
                         extended_block_meta.block_meta.row_count,

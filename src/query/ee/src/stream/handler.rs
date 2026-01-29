@@ -202,7 +202,7 @@ impl StreamHandler for RealStreamHandler {
                     if_exists: plan.if_exists,
                     tenant,
                     table_name: stream_name.clone(),
-                    tb_id: table.get_id(),
+                    tb_id: table.get_table_id(),
                     db_id: db.get_db_info().database_id.db_id,
                     db_name: db.name().to_string(),
                     engine: engine.to_string(),

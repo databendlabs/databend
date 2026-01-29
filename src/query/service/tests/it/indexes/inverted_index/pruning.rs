@@ -490,7 +490,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
 
     // create inverted index on table
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
-    let table_id = table.get_id();
+    let table_id = table.get_table_id();
     let index_name = "idx1".to_string();
     let mut index_options = BTreeMap::new();
     index_options.insert("tokenizer".to_string(), "chinese".to_string());

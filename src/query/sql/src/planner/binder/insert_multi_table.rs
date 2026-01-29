@@ -28,11 +28,14 @@ use databend_common_expression::types::DataType;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ScalarBinder;
+use crate::binder::util::TableIdentifier;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
 use crate::plans::Plan;
+use crate::plans::TableRef;
 use crate::plans::When;
+
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_insert_multi_table(
@@ -160,27 +163,39 @@ impl Binder {
         into_clauses: &[IntoClause],
         source_schema: DataSchemaRef,
         source_bind_context: &mut BindContext,
-        target_tables: &mut HashMap<u64, (String, String)>,
+        target_tables: &mut HashMap<u64, TableRef>,
     ) -> Result<Vec<Into>> {
         let mut intos = vec![];
         for into_clause in into_clauses {
             let IntoClause {
-                database,
                 table,
                 target_columns,
                 source_columns,
-                catalog,
             } = into_clause;
-            let (catalog_name, database_name, table_name) =
-                self.normalize_object_identifier_triple(catalog, database, table);
+            let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+            let catalog_name = table_identifier.catalog_name();
+            let database_name = table_identifier.database_name();
+            let table_name = table_identifier.table_name();
+            let branch_name = table_identifier.branch_name();
 
             let target_table = self
                 .ctx
-                .get_table(&catalog_name, &database_name, &table_name)
+                .get_table_with_batch(
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                    branch_name.as_deref(),
+                    None,
+                )
                 .await?;
+            let unique_id = target_table.get_unique_id();
             target_tables.insert(
-                target_table.get_id(),
-                (database_name.clone(), table_name.clone()),
+                unique_id,
+                (
+                    database_name.clone(),
+                    table_name.clone(),
+                    branch_name.clone(),
+                ),
             );
 
             let n_target_col = if target_columns.is_empty() {
@@ -267,6 +282,7 @@ impl Binder {
                 catalog: catalog_name,
                 database: database_name,
                 table: table_name,
+                branch: branch_name,
                 source_scalar_exprs,
                 casted_schema: Arc::new(casted_schema.into()),
             });

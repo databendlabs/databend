@@ -96,7 +96,9 @@ pub trait Table: Sync + Send {
         self.get_table_info().field_comments()
     }
 
-    fn get_id(&self) -> MetaId {
+    /// This method retrieves the `table_id` from the table's metadata.
+    /// If the object is a branch, it returns the ID of the parent table that the branch belongs to.
+    fn get_table_id(&self) -> MetaId {
         self.get_table_info().ident.table_id
     }
 
@@ -112,7 +114,7 @@ pub trait Table: Sync + Send {
     /// - Therefore, using `branch_id` alone as a cache key namespace is safe.
     fn get_unique_id(&self) -> u64 {
         self.get_branch_info()
-            .map_or(self.get_id(), |v| v.branch_id())
+            .map_or(self.get_table_id(), |v| v.branch_id())
     }
 
     fn distribution_level(&self) -> DistributionLevel {

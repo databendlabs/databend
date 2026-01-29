@@ -98,7 +98,7 @@ impl SimpleTableFunc for FuseVacuumDropInvertedIndex {
             ),
             None => None,
         };
-        let table_id = table.map(|t| t.get_id());
+        let table_id = table.map(|t| t.get_table_id());
 
         let reply = catalog
             .list_marked_deleted_table_indexes(&tenant, table_id)

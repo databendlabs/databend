@@ -78,7 +78,7 @@ impl Interpreter for AlterViewInterpreter {
             options.insert("query".to_string(), Some(subquery));
 
             let req = UpsertTableOptionReq {
-                table_id: tbl.get_id(),
+                table_id: tbl.get_table_id(),
                 seq: MatchSeq::Exact(tbl.get_table_info().ident.seq),
                 options,
             };

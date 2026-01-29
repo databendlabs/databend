@@ -183,7 +183,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             for table in tables {
                 // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
                 // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
-                let t_id = table.get_id();
+                let t_id = table.get_table_id();
                 if visibility_checker.check_table_visibility(
                     &ctl_name,
                     db.name(),

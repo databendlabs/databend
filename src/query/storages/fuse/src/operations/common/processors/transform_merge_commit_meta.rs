@@ -170,7 +170,7 @@ impl TransformMergeCommitMeta {
         r: CommitMeta,
         default_cluster_key_id: Option<u32>,
     ) -> CommitMeta {
-        assert_eq!(l.table_id, r.table_id, "table id mismatch");
+        assert_eq!(l.table_ref_id, r.table_ref_id, "table ref id mismatch");
         CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
@@ -182,7 +182,7 @@ impl TransformMergeCommitMeta {
                 .into_iter()
                 .chain(r.new_segment_locs)
                 .collect(),
-            table_id: l.table_id,
+            table_ref_id: l.table_ref_id,
             virtual_schema: Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
             hll: merge_column_hll(l.hll, r.hll),
         }
@@ -206,10 +206,10 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         if to_merged.is_empty() {
             return Ok(vec![]);
         }
-        let table_id = to_merged[0].table_id;
+        let table_ref_id = to_merged[0].table_ref_id;
         let merged = to_merged
             .into_iter()
-            .fold(CommitMeta::empty(table_id), |acc, x| {
+            .fold(CommitMeta::empty(table_ref_id), |acc, x| {
                 Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
             });
         Ok(vec![merged.into()])

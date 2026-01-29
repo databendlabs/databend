@@ -92,7 +92,7 @@ impl Interpreter for DropViewInterpreter {
                     if_exists: self.plan.if_exists,
                     tenant: self.plan.tenant.clone(),
                     table_name: self.plan.view_name.clone(),
-                    tb_id: table.get_id(),
+                    tb_id: table.get_table_id(),
                     db_id: db.get_db_info().database_id.db_id,
                     db_name: db.name().to_string(),
                     engine: table.engine().to_string(),

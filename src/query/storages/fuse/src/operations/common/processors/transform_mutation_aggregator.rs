@@ -73,7 +73,7 @@ use crate::statistics::sort_by_cluster_stats;
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
-    table_id: u64,
+    table_ref_id: u64,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
@@ -164,7 +164,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
         let meta = CommitMeta::new(
             conflict_resolve_context,
             new_segment_locs,
-            self.table_id,
+            self.table_ref_id,
             std::mem::take(&mut self.virtual_schema),
             std::mem::take(&mut self.hll),
         );
@@ -223,7 +223,7 @@ impl TableMutationAggregator {
             kind,
             finished_tasks: 0,
             start_time: Instant::now(),
-            table_id: table.get_id(),
+            table_ref_id: table.get_unique_id(),
             table_meta_timestamps,
             is_branch: table.branch_info.is_some(),
         }

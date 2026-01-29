@@ -169,7 +169,7 @@ impl TableRefHandler for RealTableRefHandler {
             table_id,
             seq: MatchSeq::Exact(seq),
             new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
+            base_snapshot_locations: fuse_table.base_snapshot_locations(),
             // check least visible time
             lvt_check: prev_ts.map(|time| TableLvtCheck { tenant, time }),
         };
@@ -220,7 +220,7 @@ impl TableRefHandler for RealTableRefHandler {
             table_id: table_info.ident.table_id,
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
-            base_snapshot_location: fuse_table.snapshot_loc(),
+            base_snapshot_locations: fuse_table.base_snapshot_locations(),
             lvt_check: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;

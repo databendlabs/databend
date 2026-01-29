@@ -869,7 +869,10 @@ async fn show_object_grant(
                 .get_db_info()
                 .database_id
                 .db_id;
-            let table_id = catalog.get_table(&tenant, db_name, name).await?.get_id();
+            let table_id = catalog
+                .get_table(&tenant, db_name, name)
+                .await?
+                .get_table_id();
             if !visibility_checker.check_table_visibility(
                 catalog_name,
                 db_name,

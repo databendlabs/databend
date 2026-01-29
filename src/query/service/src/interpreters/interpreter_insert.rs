@@ -221,10 +221,7 @@ impl Interpreter for InsertInterpreter {
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
-                    let table_info = ExtendedTableInfo {
-                        table_info: table1.get_table_info().clone(),
-                        branch_info: table1.get_branch_info().cloned(),
-                    };
+                    let table_info = ExtendedTableInfo::from_table(table1.as_ref());
                     if table.support_distributed_insert()
                         && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {
@@ -274,12 +271,13 @@ impl Interpreter for InsertInterpreter {
                 )?;
 
                 //  Execute the hook operator.
-                if self.plan.branch.is_none() {
+                {
                     let hook_operator = HookOperator::create(
                         self.ctx.clone(),
                         self.plan.catalog.clone(),
                         self.plan.database.clone(),
                         self.plan.table.clone(),
+                        self.plan.branch.clone(),
                         MutationKind::Insert,
                         LockTableOption::LockNoRetry,
                     );
@@ -337,12 +335,13 @@ impl Interpreter for InsertInterpreter {
         )?;
 
         //  Execute the hook operator.
-        if self.plan.branch.is_none() {
+        {
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
+                self.plan.branch.clone(),
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );

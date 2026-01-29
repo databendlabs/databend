@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -74,6 +73,7 @@ use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::set_backoff;
 use crate::statistics::TableStatsGenerator;
+use crate::statistics::gen_table_statistics;
 use crate::statistics::merge_statistics;
 
 impl FuseTable {
@@ -226,21 +226,7 @@ impl FuseTable {
             Self::remove_legacy_options(&mut new_table_meta.options);
 
             // 1.2 setup table statistics
-            let stats = &new_snapshot.summary;
-            // update statistics
-            new_table_meta.statistics = TableStatistics {
-                number_of_rows: stats.row_count,
-                data_bytes: stats.uncompressed_byte_size,
-                compressed_data_bytes: stats.compressed_byte_size,
-                index_data_bytes: stats.index_size,
-                bloom_index_size: stats.bloom_index_size,
-                ngram_index_size: stats.ngram_index_size,
-                inverted_index_size: stats.inverted_index_size,
-                vector_index_size: stats.vector_index_size,
-                virtual_column_size: stats.virtual_column_size,
-                number_of_segments: Some(new_snapshot.segments.len() as u64),
-                number_of_blocks: Some(stats.block_count),
-            };
+            new_table_meta.statistics = gen_table_statistics(new_snapshot);
         }
         new_table_meta.updated_on = Utc::now();
         Ok(new_table_meta)
@@ -288,7 +274,7 @@ impl FuseTable {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
-                base_snapshot_location: self.snapshot_loc(),
+                base_snapshot_locations: self.base_snapshot_locations(),
                 lvt_check: None,
             };
             update_table_metas.push((req, table_info.clone()));
@@ -398,7 +384,7 @@ impl FuseTable {
                 &mut snapshot_tobe_committed,
                 ctx.txn_mgr(),
                 Some(base_snapshot.clone()),
-                self.get_id(),
+                self.get_table_id(),
             )?;
 
             match self

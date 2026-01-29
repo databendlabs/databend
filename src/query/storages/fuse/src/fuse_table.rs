@@ -458,6 +458,13 @@ impl FuseTable {
             .cloned()
     }
 
+    pub fn base_snapshot_locations(&self) -> HashMap<Option<u64>, Option<String>> {
+        let mut locations = HashMap::new();
+        let branch_id = self.get_branch_id();
+        locations.insert(branch_id, self.snapshot_loc());
+        locations
+    }
+
     /// Returns a stable identifier for query result cache invalidation.
     ///
     /// This ID changes whenever table data is mutated (INSERT, UPDATE, DELETE,

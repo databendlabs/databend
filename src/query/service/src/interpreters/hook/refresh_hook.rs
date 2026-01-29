@@ -84,7 +84,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
-    let table_id = table.get_id();
+    let table_id = table.get_table_id();
 
     ctx.clear_table_meta_timestamps_cache();
 

@@ -512,13 +512,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 ) {
                     Ok(snapshot) => {
                         // No need enable auto compaction for table branch.
-                        if self.table.get_branch_info().is_none() {
-                            set_compaction_num_block_hint(
-                                self.ctx.as_ref(),
-                                table_info.name.as_str(),
-                                &snapshot.summary,
-                            );
-                        }
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            table_info.name.as_str(),
+                            &snapshot.summary,
+                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,

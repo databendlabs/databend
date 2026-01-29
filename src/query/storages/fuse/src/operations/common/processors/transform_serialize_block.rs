@@ -74,7 +74,7 @@ pub struct TransformSerializeBlock {
 
     block_builder: BlockBuilder,
     dal: Operator,
-    table_id: Option<u64>, // Only used in multi table insert
+    table_ref_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
 }
 
@@ -207,7 +207,11 @@ impl TransformSerializeBlock {
             output_data: None,
             block_builder,
             dal: table.get_operator(),
-            table_id: if with_tid { Some(table.get_id()) } else { None },
+            table_ref_id: if with_tid {
+                Some(table.get_unique_id())
+            } else {
+                None
+            },
             kind,
         })
     }
@@ -393,7 +397,7 @@ impl Processor for TransformSerializeBlock {
                 } else {
                     // appending new data block
                     if matches!(self.kind, MutationKind::Insert) {
-                        if let Some(tid) = self.table_id {
+                        if let Some(tid) = self.table_ref_id {
                             self.block_builder.ctx.update_multi_table_insert_status(
                                 tid,
                                 extended_block_meta.block_meta.row_count,
