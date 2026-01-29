@@ -68,6 +68,8 @@ pub struct MutationSource {
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
+    pub read_column_positions: Vec<usize>,
+    pub internal_columns: Vec<databend_common_catalog::plan::InternalColumn>,
     pub truncate_table: bool,
 
     pub partitions: Partitions,
@@ -110,6 +112,8 @@ impl IPhysicalPlan for MutationSource {
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
+            read_column_positions: self.read_column_positions.clone(),
+            internal_columns: self.internal_columns.clone(),
             truncate_table: self.truncate_table,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
@@ -143,8 +147,7 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> =
-            self.read_partition_columns.clone().into_iter().collect();
+        let read_partition_columns = self.read_column_positions.clone();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -191,13 +194,14 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self.read_partition_columns.clone().into_iter().collect();
+        let col_indices = self.read_column_positions.clone();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(
             builder.ctx.clone(),
             filter,
             col_indices,
+            self.internal_columns.clone(),
             &mut builder.main_pipeline,
             mutation_action,
         )?;
@@ -262,6 +266,32 @@ impl PhysicalPlanBuilder {
         }
         let output_schema = DataSchemaRefExt::create(fields);
 
+        let mut read_column_positions = Vec::new();
+        let mut internal_columns = Vec::new();
+        let table_schema = &mutation_info.table_info.meta.schema;
+
+        // For each column in read_partition_columns, find its index in the table schema
+        for column_index in mutation_source.read_partition_columns.iter() {
+            let column_entry = metadata.column(*column_index);
+
+            match column_entry {
+                databend_common_sql::ColumnEntry::BaseTableColumn(base) => {
+                    // Find the column's index in the table schema
+                    if let Ok(_field) = table_schema.field_with_name(&base.column_name) {
+                        let schema_index = table_schema.index_of(&base.column_name).unwrap();
+                        read_column_positions.push(schema_index);
+                    }
+                }
+                databend_common_sql::ColumnEntry::InternalColumn(internal) => {
+                    internal_columns.push(internal.internal_column.clone());
+                }
+                _ => {}
+            }
+        }
+
+        read_column_positions.sort_unstable();
+        read_column_positions.dedup();
+
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
         Ok(PhysicalPlan::new(MutationSource {
@@ -271,6 +301,8 @@ impl PhysicalPlanBuilder {
             filters,
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
+            read_column_positions,
+            internal_columns,
             truncate_table,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
