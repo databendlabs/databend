@@ -99,7 +99,10 @@ impl UDFValidator {
             UDFLanguage::JavaScript if GlobalConfig::instance().query.enable_udf_js_script => {
                 Ok(())
             }
-            UDFLanguage::Python if GlobalConfig::instance().query.enable_udf_python_script => {
+            UDFLanguage::Python
+                if GlobalConfig::instance().query.enable_udf_python_script
+                    || GlobalConfig::instance().query.enable_udf_sandbox =>
+            {
                 Ok(())
             }
             UDFLanguage::WebAssembly if GlobalConfig::instance().query.enable_udf_wasm_script => {
@@ -110,6 +113,21 @@ impl UDFValidator {
                 other
             ))),
         }
+    }
+
+    pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        if !GlobalConfig::instance().query.enable_udf_sandbox {
+            return Err(ErrorCode::Unimplemented(
+                "SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config",
+            ));
+        }
+        // TODO: more lang e.g. JavaScript ..
+        if *lang != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "SandboxUDF only supports python language",
+            ));
+        }
+        Ok(())
     }
 
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {

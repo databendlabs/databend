@@ -1012,6 +1012,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("udf_cloud_import_presign_expire_secs", DefaultSettingValue {
+                    // 3 day
+                    value: UserSettingValue::UInt64(259200),
+                    desc: "Presign expiry for cloud UDF stage imports",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("external_server_request_batch_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Request batch rows to external server",

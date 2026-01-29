@@ -1,4 +1,10 @@
+import hashlib
 import os
+import shutil
+import socket
+import subprocess
+import threading
+import time
 
 import grpc
 import json
@@ -12,6 +18,8 @@ import task_pb2_grpc
 import notification_pb2
 import notification_pb2_grpc
 import timestamp_pb2
+import resource_pb2
+import resource_pb2_grpc
 
 # Simple in-memory database
 TASK_DB = {}
@@ -19,6 +27,204 @@ TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+
+UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
+UDF_DOCKER_KEEP_CONTAINER = True
+UDF_DOCKER_LOG_COMMANDS = True
+UDF_DOCKER_IMAGE_PREFIX = os.getenv("UDF_DOCKER_IMAGE_PREFIX", "databend-udf-cloud")
+UDF_DOCKER_HOST = os.getenv("UDF_DOCKER_HOST", "127.0.0.1")
+UDF_DOCKER_CONTAINER_PORT = int(os.getenv("UDF_DOCKER_CONTAINER_PORT", "8815"))
+UDF_DOCKER_BASE_IMAGE = os.getenv("UDF_DOCKER_BASE_IMAGE", "python:3.12-slim")
+UDF_DOCKER_STARTUP_TIMEOUT_SECS = float(
+    os.getenv("UDF_DOCKER_STARTUP_TIMEOUT_SECS", "15")
+)
+RESOURCE_STATUS_CONTAINER_PORT = 8080
+RESOURCE_DOCKER_CACHE = {}
+RESOURCE_DOCKER_LOCK = threading.Lock()
+RESOURCE_IMAGE_BY_TYPE = {
+    "udf": UDF_DOCKER_BASE_IMAGE,
+}
+RESOURCE_SERVICE_PORT_BY_TYPE = {
+    "udf": UDF_DOCKER_CONTAINER_PORT,
+}
+
+
+def _log(*args):
+    print(*args, flush=True)
+
+
+def _run_command(args, input_text=None):
+    if UDF_DOCKER_LOG_COMMANDS:
+        _log("Sandbox docker exec:", " ".join(args))
+    try:
+        return subprocess.run(
+            args,
+            input=input_text,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        if UDF_DOCKER_LOG_COMMANDS:
+            _log("Sandbox docker failed:", exc)
+            if exc.stdout:
+                _log("Sandbox docker stdout:", exc.stdout.strip())
+            if exc.stderr:
+                _log("Sandbox docker stderr:", exc.stderr.strip())
+        raise
+
+
+def _get_resource_image(resource_type):
+    image = RESOURCE_IMAGE_BY_TYPE.get(resource_type)
+    if not image:
+        raise RuntimeError(f"unknown sandbox type '{resource_type}'")
+    return image
+
+
+def _get_resource_service_port(resource_type):
+    port = RESOURCE_SERVICE_PORT_BY_TYPE.get(resource_type)
+    if not port:
+        raise RuntimeError(f"missing service port for sandbox type '{resource_type}'")
+    return int(port)
+
+
+def _docker_available():
+    return shutil.which("docker") is not None
+
+
+def _docker_container_running(container_name):
+    try:
+        result = _run_command(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name]
+        )
+        return result.stdout.strip() == "true"
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _reserve_port():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind((UDF_DOCKER_HOST, 0))
+    _, port = sock.getsockname()
+    sock.close()
+    return port
+
+
+def _wait_for_port(host, port, timeout_secs):
+    deadline = time.time() + timeout_secs
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(0.2)
+    return False
+
+
+def _start_resource_container(
+    image_tag,
+    host_port,
+    service_port,
+    status_port,
+    container_name,
+    script,
+):
+    if UDF_DOCKER_LOG_COMMANDS:
+        _log(
+            "Sandbox docker run:",
+            f"image={image_tag}",
+            f"container={container_name}",
+            f"port={host_port}->{service_port}",
+            f"status={status_port}->{RESOURCE_STATUS_CONTAINER_PORT}",
+        )
+    cmd = [
+        "docker",
+        "run",
+        "-d",
+        "--network",
+        "host",
+        "-e",
+        f"RESOURCE_STATUS_ADDR=0.0.0.0:{status_port}",
+        "-e",
+        f"UDF_SERVER_ADDR=0.0.0.0:{host_port}",
+    ]
+    if not UDF_DOCKER_KEEP_CONTAINER:
+        cmd.append("--rm")
+    cmd.extend(
+        [
+            "--name",
+            container_name,
+            image_tag,
+            "bash",
+            "-lc",
+            script,
+        ]
+    )
+    result = _run_command(cmd)
+    if UDF_DOCKER_LOG_COMMANDS:
+        container_id = result.stdout.strip()
+        if container_id:
+            _log(f"Sandbox docker container_id={container_id}")
+
+
+def _ensure_resource_endpoint(resource_type, script):
+    image_tag = _get_resource_image(resource_type)
+    service_port = _get_resource_service_port(resource_type)
+    key_payload = json.dumps(
+        {"type": resource_type, "image": image_tag, "script": script},
+        sort_keys=True,
+    )
+    key_hash = hashlib.sha256(key_payload.encode("utf-8")).hexdigest()[:12]
+
+    with RESOURCE_DOCKER_LOCK:
+        cached = RESOURCE_DOCKER_CACHE.get(key_hash)
+        if cached and _docker_container_running(cached["container"]):
+            if UDF_DOCKER_LOG_COMMANDS:
+                _log(
+                    "Sandbox docker reuse:",
+                    f"container={cached['container']}",
+                    f"endpoint={cached['endpoint']}",
+                    f"status={cached['status_endpoint']}",
+                )
+            return cached["endpoint"], cached["status_endpoint"]
+
+        host_port = _reserve_port()
+        status_port = _reserve_port()
+        container_name = (
+            f"{UDF_DOCKER_IMAGE_PREFIX}-{resource_type}-{key_hash}-{host_port}"
+        )
+        _start_resource_container(
+            image_tag,
+            host_port,
+            service_port,
+            status_port,
+            container_name,
+            script,
+        )
+
+        endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
+        status_endpoint = f"http://{UDF_DOCKER_HOST}:{status_port}/health"
+        RESOURCE_DOCKER_CACHE[key_hash] = {
+            "container": container_name,
+            "endpoint": endpoint,
+            "status_endpoint": status_endpoint,
+        }
+
+    if UDF_DOCKER_LOG_COMMANDS:
+        _log(f"Sandbox docker endpoint={endpoint}")
+        _log(f"Sandbox docker status_endpoint={status_endpoint}")
+    if not _wait_for_port(UDF_DOCKER_HOST, host_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS):
+        raise RuntimeError(
+            f"Sandbox container {container_name} did not start on {endpoint}"
+        )
+    if not _wait_for_port(
+        UDF_DOCKER_HOST, status_port, UDF_DOCKER_STARTUP_TIMEOUT_SECS
+    ):
+        raise RuntimeError(
+            f"Sandbox container {container_name} did not start on {status_endpoint}"
+        )
+
+    return endpoint, status_endpoint
 
 
 def load_data_from_json():
@@ -453,9 +659,32 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         )
 
 
-def timestamp_to_datetime(timestamp):
-    # Convert google.protobuf.Timestamp to Python datetime
-    return datetime.fromtimestamp(timestamp.seconds + timestamp.nanos / 1e9)
+class ResourceService(resource_pb2_grpc.ResourceServiceServicer):
+    def ApplyResource(self, request, context):
+        _log("ApplyResource", request)
+        if not _docker_available():
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION,
+                "docker not found; a working docker CLI is required",
+            )
+
+        resource_type = request.type or "udf"
+        script = request.script
+        if not script:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing script")
+        _log("Sandbox script:\n", script)
+
+        try:
+            endpoint, _status_endpoint = _ensure_resource_endpoint(resource_type, script)
+        except Exception as exc:
+            context.abort(
+                grpc.StatusCode.INTERNAL,
+                f"failed to provision sandbox container: {exc}",
+            )
+
+        return resource_pb2.ApplyResourceResponse(
+            endpoint=endpoint, headers=UDF_HEADERS
+        )
 
 
 def serve():
@@ -464,17 +693,21 @@ def serve():
     notification_pb2_grpc.add_NotificationServiceServicer_to_server(
         NotificationService(), server
     )
+    resource_pb2_grpc.add_ResourceServiceServicer_to_server(
+        ResourceService(), server
+    )
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
         notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
+        resource_pb2.DESCRIPTOR.services_by_name["ResourceService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    print("Server Started at port 50051")
+    _log("Server Started at port 50051")
     server.wait_for_termination()
 
 

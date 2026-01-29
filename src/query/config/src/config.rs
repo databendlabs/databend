@@ -1933,6 +1933,9 @@ pub struct QueryConfig {
     pub enable_udf_wasm_script: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_udf_sandbox: bool,
+
+    #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
     /// A list of allowed udf server addresses.
@@ -2054,6 +2057,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             enable_udf_python_script: self.enable_udf_python_script,
             enable_udf_js_script: self.enable_udf_js_script,
             enable_udf_wasm_script: self.enable_udf_wasm_script,
+            enable_udf_sandbox: self.enable_udf_sandbox,
             udf_server_allow_list: self.udf_server_allow_list,
             udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
@@ -2161,6 +2165,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             enable_udf_python_script: inner.enable_udf_python_script,
             enable_udf_js_script: inner.enable_udf_js_script,
             enable_udf_wasm_script: inner.enable_udf_wasm_script,
+            enable_udf_sandbox: inner.enable_udf_sandbox,
 
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,

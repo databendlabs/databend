@@ -179,7 +179,8 @@ impl Binder {
                 packages,
                 immutable,
             } => {
-                UDFValidator::is_udf_script_allowed(&language.parse()?)?;
+                let parsed_language = language.parse::<UDFLanguage>()?;
+                UDFValidator::is_udf_script_allowed(&parsed_language)?;
                 let definition = create_udf_definition_script(
                     arg_types,
                     None,

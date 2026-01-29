@@ -219,6 +219,23 @@ jobs:
       - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
 
+  test_sandbox_udf:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 8c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_sandbox_udf
+        timeout-minutes: 20
+
   test_meta_cluster:
     needs: [build, check]
     runs-on:

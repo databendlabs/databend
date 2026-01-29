@@ -1,0 +1,18 @@
+syntax = "proto3";
+option go_package = "databend.com/cloudcontrol/proto";
+
+package resourceproto;
+
+message ApplyResourceRequest {
+  string type = 3;
+  string script = 4;
+}
+
+message ApplyResourceResponse {
+  string endpoint = 1;
+  map<string, string> headers = 2;
+}
+
+service ResourceService {
+  rpc ApplyResource(ApplyResourceRequest) returns (ApplyResourceResponse);
+}
