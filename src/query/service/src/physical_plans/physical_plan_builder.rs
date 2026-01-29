@@ -323,10 +323,8 @@ impl PhysicalPlanBuilder {
             RelOperator::ProjectSet(project_set) => {
                 let req = &mut child_required[0];
                 for item in &project_set.srfs {
-                    if parent_required.contains(&item.index) {
-                        for col in item.scalar.used_columns() {
-                            req.insert(col);
-                        }
+                    for col in item.scalar.used_columns() {
+                        req.insert(col);
                     }
                 }
             }

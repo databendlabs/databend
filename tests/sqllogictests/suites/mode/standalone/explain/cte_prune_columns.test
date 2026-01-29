@@ -163,5 +163,62 @@ Sequence
             ├── cte_schema: [a (#12)]
             └── estimated rows: 3.00
 
+query T nosort
+explain
+with inner_cte as (
+    select a, [a, b] as arr from cte_prune_t
+),
+outer_cte as (
+    select unnest(x.arr) as v
+    from inner_cte x
+    join inner_cte y on x.a = y.a
+)
+select 1
+from outer_cte;
+----
+Sequence
+├── MaterializedCTE: inner_cte
+│   └── EvalScalar
+│       ├── output columns: [cte_prune_t.a (#0), arr (#4)]
+│       ├── expressions: [array(cte_prune_t.a (#0), cte_prune_t.b (#1))]
+│       ├── estimated rows: 3.00
+│       └── TableScan
+│           ├── table: default.default.cte_prune_t
+│           ├── scan id: 0
+│           ├── output columns: [a (#0), b (#1)]
+│           ├── read rows: 3
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│           ├── push downs: [filters: [], limit: NONE]
+│           └── estimated rows: 3.00
+└── EvalScalar
+    ├── output columns: [1 (#17)]
+    ├── expressions: [1]
+    ├── estimated rows: 9.00
+    └── ProjectSet
+        ├── output columns: [unnest(x.arr (#9)) (#15)]
+        ├── estimated rows: 9.00
+        ├── set returning functions: unnest(x.arr (#9))
+        └── HashJoin
+            ├── output columns: [arr (#9)]
+            ├── join type: INNER
+            ├── build keys: [y.a (#10)]
+            ├── probe keys: [x.a (#5)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:y.a (#10), probe targets:[x.a (#5)@scan1], filter type:bloom,inlist,min_max
+            ├── estimated rows: 3.00
+            ├── MaterializeCTERef(Build)
+            │   ├── cte_name: inner_cte
+            │   ├── cte_schema: [a (#10), arr (#14)]
+            │   └── estimated rows: 3.00
+            └── MaterializeCTERef(Probe)
+                ├── cte_name: inner_cte
+                ├── cte_schema: [a (#5), arr (#9)]
+                └── estimated rows: 3.00
+
 statement ok
 drop table cte_prune_t;
