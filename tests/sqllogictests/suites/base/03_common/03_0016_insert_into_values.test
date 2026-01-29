@@ -49,7 +49,6 @@ INSERT INTO t_str(a) values( 'a"b\"c\\\'d')
 statement error (?s)1005
 INSERT INTO t_str values('aaa','bbb'''sssd...);
 
-onlyif mysql
 query T
 select * from t_str order by a
 ----

@@ -80,7 +80,6 @@ SELECT a AS foo, (a) AS foo FROM t ORDER BY foo LIMIT 1
 ----
 1 1
 
-onlyif mysql
 query II
 SELECT a AS "foo.bar", b FROM t ORDER BY "foo.bar" DESC
 ----

@@ -42,7 +42,6 @@ insert into t values(1);
 statement ok
 insert into t values(2);
 
-onlyif mysql
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
@@ -59,7 +58,6 @@ insert into t values(1);
 statement ok
 insert into t values(2);
 
-onlyif mysql
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----

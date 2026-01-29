@@ -179,7 +179,6 @@ select * from t1 order by id1;
 1 9
 2 9
 
-onlyif mysql
 statement ok
 truncate table system.metrics
 
@@ -192,13 +191,11 @@ select * from t1 order by id1;
 1 10
 2 10
 
-onlyif mysql
 query B
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'created_lock_nums_total'
 ----
 1
 
-onlyif mysql
 query B
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'acquired_lock_nums_total'
 ----
