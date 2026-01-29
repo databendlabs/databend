@@ -182,17 +182,6 @@ impl PhysicalPlanBuilder {
             (0..arity).map(|_| parent_required.clone()).collect();
 
         match s_expr.plan() {
-            RelOperator::MaterializedCTE(cte) => {
-                let output_columns = if let Some(columns) = &cte.cte_output_columns {
-                    columns.iter().map(|c| c.index).collect::<ColumnSet>()
-                } else {
-                    RelExpr::with_s_expr(s_expr.child(0)?)
-                        .derive_relational_prop()?
-                        .output_columns
-                        .clone()
-                };
-                child_required[0] = output_columns;
-            }
             RelOperator::EvalScalar(eval_scalar) => {
                 let req = &mut child_required[0];
                 for item in &eval_scalar.items {
@@ -251,9 +240,6 @@ impl PhysicalPlanBuilder {
                 for item in &sort.items {
                     req.insert(item.index);
                 }
-            }
-            RelOperator::Limit(_) => {
-                // no extra columns needed beyond parent_required
             }
             RelOperator::Join(join) => {
                 let mut others_required = join
@@ -334,7 +320,6 @@ impl PhysicalPlanBuilder {
                     req.extend(expr.used_columns());
                 }
             }
-            RelOperator::Exchange(_) => {}
             RelOperator::ProjectSet(project_set) => {
                 let req = &mut child_required[0];
                 for item in &project_set.srfs {
@@ -365,18 +350,21 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Mutation(_) => {
-                // same as parent_required
-            }
-            RelOperator::Sequence(_) => {
-                // same as parent_required for each child
-            }
-            RelOperator::ExpressionScan(_) => {
-                // same as parent_required for single child
-            }
-            _ => {
-                // default: keep parent_required for all children
-            }
+
+            RelOperator::Scan(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::CompactBlock(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::MaterializedCTERef(_)
+            | RelOperator::Sequence(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::Limit(_)
+            | RelOperator::Exchange(_) => {}
         }
 
         Ok(child_required)
