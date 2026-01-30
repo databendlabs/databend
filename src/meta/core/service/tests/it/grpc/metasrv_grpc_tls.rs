@@ -31,7 +31,7 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -66,7 +66,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -79,7 +79,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let tls_conf = RpcClientTlsConfig {

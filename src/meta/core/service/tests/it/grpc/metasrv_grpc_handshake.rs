@@ -17,12 +17,12 @@
 
 use std::time::Duration;
 
-use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::from_digit_ver;
 use databend_common_meta_client::handshake;
 use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_version::DATABEND_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
@@ -36,7 +36,7 @@ use crate::tests::start_metasrv;
 
 /// - Test client version < serverside min-compatible-client-ver.
 /// - Test metasrv version < client min-compatible-metasrv-ver.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_metasrv_handshake() -> anyhow::Result<()> {
     fn smaller_ver(v: &Version) -> Version {
@@ -54,8 +54,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
     let (_tc, addr) = start_metasrv::<TokioRuntime>().await?;
 
     let c =
-        ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None, None)
-            .await?;
+        TokioRuntime::connect(addr.to_string(), Some(Duration::from_millis(1000)), None).await?;
     let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
 
     info!("--- client has smaller ver than S.min_cli_ver");

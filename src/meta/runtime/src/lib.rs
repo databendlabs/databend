@@ -198,6 +198,17 @@ impl SpawnApi for DatabendRuntime {
                 .map_err(|e| std::io::Error::other(e.to_string()))
         })
     }
+
+    fn init_test_logging() -> Box<dyn std::any::Any + Send> {
+        use std::collections::BTreeMap;
+
+        let mut config = databend_common_tracing::Config::new_testing();
+        config.file.level = "DEBUG".to_string();
+
+        let guards =
+            databend_common_tracing::init_logging("meta_unittests", &config, BTreeMap::new());
+        Box::new(guards)
+    }
 }
 
 impl RuntimeApi for DatabendRuntime {

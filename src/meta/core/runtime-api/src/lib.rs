@@ -193,6 +193,18 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     /// * `DatabendRuntime` uses `databend_common_grpc::DNSResolver`.
     fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>>
     where Self: Sized;
+
+    /// Initialize logging for test environments.
+    ///
+    /// Called once at test setup. Returns a guard that should be kept alive
+    /// for the duration of the test.
+    ///
+    /// # Implementations
+    ///
+    /// * `TokioRuntime` initializes basic env_logger.
+    /// * `DatabendRuntime` uses `databend_common_tracing::init_logging()`.
+    fn init_test_logging() -> Box<dyn std::any::Any + Send>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.

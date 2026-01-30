@@ -25,7 +25,7 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.

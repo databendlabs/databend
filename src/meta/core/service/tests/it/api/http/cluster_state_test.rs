@@ -34,7 +34,7 @@ use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_cluster;
 
 /// Test MetaHandle::handle_get_nodes()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -73,7 +73,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 }
 
 /// Test MetaHandle::handle_get_status()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_cluster_state() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1]).await?;
@@ -200,7 +200,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 }
 
 /// Test MetaHandle::handle_raft_metrics()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_handle_raft_metrics() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
@@ -218,7 +218,7 @@ async fn test_handle_raft_metrics() -> anyhow::Result<()> {
 }
 
 /// Test MetaHandle::handle_trigger_snapshot()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_handle_trigger_snapshot() -> anyhow::Result<()> {
     let tc = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -234,7 +234,7 @@ async fn test_handle_trigger_snapshot() -> anyhow::Result<()> {
 }
 
 /// Test MetaHandle::handle_trigger_transfer_leader()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_handle_trigger_transfer_leader() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
@@ -257,7 +257,7 @@ async fn test_handle_trigger_transfer_leader() -> anyhow::Result<()> {
 }
 
 /// Test MetaHandle::handle_get_sys_data()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_handle_get_sys_data() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;

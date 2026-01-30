@@ -3810,9 +3810,7 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "jaq-core",
- "jaq-interpret",
  "jaq-json",
- "jaq-parse",
  "jaq-std",
  "jiff",
  "jsonb",
@@ -4205,7 +4203,6 @@ dependencies = [
  "async-trait",
  "bincode 2.0.1",
  "databend-base",
- "databend-common-base",
  "databend-common-meta-kvapi",
  "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
@@ -4244,7 +4241,9 @@ dependencies = [
 name = "databend-common-meta-runtime-api"
 version = "0.1.0"
 dependencies = [
+ "env_logger 0.11.8",
  "hickory-resolver",
+ "log",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
@@ -5503,7 +5502,6 @@ dependencies = [
  "backon",
  "chrono",
  "databend-base",
- "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
@@ -5665,7 +5663,6 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
- "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
  "fastrace",
@@ -10014,21 +10011,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jaq-interpret"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fe95ec3c24af3fd9f3dd1091593f5e49b003a66c496a8aa39d764d0a06ae17b"
-dependencies = [
- "ahash 0.8.12",
- "dyn-clone",
- "hifijson",
- "indexmap 2.9.0",
- "jaq-syn",
- "once_cell",
- "serde_json",
-]
-
-[[package]]
 name = "jaq-json"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10040,16 +10022,6 @@ dependencies = [
  "jaq-core",
  "jaq-std",
  "serde_json",
-]
-
-[[package]]
-name = "jaq-parse"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0346d7d3146cdda8acd929581f3d6626a332356c74d5c95aeaffaac2eb6dee82"
-dependencies = [
- "chumsky",
- "jaq-syn",
 ]
 
 [[package]]
@@ -10066,15 +10038,6 @@ dependencies = [
  "log",
  "regex-lite",
  "urlencoding",
-]
-
-[[package]]
-name = "jaq-syn"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ba44fe4428c71304604261ecbae047ee9cfb60c4f1a6bd222ebbb31726d3948"
-dependencies = [
- "serde",
 ]
 
 [[package]]

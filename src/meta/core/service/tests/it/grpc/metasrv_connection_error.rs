@@ -35,7 +35,7 @@ use crate::tests::service::start_metasrv_cluster;
 /// - Start a cluster of 3.
 /// - Shutdown node 1.
 /// - Test upsert kv, expect the client auto choose the running nodes.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
@@ -82,7 +82,7 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown follower node 1.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
@@ -115,7 +115,7 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 /// - Create a client to node 1 and 2.
 /// - Shutdown leader node 0.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");

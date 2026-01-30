@@ -21,8 +21,6 @@ members = [
     "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi",
-    "src/meta/kvapi-test-suite",
     "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
@@ -49,8 +47,6 @@ default-members = [
     "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi",
-    "src/meta/kvapi-test-suite",
     "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
@@ -98,8 +94,8 @@ databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/core/client" }
 databend-common-meta-control = { path = "src/meta/control" }
-databend-common-meta-kvapi = { path = "src/meta/kvapi" }
-databend-common-meta-kvapi-test-suite = { path = "src/meta/kvapi-test-suite" }
+databend-common-meta-kvapi = { path = "src/meta/core/kvapi" }
+databend-common-meta-kvapi-test-suite = { path = "src/meta/core/kvapi-test-suite" }
 databend-common-meta-kvapi-tests = { path = "src/meta/kvapi-tests" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/core/raft-store" }

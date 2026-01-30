@@ -25,7 +25,7 @@ use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_snapshot_keys_layout() -> anyhow::Result<()> {
     let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;

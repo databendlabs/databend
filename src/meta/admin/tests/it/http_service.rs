@@ -18,13 +18,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::node::Node;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
+use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::meta_service_test_harness;
 use http::Method;
@@ -43,12 +43,12 @@ use crate::tls_constants::TEST_SERVER_CERT;
 use crate::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_http_service_tls_server() -> anyhow::Result<()> {
-    let tc = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let tc = MetaSrvTestContext::<DatabendRuntime>::new(0);
 
-    let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
+    let runtime = DatabendRuntime::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
 
@@ -89,24 +89,24 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
 }
 
 /// Test http API "/v1/cluster/nodes" using HttpService's build_router()
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
-    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
+    let tc0 = MetaSrvTestContext::<DatabendRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<DatabendRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![
         tc0.config
             .raft_config
-            .raft_api_addr::<TokioRuntime>()
+            .raft_api_addr::<DatabendRuntime>()
             .await?
             .to_string(),
     ];
 
-    let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
+    let _mn0 = MetaNode::<DatabendRuntime>::start(&tc0.config).await?;
 
-    let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
+    let runtime1 = DatabendRuntime::new_testing("meta-io-rt-ut");
     let mn1 = MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
     let meta_handle_1 = Arc::new(mn1);
 
@@ -145,17 +145,17 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_http_service_cluster_state() -> anyhow::Result<()> {
-    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
-    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
+    let tc0 = MetaSrvTestContext::<DatabendRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<DatabendRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![
         tc0.config
             .raft_config
-            .raft_api_addr::<TokioRuntime>()
+            .raft_api_addr::<DatabendRuntime>()
             .await?
             .to_string(),
     ];
@@ -163,9 +163,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
     tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
+    let _meta_node0 = MetaNode::<DatabendRuntime>::start(&tc0.config).await?;
 
-    let runtime1 = TokioRuntime::new_testing("meta-io-rt-ut");
+    let runtime1 = DatabendRuntime::new_testing("meta-io-rt-ut");
     let meta_handle_1 =
         MetaWorker::create_meta_worker(tc1.config.clone(), Arc::new(runtime1)).await?;
     let meta_handle_1 = Arc::new(meta_handle_1);
