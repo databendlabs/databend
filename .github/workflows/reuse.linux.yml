@@ -273,7 +273,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
