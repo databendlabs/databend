@@ -245,7 +245,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
 dashmap = { version = "6.1.0", features = ["serde"] }
-databend-base = "0.2.8"
+databend-base = "0.2.9"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
 deltalake = "0.26"
@@ -617,7 +617,7 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
-databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.8" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.9" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }

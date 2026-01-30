@@ -1736,24 +1736,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.71.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
-dependencies = [
- "bitflags 2.9.0",
- "cexpr",
- "clang-sys",
- "itertools 0.13.0",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 2.1.1",
- "shlex",
- "syn 2.0.106",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
@@ -1761,7 +1743,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "regex",
@@ -1979,7 +1961,7 @@ version = "4.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4f033d6ba6dee8b5322f5504acf758c29317790883bac078e7949dd3d670269"
 dependencies = [
- "bindgen 0.72.1",
+ "bindgen",
  "cmake",
  "fs_extra",
  "fslock",
@@ -3332,8 +3314,8 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.8"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.8#ba762c79a98277059890fd56a7269d24f632580a"
+version = "0.2.9"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.9#3b82aad829a37617e840bde50d747a9bf0c41efe"
 dependencies = [
  "async-trait",
  "ctrlc",
@@ -9416,7 +9398,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.9",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -10541,7 +10523,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a793df0d7afeac54f95b471d3af7f0d4fb975699f972341a4b76988d49cdf0c"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.5",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -11307,7 +11289,7 @@ checksum = "478b0ff3f7d67b79da2b96f56f334431aef65e15ba4b29dd74a4236e29582bdc"
 dependencies = [
  "base64 0.21.7",
  "bigdecimal",
- "bindgen 0.71.1",
+ "bindgen",
  "bitflags 2.9.0",
  "bitvec",
  "btoi",
@@ -18019,7 +18001,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
