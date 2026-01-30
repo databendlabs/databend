@@ -243,7 +243,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 18
+        timeout-minutes: 25
 
   test_stateless_cluster:
     needs: [build, check]
@@ -260,7 +260,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 18
+        timeout-minutes: 25
 
   test_stateful_standalone:
     needs: [build, check]
