@@ -107,8 +107,15 @@ impl AsyncSink for CommitMultiTableInsert {
         for (ref_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             let table = self.tables.remove(&ref_id).unwrap();
             if table.is_temp() {
+                if table.get_branch_info().is_some() {
+                    // Temp tables are session-scoped and are not addressable via snapshot refs
+                    // (branch/tag). Using a branch ref id here could corrupt temp table meta.
+                    return Err(ErrorCode::Unimplemented(
+                        "Temporary table does not support branch/tag references".to_string(),
+                    ));
+                }
                 update_temp_tables.push(UpdateTempTableReq {
-                    table_id: ref_id,
+                    table_id: table.get_table_id(),
                     new_table_meta: table.get_table_info().meta.clone(),
                     copied_files: Default::default(),
                     desc: table.get_table_info().desc.clone(),

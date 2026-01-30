@@ -77,11 +77,9 @@ impl HookOperator {
         if self.branch.is_some() {
             // NOTE: HookOperator currently operates on the main table branch only.
             // TODO(zhyass): make HookOperator branch-aware.
-            log::debug!(
-                "skip hook operator for branch {:?} on table {}.{}",
-                self.branch,
-                self.database,
-                self.table
+            info!(
+                "skip hook operator for branch {:?} on table {}.{}.{}",
+                self.branch, self.catalog, self.database, self.table
             );
             return;
         }
