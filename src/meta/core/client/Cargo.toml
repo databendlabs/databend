@@ -37,7 +37,6 @@ tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-version = { workspace = true }
 rand = { workspace = true }
 

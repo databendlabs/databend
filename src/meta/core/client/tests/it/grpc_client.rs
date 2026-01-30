@@ -72,7 +72,7 @@ async fn test_grpc_client_handshake_timeout() {
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaChannelManager::new_real_client(c);
+        let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
 
         let res = handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
@@ -89,7 +89,7 @@ async fn test_grpc_client_handshake_timeout() {
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaChannelManager::new_real_client(c);
+        let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
 
         let res = handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 

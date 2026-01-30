@@ -4056,7 +4056,6 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "databend-base",
- "databend-common-base",
  "databend-common-grpc",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
@@ -4224,6 +4223,7 @@ dependencies = [
 name = "databend-common-meta-runtime-api"
 version = "0.1.0"
 dependencies = [
+ "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
 ]
@@ -5626,6 +5626,7 @@ name = "databend-meta-runtime"
 version = "0.1.0"
 dependencies = [
  "databend-common-base",
+ "databend-common-grpc",
  "databend-common-meta-runtime-api",
  "databend-common-metrics",
  "databend-common-tracing",
