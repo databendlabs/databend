@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -34,6 +35,7 @@ use tokio::sync::oneshot::Sender;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tonic::transport::server::TcpIncoming;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::MetaServiceConfig;
@@ -77,6 +79,11 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         self.meta_handle.clone().unwrap()
     }
 
+    /// Returns the gRPC config, which includes the actual bound port after `bind()` or `do_start()`.
+    pub fn grpc_config(&self) -> &crate::configs::GrpcConfig {
+        &self.config.grpc
+    }
+
     // Only for test
     pub async fn get_meta_node(&self) -> Arc<MetaNode<SP>> {
         self.meta_handle
@@ -87,7 +94,36 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             .unwrap()
     }
 
+    /// Binds a TCP listener for the gRPC server.
+    ///
+    /// If `listen_port` is `None`, binds to port 0 for OS-assigned port.
+    /// The actual bound port is NOT updated in config here; it will be set in `do_start_with_incoming()`.
+    pub fn bind(&self) -> Result<TcpIncoming, MetaNetworkError> {
+        let port = self.config.grpc.listen_port.unwrap_or(0);
+        let addr: SocketAddr = format!("{}:{}", self.config.grpc.listen_host, port).parse()?;
+
+        let incoming = TcpIncoming::bind(addr)
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
+        Ok(incoming)
+    }
+
     pub async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
+        let incoming = self.bind()?;
+        self.do_start_with_incoming(incoming).await
+    }
+
+    pub async fn do_start_with_incoming(
+        &mut self,
+        incoming: TcpIncoming,
+    ) -> Result<(), MetaNetworkError> {
+        let addr = incoming
+            .local_addr()
+            .map_err(|e| MetaNetworkError::BadAddressFormat(AnyError::new(&e)))?;
+
+        // Update config with actual bound port
+        self.config.grpc.listen_port = Some(addr.port());
+
         info!("GrpcServer::start");
 
         let meta_handle = self.meta_handle.clone().unwrap();
@@ -120,12 +156,6 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             builder
         };
 
-        let addr = self
-            .config
-            .grpc
-            .api_address
-            .parse::<std::net::SocketAddr>()?;
-
         info!("start gRPC listening: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(self.version.clone(), Arc::downgrade(&meta_handle));
@@ -133,40 +163,42 @@ impl<SP: SpawnApi> GrpcServer<SP> {
             .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
 
+        let router = builder.add_service(reflect_srv).add_service(grpc_srv);
+
         let id = self.config.raft_config.id;
 
-        let j = SP::spawn(
-            async move {
-                let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
+        let shutdown_fut = async move {
+            started_tx.send(()).ok();
+            info!(
+                "meta-service gRPC(on {}) starts to wait for stop signal",
+                addr
+            );
+            let _ = stop_rx.await;
+            info!("meta-service gRPC(on {}) receives stop signal", addr);
+        };
 
-                let res = builder
-                    .add_service(reflect_srv)
-                    .add_service(grpc_srv)
-                    .serve_with_shutdown(addr, async move {
-                        let _ = started_tx.send(());
-                        info!(
-                            "meta-service gRPC(on {}) starts to wait for stop signal",
-                            addr
-                        );
-                        let _ = stop_rx.await;
-                        info!("meta-service gRPC(on {}) receives stop signal", addr);
-                    })
-                    .await;
+        let fu = async move {
+            let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
 
-                info!(
-                    "meta-service gRPC(on {}) task returned res: {:?}",
-                    addr, res
-                );
-            }
-            .in_span(Span::enter_with_local_parent("spawn-grpc")),
-            Some("grpc-server".into()),
-        );
+            let res = router
+                .serve_with_incoming_shutdown(incoming, shutdown_fut)
+                .await;
+
+            info!(
+                "meta-service gRPC(on {}) task returned res: {:?}",
+                addr, res
+            );
+        };
+
+        let serving_fut = fu.in_span(Span::enter_with_local_parent("spawn-grpc"));
+
+        let join_handle = SP::spawn(serving_fut, Some("grpc-server".into()));
 
         started_rx
             .await
             .expect("maybe address already in use, try to use another port");
 
-        self.join_handle = Some(j);
+        self.join_handle = Some(join_handle);
         self.stop_grpc_tx = Some(stop_grpc_tx);
 
         info!("Done GrpcServer::start");

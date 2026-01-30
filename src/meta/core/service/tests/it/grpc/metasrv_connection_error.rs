@@ -24,8 +24,8 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use test_harness::test;
 
@@ -41,11 +41,11 @@ use crate::tests::service::start_metasrv_cluster;
 #[fastrace::trace]
 async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
-    let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -88,11 +88,11 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 #[fastrace::trace]
 async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
-    let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a1 = || addresses[1].clone();
@@ -121,11 +121,11 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 #[fastrace::trace]
 async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
-    let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a1 = || addresses[1].clone();
@@ -145,12 +145,10 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn make_client(
-    addresses: Vec<String>,
-) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+fn make_client(addresses: Vec<String>) -> Result<Arc<ClientHandle<TokioRuntime>>, CreationError> {
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         addresses, // a1() will be shut down
-        databend_common_version::BUILD_INFO.semver(),
+        databend_common_version::DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,
@@ -163,7 +161,7 @@ fn make_client(
 
 /// Test write and then read with a provided client
 async fn test_write_read(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &Arc<ClientHandle<TokioRuntime>>,
     key: impl Display,
 ) -> anyhow::Result<()> {
     info!("--- test write/read: {}", key);

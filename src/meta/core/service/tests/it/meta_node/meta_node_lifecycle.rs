@@ -54,7 +54,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
-    let tc = MetaSrvTestContext::new(0);
+    let tc = MetaSrvTestContext::<TokioRuntime>::new(0);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
     let mn = MetaNode::<TokioRuntime>::boot(&tc.config).await?;
@@ -108,7 +108,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     info!("--- bring up non-voter 2");
 
     let node_id = 2;
-    let mut tc2 = MetaSrvTestContext::new(node_id);
+    let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(node_id);
     {
         let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config).await?;
         all.push(mn2);
@@ -144,7 +144,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     info!("--- bring up non-voter 3");
 
     let node_id = 3;
-    let mut tc3 = MetaSrvTestContext::new(node_id);
+    let mut tc3 = MetaSrvTestContext::<TokioRuntime>::new(node_id);
     {
         let mn3 = MetaNode::<TokioRuntime>::open(&tc3.config.raft_config).await?;
         all.push(mn3.clone());
@@ -226,7 +226,7 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     info!("--- bring up non-voter 2");
 
     let node_id = 2;
-    let tc2 = MetaSrvTestContext::new(node_id);
+    let tc2 = MetaSrvTestContext::<TokioRuntime>::new(node_id);
     {
         let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config).await?;
         all.push(mn2);
@@ -328,7 +328,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     info!("--- bring up non-voter 1");
 
     let node_id = 1;
-    let tc1 = MetaSrvTestContext::new(node_id);
+    let tc1 = MetaSrvTestContext::<TokioRuntime>::new(node_id);
 
     let mn1 = MetaNode::<TokioRuntime>::open(&tc1.config.raft_config).await?;
 
@@ -362,7 +362,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     info!("--- bring up non-voter 3");
 
     let node_id = 2;
-    let tc2 = MetaSrvTestContext::new(node_id);
+    let tc2 = MetaSrvTestContext::<TokioRuntime>::new(node_id);
 
     let mn2 = MetaNode::<TokioRuntime>::open(&tc2.config.raft_config).await?;
 
@@ -412,13 +412,13 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     //
     // In this test it needs a cluster of 3 to form a quorum of 2, so that node-2 can be stopped.
 
-    let tc0 = MetaSrvTestContext::new(0);
+    let tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
 
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mut tc2 = MetaSrvTestContext::new(2);
+    let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(2);
     tc2.config.raft_config.single = false;
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
@@ -670,7 +670,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Check old data an new written data.
 
     let tc0 = {
-        let mut tc = MetaSrvTestContext::new(0);
+        let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
         // Purge all logs after building snapshot
         tc.config.raft_config.max_applied_log_to_keep = 0;
         let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
@@ -946,6 +946,8 @@ async fn assert_get_kv(
     Ok(())
 }
 
-fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode<TokioRuntime>>> {
+fn test_context_nodes(
+    tcs: &[MetaSrvTestContext<TokioRuntime>],
+) -> Vec<Arc<MetaNode<TokioRuntime>>> {
     tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }

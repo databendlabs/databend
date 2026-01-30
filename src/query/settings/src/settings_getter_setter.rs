@@ -381,6 +381,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    pub fn get_enable_cse_optimizer(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cse_optimizer")? != 0)
+    }
+
     pub fn get_force_eager_aggregate(&self) -> Result<bool> {
         Ok(self.try_get_u64("force_eager_aggregate")? != 0)
     }

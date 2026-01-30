@@ -21,6 +21,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
+use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
@@ -31,18 +32,18 @@ use tokio::time::sleep;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cache_basic() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let cli = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![a1(), a2(), a0()])?;
 
     let client = || cli.clone();
 
@@ -93,13 +94,13 @@ async fn test_cache_basic() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_cache_when_leader_down() -> anyhow::Result<()> {
-    let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     debug!("foofoo");
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<Vec<_>>();
 
     let a0 = || addresses[0].clone();
@@ -107,7 +108,7 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     let a2 = || addresses[2].clone();
 
     // a0() will be shut down
-    let cli = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let cli = make_grpc_client::<DatabendRuntime>(vec![a1(), a2(), a0()])?;
 
     let client = || cli.clone();
 

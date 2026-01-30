@@ -12,22 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
-
-use test_harness::test;
-
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    databend_common_meta_kvapi_test_suite::TestSuite {}
-        .test_all(builder)
-        .await
-}
+mod metasrv_builder;
+mod test_auto_increment_api;
+mod test_schema_api;

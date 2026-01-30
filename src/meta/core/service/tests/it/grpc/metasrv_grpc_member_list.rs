@@ -34,7 +34,7 @@ async fn test_member_list() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get member list
 
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 
@@ -79,11 +79,11 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // Start with 2 voters, then add 1 learner
 
     // Start initial cluster with 2 voters
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1]).await?;
 
     // Create a learner node but don't start it as part of the initial cluster
     let learner_node_id = 2;
-    let learner_tc = MetaSrvTestContext::new(learner_node_id);
+    let learner_tc = MetaSrvTestContext::<TokioRuntime>::new(learner_node_id);
     let learner_mn = MetaNode::<TokioRuntime>::open(&learner_tc.config.raft_config).await?;
 
     // Get the leader to send join request
