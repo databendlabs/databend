@@ -25,7 +25,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_formats::field_encoder::FieldEncoderValues;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use futures_util::StreamExt;
 use log::error;
 use opensrv_mysql::*;
@@ -100,8 +100,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     #[async_backtrace::framed]
     pub async fn write(
         &mut self,
-        query_result: Result<(QueryResult, Option<FormatSettings>)>,
-        format: &FormatSettings,
+        query_result: Result<(QueryResult, Option<OutputFormatSettings>)>,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
@@ -109,7 +108,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     if let Some(format) = query_format {
                         self.ok(query_result, writer, &format).await?
                     } else {
-                        self.ok(query_result, writer, format).await?
+                        let format_settings =
+                            self.session.get_settings().get_output_format_settings()?;
+                        self.ok(query_result, writer, &format_settings).await?
                     }
                 }
                 Err(error) => self.err(&error, writer).await?,
@@ -123,7 +124,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         &self,
         mut query_result: QueryResult,
         dataset_writer: QueryResultWriter<'a, W>,
-        format: &FormatSettings,
+        format: &OutputFormatSettings,
     ) -> Result<()> {
         // XXX: num_columns == 0 may is error?
         if !query_result.has_result_set {

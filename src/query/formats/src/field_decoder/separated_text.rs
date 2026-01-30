@@ -50,13 +50,13 @@ use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
+use databend_common_io::prelude::InputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
-use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
 use crate::NestedValues;
 use crate::binary::decode_binary;
@@ -79,40 +79,30 @@ impl FieldDecoder for SeparatedTextDecoder {
 /// in CSV, we find the exact bound of each field before decode it to a type.
 /// which is diff from the case when parsing values.
 impl SeparatedTextDecoder {
-    pub fn create_csv(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_csv(params: &CsvFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
-                jiff_timezone: options_ext.jiff_timezone.clone(),
-                disable_variant_check: options_ext.disable_variant_check,
+                settings: settings.clone(),
                 binary_format: params.binary_format,
-                is_rounding_mode: options_ext.is_rounding_mode,
-                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
-            nested_decoder: NestedValues::create(options_ext),
+            nested_decoder: NestedValues::create(settings),
         }
     }
 
-    pub fn create_tsv(_params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create_tsv(_params: &TsvFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                jiff_timezone: options_ext.jiff_timezone.clone(),
-                disable_variant_check: options_ext.disable_variant_check,
+                settings: settings.clone(),
                 binary_format: Default::default(),
-                is_rounding_mode: options_ext.is_rounding_mode,
-                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
-            nested_decoder: NestedValues::create(options_ext),
+            nested_decoder: NestedValues::create(settings),
         }
-    }
-
-    fn common_settings(&self) -> &InputCommonSettings {
-        &self.common_settings
     }
 
     pub fn read_field(
@@ -127,7 +117,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::Binary(c) => {
-                let data = decode_binary(data, self.common_settings().binary_format)?;
+                let data = decode_binary(data, self.common_settings.binary_format)?;
                 c.put_slice(&data);
                 c.commit_row();
                 Ok(())
@@ -175,15 +165,15 @@ impl SeparatedTextDecoder {
     }
 
     fn read_bool(&self, column: &mut MutableBitmap, data: &[u8]) -> Result<()> {
-        if data == self.common_settings().false_bytes {
+        if data == self.common_settings.false_bytes {
             column.push(false);
-        } else if data == self.common_settings().true_bytes {
+        } else if data == self.common_settings.true_bytes {
             column.push(true);
         } else {
             let err_msg = format!(
                 "Incorrect boolean value, expect {} or {}",
-                self.common_settings().true_bytes.to_str().unwrap(),
-                self.common_settings().false_bytes.to_str().unwrap()
+                self.common_settings.true_bytes.to_str().unwrap(),
+                self.common_settings.false_bytes.to_str().unwrap()
             );
             return Err(ErrorCode::BadBytes(err_msg));
         }
@@ -197,7 +187,7 @@ impl SeparatedTextDecoder {
         allow_null: bool,
     ) -> Result<()> {
         if allow_null {
-            for null in &self.common_settings().null_if {
+            for null in &self.common_settings.null_if {
                 if data == null {
                     column.push_null();
                     return Ok(());
@@ -225,7 +215,7 @@ impl SeparatedTextDecoder {
             Err(_) => {
                 // cast float value to integer value
                 let val: f64 = read_num_text_exact(&data[..effective])?;
-                let new_val: Option<T::Native> = if self.common_settings.is_rounding_mode {
+                let new_val: Option<T::Native> = if self.common_settings.settings.is_rounding_mode {
                     num_traits::cast::cast(val.round())
                 } else {
                     num_traits::cast::cast(val)
@@ -269,7 +259,7 @@ impl SeparatedTextDecoder {
 
     fn read_date(&self, column: &mut Vec<i32>, data: &[u8]) -> Result<()> {
         let mut buffer_readr = Cursor::new(&data);
-        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
+        let date = buffer_readr.read_date_text(&self.common_settings.settings.jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -288,11 +278,11 @@ impl SeparatedTextDecoder {
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        read_timestamp(column, data, self.common_settings())
+        read_timestamp(column, data, &self.common_settings)
     }
 
     fn read_timestamp_tz(&self, column: &mut Vec<timestamp_tz>, data: &[u8]) -> Result<()> {
-        read_timestamp_tz(column, data, self.common_settings())
+        read_timestamp_tz(column, data, &self.common_settings)
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
@@ -308,7 +298,7 @@ impl SeparatedTextDecoder {
                 column.commit_row();
             }
             Err(e) => {
-                if self.common_settings().disable_variant_check {
+                if self.common_settings.settings.disable_variant_check {
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));

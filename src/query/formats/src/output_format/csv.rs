@@ -18,36 +18,34 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 
-use crate::FileFormatOptionsExt;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::write_csv_string;
 use crate::output_format::OutputFormat;
 
-pub type CSVOutputFormat = CSVOutputFormatBase<false, false>;
-pub type CSVWithNamesOutputFormat = CSVOutputFormatBase<true, false>;
-pub type CSVWithNamesAndTypesOutputFormat = CSVOutputFormatBase<true, true>;
-
-pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
+pub struct CSVOutputFormat {
     schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
     quote: u8,
+
+    headers: u8,
 }
 
-impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
+impl CSVOutputFormat {
     pub fn create(
         schema: TableSchemaRef,
         params: &CsvFileFormatParams,
-        options_ext: &FileFormatOptionsExt,
+        field_encoder: FieldEncoderCSV,
+        headers: u8,
     ) -> Self {
-        let field_encoder = FieldEncoderCSV::create_csv(params, options_ext);
         Self {
             schema,
             field_encoder,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
             quote: params.quote.as_bytes()[0],
+            headers,
         }
     }
 
@@ -67,9 +65,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
     }
 }
 
-impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
-    for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
-{
+impl OutputFormat for CSVOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
         let mut buf = Vec::with_capacity(block.memory_size());
@@ -99,7 +95,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         let mut buf = vec![];
-        if WITH_NAMES {
+        if self.headers > 0 {
             let names = self
                 .schema
                 .fields()
@@ -107,7 +103,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
             buf.extend_from_slice(&self.serialize_strings(names));
-            if WITH_TYPES {
+            if self.headers > 1 {
                 let types = self
                     .schema
                     .fields()

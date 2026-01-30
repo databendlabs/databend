@@ -564,7 +564,7 @@ impl ExecuteState {
         };
 
         // set_var may change settings
-        let format_settings = ctx.get_format_settings()?;
+        let format_settings = ctx.get_output_format_settings()?;
         block_sender.plan_ready(format_settings, spiller);
         Ok(())
     }
