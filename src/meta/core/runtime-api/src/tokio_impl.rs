@@ -211,7 +211,7 @@ impl SpawnApi for TokioRuntime {
                 })?;
 
             if let Some(t) = timeout {
-                endpoint = endpoint.connect_timeout(t);
+                endpoint = endpoint.connect_timeout(t).timeout(t);
             }
             if let Some(tls) = tls {
                 endpoint = endpoint
