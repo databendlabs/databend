@@ -1254,7 +1254,7 @@ pub type ListTableCopiedFileReply = GetTableCopiedFileReply;
 /// - a derived branch (`branch_id = Some(_)`)
 ///
 /// `table_id` always refers to the physical table.
-/// `unique_id()` uniquely identifies the referenced table view:
+/// `effective_id()` uniquely identifies the referenced table view:
 /// - main branch: `table_id`
 /// - branch:      `branch_id`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

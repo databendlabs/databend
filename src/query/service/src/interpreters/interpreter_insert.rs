@@ -115,12 +115,11 @@ impl Interpreter for InsertInterpreter {
                 .get_table_by_info(table_info)?
         } else {
             self.ctx
-                .get_table_with_batch(
+                .get_table_with_branch(
                     &self.plan.catalog,
                     &self.plan.database,
                     &self.plan.table,
                     self.plan.branch.as_deref(),
-                    None,
                 )
                 .await?
         };
@@ -222,7 +221,7 @@ impl Interpreter for InsertInterpreter {
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
                     let table_info = ExtendedTableInfo {
-                        table_info: table1.get_table_info().clone(),
+                        inner: table1.get_table_info().clone(),
                         branch_info: table1.get_branch_info().cloned(),
                     };
                     if table.support_distributed_insert()

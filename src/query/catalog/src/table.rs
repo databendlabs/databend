@@ -129,7 +129,7 @@ pub trait Table: Sync + Send {
 
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(ExtendedTableInfo {
-            table_info: self.get_table_info().clone(),
+            inner: self.get_table_info().clone(),
             branch_info: self.get_branch_info().cloned(),
         })
     }

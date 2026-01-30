@@ -302,7 +302,15 @@ pub trait TableContext: Send + Sync {
 
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
-    async fn get_table_with_batch(
+    async fn get_table_with_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>>;
+
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,

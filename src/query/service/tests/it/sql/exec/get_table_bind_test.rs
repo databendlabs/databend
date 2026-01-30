@@ -879,11 +879,21 @@ impl TableContext for CtxDelegation {
         }
     }
 
+    async fn get_table_with_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
     fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         todo!()
     }
 
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,

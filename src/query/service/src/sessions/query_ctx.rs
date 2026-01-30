@@ -849,7 +849,7 @@ impl TableContext for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
             DataSourceInfo::TableSource(extend_info) => self.build_table_by_table_info(
-                &extend_info.table_info,
+                &extend_info.inner,
                 &extend_info.branch_info,
                 plan.tbl_args.clone(),
             ),
@@ -1480,6 +1480,21 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
+        self.get_table_with_branch(catalog, database, table, None)
+            .await
+    }
+
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
@@ -1496,16 +1511,12 @@ impl TableContext for QueryContext {
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, None, batch_size)
+        self.get_table_from_shared(catalog, database, table, branch, batch_size)
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
     #[async_backtrace::framed]
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
@@ -1572,7 +1583,7 @@ impl TableContext for QueryContext {
         let catalog = self.get_catalog(catalog_name).await?;
 
         let table = self
-            .get_table_with_batch(catalog_name, database_name, table_name, branch_name, None)
+            .get_table_with_branch(catalog_name, database_name, table_name, branch_name)
             .await?;
         let ref_id = TableRefId {
             table_id: table.get_id(),

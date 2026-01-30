@@ -20,7 +20,7 @@ use databend_common_meta_app::schema::TableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExtendedTableInfo {
-    pub table_info: TableInfo,
+    pub inner: TableInfo,
     pub branch_info: Option<BranchInfo>,
 }
 
@@ -28,14 +28,14 @@ impl ExtendedTableInfo {
     pub fn schema(&self) -> Arc<TableSchema> {
         self.branch_info
             .as_ref()
-            .map_or_else(|| self.table_info.schema(), |v| v.schema.clone())
+            .map_or_else(|| self.inner.schema(), |v| v.schema.clone())
     }
 
     pub fn desc(&self) -> String {
-        self.table_info.desc.clone()
+        self.inner.desc.clone()
     }
 
     pub fn catalog_name(&self) -> &str {
-        &self.table_info.catalog_info.name_ident.catalog_name
+        &self.inner.catalog_info.name_ident.catalog_name
     }
 }

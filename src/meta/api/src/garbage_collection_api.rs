@@ -238,6 +238,7 @@ async fn remove_copied_files_for_dropped_table(
                 break;
             }
 
+            let n = batch_size - copied_files.len();
             let copied_file_ident = TableCopiedFileNameIdent {
                 id: dir_id,
                 file: "dummy".to_string(),
@@ -245,12 +246,9 @@ async fn remove_copied_files_for_dropped_table(
             let dir_name = DirName::new(copied_file_ident);
 
             let mut key_stream = kv_api
-                .list_pb_keys(ListOptions::unlimited(&dir_name))
+                .list_pb_keys(ListOptions::limited(&dir_name, n as u64))
                 .await?;
-            while copied_files.len() < batch_size {
-                let Some(key) = key_stream.try_next().await? else {
-                    break;
-                };
+            while let Some(key) = key_stream.try_next().await? {
                 copied_files.push(key);
             }
         }

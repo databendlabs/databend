@@ -153,12 +153,11 @@ impl Binder {
         let catalog_info = catalog.info();
         let table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await?;
         let dedup_full_path = table

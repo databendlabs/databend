@@ -130,7 +130,7 @@ impl IPhysicalPlan for CopyIntoTable {
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let to_table = builder.ctx.build_table_by_table_info(
-            &self.table_info.table_info,
+            &self.table_info.inner,
             &self.table_info.branch_info,
             None,
         )?;

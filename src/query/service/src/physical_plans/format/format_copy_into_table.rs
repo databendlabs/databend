@@ -54,7 +54,7 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
         }
 
         Ok(FormatTreeNode::with_children(
-            format!("CopyIntoTable: {}", self.inner.table_info.table_info),
+            format!("CopyIntoTable: {}", self.inner.table_info.inner),
             children,
         ))
     }

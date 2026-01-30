@@ -92,12 +92,11 @@ impl SimpleTableFunc for CopyHistoryFunc {
             (current_database, name.clone())
         };
         let table = ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &current_catalog,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await?;
         let unique_id = table.get_unique_id();

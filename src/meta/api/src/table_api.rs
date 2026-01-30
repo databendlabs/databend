@@ -934,6 +934,9 @@ where
 
         let table_id = req.ref_id.table_id;
         let branch_id = req.ref_id.branch_id;
+        // Use branch_id as the unique identifier when operating on a branch.
+        // A branch is treated as an isolated logical table with its own metadata lineage.
+        // If branch_id is absent, fall back to table_id for the main table.
         let unique_id = branch_id.unwrap_or(table_id);
         let tid = TableId { table_id };
 

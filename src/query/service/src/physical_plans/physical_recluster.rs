@@ -128,7 +128,7 @@ impl IPhysicalPlan for Recluster {
                 let description = task.stats.get_description(&table_info.desc);
                 let plan = DataSourcePlan {
                     source_info: DataSourceInfo::TableSource(ExtendedTableInfo {
-                        table_info: table_info.clone(),
+                        inner: table_info.clone(),
                         branch_info: None,
                     }),
                     output_schema: schema.clone(),

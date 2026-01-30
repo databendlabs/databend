@@ -1173,7 +1173,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1196,7 +1196,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
@@ -1317,13 +1317,7 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table_with_batch(
-                                &catalog,
-                                &database,
-                                &table,
-                                branch.as_deref(),
-                                None,
-                            )
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1337,13 +1331,7 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table_with_batch(
-                                &catalog,
-                                &database,
-                                &table,
-                                branch.as_deref(),
-                                None,
-                            )
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
 
@@ -1378,7 +1366,7 @@ impl Binder {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let tbl = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?;
                 // Branch tables currently only support LINEAR cluster key.
                 if tbl.get_branch_info().is_some()

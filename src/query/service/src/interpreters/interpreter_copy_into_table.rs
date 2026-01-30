@@ -201,7 +201,7 @@ impl CopyIntoTableInterpreter {
             required_source_schema,
             stage_table_info: plan.stage_table_info.clone(),
             table_info: ExtendedTableInfo {
-                table_info,
+                inner: table_info,
                 branch_info,
             },
             write_mode: plan.write_mode,
@@ -390,12 +390,11 @@ impl CopyIntoTableInterpreter {
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let mut to_table = ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
                 plan.branch_name.as_deref(),
-                None,
             )
             .await?;
 
@@ -531,12 +530,11 @@ impl Interpreter for CopyIntoTableInterpreter {
         let plan = &self.plan;
         let to_table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
                 plan.branch_name.as_deref(),
-                None,
             )
             .await?;
 
