@@ -24,22 +24,26 @@
 
 ## 💡 Why Databend?
 
-Databend is an open-source **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on object storage.
+Databend is an open-source **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI
+**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on object
+storage.
 
-| | |
-| :--- | :--- |
+|                                                                                                           |                                                                                                          |
+|:----------------------------------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------|
 | **📊 BI & Analytics**<br>Supercharge your analytics with a high-performance, vectorized SQL query engine. | **✨ Vector Search**<br>Power AI and RAG applications with built-in, high-speed vector similarity search. |
-| **📄 JSON Search**<br>Seamlessly query and analyze semi-structured data with powerful JSON optimization. | **🌍 Geo Search**<br>Efficiently store, index, and query geospatial data for location intelligence. |
-| **🔄 ETL Pipeline**<br>Streamline data ingestion and transformation with built-in Streams and Tasks. | **🌿 Branching**<br>Create isolated Copy-on-Write branches instantly for dev, test, or experiments. |
+| **📄 JSON Search**<br>Seamlessly query and analyze semi-structured data with powerful JSON optimization.  | **🌍 Geo Search**<br>Efficiently store, index, and query geospatial data for location intelligence.      |
+| **🔄 ETL Pipeline**<br>Streamline data ingestion and transformation with built-in Streams and Tasks.      | **🌿 Branching**<br>Create isolated Copy-on-Write branches instantly for dev, test, or experiments.      |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
 
 ## ⚡ Quick Start
 
 ### 1. Cloud (Recommended)
+
 [Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) — Production-ready in 60 seconds.
 
 ### 2. Local (Python)
+
 Ideal for development and testing:
 
 ```bash
@@ -53,6 +57,7 @@ ctx.sql("SELECT 'Hello, Databend!'").show()
 ```
 
 ### 3. Docker
+
 Run the full warehouse locally:
 
 ```bash
@@ -61,11 +66,16 @@ docker run -p 8000:8000 datafuselabs/databend
 
 ## 🚀 Use Cases
 
-- **BI & Analytics**: High-speed SQL on massive datasets — [Query Processing](https://docs.databend.com/guides/query/sql-analytics)
-- **AI & Vectors**: Built-in vector search and embedding management — [Vector Database](https://docs.databend.com/guides/query/vector-db)
-- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON) — [JSON Search](https://docs.databend.com/guides/query/json-search)
-- **Geospatial**: Advanced geo-analytics and mapping — [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics)
-- **Stream & Task**: Continuous data ingestion and transformation — [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl)
+- **BI & Analytics**: High-speed SQL on massive
+  datasets — [Query Processing](https://docs.databend.com/guides/query/sql-analytics)
+- **AI & Vectors**: Built-in vector search and embedding
+  management — [Vector Database](https://docs.databend.com/guides/query/vector-db)
+- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (
+  JSON) — [JSON Search](https://docs.databend.com/guides/query/json-search)
+- **Geospatial**: Advanced geo-analytics and
+  mapping — [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics)
+- **Stream & Task**: Continuous data ingestion and
+  transformation — [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl)
 
 ## 🤝 Community & Support
 
