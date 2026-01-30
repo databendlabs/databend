@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_grpc::ConnectionFactory;
-use databend_common_grpc::GrpcConnectionError;
-use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_runtime_api::ChannelError;
+use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TlsConfig;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaClientError;
@@ -49,12 +50,12 @@ use crate::pool::ItemManager;
 pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
 
 #[derive(Debug)]
-pub struct MetaChannelManager {
+pub struct MetaChannelManager<R> {
     version: Version,
     username: String,
     password: String,
     timeout: Option<Duration>,
-    tls_config: Option<RpcClientTlsConfig>,
+    tls_config: Option<TlsConfig>,
 
     required_features: &'static [FeatureSpec],
 
@@ -69,15 +70,17 @@ pub struct MetaChannelManager {
     /// This prevents h2 stream reset accumulation that can lead to
     /// `too_many_internal_resets` errors.
     connection_ttl: Duration,
+
+    _phantom: PhantomData<R>,
 }
 
-impl MetaChannelManager {
+impl<R: SpawnApi> MetaChannelManager<R> {
     pub fn new(
         version: Version,
         username: impl ToString,
         password: impl ToString,
         timeout: Option<Duration>,
-        tls_config: Option<RpcClientTlsConfig>,
+        tls_config: Option<TlsConfig>,
         required_features: &'static [FeatureSpec],
         endpoints: Arc<Mutex<Endpoints>>,
         connection_ttl: Option<Duration>,
@@ -91,6 +94,7 @@ impl MetaChannelManager {
             required_features,
             endpoints,
             connection_ttl: connection_ttl.unwrap_or(DEFAULT_CONNECTION_TTL),
+            _phantom: PhantomData,
         }
     }
 
@@ -159,30 +163,25 @@ impl MetaChannelManager {
     async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
         info!("MetaChannelManager::build_channel to {}", addr);
 
-        let ch = ConnectionFactory::create_rpc_channel(
-            addr,
-            self.timeout,
-            self.tls_config.clone(),
-            None,
-        )
-        .await
-        .map_err(|e| match e {
-            GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
-                AnyError::new(&e).add_context(|| "while creating rpc channel"),
-            ),
-            GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
-                AnyError::new(&e).add_context(|| "while creating rpc channel"),
-            ),
-            GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
-                ConnectionError::new(e, "while creating rpc channel"),
-            ),
-        })?;
+        let ch = R::connect(addr.clone(), self.timeout, self.tls_config.clone())
+            .await
+            .map_err(|e| match e {
+                ChannelError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                ChannelError::TlsConfig { .. } => MetaNetworkError::TLSConfigError(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                ChannelError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
+                    ConnectionError::new(e, "while creating rpc channel"),
+                ),
+            })?;
         Ok(ch)
     }
 }
 
 #[async_trait]
-impl ItemManager for MetaChannelManager {
+impl<R: SpawnApi> ItemManager for MetaChannelManager<R> {
     type Key = String;
     type Item = EstablishedClient;
     type Error = MetaClientError;
