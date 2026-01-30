@@ -14,8 +14,8 @@
 
 use std::time::Duration;
 
-use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;

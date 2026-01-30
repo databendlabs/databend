@@ -21,6 +21,7 @@ databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-cache = { workspace = true }
+databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }

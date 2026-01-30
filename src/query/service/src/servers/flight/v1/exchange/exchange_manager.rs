@@ -348,7 +348,7 @@ impl DataExchangeManager {
                     ConnectionFactory::create_rpc_channel(
                         address.to_owned(),
                         None,
-                        Some(config.query.to_rpc_client_tls_config()),
+                        Some(config.query.to_grpc_tls_config()),
                         keep_alive_config,
                     )
                     .await?,
