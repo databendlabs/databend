@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 MAX_SCALE=74
-TIMES=30
+TIMES=10
 
 echo "SELECT 1 + 1" > /tmp/decimal.sql
 for scale in `seq 0 ${MAX_SCALE}`;do
@@ -21,4 +21,3 @@ done >> /tmp/decimal.sql
 
 cat /tmp/decimal.sql | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "1"
-

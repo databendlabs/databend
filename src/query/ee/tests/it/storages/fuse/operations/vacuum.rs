@@ -554,7 +554,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> anyhow::Result<()
 async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();
@@ -650,7 +650,7 @@ async fn test_vacuum_dropped_table_clean_autoincrement() -> anyhow::Result<()> {
 async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();
@@ -737,7 +737,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
 async fn test_gc_in_progress_db_not_undroppable() -> anyhow::Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();
@@ -826,7 +826,7 @@ async fn test_vacuum_drop_create_or_replace() -> anyhow::Result<()> {
 async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyhow::Result<()> {
     // Setup
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     let mut ee_setup = EESetup::new();
     let config = ee_setup.config_mut();
@@ -921,7 +921,7 @@ async fn test_vacuum_dropped_table_clean_tag_refs() -> anyhow::Result<()> {
 
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();
@@ -1057,7 +1057,7 @@ async fn test_vacuum_dropped_table_clean_policies() -> anyhow::Result<()> {
 
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
-    let endpoints = meta.endpoints.clone();
+    let endpoints = meta.inner().endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();

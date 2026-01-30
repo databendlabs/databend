@@ -29,7 +29,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 pushd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Preparing data (faked time)"
-./databend-test --mode 'standalone' --run-dir 8_faked_time_prepare
+./databend-test --mode 'standalone' --run-dir 8_faked_time_prepare --print-time
 
 popd
 echo "Starting standalone DatabendQuery"
@@ -39,4 +39,4 @@ sudo date -s "+2 days"
 pushd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Testing"
-./databend-test --mode 'standalone' --run-dir 9_faked_time
+./databend-test --mode 'standalone' --run-dir 9_faked_time --print-time

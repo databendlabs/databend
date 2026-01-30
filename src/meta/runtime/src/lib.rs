@@ -24,14 +24,38 @@ mod metrics;
 
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::runtime;
+use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::GrpcConnectionError;
+use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::BoxFuture;
+use databend_common_meta_runtime_api::Channel;
+use databend_common_meta_runtime_api::ChannelError;
 use databend_common_meta_runtime_api::JoinHandle;
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_runtime_api::SpawnApi;
+use databend_common_meta_runtime_api::TlsConfig;
 use databend_common_meta_runtime_api::TrackingData;
 pub use metrics::DatabendMetrics;
+
+fn convert_grpc_error(e: GrpcConnectionError) -> ChannelError {
+    match e {
+        GrpcConnectionError::InvalidUri { uri, source } => ChannelError::InvalidUri {
+            uri,
+            message: source.to_string(),
+        },
+        GrpcConnectionError::TLSConfigError { action, source } => ChannelError::TlsConfig {
+            action,
+            message: source.to_string(),
+        },
+        GrpcConnectionError::CannotConnect { uri, source } => ChannelError::CannotConnect {
+            uri,
+            message: source.to_string(),
+        },
+    }
+}
 
 /// Runtime adapter that wraps `databend_common_base::Runtime`.
 ///
@@ -137,6 +161,29 @@ impl SpawnApi for DatabendRuntime {
 
         let span = databend_common_tracing::start_trace_for_remote_request(name, &request);
         Box::pin(f(request).in_span(span))
+    }
+
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send> {
+        let payload = runtime::ThreadTracker::new_tracking_payload();
+        Box::new(move || Box::new(runtime::ThreadTracker::tracking(payload)))
+    }
+
+    /// Create a gRPC channel using `ConnectionFactory` with DNS resolution.
+    fn connect(
+        addr: String,
+        timeout: Option<Duration>,
+        tls_config: Option<TlsConfig>,
+    ) -> BoxFuture<'static, Result<Channel, ChannelError>> {
+        Box::pin(async move {
+            let grpc_tls = tls_config.map(|c| RpcClientTlsConfig {
+                rpc_tls_server_root_ca_cert: c.root_ca_cert_path,
+                domain_name: c.domain_name,
+            });
+
+            ConnectionFactory::create_rpc_channel(&addr, timeout, grpc_tls, None)
+                .await
+                .map_err(convert_grpc_error)
+        })
     }
 }
 

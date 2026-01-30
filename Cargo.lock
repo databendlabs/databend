@@ -3289,14 +3289,15 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "databend-base"
-version = "0.2.5"
-source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.5#5fbc16057703294ef3c42e938ede75800e1cd82a"
+version = "0.2.7"
+source = "git+https://github.com/databendlabs/databend-base?tag=v0.2.7#df576c5afdf23d8a1b1df0c8227170ac418684b4"
 dependencies = [
  "async-trait",
  "ctrlc",
  "futures",
  "log",
  "pin-project-lite",
+ "serde",
  "tokio",
  "uuid",
 ]
@@ -4012,12 +4013,12 @@ dependencies = [
  "anyerror",
  "anyhow",
  "chrono",
+ "databend-base",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app-storage",
- "databend-common-meta-app-types",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
  "derive_more",
@@ -4045,15 +4046,6 @@ dependencies = [
  "opendal",
  "serde",
  "tokio",
-]
-
-[[package]]
-name = "databend-common-meta-app-types"
-version = "0.1.0"
-dependencies = [
- "num-derive",
- "prost",
- "serde",
 ]
 
 [[package]]
@@ -4087,15 +4079,10 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "databend-base",
- "databend-common-base",
  "databend-common-grpc",
- "databend-common-meta-api",
- "databend-common-meta-kvapi",
  "databend-common-meta-runtime-api",
  "databend-common-meta-types",
- "databend-common-tracing",
  "databend-common-version",
- "databend-meta-runtime",
  "derive_more",
  "display-more 0.2.1",
  "fastrace",
@@ -4123,7 +4110,6 @@ dependencies = [
  "clap",
  "databend-common-building",
  "databend-common-meta-client",
- "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
  "databend-common-meta-runtime-api",
  "databend-common-meta-sled-store",
@@ -4151,7 +4137,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "databend-common-meta-app-types",
+ "databend-base",
  "databend-common-meta-types",
  "display-more 0.2.1",
  "futures-util",
@@ -4184,6 +4170,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-kvapi-test-suite",
+ "databend-common-meta-store",
  "databend-common-version",
  "databend-meta-runtime",
  "databend-meta-test-harness",
@@ -4259,6 +4246,7 @@ dependencies = [
 name = "databend-common-meta-runtime-api"
 version = "0.1.0"
 dependencies = [
+ "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
 ]
@@ -4292,6 +4280,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-schema-api-test-suite",
+ "databend-common-meta-store",
  "databend-common-version",
  "databend-meta-runtime",
  "databend-meta-test-harness",
@@ -4357,14 +4346,18 @@ dependencies = [
  "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
+ "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
  "databend-meta-runtime",
+ "fastrace",
+ "futures",
  "log",
  "semver",
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -4501,10 +4494,10 @@ dependencies = [
  "anyhow",
  "chrono",
  "convert_case 0.6.0",
+ "databend-base",
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-app-types",
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
@@ -4587,6 +4580,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-cloud-control",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
@@ -4634,6 +4628,7 @@ dependencies = [
  "simsearch",
  "tantivy-query-grammar",
  "tokio",
+ "toml 0.8.22",
  "unicase",
  "url",
  "uuid",
@@ -5607,6 +5602,7 @@ dependencies = [
  "databend-common-meta-runtime-api",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
+ "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-storage",
  "databend-common-tracing",
@@ -5653,6 +5649,7 @@ name = "databend-meta-runtime"
 version = "0.1.0"
 dependencies = [
  "databend-common-base",
+ "databend-common-grpc",
  "databend-common-meta-runtime-api",
  "databend-common-metrics",
  "databend-common-tracing",
@@ -5736,7 +5733,6 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-app-types",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-semaphore",

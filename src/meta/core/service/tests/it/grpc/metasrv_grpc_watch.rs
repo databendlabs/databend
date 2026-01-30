@@ -24,7 +24,6 @@ use std::time::UNIX_EPOCH;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::ConditionResult;

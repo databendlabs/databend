@@ -22,11 +22,11 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_meta_runtime_api::RuntimeApi;
+use databend_common_meta_runtime_api::TlsConfig;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -112,7 +112,7 @@ pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthI
 /// Thus we have to guarantee that as long as there is a meta-client, the hyper worker runtime must not be dropped.
 /// Thus a meta client creates a runtime then spawn a MetaGrpcClientWorker.
 pub struct MetaGrpcClient<RT: RuntimeApi> {
-    conn_pool: Pool<MetaChannelManager>,
+    conn_pool: Pool<MetaChannelManager<RT>>,
     endpoints: Arc<Mutex<Endpoints>>,
     endpoints_str: Vec<String>,
     auto_sync_interval: Option<Duration>,
@@ -212,12 +212,17 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
 
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
 
+        let tls = tls_config.map(|c| TlsConfig {
+            root_ca_cert_path: c.rpc_tls_server_root_ca_cert,
+            domain_name: c.domain_name,
+        });
+
         let mgr = MetaChannelManager::new(
             version,
             username,
             password,
             timeout,
-            tls_config,
+            tls,
             required_features,
             endpoints.clone(),
             None, // Use default connection TTL
@@ -281,7 +286,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
 
             debug!(worker_request :? =(&worker_request); "{} worker handle request", self);
 
-            let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
+            let _guard = (worker_request.tracking_fn.take().unwrap())();
             let span = Span::enter_with_parent(func_path!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {

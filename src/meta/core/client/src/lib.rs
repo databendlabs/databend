@@ -17,8 +17,6 @@
 
 extern crate core;
 
-databend_common_tracing::register_module_tag!("[META_CLIENT]");
-
 mod channel_manager;
 mod client_handle;
 pub mod endpoints;
@@ -26,7 +24,6 @@ pub mod errors;
 pub(crate) mod established_client;
 mod grpc_action;
 mod grpc_client;
-mod kv_api_impl;
 mod message;
 mod pool;
 pub mod required;
@@ -34,10 +31,16 @@ pub(crate) mod rpc_handler;
 
 pub use channel_manager::MetaChannelManager;
 pub use client_handle::ClientHandle;
-pub use databend_common_meta_api::reply::reply_to_api_result;
+pub use grpc_action::GetKVReply;
+pub use grpc_action::GetKVReq;
+pub use grpc_action::ListKVReply;
+pub use grpc_action::ListKVReq;
+pub use grpc_action::MGetKVReply;
+pub use grpc_action::MGetKVReq;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
+pub use grpc_action::UpsertKVReply;
 pub use grpc_client::MetaGrpcClient;
 pub use grpc_client::handshake;
 pub use message::ClientWorkerRequest;

@@ -12,7 +12,7 @@ export function wait(n) {
 \$\$;
 """
 
-$BENDSQL_CLIENT_CONNECT --query='select js_wait_test(100)' &
+$BENDSQL_CLIENT_CONNECT --query='select js_wait_test(50)' &
 job_pid=$!
 $BENDSQL_CLIENT_CONNECT --query='select js_wait_test(1)'
 $BENDSQL_CLIENT_CONNECT --query='select js_wait_test(2)'
