@@ -16,6 +16,7 @@ use std::pin::Pin;
 use std::thread::sleep;
 use std::time::Duration;
 
+use databend_common_base::runtime::spawn;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::to_digit_ver;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -183,6 +184,7 @@ pub fn start_grpc_server() -> (String, oneshot::Sender<()>, JoinHandle<()>) {
 }
 
 /// Returns a shutdown tx and a task handle.
+#[allow(clippy::disallowed_methods)]
 pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, JoinHandle<()>) {
     let addr = addr.to_string().parse().unwrap();
 
@@ -191,7 +193,7 @@ pub fn start_grpc_server_addr(addr: impl ToString) -> (oneshot::Sender<()>, Join
 
     let (tx, rx) = oneshot::channel::<()>();
 
-    let h = databend_common_base::runtime::spawn(async move {
+    let h = spawn(async move {
         Server::builder()
             .add_service(svc)
             .serve_with_shutdown(addr, async move {

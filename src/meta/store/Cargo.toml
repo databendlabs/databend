@@ -20,11 +20,14 @@ databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-runtime = { workspace = true }
+fastrace = { workspace = true }
+futures = { workspace = true }
 log = { workspace = true }
 semver = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-version = { workspace = true }

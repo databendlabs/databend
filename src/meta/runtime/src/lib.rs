@@ -20,6 +20,8 @@
 //! runtime features (memory tracking, thread tracking, etc.) while keeping the meta-service
 //! core decoupled from the query runtime.
 
+mod metrics;
+
 use std::future::Future;
 use std::sync::Arc;
 
@@ -29,6 +31,7 @@ use databend_common_meta_runtime_api::JoinHandle;
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TrackingData;
+pub use metrics::DatabendMetrics;
 
 /// Runtime adapter that wraps `databend_common_base::Runtime`.
 ///
@@ -52,6 +55,8 @@ impl std::fmt::Debug for DatabendRuntime {
 }
 
 impl SpawnApi for DatabendRuntime {
+    type ClientMetrics = DatabendMetrics;
+
     fn spawn<F>(future: F, name: Option<String>) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -132,6 +137,11 @@ impl SpawnApi for DatabendRuntime {
 
         let span = databend_common_tracing::start_trace_for_remote_request(name, &request);
         Box::pin(f(request).in_span(span))
+    }
+
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send> {
+        let payload = runtime::ThreadTracker::new_tracking_payload();
+        Box::new(move || Box::new(runtime::ThreadTracker::tracking(payload)))
     }
 }
 

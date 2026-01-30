@@ -16,14 +16,48 @@ use std::convert::TryInto;
 use std::fmt;
 use std::fmt::Debug;
 
-use databend_common_meta_kvapi::kvapi::GetKVReply;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
-use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
-use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::SeqV;
+
+/// Get a single key-value pair.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetKVReq {
+    pub key: String,
+}
+
+/// Get multiple key-value pairs.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct MGetKVReq {
+    pub keys: Vec<String>,
+}
+
+impl MGetKVReq {
+    pub fn new<S: ToString>(keys: impl IntoIterator<Item = S>) -> Self {
+        Self {
+            keys: keys.into_iter().map(|x| x.to_string()).collect(),
+        }
+    }
+}
+
+/// List key-value pairs by prefix.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListKVReq {
+    pub prefix: String,
+}
+
+impl ListKVReq {
+    pub fn new(prefix: impl ToString) -> Self {
+        Self {
+            prefix: prefix.to_string(),
+        }
+    }
+}
+
+pub type UpsertKVReply = Change<Vec<u8>>;
+pub type GetKVReply = Option<SeqV<Vec<u8>>>;
+pub type MGetKVReply = Vec<Option<SeqV<Vec<u8>>>>;
+pub type ListKVReply = Vec<(String, SeqV<Vec<u8>>)>;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;

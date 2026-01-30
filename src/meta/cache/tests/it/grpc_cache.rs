@@ -17,7 +17,6 @@
 use std::time::Duration;
 
 use databend_common_meta_cache::Cache;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;

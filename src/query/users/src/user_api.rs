@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -109,7 +108,7 @@ impl UserApiProvider {
                     .add_message_back("(while create meta store)")
             })?;
 
-        let client = meta_store.deref().clone();
+        let client = meta_store.inner().clone();
 
         let cache = if cache_config.meta_service_ownership_cache {
             let cache = RoleMgr::new_cache(client.clone()).await;

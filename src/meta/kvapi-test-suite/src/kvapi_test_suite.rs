@@ -104,6 +104,7 @@ impl TestSuite {
         self.kv_list_collect_with_limit(&builder.build().await)
             .await?;
         self.kv_mget(&builder.build().await).await?;
+        self.kv_get_many_kv(&builder.build().await).await?;
         self.kv_get_many_kv_error_propagation(&builder.build().await)
             .await?;
 
@@ -724,6 +725,43 @@ impl TestSuite {
         assert_eq!(res.without_proposed_at(), vec![
             Some(SeqV::new(1, b("v1"))),
             None
+        ]);
+
+        Ok(())
+    }
+
+    /// Test that `get_many_kv` returns keys and values correctly in the output stream.
+    pub async fn kv_get_many_kv<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        use futures_util::StreamExt;
+
+        info!("--- kvapi::KVApiTestSuite::kv_get_many_kv() start");
+
+        // Insert test data
+        kv.upsert_kv(UpsertKV::update("keys_k1", b"v1")).await?;
+        kv.upsert_kv(UpsertKV::update("keys_k2", b"v2")).await?;
+
+        // Create input stream with keys
+        let input: Vec<Result<String, KV::Error>> = vec![
+            Ok("keys_k1".to_string()),
+            Ok("keys_k2".to_string()),
+            Ok("keys_nonexistent".to_string()),
+        ];
+        let input_stream = futures_util::stream::iter(input);
+
+        // Call get_many_kv
+        let output_stream = kv.get_many_kv(input_stream.boxed()).await?;
+        let results: Vec<_> = output_stream
+            .map(|r| {
+                let item = r.unwrap();
+                (item.key, item.value.map(|v| v.data))
+            })
+            .collect()
+            .await;
+
+        assert_eq!(results, vec![
+            ("keys_k1".to_string(), Some(b("v1"))),
+            ("keys_k2".to_string(), Some(b("v2"))),
+            ("keys_nonexistent".to_string(), None),
         ]);
 
         Ok(())

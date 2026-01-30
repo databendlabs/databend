@@ -24,7 +24,6 @@ use std::time::UNIX_EPOCH;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::ConditionResult;
@@ -43,7 +42,7 @@ use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
-use databend_common_version::BUILD_INFO;
+use databend_common_version::DATABEND_SEMVER;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -663,7 +662,7 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
 fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<TokioRuntime>>> {
     let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![addr.to_string()],
-        BUILD_INFO.semver(),
+        DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,

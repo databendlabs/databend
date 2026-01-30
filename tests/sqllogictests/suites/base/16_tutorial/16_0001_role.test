@@ -1,0 +1,804 @@
+statement ok
+DROP ROLE IF EXISTS collab_risk_core
+
+statement ok
+DROP ROLE IF EXISTS collab_support_core
+
+statement ok
+DROP ROLE IF EXISTS collab_finance_payment
+
+statement ok
+DROP ROLE IF EXISTS collab_payment_commerce
+
+statement ok
+DROP ROLE IF EXISTS collab_fulfillment_commerce
+
+statement ok
+DROP ROLE IF EXISTS collab_marketing_commerce
+
+statement ok
+DROP TABLE IF EXISTS identity_mart.users
+
+statement ok
+DROP TABLE IF EXISTS payment_mart.transactions
+
+statement ok
+DROP TABLE IF EXISTS commerce_mart.orders
+
+statement ok
+DROP STAGE IF EXISTS stage_identity_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_commerce_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_payment_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_fulfillment_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_marketing_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_finance_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_support_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_risk_ingest
+
+statement ok
+DROP DATABASE IF EXISTS identity_raw
+
+statement ok
+DROP DATABASE IF EXISTS identity_mart
+
+statement ok
+DROP DATABASE IF EXISTS commerce_raw
+
+statement ok
+DROP DATABASE IF EXISTS commerce_mart
+
+statement ok
+DROP DATABASE IF EXISTS payment_raw
+
+statement ok
+DROP DATABASE IF EXISTS payment_mart
+
+statement ok
+DROP DATABASE IF EXISTS fulfillment_raw
+
+statement ok
+DROP DATABASE IF EXISTS fulfillment_mart
+
+statement ok
+DROP DATABASE IF EXISTS marketing_raw
+
+statement ok
+DROP DATABASE IF EXISTS marketing_mart
+
+statement ok
+DROP DATABASE IF EXISTS finance_raw
+
+statement ok
+DROP DATABASE IF EXISTS finance_mart
+
+statement ok
+DROP DATABASE IF EXISTS support_raw
+
+statement ok
+DROP DATABASE IF EXISTS support_mart
+
+statement ok
+DROP DATABASE IF EXISTS risk_raw
+
+statement ok
+DROP DATABASE IF EXISTS risk_mart
+
+
+statement ok
+DROP ROLE IF EXISTS identity_owner
+
+statement ok
+DROP ROLE IF EXISTS identity_rw
+
+statement ok
+DROP ROLE IF EXISTS identity_ro
+
+statement ok
+DROP ROLE IF EXISTS commerce_owner
+
+statement ok
+DROP ROLE IF EXISTS commerce_rw
+
+statement ok
+DROP ROLE IF EXISTS commerce_ro
+
+statement ok
+DROP ROLE IF EXISTS payment_owner
+
+statement ok
+DROP ROLE IF EXISTS payment_rw
+
+statement ok
+DROP ROLE IF EXISTS payment_ro
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_owner
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_rw
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_ro
+
+statement ok
+DROP ROLE IF EXISTS marketing_owner
+
+statement ok
+DROP ROLE IF EXISTS marketing_rw
+
+statement ok
+DROP ROLE IF EXISTS marketing_ro
+
+statement ok
+DROP ROLE IF EXISTS finance_owner
+
+statement ok
+DROP ROLE IF EXISTS finance_rw
+
+statement ok
+DROP ROLE IF EXISTS finance_ro
+
+statement ok
+DROP ROLE IF EXISTS support_owner
+
+statement ok
+DROP ROLE IF EXISTS support_rw
+
+statement ok
+DROP ROLE IF EXISTS support_ro
+
+statement ok
+DROP ROLE IF EXISTS risk_owner
+
+statement ok
+DROP ROLE IF EXISTS risk_rw
+
+statement ok
+DROP ROLE IF EXISTS risk_ro
+
+statement ok
+CREATE ROLE identity_owner
+
+statement ok
+CREATE ROLE identity_rw
+
+statement ok
+CREATE ROLE identity_ro
+
+statement ok
+CREATE ROLE commerce_owner
+
+statement ok
+CREATE ROLE commerce_rw
+
+statement ok
+CREATE ROLE commerce_ro
+
+statement ok
+CREATE ROLE payment_owner
+
+statement ok
+CREATE ROLE payment_rw
+
+statement ok
+CREATE ROLE payment_ro
+
+statement ok
+CREATE ROLE fulfillment_owner
+
+statement ok
+CREATE ROLE fulfillment_rw
+
+statement ok
+CREATE ROLE fulfillment_ro
+
+statement ok
+CREATE ROLE marketing_owner
+
+statement ok
+CREATE ROLE marketing_rw
+
+statement ok
+CREATE ROLE marketing_ro
+
+statement ok
+CREATE ROLE finance_owner
+
+statement ok
+CREATE ROLE finance_rw
+
+statement ok
+CREATE ROLE finance_ro
+
+statement ok
+CREATE ROLE support_owner
+
+statement ok
+CREATE ROLE support_rw
+
+statement ok
+CREATE ROLE support_ro
+
+statement ok
+CREATE ROLE risk_owner
+
+statement ok
+CREATE ROLE risk_rw
+
+statement ok
+CREATE ROLE risk_ro
+
+statement ok
+CREATE DATABASE identity_raw
+
+statement ok
+CREATE DATABASE identity_mart
+
+statement ok
+CREATE STAGE stage_identity_ingest
+
+statement ok
+CREATE DATABASE commerce_raw
+
+statement ok
+CREATE DATABASE commerce_mart
+
+statement ok
+CREATE STAGE stage_commerce_ingest
+
+statement ok
+CREATE DATABASE payment_raw
+
+statement ok
+CREATE DATABASE payment_mart
+
+statement ok
+CREATE STAGE stage_payment_ingest
+
+statement ok
+CREATE DATABASE fulfillment_raw
+
+statement ok
+CREATE DATABASE fulfillment_mart
+
+statement ok
+CREATE STAGE stage_fulfillment_ingest
+
+statement ok
+CREATE DATABASE marketing_raw
+
+statement ok
+CREATE DATABASE marketing_mart
+
+statement ok
+CREATE STAGE stage_marketing_ingest
+
+statement ok
+CREATE DATABASE finance_raw
+
+statement ok
+CREATE DATABASE finance_mart
+
+statement ok
+CREATE STAGE stage_finance_ingest
+
+statement ok
+CREATE DATABASE support_raw
+
+statement ok
+CREATE DATABASE support_mart
+
+statement ok
+CREATE STAGE stage_support_ingest
+
+statement ok
+CREATE DATABASE risk_raw
+
+statement ok
+CREATE DATABASE risk_mart
+
+statement ok
+CREATE STAGE stage_risk_ingest
+
+statement ok
+GRANT OWNERSHIP ON identity_raw.* TO ROLE identity_owner
+
+statement ok
+GRANT OWNERSHIP ON identity_mart.* TO ROLE identity_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_identity_ingest TO ROLE identity_owner
+
+statement ok
+GRANT OWNERSHIP ON commerce_raw.* TO ROLE commerce_owner
+
+statement ok
+GRANT OWNERSHIP ON commerce_mart.* TO ROLE commerce_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_commerce_ingest TO ROLE commerce_owner
+
+statement ok
+GRANT OWNERSHIP ON payment_raw.* TO ROLE payment_owner
+
+statement ok
+GRANT OWNERSHIP ON payment_mart.* TO ROLE payment_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_payment_ingest TO ROLE payment_owner
+
+statement ok
+GRANT OWNERSHIP ON fulfillment_raw.* TO ROLE fulfillment_owner
+
+statement ok
+GRANT OWNERSHIP ON fulfillment_mart.* TO ROLE fulfillment_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_fulfillment_ingest TO ROLE fulfillment_owner
+
+statement ok
+GRANT OWNERSHIP ON marketing_raw.* TO ROLE marketing_owner
+
+statement ok
+GRANT OWNERSHIP ON marketing_mart.* TO ROLE marketing_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_marketing_ingest TO ROLE marketing_owner
+
+statement ok
+GRANT OWNERSHIP ON finance_raw.* TO ROLE finance_owner
+
+statement ok
+GRANT OWNERSHIP ON finance_mart.* TO ROLE finance_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_finance_ingest TO ROLE finance_owner
+
+statement ok
+GRANT OWNERSHIP ON support_raw.* TO ROLE support_owner
+
+statement ok
+GRANT OWNERSHIP ON support_mart.* TO ROLE support_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_support_ingest TO ROLE support_owner
+
+statement ok
+GRANT OWNERSHIP ON risk_raw.* TO ROLE risk_owner
+
+statement ok
+GRANT OWNERSHIP ON risk_mart.* TO ROLE risk_owner
+
+statement ok
+GRANT OWNERSHIP ON STAGE stage_risk_ingest TO ROLE risk_owner
+
+statement ok
+GRANT USAGE ON identity_raw.* TO ROLE identity_rw
+
+statement ok
+GRANT SELECT ON identity_raw.* TO ROLE identity_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON identity_mart.* TO ROLE identity_rw
+
+statement ok
+GRANT USAGE ON identity_mart.* TO ROLE identity_ro
+
+statement ok
+GRANT SELECT ON identity_mart.* TO ROLE identity_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_identity_ingest TO ROLE identity_rw
+
+statement ok
+GRANT USAGE ON commerce_raw.* TO ROLE commerce_rw
+
+statement ok
+GRANT SELECT ON commerce_raw.* TO ROLE commerce_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON commerce_mart.* TO ROLE commerce_rw
+
+statement ok
+GRANT USAGE ON commerce_mart.* TO ROLE commerce_ro
+
+statement ok
+GRANT SELECT ON commerce_mart.* TO ROLE commerce_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_commerce_ingest TO ROLE commerce_rw
+
+statement ok
+GRANT USAGE ON payment_raw.* TO ROLE payment_rw
+
+statement ok
+GRANT SELECT ON payment_raw.* TO ROLE payment_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON payment_mart.* TO ROLE payment_rw
+
+statement ok
+GRANT USAGE ON payment_mart.* TO ROLE payment_ro
+
+statement ok
+GRANT SELECT ON payment_mart.* TO ROLE payment_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_payment_ingest TO ROLE payment_rw
+
+statement ok
+GRANT USAGE ON fulfillment_raw.* TO ROLE fulfillment_rw
+
+statement ok
+GRANT SELECT ON fulfillment_raw.* TO ROLE fulfillment_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON fulfillment_mart.* TO ROLE fulfillment_rw
+
+statement ok
+GRANT USAGE ON fulfillment_mart.* TO ROLE fulfillment_ro
+
+statement ok
+GRANT SELECT ON fulfillment_mart.* TO ROLE fulfillment_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_fulfillment_ingest TO ROLE fulfillment_rw
+
+statement ok
+GRANT USAGE ON marketing_raw.* TO ROLE marketing_rw
+
+statement ok
+GRANT SELECT ON marketing_raw.* TO ROLE marketing_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON marketing_mart.* TO ROLE marketing_rw
+
+statement ok
+GRANT USAGE ON marketing_mart.* TO ROLE marketing_ro
+
+statement ok
+GRANT SELECT ON marketing_mart.* TO ROLE marketing_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_marketing_ingest TO ROLE marketing_rw
+
+statement ok
+GRANT USAGE ON finance_raw.* TO ROLE finance_rw
+
+statement ok
+GRANT SELECT ON finance_raw.* TO ROLE finance_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON finance_mart.* TO ROLE finance_rw
+
+statement ok
+GRANT USAGE ON finance_mart.* TO ROLE finance_ro
+
+statement ok
+GRANT SELECT ON finance_mart.* TO ROLE finance_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_finance_ingest TO ROLE finance_rw
+
+statement ok
+GRANT USAGE ON support_raw.* TO ROLE support_rw
+
+statement ok
+GRANT SELECT ON support_raw.* TO ROLE support_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON support_mart.* TO ROLE support_rw
+
+statement ok
+GRANT USAGE ON support_mart.* TO ROLE support_ro
+
+statement ok
+GRANT SELECT ON support_mart.* TO ROLE support_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_support_ingest TO ROLE support_rw
+
+statement ok
+GRANT USAGE ON risk_raw.* TO ROLE risk_rw
+
+statement ok
+GRANT SELECT ON risk_raw.* TO ROLE risk_rw
+
+statement ok
+GRANT CREATE, INSERT, UPDATE, DELETE, ALTER, DROP ON risk_mart.* TO ROLE risk_rw
+
+statement ok
+GRANT USAGE ON risk_mart.* TO ROLE risk_ro
+
+statement ok
+GRANT SELECT ON risk_mart.* TO ROLE risk_ro
+
+statement ok
+GRANT READ, WRITE ON STAGE stage_risk_ingest TO ROLE risk_rw
+
+onlyif mysql
+statement ok
+SET ROLE commerce_owner
+
+statement ok
+CREATE TABLE commerce_mart.orders (
+  order_id STRING,
+  user_id STRING,
+  order_ts TIMESTAMP,
+  amount DECIMAL(18, 2)
+)
+
+onlyif mysql
+statement ok
+SET ROLE payment_owner
+
+statement ok
+CREATE TABLE payment_mart.transactions (
+  transaction_id STRING,
+  order_id STRING,
+  user_id STRING,
+  transaction_ts TIMESTAMP,
+  amount DECIMAL(18, 2)
+)
+
+onlyif mysql
+statement ok
+SET ROLE identity_owner
+
+statement ok
+CREATE TABLE identity_mart.users (
+  user_id STRING,
+  email STRING,
+  created_at TIMESTAMP
+)
+
+statement ok
+SET ROLE account_admin
+
+statement ok
+CREATE ROLE collab_marketing_commerce
+
+statement ok
+GRANT SELECT ON commerce_mart.orders TO ROLE collab_marketing_commerce
+
+statement ok
+GRANT ROLE collab_marketing_commerce TO ROLE marketing_ro
+
+statement ok
+CREATE ROLE collab_fulfillment_commerce
+
+statement ok
+GRANT SELECT ON commerce_mart.orders TO ROLE collab_fulfillment_commerce
+
+statement ok
+GRANT ROLE collab_fulfillment_commerce TO ROLE fulfillment_ro
+
+statement ok
+CREATE ROLE collab_payment_commerce
+
+statement ok
+GRANT SELECT ON commerce_mart.orders TO ROLE collab_payment_commerce
+
+statement ok
+GRANT ROLE collab_payment_commerce TO ROLE payment_ro
+
+statement ok
+CREATE ROLE collab_finance_payment
+
+statement ok
+GRANT SELECT ON payment_mart.transactions TO ROLE collab_finance_payment
+
+statement ok
+GRANT ROLE collab_finance_payment TO ROLE finance_ro
+
+statement ok
+CREATE ROLE collab_support_core
+
+statement ok
+GRANT SELECT ON commerce_mart.orders TO ROLE collab_support_core
+
+statement ok
+GRANT SELECT ON payment_mart.transactions TO ROLE collab_support_core
+
+statement ok
+GRANT ROLE collab_support_core TO ROLE support_ro
+
+statement ok
+CREATE ROLE collab_risk_core
+
+statement ok
+GRANT SELECT ON identity_mart.users TO ROLE collab_risk_core
+
+statement ok
+GRANT SELECT ON commerce_mart.orders TO ROLE collab_risk_core
+
+statement ok
+GRANT SELECT ON payment_mart.transactions TO ROLE collab_risk_core
+
+statement ok
+GRANT ROLE collab_risk_core TO ROLE risk_ro
+
+statement ok
+DROP ROLE IF EXISTS collab_risk_core
+
+statement ok
+DROP ROLE IF EXISTS collab_support_core
+
+statement ok
+DROP ROLE IF EXISTS collab_finance_payment
+
+statement ok
+DROP ROLE IF EXISTS collab_payment_commerce
+
+statement ok
+DROP ROLE IF EXISTS collab_fulfillment_commerce
+
+statement ok
+DROP ROLE IF EXISTS collab_marketing_commerce
+
+statement ok
+DROP TABLE IF EXISTS identity_mart.users
+
+statement ok
+DROP TABLE IF EXISTS payment_mart.transactions
+
+statement ok
+DROP TABLE IF EXISTS commerce_mart.orders
+
+statement ok
+DROP STAGE IF EXISTS stage_identity_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_commerce_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_payment_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_fulfillment_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_marketing_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_finance_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_support_ingest
+
+statement ok
+DROP STAGE IF EXISTS stage_risk_ingest
+
+statement ok
+DROP DATABASE IF EXISTS identity_raw
+
+statement ok
+DROP DATABASE IF EXISTS identity_mart
+
+statement ok
+DROP DATABASE IF EXISTS commerce_raw
+
+statement ok
+DROP DATABASE IF EXISTS commerce_mart
+
+statement ok
+DROP DATABASE IF EXISTS payment_raw
+
+statement ok
+DROP DATABASE IF EXISTS payment_mart
+
+statement ok
+DROP DATABASE IF EXISTS fulfillment_raw
+
+statement ok
+DROP DATABASE IF EXISTS fulfillment_mart
+
+statement ok
+DROP DATABASE IF EXISTS marketing_raw
+
+statement ok
+DROP DATABASE IF EXISTS marketing_mart
+
+statement ok
+DROP DATABASE IF EXISTS finance_raw
+
+statement ok
+DROP DATABASE IF EXISTS finance_mart
+
+statement ok
+DROP DATABASE IF EXISTS support_raw
+
+statement ok
+DROP DATABASE IF EXISTS support_mart
+
+statement ok
+DROP DATABASE IF EXISTS risk_raw
+
+statement ok
+DROP DATABASE IF EXISTS risk_mart
+
+statement ok
+DROP ROLE IF EXISTS identity_owner
+
+statement ok
+DROP ROLE IF EXISTS identity_rw
+
+statement ok
+DROP ROLE IF EXISTS identity_ro
+
+statement ok
+DROP ROLE IF EXISTS commerce_owner
+
+statement ok
+DROP ROLE IF EXISTS commerce_rw
+
+statement ok
+DROP ROLE IF EXISTS commerce_ro
+
+statement ok
+DROP ROLE IF EXISTS payment_owner
+
+statement ok
+DROP ROLE IF EXISTS payment_rw
+
+statement ok
+DROP ROLE IF EXISTS payment_ro
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_owner
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_rw
+
+statement ok
+DROP ROLE IF EXISTS fulfillment_ro
+
+statement ok
+DROP ROLE IF EXISTS marketing_owner
+
+statement ok
+DROP ROLE IF EXISTS marketing_rw
+
+statement ok
+DROP ROLE IF EXISTS marketing_ro
+
+statement ok
+DROP ROLE IF EXISTS finance_owner
+
+statement ok
+DROP ROLE IF EXISTS finance_rw
+
+statement ok
+DROP ROLE IF EXISTS finance_ro
+
+statement ok
+DROP ROLE IF EXISTS support_owner
+
+statement ok
+DROP ROLE IF EXISTS support_rw
+
+statement ok
+DROP ROLE IF EXISTS support_ro
+
+statement ok
+DROP ROLE IF EXISTS risk_owner
+
+statement ok
+DROP ROLE IF EXISTS risk_rw
+
+statement ok
+DROP ROLE IF EXISTS risk_ro

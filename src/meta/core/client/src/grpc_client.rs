@@ -22,9 +22,9 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
+use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
@@ -85,7 +85,6 @@ use crate::endpoints::rotate_failing_endpoint;
 use crate::errors::CreationError;
 use crate::established_client::EstablishedClient;
 use crate::from_digit_ver;
-use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
 use crate::pool::Pool;
@@ -281,7 +280,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
 
             debug!(worker_request :? =(&worker_request); "{} worker handle request", self);
 
-            let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
+            let _guard = (worker_request.tracking_fn.take().unwrap())();
             let span = Span::enter_with_parent(func_path!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {
@@ -418,7 +417,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         // Duration metrics
         {
             let elapsed = start.elapsed().as_millis() as f64;
-            grpc_metrics::record_meta_grpc_client_request_duration_ms(&endpoint, req_name, elapsed);
+            RT::ClientMetrics::record_request_duration(&endpoint, req_name, elapsed);
 
             if elapsed > 1000_f64 {
                 warn!(
@@ -430,10 +429,14 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
 
         // Error metrics
         if let Some(err) = resp_err {
-            grpc_metrics::incr_meta_grpc_client_request_failed(&endpoint, req_name, err);
+            let err_name = err
+                .downcast_ref::<MetaError>()
+                .map(|e| e.name())
+                .unwrap_or("unknown");
+            RT::ClientMetrics::record_request_failed(&endpoint, req_name, err_name);
             error!("{} request_id={} error: {:?}", self, request_id, err);
         } else {
-            grpc_metrics::incr_meta_grpc_client_request_success(&endpoint, req_name);
+            RT::ClientMetrics::record_request_success(&endpoint, req_name);
         }
     }
 
@@ -470,7 +473,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
                         "Failed to get or build RealClient to {}, err: {:?}",
                         addr, client_err
                     );
-                    grpc_metrics::incr_meta_grpc_make_client_fail(&addr);
+                    RT::ClientMetrics::record_make_client_fail(&addr);
 
                     rotate_failing_endpoint(&self.endpoints, Some(&addr), self);
 
