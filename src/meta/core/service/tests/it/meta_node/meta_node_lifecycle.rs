@@ -48,7 +48,7 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
@@ -65,7 +65,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
@@ -92,7 +92,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -224,7 +224,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -328,7 +328,7 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -427,7 +427,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
@@ -521,7 +521,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -643,7 +643,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 /// This prevent from the leader leaving the cluster by itself,
 /// which may not be able to commit the second log: unregister the node.
 /// And this also obviously prevent removing the last node in a cluster.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
     let (log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![]).await?;
@@ -697,7 +697,7 @@ async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
@@ -808,7 +808,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.

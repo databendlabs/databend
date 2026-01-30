@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_grpc::GrpcConnectionError;
+use anyerror::AnyError;
+use databend_common_meta_runtime_api::ChannelError;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaNetworkError;
 
-pub(crate) fn grpc_error_to_network_err(e: GrpcConnectionError) -> MetaNetworkError {
+pub(crate) fn channel_error_to_network_err(e: ChannelError) -> MetaNetworkError {
     match e {
-        GrpcConnectionError::InvalidUri { uri, source } => {
-            MetaNetworkError::BadAddressFormat(source.add_context(|| format!("uri: {}", uri)))
+        ChannelError::InvalidUri { ref uri, .. } => {
+            MetaNetworkError::BadAddressFormat(AnyError::new(&e).add_context(|| uri.clone()))
         }
-        GrpcConnectionError::TLSConfigError { action, source } => {
-            MetaNetworkError::TLSConfigError(source.add_context(|| format!("action: {}", action)))
+        ChannelError::TlsConfig { ref action, .. } => {
+            MetaNetworkError::TLSConfigError(AnyError::new(&e).add_context(|| action.clone()))
         }
-        GrpcConnectionError::CannotConnect { uri, source } => {
-            MetaNetworkError::ConnectionError(ConnectionError::new(source, uri))
+        ChannelError::CannotConnect { ref uri, .. } => {
+            MetaNetworkError::ConnectionError(ConnectionError::new(AnyError::new(&e), uri.clone()))
         }
     }
 }

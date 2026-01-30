@@ -28,7 +28,7 @@ use tokio::time::sleep;
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_member_list() -> anyhow::Result<()> {
     // - Start a metasrv server.
@@ -72,7 +72,7 @@ async fn test_member_list() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // This test verifies that member_list API returns both voters and learners

@@ -256,6 +256,14 @@ impl SpawnApi for TokioRuntime {
             Ok(lookup.into_iter().collect())
         })
     }
+
+    fn init_test_logging() -> Box<dyn std::any::Any + Send> {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init();
+        Box::new(())
+    }
 }
 
 #[expect(clippy::disallowed_methods)]

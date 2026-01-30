@@ -127,7 +127,7 @@ async fn test_watch_txn_main(
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch_single_key() -> anyhow::Result<()> {
     let (_tc, addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
@@ -160,7 +160,7 @@ async fn test_watch_single_key() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
@@ -331,7 +331,7 @@ async fn test_watch() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
@@ -425,7 +425,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch_expired_events() -> anyhow::Result<()> {
     // Test events emitted when cleaning expired key:
@@ -575,7 +575,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.

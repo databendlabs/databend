@@ -31,7 +31,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
@@ -102,7 +102,7 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
@@ -156,7 +156,7 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
@@ -222,7 +222,7 @@ async fn test_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Start 3 metasrv.
