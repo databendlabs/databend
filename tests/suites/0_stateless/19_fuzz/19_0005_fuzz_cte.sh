@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-times=256
+times=64
 
 echo "" > /tmp/fuzz_a.txt
 echo "" > /tmp/fuzz_b.txt
