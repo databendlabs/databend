@@ -23,7 +23,6 @@ fastrace = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-hickory-resolver = { workspace = true }
 hostname = { workspace = true }
 log = { workspace = true }
 map-api = { workspace = true }

@@ -16,6 +16,7 @@ mod tokio_impl;
 
 use std::fmt::Debug;
 use std::future::Future;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -183,6 +184,15 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
     ) -> BoxFuture<'static, Result<Channel, ChannelError>>
     where
         Self: Sized;
+
+    /// Resolve a hostname to IP addresses.
+    ///
+    /// # Implementations
+    ///
+    /// * `TokioRuntime` uses `hickory_resolver::TokioResolver`.
+    /// * `DatabendRuntime` uses `databend_common_grpc::DNSResolver`.
+    fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.

@@ -4195,7 +4195,6 @@ dependencies = [
  "fs_extra",
  "futures",
  "futures-util",
- "hickory-resolver",
  "hostname",
  "log",
  "map-api",
@@ -4223,6 +4222,7 @@ dependencies = [
 name = "databend-common-meta-runtime-api"
 version = "0.1.0"
 dependencies = [
+ "hickory-resolver",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
