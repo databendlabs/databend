@@ -17,6 +17,7 @@ echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 echo "set global enable_experimental_sequence_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT
 echo "drop sequence if exists seq1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop sequence if exists seq2;" | $BENDSQL_CLIENT_CONNECT
+echo "drop sequence if exists seq3;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
@@ -44,24 +45,30 @@ echo "drop table if exists tmp_b3;" | $BENDSQL_CLIENT_CONNECT
 
 echo "CREATE sequence seq1" | $USER_A_CONNECT
 echo "create sequence seq2" | $USER_A_CONNECT
+echo "create sequence seq3" | $USER_A_CONNECT
 echo "DESC sequence seq1;" | $USER_A_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_A_CONNECT | grep seq2 | wc -l
+echo "DESC sequence seq3;" | $USER_A_CONNECT | grep seq3 | wc -l
 echo "show sequences;" | $USER_A_CONNECT | wc -l
 echo "drop sequence if exists seq1;" | $USER_A_CONNECT
 echo "drop sequence if exists seq2;" | $USER_A_CONNECT
+echo "drop sequence if exists seq3;" | $USER_A_CONNECT
 
 
 echo "=== NEW LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=1 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 echo "set global enable_experimental_sequence_privilege_check=1;" | $USER_A_CONNECT
-echo "--- CREATE 2 sequences WILL SUCCESS ---"
+echo "--- CREATE 3 sequences WILL SUCCESS ---"
 echo "CREATE sequence seq1" | $USER_A_CONNECT
 echo "create sequence seq2" | $USER_A_CONNECT
+echo "create sequence seq3" | $USER_A_CONNECT
 echo "DESC sequence seq1;" | $USER_A_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_A_CONNECT | grep seq2 | wc -l
+echo "DESC sequence seq3;" | $USER_A_CONNECT | grep seq3 | wc -l
 echo "show sequences;" | $USER_A_CONNECT | wc -l
 echo "drop sequence if exists seq1;" | $USER_A_CONNECT
 echo "drop sequence if exists seq2;" | $USER_A_CONNECT
+echo "drop sequence if exists seq3;" | $USER_A_CONNECT
 
 echo "=== TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS SEQUENCES PRIVILEGES ==="
 
@@ -79,11 +86,13 @@ echo "CREATE sequence seq1" | $USER_B_CONNECT
 
 echo "alter user b with default_role='role1';" | $BENDSQL_CLIENT_CONNECT
 
-echo "--- success, seq1,2 owner role is role1 ---";
+echo "--- success, seq1,2,3 owner role is role1 ---";
 echo "CREATE sequence seq1" | $USER_B_CONNECT
 echo "create sequence seq2" | $USER_B_CONNECT
+echo "create sequence seq3" | $USER_B_CONNECT
 echo "DESC sequence seq1;" | $USER_B_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_B_CONNECT | grep seq2 | wc -l
+echo "DESC sequence seq3;" | $USER_B_CONNECT | grep seq3 | wc -l
 echo "show sequences;" | $USER_B_CONNECT | wc -l
 
 echo "--- transform seq2'ownership from role1 to role2 ---"
@@ -100,7 +109,10 @@ echo "--- grant access sequence seq1 to role3 ---"
 echo "grant access sequence on sequence seq1 to role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role3 to c;" | $BENDSQL_CLIENT_CONNECT
 echo "DESC sequence seq1;" | $USER_C_CONNECT | grep seq1 | wc -l
-echo "--- return two rows seq1,2 ---"
+echo "--- grant access sequence seq3 to role3 ---"
+echo "grant access sequence on sequence seq3 to role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "DESC sequence seq3;" | $USER_C_CONNECT | grep seq3 | wc -l
+echo "--- return three rows seq1,2,3 ---"
 echo "show sequences;" | $USER_C_CONNECT | wc -l
 
 echo "--- user b can not drop sequence seq2 ---"
@@ -111,27 +123,40 @@ echo "INSERT INTO tmp_b select nextval(seq2) from numbers(2);" | $USER_B_CONNECT
 echo "CREATE TABLE tmp_b1(a int default nextval(seq2));" | $USER_B_CONNECT
 echo "show grants on sequence seq2;" | $USER_B_CONNECT
 
-echo "--- revoke access sequence from role3 , thne user c can not drop/use sequence seq1 ---"
+echo "--- revoke access sequence from role3 , thne user c can not drop/use sequence seq1,3 ---"
 echo "revoke access sequence on sequence seq1 from role role3;" | $BENDSQL_CLIENT_CONNECT
+echo "revoke access sequence on sequence seq3 from role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "grant select, insert, create on *.* to role role_c" | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO tmp_b values(nextval(seq1));" | $USER_C_CONNECT
+echo "INSERT INTO tmp_b values(nextval(seq3));" | $USER_C_CONNECT
 echo "INSERT INTO tmp_b select nextval(seq1) from numbers(2);" | $USER_C_CONNECT
+echo "INSERT INTO tmp_b select nextval(seq3) from numbers(2);" | $USER_C_CONNECT
 echo "CREATE TABLE tmp_b1(a int default nextval(seq1));" | $USER_C_CONNECT
+echo "CREATE TABLE tmp_b1(a int default nextval(seq3));" | $USER_C_CONNECT
 echo "show grants on sequence seq1;" | $USER_C_CONNECT
+echo "show grants on sequence seq3;" | $USER_C_CONNECT
 echo "drop sequence if exists seq1;" | $USER_C_CONNECT
+echo "drop sequence if exists seq3;" | $USER_C_CONNECT
 
-echo "--- user b can drop/use sequence seq1 ---"
+echo "--- user b can drop/use sequence seq1,3 ---"
 echo "INSERT INTO tmp_b values(nextval(seq1));" | $USER_B_CONNECT
+echo "INSERT INTO tmp_b values(nextval(seq3));" | $USER_B_CONNECT
 echo "INSERT INTO tmp_b select nextval(seq1) from numbers(2);" | $USER_B_CONNECT
+echo "INSERT INTO tmp_b select nextval(seq3) from numbers(2);" | $USER_B_CONNECT
 echo "select * from tmp_b order by a;" | $USER_B_CONNECT
 echo "CREATE TABLE tmp_b1(a int default nextval(seq1),b int);" | $USER_B_CONNECT
+echo "CREATE TABLE tmp_b2(a int default nextval(seq3),b int);" | $USER_B_CONNECT
 echo "insert into tmp_b1(b) values(1)" | $USER_B_CONNECT
+echo "insert into tmp_b2(b) values(1)" | $USER_B_CONNECT
 echo "select * from tmp_b1 order by a" | $USER_B_CONNECT
+echo "select * from tmp_b2 order by a" | $USER_B_CONNECT
 echo "show grants on sequence seq1;" | $USER_B_CONNECT
+echo "show grants on sequence seq3;" | $USER_B_CONNECT
 echo "drop sequence if exists seq1;" | $USER_B_CONNECT
 echo "DROP TABLE tmp_b1;" | $USER_B_CONNECT
 echo "DROP TABLE tmp_b2;" | $USER_B_CONNECT
 echo "show grants for role role1;" | $USER_B_CONNECT
+echo "drop sequence if exists seq3;" | $USER_B_CONNECT
 
 echo "--- user c can drop/use sequence seq2 ---"
 echo "truncate table tmp_b" | $BENDSQL_CLIENT_CONNECT
@@ -153,6 +178,7 @@ echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop sequence if exists seq1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop sequence if exists seq2;" | $BENDSQL_CLIENT_CONNECT
+echo "drop sequence if exists seq3;" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT

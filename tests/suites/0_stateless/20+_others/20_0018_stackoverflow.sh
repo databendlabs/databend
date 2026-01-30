@@ -8,7 +8,7 @@ echo "CREATE TABLE t1(id VARCHAR NULL, timestamp TIMESTAMP NULL, type VARCHAR NU
 
 SQL="SELECT * FROM t1 WHERE 1 = 1 AND((timestamp = '2024-05-05 18:05:20' AND type = '1' AND id = 'xx')"
 
-for i in `seq 1 60`;do
+for i in `seq 1 300`;do
   SQL="$SQL OR (timestamp = '2024-05-05 18:05:20' AND type = '1' AND id = 'xx')"
 done
 
@@ -19,7 +19,7 @@ echo "$SQL"|$BENDSQL_CLIENT_CONNECT
 
 SQL="a > 0 "
 
-for i in `seq 1 30`;do
+for i in `seq 1 100`;do
   SQL="$SQL OR (a > ${i})"
 done 
 

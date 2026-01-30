@@ -2,49 +2,63 @@
 === TEST USER A WITH SUPER PRIVILEGES ===
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 === NEW LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=1 ===
 === TEST USER A WITH SUPER PRIVILEGES ===
---- CREATE 2 CONNECTIONS WILL SUCCESS ---
+--- CREATE 3 CONNECTIONS WILL SUCCESS ---
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 === TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS PRIVILEGES PRIVILEGES ===
 --- USER b failed to create conn c1 because current role is public, can not create ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateConnection] is required on *.* for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
---- success, c1,c2 owner role is role1 ---
+--- success, c1,c2,c3 owner role is role1 ---
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 --- transform c2'ownership from role1 to role2 ---
 --- USER failed to desc conn c2, c2 role is role2 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 c1	azblob	endpoint_url=******com
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 --- only return one row c2 ---
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
 --- grant access connection c1 to role3 ---
 c1	azblob	endpoint_url=******com
---- return two rows c1,2 ---
+--- grant access connection c3 to role3 ---
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
+--- return three rows c1,2,3 ---
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
+c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 --- user b can not drop connection c2 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c2 for user b
---- revoke access connection from role3 , thne user c can not drop/use connection c1 ---
+--- revoke access connection from role3 , thne user c can not drop/use connection c1,3 ---
 1
 1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c1 for user c
+Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c3 for user c
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c1 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
---- user b can drop/use connection c1 ---
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c3 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+--- user b can drop/use connection c1,3 ---
 invalid input parameter (protocol from connection_name=c1 (azblob) not match with uri protocol (s3).)
 Permission denied: privilege [Super] is required on *.* for user 'b'@'%' with roles [role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 OWNERSHIP	c1	NULL	ROLE	role1	
+OWNERSHIP	c3	NULL	ROLE	role1	
 CREATE CONNECTION	*.*	NULL	ROLE	role1	GRANT CREATE CONNECTION ON *.* TO ROLE `role1`
+OWNERSHIP	c3	NULL	ROLE	role1	GRANT OWNERSHIP ON CONNECTION c3 TO ROLE `role1`
 --- user c can drop/use connection c2 ---
 Permission denied: privilege [Super] is required on *.* for user 'c'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 OWNERSHIP	c2	NULL	ROLE	role2	GRANT OWNERSHIP ON CONNECTION c2 TO ROLE `role2`
