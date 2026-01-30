@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+databend_common_tracing::register_module_tag!("[META_CLIENT]", "databend_common_meta_client");
+
 pub(crate) mod local;
 
 use std::ops::Deref;
