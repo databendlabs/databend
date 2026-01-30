@@ -16,7 +16,6 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::NetworkPolicy;
 use databend_common_meta_app::principal::PasswordHashMethod;
@@ -25,6 +24,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 

@@ -23,6 +23,7 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-meta-client = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }

@@ -15,7 +15,6 @@
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -24,6 +23,7 @@ use databend_common_meta_app::schema::CreateOption::Create;
 use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
 use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::UserApiProvider;

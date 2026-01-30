@@ -121,7 +121,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
         let admin_req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             0,
         );
@@ -152,12 +155,19 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
-        let to_addr = tc1.config.raft_config.raft_api_addr().await?;
+        let to_addr = tc1
+            .config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?;
 
         let mut client = RaftServiceClient::connect(format!("http://{}", to_addr)).await?;
         let admin_req = join_req(
             node_id,
-            tc3.config.raft_config.raft_api_addr().await?,
+            tc3.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc3.config.grpc.advertise_address(),
             1,
         );
@@ -237,7 +247,11 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
         let leader_id = all[0].get_leader().await?.unwrap();
         let leader = all[leader_id as usize].clone();
 
-        let endpoint = tc2.config.raft_config.raft_api_addr().await?;
+        let endpoint = tc2
+            .config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?;
         let grpc_api_advertise_address = tc2.config.grpc.advertise_address();
 
         let admin_req = ForwardRequest {
@@ -338,7 +352,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let leader = all[leader_id as usize].clone();
     let req = join_req(
         node_id,
-        tc1.config.raft_config.raft_api_addr().await?,
+        tc1.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?,
         tc1.config.grpc.advertise_address(),
         1,
     );
@@ -370,7 +387,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     {
         let req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             1,
         );
@@ -380,7 +400,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     {
         let req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             1,
         );
@@ -416,11 +439,23 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(2);
     tc2.config.raft_config.single = false;
-    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc2.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let n1 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
     // Initial membership log, leader blank log, add node-0 log.

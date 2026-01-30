@@ -26,12 +26,12 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_grpc::RpcClientConf;
-use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_client::RpcClientConf;
+use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 
@@ -358,6 +358,14 @@ impl Default for QueryConfig {
 impl QueryConfig {
     pub fn to_rpc_client_tls_config(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
+            rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
+            domain_name: self.rpc_tls_query_service_domain_name.clone(),
+        }
+    }
+
+    /// Returns TLS config for use with `ConnectionFactory`.
+    pub fn to_grpc_tls_config(&self) -> databend_common_grpc::RpcClientTlsConfig {
+        databend_common_grpc::RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
         }

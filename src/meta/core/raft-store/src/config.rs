@@ -18,11 +18,11 @@ use std::io;
 use std::net::Ipv4Addr;
 use std::path::Path;
 
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::raft_types::NodeId;
 
-use crate::dns_resolver;
 use crate::ondisk::DATA_VERSION;
 use crate::raft_log_v004;
 
@@ -268,20 +268,18 @@ impl RaftConfig {
     }
 
     /// Resolves the advertise host to an endpoint, supporting both IP addresses and hostnames.
-    pub async fn raft_api_addr(&self) -> Result<Endpoint, io::Error> {
+    pub async fn raft_api_addr<R: SpawnApi>(&self) -> Result<Endpoint, io::Error> {
         if let Ok(addr) = self.raft_advertise_host.parse::<Ipv4Addr>() {
             return Ok(Endpoint::new(addr, self.raft_api_port));
         }
 
-        let ip = dns_resolver::resolve(&self.raft_advertise_host)
-            .await?
-            .next()
-            .ok_or_else(|| {
-                io::Error::other(format!(
-                    "No IP address found for hostname: {}",
-                    self.raft_advertise_host
-                ))
-            })?;
+        let ips = R::resolve(&self.raft_advertise_host).await?;
+        let ip = ips.into_iter().next().ok_or_else(|| {
+            io::Error::other(format!(
+                "No IP address found for hostname: {}",
+                self.raft_advertise_host
+            ))
+        })?;
 
         Ok(Endpoint::new(ip, self.raft_api_port))
     }

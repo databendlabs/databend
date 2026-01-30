@@ -198,13 +198,19 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         for mut tc in stopped_tcs {
             info!(
                 "--- starting metasrv: {:?}",
-                tc.config.raft_config.raft_api_addr().await?
+                tc.config
+                    .raft_config
+                    .raft_api_addr::<TokioRuntime>()
+                    .await?
             );
             start_metasrv_with_context::<TokioRuntime>(&mut tc).await?;
 
             info!(
                 "--- started metasrv: {:?}",
-                tc.config.raft_config.raft_api_addr().await?
+                tc.config
+                    .raft_config
+                    .raft_api_addr::<TokioRuntime>()
+                    .await?
             );
 
             // sleep(Duration::from_secs(3)).await;
