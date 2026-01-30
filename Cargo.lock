@@ -5502,7 +5502,6 @@ dependencies = [
  "backon",
  "chrono",
  "databend-base",
- "databend-common-meta-api",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
