@@ -17,12 +17,12 @@ use std::collections::HashSet;
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
