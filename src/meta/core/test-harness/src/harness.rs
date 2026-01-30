@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Once;
 
-use databend_common_tracing::Config;
-use databend_common_tracing::closure_name;
-use databend_common_tracing::init_logging;
 use fastrace::prelude::*;
 
 pub fn meta_service_test_harness<F, Fut>(test: F)
 where
     F: FnOnce() -> Fut + 'static,
-    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+    Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
 {
     setup_test();
 
@@ -55,14 +53,26 @@ where F: FnOnce() -> anyhow::Result<()> + 'static {
 fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let mut config = Config::new_testing();
-        config.file.level = "DEBUG".to_string();
-
-        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
+        let guards = init_logging();
         Box::leak(Box::new(guards));
     });
 }
 
+fn init_logging() -> impl Any {
+    let mut config = databend_common_tracing::Config::new_testing();
+    config.file.level = "DEBUG".to_string();
+
+    databend_common_tracing::init_logging("meta_unittests", &config, BTreeMap::new())
+}
+
 fn shutdown_test() {
     fastrace::flush();
+}
+
+fn closure_name<F: std::any::Any>() -> &'static str {
+    let func_path = std::any::type_name::<F>();
+    func_path
+        .rsplit("::")
+        .find(|name| *name != "{{closure}}")
+        .unwrap()
 }

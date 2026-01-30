@@ -28,11 +28,17 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -393,6 +399,63 @@ impl BlockingTransform for TransformSRF {
                     });
                     result.add_entry(block_entry);
                 }
+                "generate_series" => match srf_expr.return_type.remove_nullable() {
+                    DataType::Tuple(fields) => {
+                        if fields.len() != 1 {
+                            return Err(databend_common_exception::ErrorCode::Internal(
+                                "generate_series expects a single tuple field".to_string(),
+                            ));
+                        }
+                        match fields[0].remove_nullable() {
+                            DataType::Number(num_ty) => {
+                                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                                    NumberDataType::NUM_TYPE => {
+                                        let column = build_srf_column::<NumberType<NUM_TYPE>, _>(
+                                            result_rows,
+                                            used,
+                                            srf_results,
+                                            &self.num_rows,
+                                            push_number_column_generic::<NUM_TYPE>,
+                                        );
+                                        result.add_column(Column::Tuple(vec![column]));
+                                    }
+                                })
+                            }
+                            DataType::Timestamp => {
+                                let column = build_srf_column::<TimestampType, _>(
+                                    result_rows,
+                                    used,
+                                    srf_results,
+                                    &self.num_rows,
+                                    push_timestamp_column,
+                                );
+                                result.add_column(Column::Tuple(vec![column]));
+                            }
+                            DataType::Date => {
+                                let column = build_srf_column::<DateType, _>(
+                                    result_rows,
+                                    used,
+                                    srf_results,
+                                    &self.num_rows,
+                                    push_date_column,
+                                );
+                                result.add_column(Column::Tuple(vec![column]));
+                            }
+                            other => {
+                                return Err(databend_common_exception::ErrorCode::BadArguments(
+                                    format!(
+                                        "generate_series only supports number/timestamp/date arguments, got {other}"
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                    other => {
+                        return Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                            "generate_series expects a tuple return type, got {other}"
+                        )));
+                    }
+                },
                 _ => todo!(
                     "unsupported set-returning function: {}",
                     srf_expr.function.signature.name
@@ -414,6 +477,39 @@ impl BlockingTransform for TransformSRF {
 
         Ok(Some(result))
     }
+}
+
+fn build_srf_column<T, F>(
+    result_rows: usize,
+    used: usize,
+    srf_results: &mut VecDeque<(Value<AnyType>, usize)>,
+    num_rows: &VecDeque<usize>,
+    mut push_fn: F,
+) -> Column
+where
+    T: ReturnType,
+    F: FnMut(Column, &mut NullableColumnBuilder<T>, usize, usize),
+    T: databend_common_expression::types::ArgType,
+{
+    let mut builder = NullableColumnBuilder::<T>::with_capacity(result_rows, &[]);
+    for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
+        if let Value::Column(column) = row_result {
+            let column = match column {
+                Column::Tuple(mut fields) => {
+                    if fields.len() != 1 {
+                        builder.push_repeat_null(num_rows[i]);
+                        continue;
+                    }
+                    fields.pop().unwrap()
+                }
+                column => column,
+            };
+            push_fn(column, &mut builder, num_rows[i], repeat_times);
+        } else {
+            builder.push_repeat_null(num_rows[i]);
+        }
+    }
+    Column::Nullable(Box::new(builder.build().upcast()))
 }
 
 pub fn push_string_column(
@@ -504,6 +600,109 @@ fn push_number_column(
                 for idx in 0..repeat_times {
                     if validity.get_bit(idx) {
                         builder.push(unsafe { *number_column.get_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_number_column_generic<T: Number>(
+    column: Column,
+    builder: &mut NullableColumnBuilder<NumberType<T>>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Number(number_column) = nullable_column.column {
+            let number_column = T::try_downcast_column(&number_column).unwrap();
+            let validity = nullable_column.validity;
+            if validity.null_count() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { *number_column.get_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.null_count() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { *number_column.get_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_timestamp_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<TimestampType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Timestamp(timestamp_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.null_count() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { *timestamp_column.get_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.null_count() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { *timestamp_column.get_unchecked(idx) });
+                    } else {
+                        builder.push_null();
+                    }
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            }
+        } else {
+            unreachable!();
+        }
+    } else {
+        unreachable!();
+    }
+}
+
+fn push_date_column(
+    column: Column,
+    builder: &mut NullableColumnBuilder<DateType>,
+    num_rows: usize,
+    repeat_times: usize,
+) {
+    if let Column::Nullable(box nullable_column) = column {
+        if let Column::Date(date_column) = nullable_column.column {
+            let validity = nullable_column.validity;
+            if validity.null_count() == 0 {
+                for idx in 0..repeat_times {
+                    builder.push(unsafe { *date_column.get_unchecked(idx) });
+                }
+                builder.push_repeat_null(num_rows - repeat_times);
+            } else if validity.null_count() == validity.len() {
+                builder.push_repeat_null(num_rows);
+            } else {
+                for idx in 0..repeat_times {
+                    if validity.get_bit(idx) {
+                        builder.push(unsafe { *date_column.get_unchecked(idx) });
                     } else {
                         builder.push_null();
                     }

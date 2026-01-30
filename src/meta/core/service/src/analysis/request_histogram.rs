@@ -244,12 +244,12 @@ mod tests {
 
     #[test]
     fn test_label_for_list_prefix() {
-        let req = MetaGrpcReadReq::ListKV(databend_common_meta_kvapi::kvapi::ListKVReq {
+        let req = MetaGrpcReadReq::ListKV(databend_common_meta_client::ListKVReq {
             prefix: "__fd_settings/tenant/".to_string(),
         });
         assert_eq!(label_for_read(&req), "ListKV-__fd_settings");
 
-        let req = MetaGrpcReadReq::ListKV(databend_common_meta_kvapi::kvapi::ListKVReq {
+        let req = MetaGrpcReadReq::ListKV(databend_common_meta_client::ListKVReq {
             prefix: String::new(),
         });
         assert_eq!(label_for_read(&req), "ListKV");

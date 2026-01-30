@@ -15,8 +15,6 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;

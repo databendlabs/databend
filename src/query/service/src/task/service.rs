@@ -163,7 +163,7 @@ impl TaskService {
                 .map_err(|e| {
                     ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
                 })?;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(
             4,

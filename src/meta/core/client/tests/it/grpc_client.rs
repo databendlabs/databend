@@ -17,17 +17,16 @@ use std::time::Duration;
 
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
 use databend_common_meta_client::handshake;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::StreamItem;
-use databend_meta_runtime::DatabendRuntime;
 use futures::StreamExt;
 use log::info;
 use tonic::codegen::BoxStream;
@@ -105,9 +104,7 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
     let client = new_client(&srv_addr, Some(Duration::from_secs(3)))?;
 
     // Send a Get request and return the first item.
-    async fn send_req(
-        client: &Arc<ClientHandle<DatabendRuntime>>,
-    ) -> Result<StreamItem, MetaError> {
+    async fn send_req(client: &Arc<ClientHandle<TokioRuntime>>) -> Result<StreamItem, MetaError> {
         let res: Result<BoxStream<StreamItem>, MetaError> =
             client.request(Streamed(MGetKVReq::new(["foo"]))).await;
 
@@ -153,9 +150,9 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
 fn new_client(
     addr: impl ToString,
     timeout: Option<Duration>,
-) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
+) -> anyhow::Result<Arc<ClientHandle<TokioRuntime>>> {
     let version = databend_common_version::BUILD_INFO.semver();
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![addr.to_string()],
         version,
         "",
