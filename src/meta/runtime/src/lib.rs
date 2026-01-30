@@ -23,6 +23,7 @@
 mod metrics;
 
 use std::future::Future;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -183,6 +184,18 @@ impl SpawnApi for DatabendRuntime {
             ConnectionFactory::create_rpc_channel(&addr, timeout, grpc_tls, None)
                 .await
                 .map_err(convert_grpc_error)
+        })
+    }
+
+    fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>> {
+        let hostname = hostname.to_string();
+        Box::pin(async move {
+            let resolver = databend_common_grpc::DNSResolver::instance()
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            resolver
+                .resolve(&hostname)
+                .await
+                .map_err(|e| std::io::Error::other(e.to_string()))
         })
     }
 }

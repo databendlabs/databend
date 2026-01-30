@@ -97,7 +97,11 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
         .unwrap();
 
     // Join the learner to the cluster
-    let endpoint = learner_tc.config.raft_config.raft_api_addr().await?;
+    let endpoint = learner_tc
+        .config
+        .raft_config
+        .raft_api_addr::<TokioRuntime>()
+        .await?;
     let grpc_api_advertise_address = learner_tc
         .config
         .grpc

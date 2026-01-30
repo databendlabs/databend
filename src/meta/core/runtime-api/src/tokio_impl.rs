@@ -13,10 +13,14 @@
 // limitations under the License.
 
 use std::future::Future;
+use std::io;
+use std::net::IpAddr;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::thread::JoinHandle as ThreadJoinHandle;
 use std::time::Duration;
 
+use hickory_resolver::TokioResolver;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -32,6 +36,13 @@ use crate::RuntimeApi;
 use crate::SpawnApi;
 use crate::TlsConfig;
 use crate::TrackingData;
+
+/// Global DNS resolver instance for TokioRuntime.
+static DNS_RESOLVER: LazyLock<io::Result<TokioResolver>> =
+    LazyLock::new(|| match TokioResolver::builder_tokio() {
+        Ok(builder) => Ok(builder.build()),
+        Err(e) => Err(io::Error::other(e)),
+    });
 
 /// No-op metrics implementation for lightweight/testing scenarios.
 #[derive(Clone, Copy, Debug)]
@@ -229,6 +240,20 @@ impl SpawnApi for TokioRuntime {
                     uri: addr,
                     message: e.to_string(),
                 })
+        })
+    }
+
+    fn resolve(hostname: &str) -> BoxFuture<'static, io::Result<Vec<IpAddr>>> {
+        let hostname = hostname.to_string();
+        Box::pin(async move {
+            let resolver = DNS_RESOLVER
+                .as_ref()
+                .map_err(|e: &io::Error| io::Error::other(e.to_string()))?;
+            let lookup = resolver
+                .lookup_ip(&hostname)
+                .await
+                .map_err(|e| io::Error::other(e.to_string()))?;
+            Ok(lookup.into_iter().collect())
         })
     }
 }

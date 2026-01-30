@@ -41,7 +41,13 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 

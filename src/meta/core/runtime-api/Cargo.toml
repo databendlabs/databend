@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+hickory-resolver = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

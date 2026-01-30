@@ -190,7 +190,11 @@ pub(crate) async fn start_meta_node_non_voter(
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext<TokioRuntime>)> {
     let mut tc = MetaSrvTestContext::<TokioRuntime>::new(id);
-    let addr = tc.config.raft_config.raft_api_addr().await?;
+    let addr = tc
+        .config
+        .raft_config
+        .raft_api_addr::<TokioRuntime>()
+        .await?;
 
     let raft_conf = &tc.config.raft_config;
 

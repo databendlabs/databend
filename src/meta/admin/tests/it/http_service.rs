@@ -96,7 +96,13 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let _mn0 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
 
@@ -146,7 +152,13 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
     // tc1.admin already has an OS-assigned port from MetaSrvTestContext::new()
     tc1.admin.tls.key = TEST_SERVER_KEY.to_owned();
     tc1.admin.tls.cert = TEST_SERVER_CERT.to_owned();
