@@ -17,7 +17,10 @@ use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use geo::BoundingRect;
 use geo::Geometry;
+use geo::Point;
+use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
 use geozero::GeozeroGeometry;
@@ -398,4 +401,184 @@ pub fn geometry_type_name(geo: &Geometry) -> &'static str {
         Geometry::Rect(_) => "Rect",
         Geometry::Triangle(_) => "Triangle",
     }
+}
+
+pub fn st_extreme(geometry: &Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
+    match geometry {
+        Geometry::Point(point) => {
+            let coord = match axis {
+                Axis::X => point.x(),
+                Axis::Y => point.y(),
+            };
+            Some(coord)
+        }
+        Geometry::MultiPoint(multi_point) => {
+            let mut extreme_coord: Option<f64> = None;
+            for point in multi_point {
+                if let Some(coord) = st_extreme(&Geometry::Point(*point), axis, extremum) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
+                }
+            }
+            extreme_coord
+        }
+        Geometry::Line(line) => {
+            let bounding_rect = line.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+        Geometry::MultiLineString(multi_line) => {
+            let mut extreme_coord: Option<f64> = None;
+            for line in multi_line {
+                if let Some(coord) = st_extreme(&Geometry::LineString(line.clone()), axis, extremum)
+                {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
+                }
+            }
+            extreme_coord
+        }
+        Geometry::Polygon(polygon) => {
+            let bounding_rect = polygon.bounding_rect()?;
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+        Geometry::MultiPolygon(multi_polygon) => {
+            let mut extreme_coord: Option<f64> = None;
+            for polygon in multi_polygon {
+                if let Some(coord) = st_extreme(&Geometry::Polygon(polygon.clone()), axis, extremum)
+                {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
+                }
+            }
+            extreme_coord
+        }
+        Geometry::GeometryCollection(geometry_collection) => {
+            let mut extreme_coord: Option<f64> = None;
+            for geometry in geometry_collection {
+                if let Some(coord) = st_extreme(geometry, axis, extremum) {
+                    extreme_coord = match extreme_coord {
+                        Some(existing) => match extremum {
+                            Extremum::Max => Some(existing.max(coord)),
+                            Extremum::Min => Some(existing.min(coord)),
+                        },
+                        None => Some(coord),
+                    };
+                }
+            }
+            extreme_coord
+        }
+        Geometry::LineString(line_string) => line_string.bounding_rect().map(|rect| match axis {
+            Axis::X => match extremum {
+                Extremum::Max => rect.max().x,
+                Extremum::Min => rect.min().x,
+            },
+            Axis::Y => match extremum {
+                Extremum::Max => rect.max().y,
+                Extremum::Min => rect.min().y,
+            },
+        }),
+        Geometry::Rect(rect) => {
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => rect.max().x,
+                    Extremum::Min => rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => rect.max().y,
+                    Extremum::Min => rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+        Geometry::Triangle(triangle) => {
+            let bounding_rect = triangle.bounding_rect();
+            let coord = match axis {
+                Axis::X => match extremum {
+                    Extremum::Max => bounding_rect.max().x,
+                    Extremum::Min => bounding_rect.min().x,
+                },
+                Axis::Y => match extremum {
+                    Extremum::Max => bounding_rect.max().y,
+                    Extremum::Min => bounding_rect.min().y,
+                },
+            };
+            Some(coord)
+        }
+    }
+}
+
+pub fn count_points(geom: &Geometry) -> usize {
+    match geom {
+        Geometry::Point(_) => 1,
+        Geometry::Line(_) => 2,
+        Geometry::LineString(line_string) => line_string.0.len(),
+        Geometry::Polygon(polygon) => {
+            polygon.exterior().0.len()
+                + polygon
+                    .interiors()
+                    .iter()
+                    .map(|line_string| line_string.0.len())
+                    .sum::<usize>()
+        }
+        Geometry::MultiPoint(multi_point) => multi_point.0.len(),
+        Geometry::MultiLineString(multi_line_string) => multi_line_string
+            .0
+            .iter()
+            .map(|line_string| line_string.0.len())
+            .sum::<usize>(),
+        Geometry::MultiPolygon(multi_polygon) => multi_polygon
+            .0
+            .iter()
+            .map(|polygon| count_points(&Geometry::Polygon(polygon.clone())))
+            .sum::<usize>(),
+        Geometry::GeometryCollection(geometry_collection) => geometry_collection
+            .0
+            .iter()
+            .map(count_points)
+            .sum::<usize>(),
+        Geometry::Rect(_) => 5,
+        Geometry::Triangle(_) => 4,
+    }
+}
+
+pub fn point_to_geohash(ewkb: &[u8], precision: Option<i32>) -> Result<String> {
+    let (geo, _) = ewkb_to_geo(&mut Ewkb(ewkb))?;
+    let point = Point::try_from(geo).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+    encode(point.0, precision.map_or(12, |p| p as usize))
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }

@@ -43,4 +43,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
-./databend-test "$1" --mode 'standalone' --run-dir 4_stateful_large_data
+./databend-test "$1" --mode 'standalone' --run-dir 4_stateful_large_data --print-time

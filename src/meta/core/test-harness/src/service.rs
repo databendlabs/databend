@@ -99,7 +99,7 @@ pub async fn start_metasrv_cluster<R: RuntimeApi>(
     let mut tc0 = MetaSrvTestContext::<R>::new(leader_id);
     start_metasrv_with_context(&mut tc0).await?;
 
-    let leader_addr = tc0.config.raft_config.raft_api_addr().await?;
+    let leader_addr = tc0.config.raft_config.raft_api_addr::<R>().await?;
     res.push(tc0);
 
     for node_id in node_ids.iter().skip(1) {
@@ -244,7 +244,7 @@ impl<R: RuntimeApi> MetaSrvTestContext<R> {
     pub async fn raft_client(
         &self,
     ) -> anyhow::Result<RaftServiceClient<tonic::transport::Channel>> {
-        let addr = self.config.raft_config.raft_api_addr().await?;
+        let addr = self.config.raft_config.raft_api_addr::<R>().await?;
 
         // retry 3 times until server starts listening.
         for _ in 0..3 {

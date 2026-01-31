@@ -48,7 +48,7 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
@@ -65,7 +65,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
@@ -92,7 +92,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -121,7 +121,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
         let admin_req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             0,
         );
@@ -152,12 +155,19 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
-        let to_addr = tc1.config.raft_config.raft_api_addr().await?;
+        let to_addr = tc1
+            .config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?;
 
         let mut client = RaftServiceClient::connect(format!("http://{}", to_addr)).await?;
         let admin_req = join_req(
             node_id,
-            tc3.config.raft_config.raft_api_addr().await?,
+            tc3.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc3.config.grpc.advertise_address(),
             1,
         );
@@ -214,7 +224,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -237,7 +247,11 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
         let leader_id = all[0].get_leader().await?.unwrap();
         let leader = all[leader_id as usize].clone();
 
-        let endpoint = tc2.config.raft_config.raft_api_addr().await?;
+        let endpoint = tc2
+            .config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?;
         let grpc_api_advertise_address = tc2.config.grpc.advertise_address();
 
         let admin_req = ForwardRequest {
@@ -314,7 +328,7 @@ async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -338,7 +352,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let leader = all[leader_id as usize].clone();
     let req = join_req(
         node_id,
-        tc1.config.raft_config.raft_api_addr().await?,
+        tc1.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?,
         tc1.config.grpc.advertise_address(),
         1,
     );
@@ -370,7 +387,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     {
         let req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             1,
         );
@@ -380,7 +400,10 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     {
         let req = join_req(
             node_id,
-            tc2.config.raft_config.raft_api_addr().await?,
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?,
             tc2.config.grpc.advertise_address(),
             1,
         );
@@ -404,7 +427,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
@@ -416,11 +439,23 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(2);
     tc2.config.raft_config.single = false;
-    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc2.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     let n1 = MetaNode::<TokioRuntime>::start(&tc0.config).await?;
     // Initial membership log, leader blank log, add node-0 log.
@@ -486,7 +521,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
@@ -608,7 +643,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 /// This prevent from the leader leaving the cluster by itself,
 /// which may not be able to commit the second log: unregister the node.
 /// And this also obviously prevent removing the last node in a cluster.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
     let (log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![]).await?;
@@ -662,7 +697,7 @@ async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
@@ -773,7 +808,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.

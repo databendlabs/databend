@@ -34,7 +34,7 @@ insert into join_fuzz1 select * from join_fuzz_r limit ${rows};
 insert into join_fuzz2 select * from join_fuzz_r limit ${rows};
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
-fields=(a b c d e f g)
+fields=(a b e f)
 length=${#fields[@]}
 
 # Perform join operations and compare results

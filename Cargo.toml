@@ -21,8 +21,6 @@ members = [
     "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi",
-    "src/meta/kvapi-test-suite",
     "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
@@ -49,8 +47,6 @@ default-members = [
     "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi",
-    "src/meta/kvapi-test-suite",
     "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
@@ -98,8 +94,8 @@ databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/core/client" }
 databend-common-meta-control = { path = "src/meta/control" }
-databend-common-meta-kvapi = { path = "src/meta/kvapi" }
-databend-common-meta-kvapi-test-suite = { path = "src/meta/kvapi-test-suite" }
+databend-common-meta-kvapi = { path = "src/meta/core/kvapi" }
+databend-common-meta-kvapi-test-suite = { path = "src/meta/core/kvapi-test-suite" }
 databend-common-meta-kvapi-tests = { path = "src/meta/kvapi-tests" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/core/raft-store" }
@@ -245,7 +241,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
 dashmap = { version = "6.1.0", features = ["serde"] }
-databend-base = "0.2.7"
+databend-base = "0.2.9"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
 deltalake = "0.26"
@@ -272,9 +268,9 @@ fs_extra = "1.3.0"
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
-geo = { version = "0.28.0", features = ["use-serde"] }
-geohash = "0.13.0"
-geozero = { version = "0.14.0", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
+geo = { version = "0.32.0", features = ["use-serde"] }
+geohash = "0.13.1"
+geozero = { version = "0.15.1", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"
 glob = "0.3.0"
 globiter = "0.1"
@@ -313,13 +309,14 @@ aws-smithy-types = "1.2.13"
 indexmap = "2.0.0"
 indicatif = "0.17.5"
 itertools = "0.13.0"
-jaq-core = "1.5.1"
+jaq-core = "2.2.1"
 jaq-interpret = "1.5.0"
+jaq-json = { version = "1.1.3", features = ["serde_json"] }
 jaq-parse = "1.0.3"
-jaq-std = "1.6.0"
+jaq-std = "2.1.2"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
-jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
+jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
 lexical-core = "1"
@@ -394,7 +391,7 @@ pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "edecd74", 
 ] }
 pretty_assertions = "1.3.0"
 procfs = { version = "0.17.0" }
-proj4rs = { version = "0.1.4", features = ["geo-types", "crs-definitions"] }
+proj4rs = { version = "0.1.9", features = ["geo-types", "crs-definitions"] }
 proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.13" }
 prost-build = { version = "0.13" }
@@ -499,7 +496,7 @@ volo-thrift = "0.10"
 walkdir = "2.3.2"
 watcher = { version = "0.5.0" }
 wiremock = "0.6"
-wkt = "0.11.1"
+wkt = "0.14.0"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
 zip = "3.0.0"
@@ -616,7 +613,7 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
-databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.7" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.9" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }

@@ -23,6 +23,7 @@
 mod metrics;
 
 use std::future::Future;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -184,6 +185,29 @@ impl SpawnApi for DatabendRuntime {
                 .await
                 .map_err(convert_grpc_error)
         })
+    }
+
+    fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>> {
+        let hostname = hostname.to_string();
+        Box::pin(async move {
+            let resolver = databend_common_grpc::DNSResolver::instance()
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            resolver
+                .resolve(&hostname)
+                .await
+                .map_err(|e| std::io::Error::other(e.to_string()))
+        })
+    }
+
+    fn init_test_logging() -> Box<dyn std::any::Any + Send> {
+        use std::collections::BTreeMap;
+
+        let mut config = databend_common_tracing::Config::new_testing();
+        config.file.level = "DEBUG".to_string();
+
+        let guards =
+            databend_common_tracing::init_logging("meta_unittests", &config, BTreeMap::new());
+        Box::new(guards)
     }
 }
 

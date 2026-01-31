@@ -871,6 +871,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_decimal",
     "to_bitmap",
     "to_geometry",
+    "to_geography",
     "parse_json",
 ];
 

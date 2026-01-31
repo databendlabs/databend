@@ -15,7 +15,6 @@
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PasswordHashMethod;
@@ -26,6 +25,7 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_runtime_api::TokioRuntime;
 use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
 use databend_meta::metrics::server_metrics;
 use databend_meta_admin::HttpService;
+use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
 use http::Method;
@@ -31,10 +31,10 @@ use poem::get;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
-    let tcs = start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
 
     let leader = tcs[0]
         .grpc_srv
@@ -56,7 +56,7 @@ async fn test_metrics() -> anyhow::Result<()> {
         let mh = leader.clone();
         get(poem::endpoint::make(move |_req: Request| {
             let mh = mh.clone();
-            async move { HttpService::<TokioRuntime>::metrics_handler(mh).await }
+            async move { HttpService::<DatabendRuntime>::metrics_handler(mh).await }
         }))
     });
 
