@@ -2014,6 +2014,42 @@ pub fn literal_bool(i: Input) -> IResult<bool> {
     alt((value(true, rule! { TRUE }), value(false, rule! { FALSE }))).parse(i)
 }
 
+/// Parse a duration literal like "1ms", "100us", "2s"
+/// Returns the duration in microseconds
+pub fn literal_duration_us(i: Input) -> IResult<u64> {
+    map_res(
+        rule! {
+            LiteralDuration
+        },
+        |token| {
+            let text = token.text().to_lowercase();
+            let (num_str, multiplier) = if let Some(num) = text.strip_suffix("ms") {
+                (num, 1000u64) // milliseconds to microseconds
+            } else if let Some(num) = text.strip_suffix("us") {
+                (num, 1u64) // microseconds
+            } else if let Some(num) = text.strip_suffix('s') {
+                (num, 1_000_000u64) // seconds to microseconds
+            } else {
+                return Err(nom::Err::Failure(ErrorKind::Other("invalid duration unit")));
+            };
+
+            // Parse the number (could be integer or float)
+            if num_str.contains('.') {
+                let value: f64 = num_str
+                    .parse()
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid duration number")))?;
+                Ok((value * multiplier as f64) as u64)
+            } else {
+                let value: u64 = num_str
+                    .replace('_', "")
+                    .parse()
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid duration number")))?;
+                Ok(value * multiplier)
+            }
+        },
+    )(i)
+}
+
 pub fn literal_string(i: Input) -> IResult<String> {
     map_res(
         rule! {

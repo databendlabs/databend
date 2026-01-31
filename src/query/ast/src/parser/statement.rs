@@ -6465,40 +6465,15 @@ fn trace_filter_and(i: Input) -> IResult<TraceFilter> {
 fn trace_filter_primary(i: Input) -> IResult<TraceFilter> {
     let duration_filter = map(
         rule! {
-            DURATION ~ #trace_filter_op ~ #literal_u64 ~ MS
+            DURATION ~ #trace_filter_op ~ #literal_duration_us
         },
-        |(_, op, threshold, _)| TraceFilter::Duration {
-            op,
-            threshold_ms: threshold,
-        },
-    );
-
-    let name_like_filter = map(
-        rule! {
-            NAME ~ LIKE ~ #literal_string
-        },
-        |(_, _, pattern)| TraceFilter::Name {
-            pattern,
-            negated: false,
-        },
-    );
-
-    let name_not_like_filter = map(
-        rule! {
-            NAME ~ NOT ~ LIKE ~ #literal_string
-        },
-        |(_, _, _, pattern)| TraceFilter::Name {
-            pattern,
-            negated: true,
-        },
+        |(_, op, threshold_us)| TraceFilter::Duration { op, threshold_us },
     );
 
     let paren_filter = map(rule! { "(" ~ #trace_filter_expr ~ ")" }, |(_, f, _)| f);
 
     rule!(
         #duration_filter
-        | #name_not_like_filter
-        | #name_like_filter
         | #paren_filter
     )
     .parse(i)

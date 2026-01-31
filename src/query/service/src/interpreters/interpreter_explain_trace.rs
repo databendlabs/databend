@@ -166,14 +166,15 @@ impl ExplainTraceInterpreter {
     /// Apply a filter condition to a span
     fn apply_filter(&self, span: &SpanRecord, filter: &TraceFilter) -> bool {
         match filter {
-            TraceFilter::Duration { op, threshold_ms } => {
-                let duration_ms = span.duration_ns / 1_000_000;
+            TraceFilter::Duration { op, threshold_us } => {
+                // span.duration_ns is in nanoseconds, convert to microseconds
+                let duration_us = span.duration_ns / 1_000;
                 match op {
-                    TraceFilterOp::Gt => duration_ms > *threshold_ms,
-                    TraceFilterOp::Gte => duration_ms >= *threshold_ms,
-                    TraceFilterOp::Lt => duration_ms < *threshold_ms,
-                    TraceFilterOp::Lte => duration_ms <= *threshold_ms,
-                    TraceFilterOp::Eq => duration_ms == *threshold_ms,
+                    TraceFilterOp::Gt => duration_us > *threshold_us,
+                    TraceFilterOp::Gte => duration_us >= *threshold_us,
+                    TraceFilterOp::Lt => duration_us < *threshold_us,
+                    TraceFilterOp::Lte => duration_us <= *threshold_us,
+                    TraceFilterOp::Eq => duration_us == *threshold_us,
                 }
             }
             TraceFilter::Name { pattern, negated } => {

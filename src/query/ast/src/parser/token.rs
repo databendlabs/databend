@@ -178,6 +178,12 @@ pub enum TokenKind {
     #[regex(r"0[xX][a-fA-F0-9]+")]
     MySQLLiteralHex,
 
+    // Duration literals (must be before LiteralInteger/LiteralFloat to match first)
+    // Supports: 1s, 100ms, 50us, 1.5s, 0.5ms
+    #[regex(r"[0-9]+(_|[0-9])*(ms|us|s)", ignore(ascii_case))]
+    #[regex(r"([0-9]*\.[0-9]+|[0-9]+\.[0-9]*)(ms|us|s)", ignore(ascii_case))]
+    LiteralDuration,
+
     #[regex(r"[0-9]+(_|[0-9])*")]
     LiteralInteger,
 
@@ -891,8 +897,6 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
-    #[token("MS", ignore(ascii_case))]
-    MS,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
@@ -903,8 +907,6 @@ pub enum TokenKind {
     NEXT_DAY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
-    #[token("NAME", ignore(ascii_case))]
-    NAME,
     #[token("NATURAL", ignore(ascii_case))]
     NATURAL,
     #[token("NETWORK", ignore(ascii_case))]

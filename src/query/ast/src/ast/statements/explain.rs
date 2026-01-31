@@ -103,10 +103,10 @@ impl Display for TraceFilterOp {
 /// Filter condition for EXPLAIN TRACE
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum TraceFilter {
-    /// Filter by duration (in milliseconds)
+    /// Filter by duration (stored in microseconds for precision)
     Duration {
         op: TraceFilterOp,
-        threshold_ms: u64,
+        threshold_us: u64,
     },
     /// Filter by span name pattern (supports LIKE syntax with % wildcard)
     Name { pattern: String, negated: bool },
@@ -119,8 +119,15 @@ pub enum TraceFilter {
 impl Display for TraceFilter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TraceFilter::Duration { op, threshold_ms } => {
-                write!(f, "duration {} {}ms", op, threshold_ms)
+            TraceFilter::Duration { op, threshold_us } => {
+                // Display in the most readable unit
+                if *threshold_us >= 1_000_000 && threshold_us % 1_000_000 == 0 {
+                    write!(f, "duration {} {}s", op, threshold_us / 1_000_000)
+                } else if *threshold_us >= 1_000 && threshold_us % 1_000 == 0 {
+                    write!(f, "duration {} {}ms", op, threshold_us / 1_000)
+                } else {
+                    write!(f, "duration {} {}us", op, threshold_us)
+                }
             }
             TraceFilter::Name { pattern, negated } => {
                 if *negated {
