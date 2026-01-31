@@ -1279,6 +1279,8 @@ pub enum TokenKind {
     TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
+    #[token("TRACE", ignore(ascii_case))]
+    TRACE,
     #[token("TRANSIENT", ignore(ascii_case))]
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]

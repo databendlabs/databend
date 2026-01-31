@@ -27,6 +27,7 @@ mod runtime;
 mod runtime_tracker;
 mod thread;
 mod time_series;
+mod trace;
 pub mod workload_group;
 
 pub use backtrace::AsyncTaskItem;
@@ -80,3 +81,5 @@ pub use time_series::TimeSeriesProfiles;
 pub use time_series::compress_time_point;
 pub use time_series::get_time_series_profile_desc;
 pub use tokio::task::JoinHandle;
+pub use trace::QueryTrace;
+pub use trace::TraceCollector;

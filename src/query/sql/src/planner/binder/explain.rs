@@ -159,6 +159,9 @@ impl Binder {
             ExplainKind::Perf => Ok(Plan::ExplainPerf {
                 sql: inner.to_string(),
             }),
+            ExplainKind::Trace => Ok(Plan::ExplainTrace {
+                sql: inner.to_string(),
+            }),
             _ => Ok(Plan::Explain {
                 kind: kind.clone(),
                 config,

@@ -44,6 +44,8 @@ pub enum ExplainKind {
     Graphical,
 
     Perf,
+
+    Trace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]

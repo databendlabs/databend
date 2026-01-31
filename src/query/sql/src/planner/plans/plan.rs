@@ -226,6 +226,9 @@ pub enum Plan {
     ExplainPerf {
         sql: String,
     },
+    ExplainTrace {
+        sql: String,
+    },
     ReportIssue(String),
 
     // Call is rewrite into Query
@@ -551,7 +554,8 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. }
             | Plan::ExplainAnalyze { .. }
-            | Plan::ExplainPerf { .. } => {
+            | Plan::ExplainPerf { .. }
+            | Plan::ExplainTrace { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::DataMutation { schema, .. } => schema.clone(),

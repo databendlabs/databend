@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::servers::flight::v1::packets::QueryFragment;
+mod query_trace;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QueryFragments {
-    pub query_id: String,
-    pub fragments: Vec<QueryFragment>,
-    #[serde(default)]
-    pub trace_flag: bool,
-    /// W3C Trace Context traceparent header for distributed tracing
-    #[serde(default)]
-    pub trace_parent: Option<String>,
-}
+pub use query_trace::QueryTrace;
+pub use query_trace::TraceCollector;

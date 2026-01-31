@@ -81,7 +81,7 @@ fn query_statement(i: Input) -> IResult<Statement> {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF | TRACE)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -100,6 +100,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
                     Some(TokenKind::PERF) => ExplainKind::Perf,
+                    Some(TokenKind::TRACE) => ExplainKind::Trace,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },

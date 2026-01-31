@@ -2347,6 +2347,38 @@ impl TableContext for QueryContext {
     fn set_nodes_perf(&self, node: String, perf: String) {
         self.shared.set_nodes_perf(node, perf);
     }
+
+    fn get_trace_flag(&self) -> bool {
+        self.shared.get_trace_flag()
+    }
+
+    fn set_trace_flag(&self, flag: bool) {
+        self.shared.set_trace_flag(flag);
+    }
+
+    fn get_nodes_trace(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.shared.get_nodes_trace()
+    }
+
+    fn set_nodes_trace(&self, node: String, trace: String) {
+        self.shared.set_nodes_trace(node, trace);
+    }
+
+    fn set_trace_parent(&self, trace_parent: Option<String>) {
+        self.shared.set_trace_parent(trace_parent);
+    }
+
+    fn get_trace_parent(&self) -> Option<String> {
+        self.shared.get_trace_parent()
+    }
+
+    fn set_explain_trace_reporter_set(&self, flag: bool) {
+        self.shared.set_explain_trace_reporter_set(flag);
+    }
+
+    fn get_explain_trace_reporter_set(&self) -> bool {
+        self.shared.get_explain_trace_reporter_set()
+    }
 }
 
 impl QueryContext {

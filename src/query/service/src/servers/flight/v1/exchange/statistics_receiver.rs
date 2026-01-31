@@ -186,6 +186,10 @@ impl StatisticsReceiver {
                 ctx.set_nodes_perf(source_target.to_string(), perf);
                 Ok(false)
             }
+            Ok(Some(DataPacket::QueryTrace(trace))) => {
+                ctx.set_nodes_trace(source_target.to_string(), trace);
+                Ok(false)
+            }
             Ok(Some(DataPacket::PartStatistics(stat))) => {
                 ctx.merge_pruned_partitions_stats(&stat);
                 Ok(false)

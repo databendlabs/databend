@@ -690,6 +690,7 @@ impl Display for Statement {
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                     ExplainKind::Perf => write!(f, " PERF")?,
+                    ExplainKind::Trace => write!(f, " TRACE")?,
                 }
                 write!(f, " {query}")?;
             }

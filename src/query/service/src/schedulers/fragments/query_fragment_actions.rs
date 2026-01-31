@@ -178,10 +178,17 @@ impl QueryFragmentsActions {
 
     pub fn get_query_fragments(&self) -> Result<HashMap<String, QueryFragments>> {
         let mut query_fragments = HashMap::new();
+        let trace_flag = self.ctx.get_trace_flag();
+        // Get trace parent from current local parent (preferred) or from context (fallback)
+        let trace_parent = fastrace::prelude::SpanContext::current_local_parent()
+            .map(|ctx| ctx.encode_w3c_traceparent())
+            .or_else(|| self.ctx.get_trace_parent());
         for (executor, fragments) in self.get_executors_fragments() {
             query_fragments.insert(executor, QueryFragments {
                 query_id: self.ctx.get_id(),
                 fragments,
+                trace_flag,
+                trace_parent: trace_parent.clone(),
             });
         }
 
