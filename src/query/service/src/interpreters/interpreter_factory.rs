@@ -283,10 +283,9 @@ impl InterpreterFactory {
                 sql.clone(),
                 ctx,
             )?)),
-            Plan::ExplainTrace { sql } => Ok(Arc::new(ExplainTraceInterpreter::try_create(
-                sql.clone(),
-                ctx,
-            )?)),
+            Plan::ExplainTrace { sql, options } => Ok(Arc::new(
+                ExplainTraceInterpreter::try_create(sql.clone(), options.clone(), ctx)?,
+            )),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
                 ctx,
                 sql.clone(),

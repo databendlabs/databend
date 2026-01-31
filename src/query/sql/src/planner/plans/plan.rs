@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainTraceOptions;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -228,6 +229,7 @@ pub enum Plan {
     },
     ExplainTrace {
         sql: String,
+        options: ExplainTraceOptions,
     },
     ReportIssue(String),
 

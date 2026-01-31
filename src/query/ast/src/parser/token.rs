@@ -575,6 +575,8 @@ pub enum TokenKind {
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
+    #[token("DURATION", ignore(ascii_case))]
+    DURATION,
     #[token("RESPECT", ignore(ascii_case))]
     RESPECT,
     #[token("IGNORE", ignore(ascii_case))]
@@ -668,6 +670,8 @@ pub enum TokenKind {
     FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FILTER", ignore(ascii_case))]
+    FILTER,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
     #[token("FLASHBACK", ignore(ascii_case))]
@@ -849,6 +853,8 @@ pub enum TokenKind {
     LEFT,
     #[token("LET", ignore(ascii_case))]
     LET,
+    #[token("LEVEL", ignore(ascii_case))]
+    LEVEL,
     #[token("LIKE", ignore(ascii_case))]
     LIKE,
     #[token("LIMIT", ignore(ascii_case))]
@@ -885,6 +891,8 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
+    #[token("MS", ignore(ascii_case))]
+    MS,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
@@ -895,6 +903,8 @@ pub enum TokenKind {
     NEXT_DAY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
+    #[token("NAME", ignore(ascii_case))]
+    NAME,
     #[token("NATURAL", ignore(ascii_case))]
     NATURAL,
     #[token("NETWORK", ignore(ascii_case))]
