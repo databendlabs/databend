@@ -2,7 +2,9 @@ statement ok
 set enable_cse_optimizer=1;
 
 statement ok
-create or replace table cse_t as select number as a, number % 3 as b from numbers(6);
+create or replace table cse_t as
+select number as a, number % 3 as b, number + 100 as c
+from numbers(6);
 
 query T nosort
 explain select t.a, t.b, agg.max_a
@@ -24,17 +26,17 @@ Sequence
 │       ├── push downs: [filters: [], limit: NONE]
 │       └── estimated rows: 6.00
 └── HashJoin
-    ├── output columns: [t.a (#0), t.b (#1), max(a) (#4)]
+    ├── output columns: [t.a (#0), t.b (#1), max(a) (#6)]
     ├── join type: INNER
-    ├── build keys: [agg.b (#3)]
+    ├── build keys: [agg.b (#4)]
     ├── probe keys: [t.b (#1)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:agg.b (#3), probe targets:[t.b (#1)@scan0], filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:agg.b (#4), probe targets:[t.b (#1)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 12.00
     ├── AggregateFinal(Build)
-    │   ├── output columns: [max(a) (#4), cse_t.b (#3)]
+    │   ├── output columns: [max(a) (#6), cse_t.b (#4)]
     │   ├── group by: [b]
     │   ├── aggregate functions: [max(a)]
     │   ├── estimated rows: 3.00
@@ -44,7 +46,7 @@ Sequence
     │       ├── estimated rows: 3.00
     │       └── MaterializeCTERef
     │           ├── cte_name: cte_cse_0
-    │           ├── cte_schema: [a (#2), b (#3)]
+    │           ├── cte_schema: [a (#3), b (#4)]
     │           └── estimated rows: 6.00
     └── MaterializeCTERef(Probe)
         ├── cte_name: cte_cse_0
