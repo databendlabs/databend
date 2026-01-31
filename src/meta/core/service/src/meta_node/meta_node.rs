@@ -23,7 +23,6 @@ use std::sync::atomic::AtomicI32;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_meta_api::reply::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_raft_store::config::RaftConfig;
@@ -124,6 +123,7 @@ use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::store::meta_raft_log::MetaRaftLog;
 use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
+use crate::util::reply_to_api_result;
 
 pub type LogStore = MetaRaftLog;
 pub type SMStore<SP> = MetaRaftStateMachine<SP>;
