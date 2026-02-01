@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 
 use databend_common_ast::ast::CreateDynamicTableStmt;
 use databend_common_ast::ast::CreateTableSource;
-use databend_common_ast::ast::TypeName;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -124,25 +123,13 @@ impl Binder {
             }
         }
 
-        // todo(geometry): remove this when geometry stable.
         if let Some(CreateTableSource::Columns {
-            columns,
             opt_table_indexes,
             opt_column_constraints,
             opt_table_constraints,
+            ..
         }) = &source
         {
-            if columns
-                .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry))
-                && !self.ctx.get_settings().get_enable_geo_create_table()?
-            {
-                return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry type is an experimental feature. \
-                    You can `set enable_geo_create_table=1` to use this feature. \
-                    We do not guarantee its compatibility until we doc this feature.",
-                ));
-            }
             if opt_table_indexes.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "dynamic table don't support indexes".to_string(),

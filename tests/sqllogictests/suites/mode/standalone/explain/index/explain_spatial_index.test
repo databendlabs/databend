@@ -1,0 +1,59 @@
+statement ok
+DROP DATABASE IF EXISTS test_spatial_index_db
+
+statement ok
+CREATE DATABASE test_spatial_index_db
+
+statement ok
+USE test_spatial_index_db
+
+statement ok
+CREATE TABLE t (store_id INT, category String, store_name String, status String, loaction Geometry, SPATIAL INDEX idx (loaction)) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO t VALUES
+(1, 'coffee', 'Alpha', 'active', TO_GEOMETRY('POINT(10 10)')),
+(2, 'coffee', 'Beta', 'active', TO_GEOMETRY('POINT(11 11)')),
+(3, 'tea', 'Gamma', 'active', TO_GEOMETRY('POINT(50 50)')),
+(4, 'coffee', 'Delta', 'inactive', TO_GEOMETRY('POINT(51 51)')),
+(5, 'coffee', 'Epsilon', 'active', TO_GEOMETRY('POINT(-10 -10)')),
+(6, 'tea', 'Zeta', 'inactive', TO_GEOMETRY('POINT(-11 -11)')),
+(7, 'coffee', 'Eta', 'active', TO_GEOMETRY('POINT(100 100)')),
+(8, 'tea', 'Theta', 'active', TO_GEOMETRY('POINT(101 101)'))
+
+query T
+EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_within(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee' AND status = 'active';
+----
+TableScan
+├── table: default.test_spatial_index_db.t
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 4
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_within(t.loaction (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t.category (#1) = 'coffee' and t.status (#3) = 'active'], limit: NONE]
+└── estimated rows: 1.60
+
+query T
+EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_intersects(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) OR category = 'coffee';
+----
+TableScan
+├── table: default.test_spatial_index_db.t
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 8
+├── read size: < 1 KiB
+├── partitions total: 4
+├── partitions scanned: 4
+├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 4 cost: <slt:ignore>>]
+├── push downs: [filters: [st_intersects(t.loaction (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or t.category (#1) = 'coffee'], limit: NONE]
+└── estimated rows: 4.00
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE test_spatial_index_db
+

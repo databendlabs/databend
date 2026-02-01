@@ -184,6 +184,8 @@ impl FuseTable {
             filters: filters.clone(),
             ..PushDownInfo::default()
         });
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
         let mut pruner = FusePruner::create(
             &ctx,
@@ -192,6 +194,7 @@ impl FuseTable {
             &push_down,
             self.bloom_index_cols(),
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
+            spatial_index_columns,
             None,
         )?;
 

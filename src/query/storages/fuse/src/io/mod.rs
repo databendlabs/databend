@@ -48,6 +48,7 @@ pub use write::InvertedIndexBuilder;
 pub use write::InvertedIndexWriter;
 pub use write::MAX_BLOCK_UNCOMPRESSED_SIZE;
 pub use write::MetaWriter;
+pub use write::SpatialIndexBuilder;
 pub(crate) use write::StreamBlockBuilder;
 pub(crate) use write::StreamBlockProperties;
 pub use write::VectorIndexBuilder;

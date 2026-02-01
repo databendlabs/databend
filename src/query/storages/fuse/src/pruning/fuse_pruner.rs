@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::max;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
@@ -21,6 +22,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
@@ -36,6 +38,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::SegmentBlockMetasCache;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
 use databend_storages_common_pruner::Limiter;
@@ -69,6 +72,7 @@ use crate::pruning::InvertedIndexPruner;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
+use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
 use crate::pruning::segment_pruner::SegmentPruner;
@@ -88,6 +92,7 @@ pub struct PruningContext {
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
+    pub spatial_index_pruner: Option<Arc<SpatialIndexPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
     pub pruning_cost: PruningCostController,
@@ -104,6 +109,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
@@ -180,6 +186,15 @@ impl PruningContext {
         // virtual column pruner, used to read virtual column metas and ignore source columns.
         let virtual_column_pruner = VirtualColumnPruner::try_create(dal.clone(), push_down)?;
 
+        let spatial_index_pruner = SpatialIndexPruner::create(
+            func_ctx.clone(),
+            &table_schema,
+            filter_expr.as_ref(),
+            &spatial_index_columns,
+            dal.clone(),
+            ReadSettings::from_ctx(ctx)?,
+        )?;
+
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
@@ -210,6 +225,7 @@ impl PruningContext {
             internal_column_pruner,
             inverted_index_pruner,
             virtual_column_pruner,
+            spatial_index_pruner,
             pruning_stats,
             pruning_cost,
         });
@@ -236,6 +252,7 @@ impl FusePruner {
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         Self::create_with_pages(
@@ -247,6 +264,7 @@ impl FusePruner {
             vec![],
             bloom_index_cols,
             ngram_args,
+            spatial_index_columns,
             bloom_index_builder,
         )
     }
@@ -261,6 +279,7 @@ impl FusePruner {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
@@ -290,6 +309,7 @@ impl FusePruner {
             cluster_keys,
             bloom_index_cols,
             ngram_args,
+            spatial_index_columns,
             max_concurrency,
             bloom_index_builder,
         )?;
@@ -645,6 +665,12 @@ impl FusePruner {
             stats.get_blocks_vector_index_pruning_after() as usize;
         let blocks_vector_index_pruning_cost = stats.get_blocks_vector_index_pruning_cost();
 
+        let blocks_spatial_index_pruning_before =
+            stats.get_blocks_spatial_index_pruning_before() as usize;
+        let blocks_spatial_index_pruning_after =
+            stats.get_blocks_spatial_index_pruning_after() as usize;
+        let blocks_spatial_index_pruning_cost = stats.get_blocks_spatial_index_pruning_cost();
+
         let blocks_topn_pruning_before = stats.get_blocks_topn_pruning_before() as usize;
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
         let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
@@ -665,6 +691,9 @@ impl FusePruner {
             blocks_vector_index_pruning_before,
             blocks_vector_index_pruning_after,
             blocks_vector_index_pruning_cost,
+            blocks_spatial_index_pruning_before,
+            blocks_spatial_index_pruning_after,
+            blocks_spatial_index_pruning_cost,
             blocks_topn_pruning_before,
             blocks_topn_pruning_after,
             blocks_topn_pruning_cost,
