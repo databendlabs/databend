@@ -878,7 +878,11 @@ impl QueryCoordinator {
         let trace_flag = info.query_ctx.get_trace_flag();
         let explain_trace_reporter_set = info.query_ctx.get_explain_trace_reporter_set();
         let trace_collector = if trace_flag && !explain_trace_reporter_set {
-            let collector = Arc::new(std::sync::Mutex::new(TraceCollector::new()));
+            // Get filter options from context (propagated from coordinator)
+            let filter_options = info.query_ctx.get_trace_filter_options();
+            let collector = Arc::new(std::sync::Mutex::new(TraceCollector::with_filter(
+                filter_options,
+            )));
             let collector_clone = collector.clone();
             fastrace::set_reporter(
                 collector_clone.lock().unwrap().clone(),

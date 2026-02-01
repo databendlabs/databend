@@ -27,6 +27,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -503,6 +504,12 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn get_explain_trace_reporter_set(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_trace_filter_options(&self, _options: TraceFilterOptions) {
+        unimplemented!()
+    }
+    fn get_trace_filter_options(&self) -> TraceFilterOptions {
         unimplemented!()
     }
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {

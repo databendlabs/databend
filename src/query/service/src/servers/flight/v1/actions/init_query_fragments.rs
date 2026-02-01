@@ -37,6 +37,9 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
         ctx.set_trace_parent(Some(trace_parent.clone()));
     }
 
+    // Set trace filter options from coordinator node
+    ctx.set_trace_filter_options(fragments.trace_filter_options.clone());
+
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());

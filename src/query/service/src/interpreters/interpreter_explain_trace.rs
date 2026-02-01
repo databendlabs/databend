@@ -21,6 +21,7 @@ use databend_common_ast::ast::TraceLevel;
 use databend_common_base::runtime::QueryTrace;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TraceCollector;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -28,7 +29,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
 use databend_common_sql::Planner;
-use fastrace::collector::SpanRecord;
 use fastrace::prelude::*;
 use futures_util::StreamExt;
 
@@ -54,11 +54,22 @@ impl ExplainTraceInterpreter {
     }
 
     pub async fn trace(&self) -> Result<Vec<DataBlock>> {
+        // Flush any pending spans from previous queries
+        fastrace::flush();
+
         // Set trace flag to enable trace collection in distributed nodes
         self.ctx.set_trace_flag(true);
 
-        // Create trace collector and set it as the reporter
-        let collector = Arc::new(std::sync::Mutex::new(TraceCollector::new()));
+        // Build filter options for collection-time filtering
+        let filter_options = self.build_filter_options();
+
+        // Store filter options in context for remote nodes
+        self.ctx.set_trace_filter_options(filter_options.clone());
+
+        // Create trace collector with filter options
+        let collector = Arc::new(std::sync::Mutex::new(TraceCollector::with_filter(
+            filter_options,
+        )));
         let collector_clone = collector.clone();
 
         // Set the collector as the fastrace reporter
@@ -72,6 +83,7 @@ impl ExplainTraceInterpreter {
 
         // Create root span context and set trace_parent for distributed tracing
         let root_context = SpanContext::random();
+        let root_trace_id = root_context.trace_id;
         self.ctx
             .set_trace_parent(Some(root_context.encode_w3c_traceparent()));
 
@@ -88,137 +100,84 @@ impl ExplainTraceInterpreter {
         // Check for errors after flush
         result?;
 
-        // Collect spans from the collector
-        let spans = collector.lock().unwrap().get_spans();
-        log::info!("EXPLAIN TRACE: collected {} local spans", spans.len());
-
-        // Apply filtering based on options
-        let filtered_spans = self.filter_spans(spans);
-        log::info!(
-            "EXPLAIN TRACE: {} spans after filtering",
-            filtered_spans.len()
-        );
+        // Collect spans from the collector (already filtered during collection)
+        // Filter by trace ID to only include spans from this query
+        let all_spans = collector.lock().unwrap().get_spans();
+        let spans: Vec<_> = all_spans
+            .into_iter()
+            .filter(|span| span.trace_id == root_trace_id)
+            .collect();
 
         // Collect trace data from other nodes
         let node_id = GlobalConfig::instance().query.node_id.clone();
         let other_nodes = self.ctx.get_nodes_trace().lock().clone();
-        log::info!(
-            "EXPLAIN TRACE: collected traces from {} remote nodes",
-            other_nodes.len()
-        );
 
         // Convert remote traces to the format expected by merge_jaeger_traces
         let remote_traces: Vec<(String, String)> = other_nodes.into_iter().collect();
 
-        // Merge all traces into a single Jaeger JSON
+        // Convert root_trace_id to hex string for filtering remote traces
+        let root_trace_id_hex = format!("{:032x}", root_trace_id.0);
+
+        // Merge all traces into a single Jaeger JSON, filtering by trace ID
         let merged_trace =
-            QueryTrace::merge_jaeger_traces(filtered_spans, &node_id, &remote_traces);
+            QueryTrace::merge_jaeger_traces(spans, &node_id, &remote_traces, &root_trace_id_hex);
 
         let trace_data = StringType::from_data(vec![merged_trace]);
         Ok(vec![DataBlock::new_from_columns(vec![trace_data])])
     }
 
-    /// Filter spans based on LEVEL and FILTER options
-    fn filter_spans(&self, spans: Vec<SpanRecord>) -> Vec<SpanRecord> {
-        spans
-            .into_iter()
-            .filter(|span| {
-                // Apply LEVEL filter
-                if !self.pass_level_filter(span) {
-                    return false;
-                }
+    /// Build filter options from EXPLAIN TRACE options for collection-time filtering
+    fn build_filter_options(&self) -> TraceFilterOptions {
+        let mut options = TraceFilterOptions::new();
 
-                // Apply FILTER condition
-                if let Some(filter) = &self.options.filter {
-                    if !self.apply_filter(span, filter) {
-                        return false;
-                    }
-                }
-
-                true
-            })
-            .collect()
-    }
-
-    /// Check if span passes the LEVEL filter
-    fn pass_level_filter(&self, span: &SpanRecord) -> bool {
-        match self.options.level {
-            TraceLevel::All => true,
-            TraceLevel::High => {
-                // Exclude processor-level spans
-                let name = &span.name;
-
-                // Exclude spans ending with ::process or ::async_process
-                if name.ends_with("::process") || name.ends_with("::async_process") {
-                    return false;
-                }
-
-                // Exclude ProcessorAsyncTask spans
-                if name.contains("ProcessorAsyncTask") {
-                    return false;
-                }
-
-                true
-            }
+        // Apply LEVEL filter
+        if matches!(self.options.level, TraceLevel::High) {
+            options = options.with_high_level_only(true);
         }
+
+        // Apply FILTER condition (only duration filters can be applied during collection)
+        if let Some(filter) = &self.options.filter {
+            self.apply_duration_filter_to_options(&mut options, filter);
+        }
+
+        options
     }
 
-    /// Apply a filter condition to a span
-    fn apply_filter(&self, span: &SpanRecord, filter: &TraceFilter) -> bool {
+    /// Extract duration filter from TraceFilter and apply to TraceFilterOptions
+    fn apply_duration_filter_to_options(
+        &self,
+        options: &mut TraceFilterOptions,
+        filter: &TraceFilter,
+    ) {
         match filter {
             TraceFilter::Duration { op, threshold_us } => {
-                // span.duration_ns is in nanoseconds, convert to microseconds
-                let duration_us = span.duration_ns / 1_000;
                 match op {
-                    TraceFilterOp::Gt => duration_us > *threshold_us,
-                    TraceFilterOp::Gte => duration_us >= *threshold_us,
-                    TraceFilterOp::Lt => duration_us < *threshold_us,
-                    TraceFilterOp::Lte => duration_us <= *threshold_us,
-                    TraceFilterOp::Eq => duration_us == *threshold_us,
+                    TraceFilterOp::Gt | TraceFilterOp::Gte => {
+                        // DURATION > X or DURATION >= X means min_duration
+                        options.min_duration_us = Some(*threshold_us);
+                    }
+                    TraceFilterOp::Lt | TraceFilterOp::Lte => {
+                        // DURATION < X or DURATION <= X means max_duration
+                        options.max_duration_us = Some(*threshold_us);
+                    }
+                    TraceFilterOp::Eq => {
+                        // DURATION = X means both min and max
+                        options.min_duration_us = Some(*threshold_us);
+                        options.max_duration_us = Some(*threshold_us);
+                    }
                 }
             }
-            TraceFilter::Name { pattern, negated } => {
-                let matches = self.like_match(&span.name, pattern);
-                if *negated { !matches } else { matches }
+            TraceFilter::And(a, b) => {
+                self.apply_duration_filter_to_options(options, a);
+                self.apply_duration_filter_to_options(options, b);
             }
-            TraceFilter::And(a, b) => self.apply_filter(span, a) && self.apply_filter(span, b),
-            TraceFilter::Or(a, b) => self.apply_filter(span, a) || self.apply_filter(span, b),
-        }
-    }
-
-    /// Simple LIKE pattern matching with % wildcard
-    fn like_match(&self, text: &str, pattern: &str) -> bool {
-        // Convert SQL LIKE pattern to regex-like matching
-        let parts: Vec<&str> = pattern.split('%').collect();
-
-        if parts.len() == 1 {
-            // No wildcards, exact match
-            return text == pattern;
-        }
-
-        let mut pos = 0;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                continue;
+            TraceFilter::Or(_, _) => {
+                // OR filters are complex, skip collection-time filtering
             }
-
-            if let Some(found_pos) = text[pos..].find(part) {
-                if i == 0 && found_pos != 0 {
-                    // First part must match at the beginning if pattern doesn't start with %
-                    return false;
-                }
-                pos += found_pos + part.len();
-            } else {
-                return false;
+            TraceFilter::Name { .. } => {
+                // Name filters can't be applied during collection
             }
         }
-
-        // If pattern doesn't end with %, the last part must match at the end
-        if !pattern.ends_with('%') && !parts.last().unwrap_or(&"").is_empty() {
-            return text.ends_with(parts.last().unwrap());
-        }
-
-        true
     }
 
     pub async fn simulate_execute(&self) -> Result<()> {
@@ -232,6 +191,11 @@ impl ExplainTraceInterpreter {
         let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
         let mut data_stream = interpreter.execute(self.ctx.clone()).await?;
         while data_stream.next().await.is_some() {}
+        // Drop the data stream explicitly to ensure all cleanup happens
+        // The on_finished callbacks (including wait_shutdown) will complete
+        // before the stream is fully dropped, ensuring all remote traces are received
+        drop(data_stream);
+
         Ok(())
     }
 }

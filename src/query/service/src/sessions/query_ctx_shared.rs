@@ -34,6 +34,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -195,6 +196,8 @@ pub struct QueryContextShared {
     pub(super) trace_parent: Arc<RwLock<Option<String>>>,
     /// Flag to indicate that EXPLAIN TRACE has set up the reporter (to avoid overwriting)
     pub(super) explain_trace_reporter_set: AtomicBool,
+    /// Filter options for trace collection (used by remote nodes)
+    pub(super) trace_filter_options: Arc<RwLock<TraceFilterOptions>>,
 
     pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
 }
@@ -283,6 +286,7 @@ impl QueryContextShared {
             nodes_trace: Arc::new(Mutex::new(HashMap::new())),
             trace_parent: Arc::new(RwLock::new(None)),
             explain_trace_reporter_set: AtomicBool::new(false),
+            trace_filter_options: Arc::new(RwLock::new(TraceFilterOptions::default())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
@@ -964,6 +968,14 @@ impl QueryContextShared {
 
     pub fn get_explain_trace_reporter_set(&self) -> bool {
         self.explain_trace_reporter_set.load(Ordering::SeqCst)
+    }
+
+    pub fn set_trace_filter_options(&self, options: TraceFilterOptions) {
+        *self.trace_filter_options.write() = options;
+    }
+
+    pub fn get_trace_filter_options(&self) -> TraceFilterOptions {
+        self.trace_filter_options.read().clone()
     }
 }
 

@@ -46,6 +46,7 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -2378,6 +2379,14 @@ impl TableContext for QueryContext {
 
     fn get_explain_trace_reporter_set(&self) -> bool {
         self.shared.get_explain_trace_reporter_set()
+    }
+
+    fn set_trace_filter_options(&self, options: TraceFilterOptions) {
+        self.shared.set_trace_filter_options(options);
+    }
+
+    fn get_trace_filter_options(&self) -> TraceFilterOptions {
+        self.shared.get_trace_filter_options()
     }
 }
 

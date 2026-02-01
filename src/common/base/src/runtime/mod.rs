@@ -83,3 +83,4 @@ pub use time_series::get_time_series_profile_desc;
 pub use tokio::task::JoinHandle;
 pub use trace::QueryTrace;
 pub use trace::TraceCollector;
+pub use trace::TraceFilterOptions;

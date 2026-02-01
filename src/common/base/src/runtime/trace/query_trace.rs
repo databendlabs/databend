@@ -22,15 +22,91 @@ use fastrace::collector::SpanRecord;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 
-/// In-memory trace collector that captures fastrace spans
+/// Filter options for trace collection
+#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
+pub struct TraceFilterOptions {
+    /// Minimum duration in microseconds (spans shorter than this are filtered out)
+    pub min_duration_us: Option<u64>,
+    /// Maximum duration in microseconds (spans longer than this are filtered out)
+    pub max_duration_us: Option<u64>,
+    /// Filter level: if true, exclude processor-level spans
+    pub high_level_only: bool,
+}
+
+impl TraceFilterOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_min_duration_us(mut self, min_us: u64) -> Self {
+        self.min_duration_us = Some(min_us);
+        self
+    }
+
+    pub fn with_max_duration_us(mut self, max_us: u64) -> Self {
+        self.max_duration_us = Some(max_us);
+        self
+    }
+
+    pub fn with_high_level_only(mut self, high_level: bool) -> Self {
+        self.high_level_only = high_level;
+        self
+    }
+
+    /// Check if a span passes the filter
+    pub fn passes(&self, span: &SpanRecord) -> bool {
+        let duration_us = span.duration_ns / 1_000;
+
+        // Check min duration
+        if let Some(min) = self.min_duration_us
+            && duration_us < min
+        {
+            return false;
+        }
+
+        // Check max duration
+        if let Some(max) = self.max_duration_us
+            && duration_us > max
+        {
+            return false;
+        }
+
+        // Check high level filter
+        if self.high_level_only {
+            let name = &span.name;
+            if name.ends_with("::process") || name.ends_with("::async_process") {
+                return false;
+            }
+            if name.contains("ProcessorAsyncTask") {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+/// In-memory trace collector that captures fastrace spans with optional filtering
 #[derive(Clone, Default)]
 pub struct TraceCollector {
     spans: Arc<Mutex<Vec<SpanRecord>>>,
+    filter: Arc<Mutex<TraceFilterOptions>>,
 }
 
 impl TraceCollector {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn with_filter(filter: TraceFilterOptions) -> Self {
+        Self {
+            spans: Arc::new(Mutex::new(Vec::new())),
+            filter: Arc::new(Mutex::new(filter)),
+        }
+    }
+
+    pub fn set_filter(&self, filter: TraceFilterOptions) {
+        *self.filter.lock().unwrap() = filter;
     }
 
     pub fn get_spans(&self) -> Vec<SpanRecord> {
@@ -40,7 +116,13 @@ impl TraceCollector {
 
 impl Reporter for TraceCollector {
     fn report(&mut self, spans: Vec<SpanRecord>) {
-        self.spans.lock().unwrap().extend(spans);
+        let filter = self.filter.lock().unwrap();
+        let filtered: Vec<SpanRecord> = spans
+            .into_iter()
+            .filter(|span| filter.passes(span))
+            .collect();
+        drop(filter);
+        self.spans.lock().unwrap().extend(filtered);
     }
 }
 
@@ -180,10 +262,12 @@ impl QueryTrace {
     }
 
     /// Merge multiple Jaeger JSON traces into a single Jaeger JSON
+    /// Only includes spans that match the specified trace_id_filter
     pub fn merge_jaeger_traces(
         local_spans: Vec<SpanRecord>,
         local_node_id: &str,
         remote_traces: &[(String, String)], // (node_id, jaeger_json)
+        trace_id_filter: &str,              // Only include spans with this trace ID
     ) -> String {
         // Collect all spans from local node with node_id as processID
         let mut all_spans: Vec<JsonValue> = local_spans
@@ -195,12 +279,18 @@ impl QueryTrace {
         let mut node_ids: HashSet<String> = HashSet::new();
         node_ids.insert(local_node_id.to_string());
 
-        // Parse and merge spans from remote nodes
+        // Parse and merge spans from remote nodes, filtering by trace ID
         for (_node_id, trace_json) in remote_traces {
             if let Ok(parsed) = serde_json::from_str::<JsonValue>(trace_json)
                 && let Some(data) = parsed.get("data").and_then(|v| v.as_array())
             {
                 for trace in data {
+                    // Only include traces that match the filter
+                    let trace_id = trace.get("traceID").and_then(|v| v.as_str()).unwrap_or("");
+                    if trace_id != trace_id_filter {
+                        continue;
+                    }
+
                     if let Some(spans) = trace.get("spans").and_then(|v| v.as_array()) {
                         for span in spans {
                             // Extract node_id from the span's processID
@@ -212,13 +302,6 @@ impl QueryTrace {
                     }
                 }
             }
-        }
-
-        // Group spans by traceID
-        let mut traces_by_id: HashMap<String, Vec<JsonValue>> = HashMap::new();
-        for span in all_spans {
-            let trace_id = span["traceID"].as_str().unwrap_or("").to_string();
-            traces_by_id.entry(trace_id).or_default().push(span);
         }
 
         // Build processes map - one process per node
@@ -235,20 +318,13 @@ impl QueryTrace {
             );
         }
 
-        // Build traces array
-        let traces: Vec<JsonValue> = traces_by_id
-            .into_iter()
-            .map(|(trace_id, spans)| {
-                json!({
-                    "traceID": trace_id,
-                    "spans": spans,
-                    "processes": processes.clone()
-                })
-            })
-            .collect();
-
+        // Build single trace with all spans (they all have the same trace ID now)
         let output = json!({
-            "data": traces
+            "data": [{
+                "traceID": trace_id_filter,
+                "spans": all_spans,
+                "processes": processes
+            }]
         });
 
         serde_json::to_string_pretty(&output)
