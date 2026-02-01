@@ -26,14 +26,14 @@
 
 Databend is an open-source enterprise data warehouse built in Rust.
 
-**Core capabilities**: Analytics, vector search, full-text search — unified in one engine.
+**Core capabilities**: Analytics, vector search, full-text search, auto schema evolution — unified in one engine.
 
-**Agent-ready**: Build and orchestrate AI agents with Sandbox UDFs. Python runs in isolated sandboxes, SQL handles orchestration.
+**Agent-ready**: Sandbox UDFs for agent logic, SQL for orchestration, transactions for reliability, branching for safe experimentation on production data.
 
 | | |
 | :--- | :--- |
-| **📊 Core Engine**<br>Analytics, vector search, full-text search. One engine for structured, semi-structured, and unstructured data. | **🤖 Agent-Ready**<br>Sandbox UDF + SQL orchestration. Build and run agents on your enterprise data. |
-| **🏢 Enterprise Scale**<br>Elastic compute, cloud native. Runs on S3, Azure, GCS. | **🔒 Secure Sandbox**<br>Isolated Python execution via Arrow Flight. Scale independently. |
+| **📊 Core Engine**<br>Analytics, vector search, full-text search, auto schema evolution, transactions. | **🤖 Agent-Ready**<br>Sandbox UDF + SQL orchestration. Build and run agents on your enterprise data. |
+| **🏢 Enterprise Scale**<br>Elastic compute, cloud native. S3/Azure/GCS. | **🌿 Branching**<br>Git-like data versioning. Agents safely operate on production snapshots. |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
 
@@ -86,7 +86,7 @@ SELECT my_agent(question) FROM tasks;
 
 ## 🚀 Use Cases
 
-- **AI Agents**: Build agents with Sandbox UDF, orchestrate with SQL
+- **AI Agents**: Sandbox UDF + SQL orchestration + branching for safe operations
 - **Analytics & BI**: Large-scale SQL analytics — [Learn more](https://docs.databend.com/guides/query/sql-analytics)
 - **Search & RAG**: Vector + full-text search — [Learn more](https://docs.databend.com/guides/query/vector-db)
 
