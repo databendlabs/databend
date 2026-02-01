@@ -16,6 +16,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::RwLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use fastrace::collector::Reporter;
 use fastrace::collector::SpanRecord;
@@ -329,5 +333,137 @@ impl QueryTrace {
 
         serde_json::to_string_pretty(&output)
             .unwrap_or_else(|e| format!("Error serializing trace: {}", e))
+    }
+}
+
+/// Global trace reporter that wraps an optional inner reporter and supports
+/// temporary collectors for EXPLAIN TRACE.
+///
+/// This allows EXPLAIN TRACE to collect spans without losing the original
+/// tracing configuration. The inner reporter (OTLP, StructLog, etc.) continues
+/// to receive spans while EXPLAIN TRACE also collects them.
+struct GlobalTraceReporterInner {
+    inner: Mutex<Option<Box<dyn Reporter + Send>>>,
+    /// Use RwLock for collectors - report() only needs read access
+    collectors: RwLock<HashMap<String, Arc<Mutex<TraceCollector>>>>,
+    /// Fast path: skip collectors iteration when no collectors are registered
+    has_collectors: AtomicBool,
+}
+
+impl GlobalTraceReporterInner {
+    fn new() -> Self {
+        Self {
+            inner: Mutex::new(None),
+            collectors: RwLock::new(HashMap::new()),
+            has_collectors: AtomicBool::new(false),
+        }
+    }
+
+    fn instance() -> &'static GlobalTraceReporterInner {
+        static INSTANCE: OnceLock<GlobalTraceReporterInner> = OnceLock::new();
+        INSTANCE.get_or_init(GlobalTraceReporterInner::new)
+    }
+
+    fn report(&self, spans: Vec<SpanRecord>) {
+        // Forward to inner reporter if present
+        if let Ok(mut inner) = self.inner.lock()
+            && let Some(ref mut reporter) = *inner
+        {
+            reporter.report(spans.clone());
+        }
+
+        // Fast path: skip if no collectors registered (common case)
+        if !self.has_collectors.load(Ordering::Acquire) {
+            return;
+        }
+
+        // Forward to all registered collectors (read lock only)
+        if let Ok(collectors) = self.collectors.read() {
+            for collector in collectors.values() {
+                if let Ok(mut c) = collector.lock() {
+                    c.report(spans.clone());
+                }
+            }
+        }
+    }
+}
+
+/// Handle to the global trace reporter. This is a thin wrapper that always
+/// delegates to the singleton GlobalTraceReporterInner.
+#[derive(Clone, Default)]
+pub struct GlobalTraceReporter;
+
+impl GlobalTraceReporter {
+    /// Get a new handle to the global reporter
+    pub fn instance() -> Self {
+        Self
+    }
+
+    /// Set the inner reporter (called during initialization)
+    pub fn set_inner_reporter(&self, reporter: Box<dyn Reporter + Send>) {
+        let mut inner = GlobalTraceReporterInner::instance().inner.lock().unwrap();
+        *inner = Some(reporter);
+    }
+
+    /// Register a collector for EXPLAIN TRACE
+    /// Returns a unique ID that can be used to unregister the collector
+    pub fn register_collector(&self, collector: Arc<Mutex<TraceCollector>>) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        let instance = GlobalTraceReporterInner::instance();
+        {
+            let mut collectors = instance.collectors.write().unwrap();
+            collectors.insert(id.clone(), collector);
+        }
+        // Set flag after inserting (Release ordering ensures visibility)
+        instance.has_collectors.store(true, Ordering::Release);
+        id
+    }
+
+    /// Unregister a collector after EXPLAIN TRACE completes
+    pub fn unregister_collector(&self, id: &str) {
+        let instance = GlobalTraceReporterInner::instance();
+        let mut collectors = instance.collectors.write().unwrap();
+        collectors.remove(id);
+        // Update flag based on whether any collectors remain
+        instance
+            .has_collectors
+            .store(!collectors.is_empty(), Ordering::Release);
+    }
+
+    /// Check if there are any active collectors
+    pub fn has_active_collectors(&self) -> bool {
+        GlobalTraceReporterInner::instance()
+            .has_collectors
+            .load(Ordering::Acquire)
+    }
+}
+
+/// RAII guard that automatically unregisters a collector when dropped.
+/// This ensures the collector is always unregistered, even on panic.
+pub struct CollectorGuard {
+    collector_id: String,
+}
+
+impl CollectorGuard {
+    /// Create a new guard that will unregister the collector when dropped
+    pub fn new(collector_id: String) -> Self {
+        Self { collector_id }
+    }
+
+    /// Get the collector ID
+    pub fn id(&self) -> &str {
+        &self.collector_id
+    }
+}
+
+impl Drop for CollectorGuard {
+    fn drop(&mut self) {
+        GlobalTraceReporter::instance().unregister_collector(&self.collector_id);
+    }
+}
+
+impl Reporter for GlobalTraceReporter {
+    fn report(&mut self, spans: Vec<SpanRecord>) {
+        GlobalTraceReporterInner::instance().report(spans);
     }
 }

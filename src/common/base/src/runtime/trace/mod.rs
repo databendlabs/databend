@@ -14,6 +14,8 @@
 
 mod query_trace;
 
+pub use query_trace::CollectorGuard;
+pub use query_trace::GlobalTraceReporter;
 pub use query_trace::QueryTrace;
 pub use query_trace::TraceCollector;
 pub use query_trace::TraceFilterOptions;

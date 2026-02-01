@@ -18,6 +18,8 @@ use databend_common_ast::ast::ExplainTraceOptions;
 use databend_common_ast::ast::TraceFilter;
 use databend_common_ast::ast::TraceFilterOp;
 use databend_common_ast::ast::TraceLevel;
+use databend_common_base::runtime::CollectorGuard;
+use databend_common_base::runtime::GlobalTraceReporter;
 use databend_common_base::runtime::QueryTrace;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TraceCollector;
@@ -70,13 +72,13 @@ impl ExplainTraceInterpreter {
         let collector = Arc::new(std::sync::Mutex::new(TraceCollector::with_filter(
             filter_options,
         )));
-        let collector_clone = collector.clone();
 
-        // Set the collector as the fastrace reporter
-        fastrace::set_reporter(
-            collector_clone.lock().unwrap().clone(),
-            fastrace::collector::Config::default(),
-        );
+        // Register the collector with GlobalTraceReporter instead of replacing the reporter
+        // This preserves the original tracing configuration (OTLP, StructLog, etc.)
+        let collector_id = GlobalTraceReporter::instance().register_collector(collector.clone());
+
+        // Use RAII guard to ensure collector is unregistered even on panic
+        let _collector_guard = CollectorGuard::new(collector_id);
 
         // Mark that EXPLAIN TRACE has set up the reporter (to prevent overwriting)
         self.ctx.set_explain_trace_reporter_set(true);
@@ -97,7 +99,7 @@ impl ExplainTraceInterpreter {
         // Flush fastrace to ensure all spans are collected
         fastrace::flush();
 
-        // Check for errors after flush
+        // Check for errors after flush (collector will be unregistered by guard on drop)
         result?;
 
         // Collect spans from the collector (already filtered during collection)

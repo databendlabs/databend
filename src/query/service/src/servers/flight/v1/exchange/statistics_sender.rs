@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::CollectorGuard;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
@@ -55,17 +56,24 @@ impl StatisticsSender {
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
         trace_collector: Option<Arc<std::sync::Mutex<TraceCollector>>>,
+        trace_collector_id: Option<String>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
+        // Create guard to ensure collector is unregistered even on panic
+        let collector_guard = trace_collector_id.map(CollectorGuard::new);
+
         let handle = spawner
             .try_spawn({
                 let query_id = query_id.to_string();
 
                 async move {
+                    // Keep guard alive until task completes
+                    let _collector_guard = collector_guard;
+
                     let mut cnt = 0;
                     let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                     let mut notified = Box::pin(shutdown_flag_receiver.recv());
@@ -314,6 +322,8 @@ impl StatisticsSender {
                 // Send via flight
                 let data_packet = DataPacket::QueryTrace(trace_json);
                 flight_sender.send(data_packet).await?;
+
+                // Note: collector is unregistered by CollectorGuard when task completes
             }
         }
         Ok(())

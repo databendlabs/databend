@@ -28,6 +28,7 @@ use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalTraceReporter;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TraceCollector;
@@ -877,20 +878,19 @@ impl QueryCoordinator {
         // when EXPLAIN TRACE is running.
         let trace_flag = info.query_ctx.get_trace_flag();
         let explain_trace_reporter_set = info.query_ctx.get_explain_trace_reporter_set();
-        let trace_collector = if trace_flag && !explain_trace_reporter_set {
+        let (trace_collector, trace_collector_id) = if trace_flag && !explain_trace_reporter_set {
             // Get filter options from context (propagated from coordinator)
             let filter_options = info.query_ctx.get_trace_filter_options();
             let collector = Arc::new(std::sync::Mutex::new(TraceCollector::with_filter(
                 filter_options,
             )));
-            let collector_clone = collector.clone();
-            fastrace::set_reporter(
-                collector_clone.lock().unwrap().clone(),
-                fastrace::collector::Config::default(),
-            );
-            Some(collector)
+            // Register the collector with GlobalTraceReporter instead of replacing the reporter
+            // This preserves the original tracing configuration (OTLP, StructLog, etc.)
+            let collector_id =
+                GlobalTraceReporter::instance().register_collector(collector.clone());
+            (Some(collector), Some(collector_id))
         } else {
-            None
+            (None, None)
         };
 
         if !info.started.swap(true, Ordering::SeqCst) {
@@ -985,6 +985,7 @@ impl QueryCoordinator {
             executor.get_inner(),
             perf_guard,
             trace_collector,
+            trace_collector_id,
             finished_profiling_rx,
         );
 

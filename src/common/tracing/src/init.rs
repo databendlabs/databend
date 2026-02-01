@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalTraceReporter;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
@@ -211,10 +212,11 @@ pub fn init_logging(
         let trace_config = fastrace::collector::Config::default();
         if cfg.structlog.on {
             let reporter = StructLogReporter::wrap(otlp_reporter);
-            fastrace::set_reporter(reporter, trace_config);
+            GlobalTraceReporter::instance().set_inner_reporter(Box::new(reporter));
         } else {
-            fastrace::set_reporter(otlp_reporter, trace_config);
+            GlobalTraceReporter::instance().set_inner_reporter(Box::new(otlp_reporter));
         }
+        fastrace::set_reporter(GlobalTraceReporter::instance().clone(), trace_config);
 
         _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
         _drop_guards.push(Box::new(defer::defer(|| {
@@ -224,8 +226,18 @@ pub fn init_logging(
         })));
     } else if cfg.structlog.on {
         let reporter = StructLogReporter::new();
-        fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+        GlobalTraceReporter::instance().set_inner_reporter(Box::new(reporter));
+        fastrace::set_reporter(
+            GlobalTraceReporter::instance().clone(),
+            fastrace::collector::Config::default(),
+        );
         _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
+    } else {
+        // No tracing configured, but still set up GlobalTraceReporter for EXPLAIN TRACE
+        fastrace::set_reporter(
+            GlobalTraceReporter::instance().clone(),
+            fastrace::collector::Config::default(),
+        );
     }
 
     // initialize logging

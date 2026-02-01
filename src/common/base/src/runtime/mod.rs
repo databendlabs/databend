@@ -81,6 +81,8 @@ pub use time_series::TimeSeriesProfiles;
 pub use time_series::compress_time_point;
 pub use time_series::get_time_series_profile_desc;
 pub use tokio::task::JoinHandle;
+pub use trace::CollectorGuard;
+pub use trace::GlobalTraceReporter;
 pub use trace::QueryTrace;
 pub use trace::TraceCollector;
 pub use trace::TraceFilterOptions;
