@@ -30,6 +30,7 @@ mod index;
 mod inverted_index;
 mod page_index;
 mod range_index;
+mod spatial_index;
 mod virtual_column;
 
 pub use bloom_index::BloomIndex;
@@ -57,6 +58,8 @@ pub use inverted_index::extract_fsts;
 pub use page_index::PageIndex;
 pub use range_index::RangeIndex;
 pub use range_index::statistics_to_domain;
+pub use spatial_index::SpatialIndexFile;
+pub use spatial_index::SpatialIndexMeta;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;
 pub use virtual_column::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
 pub use virtual_column::VIRTUAL_COLUMN_STRING_TABLE_KEY;

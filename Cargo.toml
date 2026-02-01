@@ -268,6 +268,7 @@ futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
 geo = { version = "0.32.0", features = ["use-serde"] }
+geo-index = "0.3.2"
 geohash = "0.13.1"
 geozero = { version = "0.15.1", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"

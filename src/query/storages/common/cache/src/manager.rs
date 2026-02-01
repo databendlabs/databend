@@ -46,6 +46,8 @@ use crate::caches::InvertedIndexMetaCache;
 use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
+use crate::caches::SpatialIndexFileCache;
+use crate::caches::SpatialIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::caches::VectorIndexFileCache;
@@ -111,6 +113,8 @@ pub struct CacheManager {
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
     vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
+    spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
+    spatial_index_file_cache: CacheSlot<SpatialIndexFileCache>,
     virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
@@ -233,6 +237,8 @@ impl CacheManager {
                 inverted_index_file_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
                 vector_index_file_cache: CacheSlot::new(None),
+                spatial_index_meta_cache: CacheSlot::new(None),
+                spatial_index_file_cache: CacheSlot::new(None),
                 virtual_column_meta_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
@@ -389,6 +395,50 @@ impl CacheManager {
                 )?
             };
 
+            let spatial_index_meta_cache = {
+                let spatial_index_meta_on_disk_cache_path =
+                    PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id.clone())
+                        .join("spatial_index_meta_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA,
+                    config.spatial_index_meta_count as usize,
+                    Unit::Count,
+                    &spatial_index_meta_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_spatial_index_meta_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )?
+            };
+
+            // setup spatial index filter cache
+            let spatial_index_file_size = if config.spatial_index_filter_memory_ratio != 0 {
+                (*max_server_memory_usage as usize)
+                    * config.spatial_index_filter_memory_ratio as usize
+                    / 100
+            } else {
+                config.spatial_index_filter_size as usize
+            };
+            let spatial_index_file_cache = {
+                let spatial_index_file_on_disk_cache_path =
+                    PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id.clone())
+                        .join("spatial_index_file_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_SPATIAL_INDEX_FILE,
+                    spatial_index_file_size,
+                    Unit::Bytes,
+                    &spatial_index_file_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_spatial_index_data_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )?
+            };
+
             let virtual_column_meta_cache = {
                 let virtual_column_meta_on_disk_cache_path =
                     PathBuf::from(&config.disk_cache_config.path)
@@ -442,6 +492,8 @@ impl CacheManager {
                 inverted_index_file_cache,
                 vector_index_meta_cache,
                 vector_index_file_cache,
+                spatial_index_meta_cache,
+                spatial_index_file_cache,
                 virtual_column_meta_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
@@ -559,6 +611,21 @@ impl CacheManager {
             HYBRID_CACHE_VECTOR_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE => {
                 Self::set_hybrid_cache_bytes_capacity(
                     &self.vector_index_file_cache,
+                    new_capacity,
+                    name,
+                );
+            }
+            HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA
+            | IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA => {
+                Self::set_hybrid_cache_items_capacity(
+                    &self.spatial_index_meta_cache,
+                    new_capacity,
+                    name,
+                );
+            }
+            HYBRID_CACHE_SPATIAL_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE => {
+                Self::set_hybrid_cache_bytes_capacity(
+                    &self.spatial_index_file_cache,
                     new_capacity,
                     name,
                 );
@@ -744,6 +811,14 @@ impl CacheManager {
         self.get_hybrid_cache(self.vector_index_file_cache.get())
     }
 
+    pub fn get_spatial_index_meta_cache(&self) -> Option<SpatialIndexMetaCache> {
+        self.get_hybrid_cache(self.spatial_index_meta_cache.get())
+    }
+
+    pub fn get_spatial_index_file_cache(&self) -> Option<SpatialIndexFileCache> {
+        self.get_hybrid_cache(self.spatial_index_file_cache.get())
+    }
+
     pub fn get_virtual_column_meta_cache(&self) -> Option<VirtualColumnMetaCache> {
         self.get_hybrid_cache(self.virtual_column_meta_cache.get())
     }
@@ -899,6 +974,12 @@ const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_
 const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str =
     "memory_cache_vector_index_file_meta_data";
 
+const HYBRID_CACHE_SPATIAL_INDEX_FILE: &str = "cache_spatial_index_file";
+const IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE: &str = "memory_cache_spatial_index_file";
+const HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA: &str = "cache_spatial_index_file_meta_data";
+const IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA: &str =
+    "memory_cache_spatial_index_file_meta_data";
+
 const HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str = "cache_virtual_column_file_meta_data";
 const IN_MEMORY_HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str =
     "memory_cache_virtual_column_file_meta_data";
@@ -956,6 +1037,8 @@ mod tests {
             disk_cache_inverted_index_data_size: 1024 * 1024,
             disk_cache_vector_index_meta_size: 1024 * 1024,
             disk_cache_vector_index_data_size: 1024 * 1024,
+            disk_cache_spatial_index_meta_size: 1024 * 1024,
+            disk_cache_spatial_index_data_size: 1024 * 1024,
             disk_cache_virtual_column_meta_size: 1024 * 1024,
             ..CacheConfig::default()
         }
@@ -970,6 +1053,8 @@ mod tests {
             disk_cache_inverted_index_data_size: 0,
             disk_cache_vector_index_meta_size: 0,
             disk_cache_vector_index_data_size: 0,
+            disk_cache_spatial_index_meta_size: 0,
+            disk_cache_spatial_index_data_size: 0,
             disk_cache_virtual_column_meta_size: 0,
             ..CacheConfig::default()
         }
@@ -1005,6 +1090,14 @@ mod tests {
                 .on_disk_cache()
                 .is_some()
             && cache_manager
+                .get_spatial_index_meta_cache()
+                .on_disk_cache()
+                .is_some()
+            && cache_manager
+                .get_spatial_index_file_cache()
+                .on_disk_cache()
+                .is_some()
+            && cache_manager
                 .get_virtual_column_meta_cache()
                 .on_disk_cache()
                 .is_some()
@@ -1037,6 +1130,14 @@ mod tests {
                 .is_none()
             && cache_manager
                 .get_vector_index_file_cache()
+                .on_disk_cache()
+                .is_none()
+            && cache_manager
+                .get_spatial_index_meta_cache()
+                .on_disk_cache()
+                .is_none()
+            && cache_manager
+                .get_spatial_index_file_cache()
                 .on_disk_cache()
                 .is_none()
             && cache_manager
@@ -1204,6 +1305,8 @@ mod tests {
             ngram_filter_index_size: None,
             vector_index_location: None,
             vector_index_size: None,
+            spatial_index_location: None,
+            spatial_index_size: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
             create_on: None,

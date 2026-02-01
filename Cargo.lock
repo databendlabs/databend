@@ -4782,6 +4782,9 @@ dependencies = [
  "fastrace",
  "futures",
  "futures-util",
+ "geo",
+ "geo-index",
+ "geozero",
  "indexmap 2.9.0",
  "itertools 0.13.0",
  "jsonb",
@@ -5770,6 +5773,7 @@ dependencies = [
  "flatbuffers",
  "futures",
  "futures-util",
+ "geo",
  "geozero",
  "goldenfile",
  "headers",
@@ -7585,6 +7589,20 @@ dependencies = [
  "serde",
  "sif-itree",
  "spade",
+]
+
+[[package]]
+name = "geo-index"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a27fb4e4ffdde62f8aa7a4165b30f6fe8e8337d35b657ebf86c98d884ee7c750"
+dependencies = [
+ "bytemuck",
+ "float_next_after",
+ "geo-traits",
+ "num-traits",
+ "thiserror 1.0.69",
+ "tinyvec",
 ]
 
 [[package]]

@@ -35,6 +35,9 @@ use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_nums;
@@ -63,6 +66,8 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::SpatialIndexBuilder;
+use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
@@ -161,6 +166,7 @@ pub struct BlockSerialization {
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
+    pub spatial_index_state: Option<SpatialIndexState>,
     pub column_hlls: Option<BlockHLLState>,
 }
 
@@ -182,6 +188,7 @@ pub struct BlockBuilder {
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub vector_index_builder: Option<VectorIndexBuilder>,
+    pub spatial_index_builder: Option<SpatialIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
     /// Indicates whether column_hlls should be serialized into RawBlockHLL
     /// - true: Output as BlockHLLState::Serialized(RawBlockHLL)
@@ -240,6 +247,18 @@ impl BlockBuilder {
             None
         };
 
+        let spatial_index_state = if let Some(ref spatial_index_builder) =
+            self.spatial_index_builder
+        {
+            let spatial_index_location = self.meta_locations.block_spatial_index_location();
+            let mut spatial_index_builder = spatial_index_builder.clone();
+            spatial_index_builder.add_block(&data_block)?;
+            let spatial_index_state = spatial_index_builder.finalize(&spatial_index_location)?;
+            Some(spatial_index_state)
+        } else {
+            None
+        };
+
         let virtual_column_state =
             if let Some(ref virtual_column_builder) = self.virtual_column_builder {
                 let mut virtual_column_builder = virtual_column_builder.clone();
@@ -293,6 +312,8 @@ impl BlockBuilder {
                 .unwrap_or_default(),
             vector_index_size: vector_index_state.as_ref().map(|v| v.size),
             vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
+            spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
+            spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -315,6 +336,7 @@ impl BlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
+            spatial_index_state,
             column_hlls,
         };
         Ok(serialized)
@@ -352,6 +374,7 @@ impl BlockWriter {
         Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
+        Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
@@ -406,6 +429,24 @@ impl BlockWriter {
             metrics_inc_block_vector_index_write_nums(1);
             metrics_inc_block_vector_index_write_bytes(index_size);
             metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_spatial_index_state(
+        dal: &Operator,
+        spatial_index_state: Option<SpatialIndexState>,
+    ) -> Result<()> {
+        if let Some(spatial_index_state) = spatial_index_state {
+            let start = Instant::now();
+
+            let location = &spatial_index_state.location.0;
+            let index_size = spatial_index_state.size;
+            write_data(spatial_index_state.data, dal, location).await?;
+
+            metrics_inc_block_spatial_index_write_nums(1);
+            metrics_inc_block_spatial_index_write_bytes(index_size);
+            metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }

@@ -1136,6 +1136,7 @@ impl Binder {
                 &vector_index,
             );
         }
+
         Ok(s_expr)
     }
 

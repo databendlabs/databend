@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -62,10 +63,19 @@ async fn apply_block_pruning(
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
-    FusePruner::create(&ctx, op, schema, push_down, bloom_index_cols, vec![], None)?
-        .read_pruning(segment_locs)
-        .await
-        .map(|v| v.into_iter().map(|(_, v)| v).collect())
+    FusePruner::create(
+        &ctx,
+        op,
+        schema,
+        push_down,
+        bloom_index_cols,
+        vec![],
+        HashSet::new(),
+        None,
+    )?
+    .read_pruning(segment_locs)
+    .await
+    .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
 
 #[tokio::test(flavor = "multi_thread")]

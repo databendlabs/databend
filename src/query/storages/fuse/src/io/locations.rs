@@ -34,6 +34,7 @@ use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_REF_PREFIX;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
+use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -70,6 +71,7 @@ pub struct TableMetaLocationGenerator {
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
     vector_index_location_prefix: String,
+    spatial_index_location_prefix: String,
     segment_statistics_location_prefix: String,
     ref_snapshot_location_prefix: String,
 }
@@ -85,6 +87,8 @@ impl TableMetaLocationGenerator {
         let inverted_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
         let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
+        let spatial_index_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
         let segment_statistics_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
         let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_REF_PREFIX);
@@ -97,6 +101,7 @@ impl TableMetaLocationGenerator {
             agg_index_location_prefix,
             inverted_index_location_prefix,
             vector_index_location_prefix,
+            spatial_index_location_prefix,
             segment_statistics_location_prefix,
             ref_snapshot_location_prefix,
         }
@@ -116,6 +121,10 @@ impl TableMetaLocationGenerator {
 
     pub fn block_vector_index_prefix(&self) -> &str {
         &self.vector_index_location_prefix
+    }
+
+    pub fn block_spatial_index_prefix(&self) -> &str {
+        &self.spatial_index_location_prefix
     }
 
     pub fn segment_location_prefix(&self) -> &str {
@@ -168,6 +177,19 @@ impl TableMetaLocationGenerator {
             format!(
                 "{}{}_v{}.parquet",
                 self.block_vector_index_prefix(),
+                uuid.as_simple(),
+                BlockFilter::VERSION,
+            ),
+            BlockFilter::VERSION,
+        )
+    }
+
+    pub fn block_spatial_index_location(&self) -> Location {
+        let uuid = Uuid::now_v7();
+        (
+            format!(
+                "{}{}_v{}.parquet",
+                self.block_spatial_index_prefix(),
                 uuid.as_simple(),
                 BlockFilter::VERSION,
             ),

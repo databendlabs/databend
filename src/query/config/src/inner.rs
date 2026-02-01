@@ -665,6 +665,21 @@ pub struct CacheConfig {
     /// Max percentage of in memory vector index filters cache relative to whole memory. By default it is 0 (disabled).
     pub vector_index_filter_memory_ratio: u64,
 
+    /// Max number of cached spatial index meta objects. Set it to 0 to disable it.
+    pub spatial_index_meta_count: u64,
+
+    /// Max bytes of cached spatial index meta data on disk. Set it to 0 to disable it.
+    pub disk_cache_spatial_index_meta_size: u64,
+
+    /// Max bytes of cached spatial index filters used. Set it to 0 to disable it.
+    pub spatial_index_filter_size: u64,
+
+    /// Max bytes of cached spatial index filters on disk. Set it to 0 to disable it.
+    pub disk_cache_spatial_index_data_size: u64,
+
+    /// Max percentage of in memory spatial index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub spatial_index_filter_memory_ratio: u64,
+
     /// Max number of cached virtual column meta objects. Set it to 0 to disable it.
     pub virtual_column_meta_count: u64,
 
@@ -812,6 +827,11 @@ impl Default for CacheConfig {
             vector_index_filter_size: 64424509440,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
+            spatial_index_meta_count: 30000,
+            disk_cache_spatial_index_meta_size: 0,
+            spatial_index_filter_size: 64424509440,
+            disk_cache_spatial_index_data_size: 0,
+            spatial_index_filter_memory_ratio: 0,
             virtual_column_meta_count: 30000,
             disk_cache_virtual_column_meta_size: 0,
             table_prune_partitions_count: 256,
