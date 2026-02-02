@@ -15,6 +15,6 @@
 mod analyze;
 mod optimizer;
 mod rewrite;
-mod table_signature;
+mod signature;
 
 pub use optimizer::CommonSubexpressionOptimizer;

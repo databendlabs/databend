@@ -22,29 +22,29 @@ use crate::planner::metadata::Metadata;
 use crate::plans::RelOperator;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TableSignature {
+pub struct SExprSignature {
     pub tables: BTreeSet<IndexType>,
 }
 
-pub fn collect_table_signatures(
+pub fn compute_s_expr_signatures(
     root: &SExpr,
     metadata: &Metadata,
-) -> HashMap<TableSignature, Vec<(Vec<usize>, SExpr)>> {
+) -> HashMap<SExprSignature, Vec<(Vec<usize>, SExpr)>> {
     let mut signature_to_exprs = HashMap::new();
     let mut path = Vec::new();
-    collect_table_signatures_rec(root, &mut path, metadata, &mut signature_to_exprs);
+    compute_s_expr_signature_rec(root, &mut path, metadata, &mut signature_to_exprs);
     signature_to_exprs
 }
 
-fn collect_table_signatures_rec(
+fn compute_s_expr_signature_rec(
     expr: &SExpr,
     path: &mut Vec<usize>,
     metadata: &Metadata,
-    signature_to_exprs: &mut HashMap<TableSignature, Vec<(Vec<usize>, SExpr)>>,
+    signature_to_exprs: &mut HashMap<SExprSignature, Vec<(Vec<usize>, SExpr)>>,
 ) {
     for (child_index, child) in expr.children().enumerate() {
         path.push(child_index);
-        collect_table_signatures_rec(child, path, metadata, signature_to_exprs);
+        compute_s_expr_signature_rec(child, path, metadata, signature_to_exprs);
         path.pop();
     }
 
@@ -75,7 +75,7 @@ fn collect_table_signatures_rec(
         let mut tables = BTreeSet::new();
         tables.insert(table.get_id() as IndexType);
         signature_to_exprs
-            .entry(TableSignature { tables })
+            .entry(SExprSignature { tables })
             .or_default()
             .push((path.clone(), expr.clone()));
     }

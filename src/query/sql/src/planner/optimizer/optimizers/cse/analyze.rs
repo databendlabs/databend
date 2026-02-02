@@ -18,7 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use super::rewrite::SExprReplacement;
-use super::table_signature::collect_table_signatures;
+use super::signature::compute_s_expr_signatures;
 use crate::optimizer::ir::SExpr;
 use crate::planner::metadata::Metadata;
 use crate::plans::MaterializedCTE;
@@ -34,7 +34,7 @@ pub fn analyze_common_subexpression(
         return Ok((vec![], vec![]));
     }
 
-    let signature_to_exprs = collect_table_signatures(s_expr, metadata);
+    let signature_to_exprs = compute_s_expr_signatures(s_expr, metadata);
     let mut replacements = vec![];
     let mut materialized_ctes = vec![];
     for exprs in signature_to_exprs.values() {
