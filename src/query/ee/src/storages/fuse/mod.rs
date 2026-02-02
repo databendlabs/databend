@@ -17,4 +17,3 @@ pub mod operations;
 pub use operations::vacuum_drop_tables::vacuum_drop_tables;
 pub use operations::vacuum_table::do_vacuum;
 pub use operations::vacuum_table_v2::do_vacuum2;
-pub use operations::virtual_columns::do_refresh_virtual_column;
