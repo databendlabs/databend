@@ -34,8 +34,7 @@ glob = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
-jaq-interpret = { workspace = true }
-jaq-parse = { workspace = true }
+jaq-json = { workspace = true }
 jaq-std = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }

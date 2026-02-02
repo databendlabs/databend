@@ -18,6 +18,7 @@ databend-common-meta-api = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-schema-api-test-suite = { workspace = true }
+databend-common-meta-store = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-test-harness = { workspace = true }

@@ -991,7 +991,7 @@ pub async fn create_client(
     };
 
     let rpc_tls_config = if config.tls_query_cli_enabled() {
-        Some(config.query.to_rpc_client_tls_config())
+        Some(config.query.to_grpc_tls_config())
     } else {
         None
     };

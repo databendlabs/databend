@@ -72,7 +72,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore<TokioRuntime>, MetaSrvTestContex
     }
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_impl_raft_storage() -> anyhow::Result<()> {
     databend_common_meta_sled_store::openraft::testing::log::Suite::test_all(MetaStoreBuilder {})
@@ -82,7 +82,7 @@ async fn test_impl_raft_storage() -> anyhow::Result<()> {
 }
 
 /// Ensure purged logs to be removed from the cache
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_store_purge_cache() -> anyhow::Result<()> {
     let id = 3;
@@ -147,7 +147,7 @@ ChunkId(00_000_000_000_000_000_200)
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Create a meta store
@@ -207,7 +207,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
@@ -256,7 +256,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
@@ -304,7 +304,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv

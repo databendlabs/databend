@@ -19,8 +19,6 @@ use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::DATABEND_SEMVER;
@@ -37,7 +35,7 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext<TokioRuntime>, k: impl std::fmt::Display) -> String {
@@ -126,7 +124,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext<TokioRuntime>, k: impl std::fmt::Display) -> String {
@@ -200,13 +198,19 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         for mut tc in stopped_tcs {
             info!(
                 "--- starting metasrv: {:?}",
-                tc.config.raft_config.raft_api_addr().await?
+                tc.config
+                    .raft_config
+                    .raft_api_addr::<TokioRuntime>()
+                    .await?
             );
             start_metasrv_with_context::<TokioRuntime>(&mut tc).await?;
 
             info!(
                 "--- started metasrv: {:?}",
-                tc.config.raft_config.raft_api_addr().await?
+                tc.config
+                    .raft_config
+                    .raft_api_addr::<TokioRuntime>()
+                    .await?
             );
 
             // sleep(Duration::from_secs(3)).await;

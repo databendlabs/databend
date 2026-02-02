@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::UpsertKV;
@@ -35,7 +34,7 @@ fn req(prefix: &str, limit: Option<u64>) -> KvListRequest {
 }
 
 /// Test: KvList on leader returns stream and respects limit.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_list_on_leader() -> anyhow::Result<()> {
     let (tc, _) = crate::tests::start_metasrv::<TokioRuntime>().await?;
@@ -69,7 +68,7 @@ async fn test_kv_list_on_leader() -> anyhow::Result<()> {
 }
 
 /// Test: KvList on follower returns error with leader endpoint.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_list_on_follower_returns_leader() -> anyhow::Result<()> {
     let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
@@ -94,7 +93,7 @@ async fn test_kv_list_on_follower_returns_leader() -> anyhow::Result<()> {
 }
 
 /// Test: KvList on single node (no quorum) returns error.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_list_no_quorum_no_leader() -> anyhow::Result<()> {
     let mut tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;

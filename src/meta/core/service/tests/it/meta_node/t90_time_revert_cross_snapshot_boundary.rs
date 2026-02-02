@@ -46,7 +46,7 @@ use crate::tests::meta_node::timeout;
 /// - When meta-service restarts, there is one log(`A`) to re-apply that has smaller `expire_at`(`t1`)
 ///   than the biggest timestamp(`LogEntry.time_ms`) in the snapshot,
 /// - and all the log entries before `A` have smaller timestamp(`LogEntry.time_ms`) than `t1`.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_log_time_revert_cross_snapshot_boundary() -> anyhow::Result<()> {
     let now_ms = since_epoch_millis();

@@ -17,7 +17,6 @@
 use std::time::Duration;
 
 use databend_common_meta_cache::Cache;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
@@ -29,7 +28,7 @@ use log::debug;
 use test_harness::test;
 use tokio::time::sleep;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_cache_basic() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -91,7 +90,7 @@ async fn test_cache_basic() -> anyhow::Result<()> {
 }
 
 /// Test cache survive leader down and switch
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;

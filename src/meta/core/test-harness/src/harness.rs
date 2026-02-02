@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Once;
 
-use databend_common_tracing::Config;
-use databend_common_tracing::closure_name;
-use databend_common_tracing::init_logging;
+use databend_common_meta_runtime_api::SpawnApi;
 use fastrace::prelude::*;
 
-pub fn meta_service_test_harness<F, Fut>(test: F)
+pub fn meta_service_test_harness<SP, F, Fut>(test: F)
 where
+    SP: SpawnApi,
     F: FnOnce() -> Fut + 'static,
-    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+    Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
 {
-    setup_test();
+    setup_test::<SP>();
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(3)
@@ -40,9 +38,12 @@ where
 }
 
 #[allow(dead_code)]
-pub fn meta_service_test_harness_sync<F>(test: F)
-where F: FnOnce() -> anyhow::Result<()> + 'static {
-    setup_test();
+pub fn meta_service_test_harness_sync<SP, F>(test: F)
+where
+    SP: SpawnApi,
+    F: FnOnce() -> anyhow::Result<()> + 'static,
+{
+    setup_test::<SP>();
 
     let root = Span::root(closure_name::<F>(), SpanContext::random());
     let _guard = root.set_local_parent();
@@ -52,17 +53,22 @@ where F: FnOnce() -> anyhow::Result<()> + 'static {
     shutdown_test();
 }
 
-fn setup_test() {
+fn setup_test<SP: SpawnApi>() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let mut config = Config::new_testing();
-        config.file.level = "DEBUG".to_string();
-
-        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
+        let guards = SP::init_test_logging();
         Box::leak(Box::new(guards));
     });
 }
 
 fn shutdown_test() {
     fastrace::flush();
+}
+
+fn closure_name<F: std::any::Any>() -> &'static str {
+    let func_path = std::any::type_name::<F>();
+    func_path
+        .rsplit("::")
+        .find(|name| *name != "{{closure}}")
+        .unwrap()
 }

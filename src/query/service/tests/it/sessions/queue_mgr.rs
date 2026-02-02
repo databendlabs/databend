@@ -29,7 +29,7 @@ use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_grpc::RpcClientConf;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;

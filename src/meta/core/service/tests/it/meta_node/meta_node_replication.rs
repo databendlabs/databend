@@ -17,8 +17,8 @@
 use std::fs;
 use std::io::Read;
 
+use databend_common_meta_client::GetKVReq;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_runtime_api::TokioRuntime;
@@ -52,7 +52,7 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // - Bring up a cluster of 3.
@@ -161,7 +161,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.
@@ -246,7 +246,7 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_raft_service_install_snapshot_v004() -> anyhow::Result<()> {
     // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.

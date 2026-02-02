@@ -23,6 +23,7 @@
 mod harness;
 mod service;
 
+pub use databend_common_meta_runtime_api::TokioRuntime;
 pub use harness::meta_service_test_harness;
 pub use harness::meta_service_test_harness_sync;
 pub use service::MetaSrvTestContext;

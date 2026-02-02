@@ -23,10 +23,7 @@ use std::sync::atomic::AtomicI32;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_grpc::ConnectionFactory;
-use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::RequestFor;
-use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -114,7 +111,7 @@ use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::MetaForwarder;
 use crate::meta_service::MetaNodeBuilder;
 use crate::meta_service::RaftServiceImpl;
-use crate::meta_service::errors::grpc_error_to_network_err;
+use crate::meta_service::errors::channel_error_to_network_err;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::runtime_config::RuntimeConfig;
 use crate::meta_service::watcher::DispatcherHandle;
@@ -126,6 +123,7 @@ use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::store::meta_raft_log::MetaRaftLog;
 use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
+use crate::util::reply_to_api_result;
 
 pub type LogStore = MetaRaftLog;
 pub type SMStore<SP> = MetaRaftStateMachine<SP>;
@@ -215,13 +213,7 @@ impl<SP: SpawnApi> MetaNode<SP> {
         let ip_port = match ipv4_addr {
             Ok(addr) => format!("{}:{}", addr, port),
             Err(_) => {
-                let resolver = DNSResolver::instance().map_err(|e| {
-                    MetaNetworkError::DnsParseError(format!(
-                        "get dns resolver instance error: {}",
-                        e
-                    ))
-                })?;
-                let ip_addrs = resolver.resolve(host).await.map_err(|e| {
+                let ip_addrs = SP::resolve(host).await.map_err(|e| {
                     MetaNetworkError::GetNodeAddrError(format!(
                         "resolve addr {} error: {}",
                         host, e
@@ -947,12 +939,12 @@ impl<SP: SpawnApi> MetaNode<SP> {
             addr, timeout
         );
 
-        let chan_res = ConnectionFactory::create_rpc_channel(addr, timeout, None, None).await;
+        let chan_res = SP::connect(addr.clone(), timeout, None).await;
         let chan = match chan_res {
             Ok(c) => c,
             Err(e) => {
                 error!("connect to {} join cluster fail: {:?}", addr, e);
-                let net_err = grpc_error_to_network_err(e);
+                let net_err = channel_error_to_network_err(e);
                 return Err(MetaAPIError::NetworkError(net_err));
             }
         };

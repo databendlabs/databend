@@ -64,7 +64,7 @@ fn process_candidate_expressions(
     let cte_def_columns = cte_def.derive_relational_prop()?.output_columns.clone();
     let cte_name = format!("cte_cse_{}", materialized_ctes.len());
 
-    let cte_plan = MaterializedCTE::new(cte_name.clone(), None, None);
+    let cte_plan = MaterializedCTE::new(cte_name.clone(), None);
     let cte_expr = SExpr::create_unary(
         Arc::new(RelOperator::MaterializedCTE(cte_plan)),
         cte_def.clone(),

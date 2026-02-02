@@ -14,10 +14,8 @@
 
 use std::time::Duration;
 
-use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_api::TableApi;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
@@ -33,7 +31,7 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -61,15 +59,14 @@ async fn test_tls_server() -> anyhow::Result<()> {
         Some(tls_conf),
     )?;
 
-    let r = client
-        .get_table(("do not care", "do not care", "do not care").into())
-        .await;
-    assert!(r.is_err());
+    // Use get_cluster_status to verify TLS connection works (this connects to server)
+    let r = client.get_cluster_status().await;
+    assert!(r.is_ok());
 
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
@@ -82,7 +79,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let tls_conf = RpcClientTlsConfig {

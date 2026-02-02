@@ -25,6 +25,7 @@ use log::info;
 use test_harness::test;
 use tokio::time::sleep;
 
+use crate::testing::TokioRuntime;
 use crate::testing::meta_service_test_harness;
 use crate::testing::since_epoch_sec;
 use crate::tests::meta_node::start_meta_node_leader;
@@ -35,7 +36,7 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 /// - Start a leader, write kv with expiration;
 /// - Assert expired kv can not be read and write.
 /// - Bring up a learner, replicate logs from leader, rebuild the same state machine.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     let mut log_index = 0;

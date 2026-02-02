@@ -15,8 +15,6 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
@@ -33,7 +31,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
@@ -104,7 +102,7 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
@@ -142,7 +140,11 @@ async fn test_retry_join() -> anyhow::Result<()> {
         tc1.config.raft_config.single = false;
         tc1.config.raft_config.join = vec![
             bad_addr,
-            tc0.config.raft_config.raft_api_addr().await?.to_string(),
+            tc0.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
         ];
         let ret = start_metasrv_with_context::<TokioRuntime>(&mut tc1).await;
         match ret {
@@ -154,7 +156,7 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
@@ -165,7 +167,13 @@ async fn test_join() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     start_metasrv_with_context::<TokioRuntime>(&mut tc0).await?;
     start_metasrv_with_context::<TokioRuntime>(&mut tc1).await?;
@@ -214,7 +222,7 @@ async fn test_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Start 3 metasrv.
@@ -229,10 +237,22 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(2);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     tc2.config.raft_config.single = false;
-    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc2.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     start_metasrv_with_context::<TokioRuntime>(&mut tc0).await?;
     start_metasrv_with_context::<TokioRuntime>(&mut tc1).await?;
@@ -323,8 +343,16 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let mut tc3 = MetaSrvTestContext::<TokioRuntime>::new(3);
         tc3.config.raft_config.single = false;
         tc3.config.raft_config.join = vec![
-            tc1.config.raft_config.raft_api_addr().await?.to_string(),
-            tc2.config.raft_config.raft_api_addr().await?.to_string(),
+            tc1.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
         ];
 
         start_metasrv_with_context::<TokioRuntime>(&mut tc3).await?;

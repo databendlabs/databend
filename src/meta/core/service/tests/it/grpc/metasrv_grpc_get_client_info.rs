@@ -18,7 +18,7 @@ use regex::Regex;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.

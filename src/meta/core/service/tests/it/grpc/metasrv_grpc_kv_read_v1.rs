@@ -19,10 +19,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::ListKVReq;
+use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::Streamed;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
@@ -40,7 +39,7 @@ use crate::testing::meta_service_test_harness;
 use crate::testing::since_epoch_sec;
 use crate::tests::service::make_grpc_client;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     let now_sec = since_epoch_sec();
@@ -56,7 +55,7 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
     let now_sec = since_epoch_sec();
@@ -75,7 +74,7 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
 }
 
 /// When invoke kv_read_v1() on a follower, the leader endpoint is responded in the response header.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<()> {
     let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;

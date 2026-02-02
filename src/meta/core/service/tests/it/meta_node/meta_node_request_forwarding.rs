@@ -31,7 +31,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
     // - Start a leader, 2 followers and a non-voter;

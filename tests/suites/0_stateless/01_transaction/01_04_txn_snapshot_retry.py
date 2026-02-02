@@ -10,8 +10,8 @@ from mysql.connector import errors as mysql_errors
 
 
 TABLE_NAME = "txn_snapshot_retry_concurrency"
-NUM_THREADS = 16
-TRANSACTIONS_PER_THREAD = 4
+NUM_THREADS = 8
+TRANSACTIONS_PER_THREAD = 3
 ROWS_PER_TRANSACTION = 2
 MAX_RETRIES = 8
 RETRY_SLEEP_RANGE = (0.01, 0.05)

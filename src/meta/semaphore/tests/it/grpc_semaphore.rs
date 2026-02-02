@@ -16,7 +16,6 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::UpsertKV;
@@ -29,7 +28,7 @@ use test_harness::test;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_simple() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -80,7 +79,7 @@ async fn test_semaphore_simple() -> anyhow::Result<()> {
 }
 
 /// Assert the acquired guard gets ready when the semaphore is removed.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_guard_future() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -120,7 +119,7 @@ async fn test_semaphore_guard_future() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_time_based() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -171,7 +170,7 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
 }
 
 /// Test error handling when acquirer is dropped while operations are in progress
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -204,7 +203,7 @@ async fn test_acquirer_closed_error_handling() -> anyhow::Result<()> {
 }
 
 /// Test permit removal notification system
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_permit_removal_notification() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -248,7 +247,7 @@ async fn test_permit_removal_notification() -> anyhow::Result<()> {
 }
 
 /// Test resource cleanup when permits are dropped
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -282,7 +281,7 @@ async fn test_permit_resource_cleanup() -> anyhow::Result<()> {
 }
 
 /// Test concurrent acquirer operations and error isolation
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -354,7 +353,7 @@ async fn test_semaphore_concurrent_error_isolation() -> anyhow::Result<()> {
 }
 
 /// Test timeout behavior and recovery
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -391,7 +390,7 @@ async fn test_semaphore_timeout_behavior() -> anyhow::Result<()> {
 }
 
 /// Test watch stream behavior under connection issues
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_watch_stream_resilience() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -427,7 +426,7 @@ async fn test_watch_stream_resilience() -> anyhow::Result<()> {
 }
 
 /// Test semaphore behavior with different capacity configurations
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -472,7 +471,7 @@ async fn test_semaphore_capacity_edge_cases() -> anyhow::Result<()> {
 }
 
 /// Test time-based sequencing behavior
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
@@ -512,7 +511,7 @@ async fn test_time_based_sequencing_edge_cases() -> anyhow::Result<()> {
 }
 
 /// If the meta-service stops streaming changes, the semaphore should re-connect.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
     let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
@@ -581,7 +580,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 }
 
 /// The acquirer should receive a connection closed error when the stream is closed
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
     let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
