@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "=== test UDF priv"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
@@ -23,12 +23,12 @@ echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CL
 echo "grant insert, delete, update, select on default.t to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
 echo "grant select on default.t to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
 echo "grant super on *.* to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-sleep 2;
+echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
 
 # error test need privielge f1
 echo "=== Only Has Privilege on f2 ==="
 echo "grant usage on udf f2 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-sleep 1;
+echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
 echo "select f2(f1(1));" | $TEST_USER_CONNECT
 # bug need error
 echo "select add(1, f2(f1(1)));" | $TEST_USER_CONNECT
@@ -63,7 +63,7 @@ echo "delete from t;" | $TEST_USER_CONNECT
 echo "=== Only Has Privilege on f1 ==="
 echo "grant usage on udf f1 to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
 echo "revoke usage on udf f2 from 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-sleep 1;
+echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
 echo "select f2(f1(1))" | $TEST_USER_CONNECT
 echo "select add(1, f1(1))" | $TEST_USER_CONNECT
 echo "select max(f2(f1(1)));" | $TEST_USER_CONNECT

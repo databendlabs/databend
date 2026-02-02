@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "create user if not exists test identified by 'test'"|$BENDSQL_CLIENT_CONNECT
 
-export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql --user=test --password=test --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_NON_PRIVILEGED_USER_CONNECT="bendsql -A --user=test --password=test --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 
 echo "call system\$fuse_amend('db', 't')" | $TEST_NON_PRIVILEGED_USER_CONNECT

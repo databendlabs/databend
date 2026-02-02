@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 export TEST_USER_PASSWORD="password"
-export USER_TEST_CONNECT="bendsql --user=test --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_TEST_CONNECT="bendsql -A --user=test --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 
 echo "drop user if exists test" | $BENDSQL_CLIENT_CONNECT

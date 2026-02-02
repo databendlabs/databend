@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 stmt "drop database if exists db01;"
@@ -160,7 +160,7 @@ rm -rf password.out
 
 ## Show grants test
 export TEST_USER_PASSWORD="password"
-export USER_A_CONNECT="bendsql --user=a --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql -A --user=a --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "drop user if exists a" | $BENDSQL_CLIENT_CONNECT
 echo "create user a identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
@@ -200,7 +200,7 @@ echo "show columns from clusters from system" | $BENDSQL_CLIENT_CONNECT | echo $
 echo "show columns from tasks from system" | $BENDSQL_CLIENT_CONNECT | echo $?
 
 #DML privilege check
-export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_B_CONNECT="bendsql -A --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 rm -rf /tmp/00_0020
 mkdir -p /tmp/00_0020
@@ -303,7 +303,7 @@ echo "drop user b" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
 echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
 echo "grant drop on default.t to c" | $BENDSQL_CLIENT_CONNECT
-export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "drop table if exists t" | $USER_C_CONNECT
 echo "drop table if exists unknown_t" | $USER_C_CONNECT
@@ -317,7 +317,7 @@ echo "drop database if exists db01" | $BENDSQL_CLIENT_CONNECT
 echo "=== set privilege check ==="
 echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
 echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
-export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo "set session max_threads=1000" | $BENDSQL_CLIENT_CONNECT
 echo "unset session max_threads" | $BENDSQL_CLIENT_CONNECT
 echo "settings (ddl_column_type_nullable=0) select 100" | $BENDSQL_CLIENT_CONNECT
