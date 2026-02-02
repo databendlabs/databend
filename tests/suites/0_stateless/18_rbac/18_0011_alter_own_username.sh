@@ -4,8 +4,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export TEST_USER2_CONNECT="bendsql --user=testuser2 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER2_CONNECT="bendsql -A --user=testuser2 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo '-- reset users'
 echo "DROP USER IF EXISTS 'testuser1'" | $BENDSQL_CLIENT_CONNECT
@@ -23,7 +23,7 @@ echo "alter user 'testuser1' identified by '123' with disabled=true" | $TEST_USE
 # error: APIError: RequestError: Query Page failed with status 401 Unauthorized: {"error":{"code":"401","message":"... incorrect password ..."}}
 echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT 2>&1 | grep 'incorrect password' | wc -l
 
-export TEST_USER_MODIFY_CONNECT="bendsql --user=testuser1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_MODIFY_CONNECT="bendsql -A --user=testuser1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "select 1" | $TEST_USER_CONNECT  2>&1 | grep 'incorrect password' | wc -l
 echo "select 'testuser1 password is 123'" | $TEST_USER_MODIFY_CONNECT
