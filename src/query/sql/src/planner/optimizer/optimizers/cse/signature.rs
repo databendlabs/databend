@@ -48,35 +48,86 @@ fn compute_s_expr_signature_rec(
         path.pop();
     }
 
-    if let RelOperator::Scan(scan) = expr.plan.as_ref() {
-        let has_internal_column = scan.columns.iter().any(|column_index| {
-            let column = metadata.column(*column_index);
-            matches!(column, ColumnEntry::InternalColumn(_))
-        });
-        if has_internal_column
-            || scan.prewhere.is_some()
-            || scan.agg_index.is_some()
-            || scan.change_type.is_some()
-            || scan.update_stream_columns
-            || scan.inverted_index.is_some()
-            || scan.vector_index.is_some()
-            || scan.is_lazy_table
-            || scan.sample.is_some()
-        {
-            return;
-        }
+    match expr.plan.as_ref() {
+        RelOperator::Scan(scan) => {
+            let has_internal_column = scan.columns.iter().any(|column_index| {
+                let column = metadata.column(*column_index);
+                matches!(column, ColumnEntry::InternalColumn(_))
+            });
+            if has_internal_column
+                || scan.prewhere.is_some()
+                || scan.agg_index.is_some()
+                || scan.change_type.is_some()
+                || scan.update_stream_columns
+                || scan.inverted_index.is_some()
+                || scan.vector_index.is_some()
+                || scan.is_lazy_table
+                || scan.sample.is_some()
+            {
+                return;
+            }
 
-        let table_entry = metadata.table(scan.table_index);
-        let table = table_entry.table();
-        if table.engine() != "FUSE" {
-            return;
-        }
+            let table_entry = metadata.table(scan.table_index);
+            let table = table_entry.table();
+            if table.engine() != "FUSE" {
+                return;
+            }
 
-        let mut tables = BTreeSet::new();
-        tables.insert(table.get_id() as IndexType);
-        signature_to_exprs
-            .entry(SExprSignature { tables })
-            .or_default()
-            .push((path.clone(), expr.clone()));
+            let mut tables = BTreeSet::new();
+            tables.insert(table.get_id() as IndexType);
+            signature_to_exprs
+                .entry(SExprSignature { tables })
+                .or_default()
+                .push((path.clone(), expr.clone()));
+        }
+        RelOperator::Join(join) => {
+            if join.from_correlated_subquery || join.is_lateral {
+                return;
+            }
+            if !matches!(
+                join.join_type,
+                crate::plans::JoinType::Inner | crate::plans::JoinType::Cross
+            ) {
+                return;
+            }
+
+            let mut left_signature = None;
+            let mut left_path = path.clone();
+            left_path.push(0);
+            'left: for (signature, entries) in signature_to_exprs.iter() {
+                for (entry_path, _) in entries {
+                    if entry_path == &left_path {
+                        left_signature = Some(signature.clone());
+                        break 'left;
+                    }
+                }
+            }
+
+            let mut right_signature = None;
+            let mut right_path = path.clone();
+            right_path.push(1);
+            'right: for (signature, entries) in signature_to_exprs.iter() {
+                for (entry_path, _) in entries {
+                    if entry_path == &right_path {
+                        right_signature = Some(signature.clone());
+                        break 'right;
+                    }
+                }
+            }
+
+            let (Some(left_signature), Some(right_signature)) =
+                (left_signature, right_signature)
+            else {
+                return;
+            };
+
+            let mut tables = left_signature.tables.clone();
+            tables.extend(right_signature.tables.iter().copied());
+            signature_to_exprs
+                .entry(SExprSignature { tables })
+                .or_default()
+                .push((path.clone(), expr.clone()));
+        }
+        _ => {}
     }
 }
