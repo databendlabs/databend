@@ -48,11 +48,20 @@ impl BlockSlotFilterTransform {
     }
 
     /// Check if a block should be processed by this executor based on block-level shuffle.
-    /// For BlockMod shuffle, each executor only processes blocks where block_idx % num_slots == slot.
-    fn should_process_block(block_idx: usize, block_slot: &Option<BlockSlotDescription>) -> bool {
+    /// For BlockMod shuffle, each executor only processes blocks where
+    /// hash(segment_location, block_idx) % num_slots == slot.
+    fn should_process_block(
+        segment_location: &crate::SegmentLocation,
+        block_idx: usize,
+        block_slot: &Option<BlockSlotDescription>,
+    ) -> bool {
         match block_slot {
             Some(BlockSlotDescription { num_slots, slot }) => {
-                block_idx % num_slots == *slot as usize
+                let desc = BlockSlotDescription {
+                    num_slots: *num_slots,
+                    slot: *slot,
+                };
+                desc.matches(&segment_location.location, block_idx)
             }
             None => true,
         }
@@ -82,7 +91,11 @@ impl Transform for BlockSlotFilterTransform {
                 .filter(|(block_idx, _block_meta)| {
                     // block_idx here is the index within the segment (0, 1, 2, ...)
                     // This matches the block_idx used in BlockPruner and SendPartInfoSink
-                    Self::should_process_block(*block_idx, &self.block_slot)
+                    Self::should_process_block(
+                        &block_metas_meta.segment_location,
+                        *block_idx,
+                        &self.block_slot,
+                    )
                 })
                 .map(|(_, block_meta)| block_meta.clone())
                 .collect();

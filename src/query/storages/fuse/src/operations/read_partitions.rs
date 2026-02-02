@@ -165,7 +165,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                //if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                // if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
                 if self.is_column_oriented() || distributed_pruning {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
@@ -175,30 +175,49 @@ impl FuseTable {
                     // Determine shuffle kind based on heuristic:
                     // Use block-level shuffle when segment count is small relative to cluster size
                     let threshold = ctx.get_settings().get_auto_block_shuffle_threshold()?;
-                    let shuffle_kind =
-                        if threshold > 0 && nodes_num > 1 && segment_len < nodes_num * threshold {
-                            // Block-level shuffle: broadcast all segments to all executors,
-                            // each executor filters blocks by block_idx % num_executors == executor_idx
-                            info!(
-                                "Using BlockMod shuffle: segments={}, nodes={}, threshold={}",
-                                segment_len, nodes_num, threshold
-                            );
-                            PartitionsShuffleKind::BlockMod(None)
-                        } else {
-                            // Default: use Mod shuffle kind for cache affinity at segment level
-                            info!(
-                                "Using Mod shuffle: segments={}, nodes={}, threshold={}",
-                                segment_len, nodes_num, threshold
-                            );
-                            PartitionsShuffleKind::Mod
-                        };
+                    let query_kind = ctx.get_query_kind();
+                    let shuffle_kind = if self.is_column_oriented() {
+                        // Column-oriented pruning pipeline does not support block-slot filtering yet.
+                        info!(
+                            "Column-oriented table: disable BlockMod shuffle, using Mod: segments={}, nodes={}, threshold={}",
+                            segment_len, nodes_num, threshold
+                        );
+                        PartitionsShuffleKind::Mod
+                    } else if !matches!(
+                        query_kind,
+                        databend_common_catalog::query_kind::QueryKind::Query
+                            | databend_common_catalog::query_kind::QueryKind::Explain
+                    ) {
+                        info!(
+                            "Non-query statement: disable BlockMod shuffle, using Mod: kind={}, segments={}, nodes={}, threshold={}",
+                            query_kind, segment_len, nodes_num, threshold
+                        );
+                        PartitionsShuffleKind::Mod
+                    } else if threshold > 0 && nodes_num > 1 && segment_len < nodes_num * threshold
+                    {
+                        // Block-level shuffle: broadcast all segments to all executors,
+                        // each executor filters blocks by hash(segment_location, block_idx) % num_executors
+                        info!(
+                            "Using BlockMod shuffle: segments={}, nodes={}, threshold={}",
+                            segment_len, nodes_num, threshold
+                        );
+                        PartitionsShuffleKind::BlockMod(None)
+                    } else {
+                        // Default: use Mod shuffle kind for cache affinity at segment level
+                        info!(
+                            "Using Mod shuffle: segments={}, nodes={}, threshold={}",
+                            segment_len, nodes_num, threshold
+                        );
+                        PartitionsShuffleKind::Mod
+                    };
 
+                    let block_count = snapshot.summary.block_count as usize;
                     let mut part_stats = PartStatistics::new_estimated(
                         Some(snapshot_loc),
                         snapshot.summary.row_count as usize,
                         snapshot.summary.compressed_byte_size as usize,
-                        segment_len,
-                        segment_len,
+                        block_count,
+                        block_count,
                     );
                     part_stats.shuffle_kind = Some(shuffle_kind.clone());
 
@@ -251,6 +270,7 @@ impl FuseTable {
             return Ok(None);
         }
         let push_downs = plan.push_downs.clone();
+        let shuffle_kind = plan.parts.kind.clone();
         let max_io_requests = self.adjust_io_request(&ctx)?;
         let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
         self.pruned_result_receiver.lock().replace(part_info_rx);
@@ -264,7 +284,10 @@ impl FuseTable {
                 .map(|push_downs| {
                     format!(
                         "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", lazy_init_segments, push_downs))
+                        Sha256::digest(format!(
+                            "{:?}_{:?}_{:?}",
+                            lazy_init_segments, push_downs, shuffle_kind
+                        ))
                     )
                 });
 

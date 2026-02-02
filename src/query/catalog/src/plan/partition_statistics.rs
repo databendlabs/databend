@@ -116,18 +116,19 @@ impl PartStatistics {
         let shuffle_kind = self.shuffle_kind.as_ref().or(other.shuffle_kind.as_ref());
         let use_max_for_counts = matches!(
             shuffle_kind,
-            Some(PartitionsShuffleKind::BlockMod(_))
-                | Some(PartitionsShuffleKind::BroadcastCluster)
+            Some(PartitionsShuffleKind::BroadcastCluster)
                 | Some(PartitionsShuffleKind::BroadcastWarehouse)
         );
+        let use_max_for_segments =
+            use_max_for_counts || matches!(shuffle_kind, Some(PartitionsShuffleKind::BlockMod(_)));
 
         if use_max_for_counts {
-            // BlockMod/Broadcast: all nodes see the same data, use max
+            // Broadcast: all nodes see the same data, use max
             self.read_rows = self.read_rows.max(other.read_rows);
             self.read_bytes = self.read_bytes.max(other.read_bytes);
             self.partitions_scanned = self.partitions_scanned.max(other.partitions_scanned);
         } else {
-            // Mod/Seq: each node sees different data, use sum
+            // Seq/Mod/BlockMod: each node sees different data, use sum
             self.read_rows += other.read_rows;
             self.read_bytes += other.read_bytes;
             self.partitions_scanned += other.partitions_scanned;
@@ -137,7 +138,10 @@ impl PartStatistics {
         // which should be the same across all nodes. Always use max to avoid inflation.
         self.partitions_total = self.partitions_total.max(other.partitions_total);
 
-        self.pruning_stats
-            .merge(&other.pruning_stats, use_max_for_counts);
+        self.pruning_stats.merge(
+            &other.pruning_stats,
+            use_max_for_segments,
+            use_max_for_counts,
+        );
     }
 }
