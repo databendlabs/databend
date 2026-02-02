@@ -36,7 +36,8 @@ pub struct NdJsonDecoder {
 
 impl NdJsonDecoder {
     pub fn create(fmt: NdJsonInputFormat, load_context: Arc<LoadContext>) -> Self {
-        let field_decoder = FieldJsonAstDecoder::create(&load_context.file_format_options_ext);
+        let field_decoder =
+            FieldJsonAstDecoder::create(&load_context.settings, load_context.is_select);
         Self {
             load_context,
             fmt,

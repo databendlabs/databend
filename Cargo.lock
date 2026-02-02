@@ -4550,6 +4550,7 @@ dependencies = [
  "databend-common-users",
  "databend-common-version",
  "itertools 0.13.0",
+ "jiff",
  "log",
  "num_cpus",
  "once_cell",

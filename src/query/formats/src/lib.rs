@@ -28,9 +28,8 @@ pub mod output_format;
 pub use clickhouse::ClickhouseFormatType;
 pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
-pub use file_format_type::FileFormatOptionsExt;
 pub use file_format_type::FileFormatTypeExt;
-pub use file_format_type::parse_timezone;
+pub use file_format_type::get_output_format;
 
 pub use crate::common_settings::InputCommonSettings;
 pub use crate::common_settings::OutputCommonSettings;

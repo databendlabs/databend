@@ -37,7 +37,7 @@ use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 use log::info;
@@ -79,7 +79,7 @@ impl BlocksCollector {
         self.columns.iter().map(|(_, num_rows)| *num_rows).sum()
     }
 
-    pub fn into_serializer(self, format: FormatSettings) -> BlocksSerializer {
+    pub fn into_serializer(self, format: OutputFormatSettings) -> BlocksSerializer {
         BlocksSerializer {
             columns: self.columns,
             format: Some(format),
@@ -91,7 +91,7 @@ impl BlocksCollector {
 pub struct BlocksSerializer {
     // Vec<Column> for a Block
     columns: Vec<(Vec<Column>, usize)>,
-    format: Option<FormatSettings>,
+    format: Option<OutputFormatSettings>,
 }
 
 impl BlocksSerializer {
@@ -166,7 +166,7 @@ impl serde::Serialize for BlocksSerializer {
 }
 
 struct RowSerializer<'a> {
-    format: &'a FormatSettings,
+    format: &'a OutputFormatSettings,
     data_block: &'a [Column],
     encoder: &'a FieldEncoderValues,
     buf: &'a RefCell<Vec<u8>>,

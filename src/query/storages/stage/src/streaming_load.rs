@@ -27,7 +27,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
@@ -76,12 +75,13 @@ pub fn build_streaming_load_pipeline(
     // since there are only one source, a few processor is fast enough and avoid both OOM and small DataBlocks.
     let max_threads = max_threads.min(4);
 
-    let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
+    let settings = settings.get_input_format_settings()?;
 
     let load_ctx = Arc::new(LoadContext::try_create(
         ctx.clone(),
         schema,
-        file_format_options_ext,
+        false,
+        settings,
         default_exprs,
         None,
         block_compact_thresholds,

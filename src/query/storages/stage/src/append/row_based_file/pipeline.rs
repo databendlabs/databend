@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_formats::FileFormatOptionsExt;
+use databend_common_formats::get_output_format;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
@@ -64,15 +64,23 @@ pub(crate) fn append_data_to_row_based_files(
     let max_threads = max_threads.min(mem_limit / max_file_size).max(1);
     let format = &info.stage.file_format_params;
 
-    let mut options_ext = FileFormatOptionsExt::create_from_settings(&ctx.get_settings(), false)?;
-    let output_format = options_ext.get_output_format(schema.clone(), format.clone())?;
+    let format_settings = ctx.get_output_format_settings()?;
+    let output_format = get_output_format(
+        schema.clone(),
+        format.clone(),
+        format_settings.clone(),
+        None,
+    )?;
     let compression = info.stage.file_format_params.clone().compression();
     let prefix = output_format.serialize_prefix()?;
 
     pipeline.try_add_transformer(|| {
-        let mut options_ext =
-            FileFormatOptionsExt::create_from_settings(&ctx.get_settings(), false)?;
-        let output_format = options_ext.get_output_format(schema.clone(), format.clone())?;
+        let output_format = get_output_format(
+            schema.clone(),
+            format.clone(),
+            format_settings.clone(),
+            None,
+        )?;
         Ok(SerializeProcessor::new(ctx.clone(), output_format))
     })?;
     pipeline.try_resize(1)?;

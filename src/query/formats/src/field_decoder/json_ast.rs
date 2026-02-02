@@ -47,6 +47,7 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::prelude::InputFormatSettings;
 use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jiff::tz::TimeZone;
 use lexical_core::FromLexical;
@@ -55,7 +56,6 @@ use num_traits::NumCast;
 use serde_json::Value;
 
 use crate::FieldDecoder;
-use crate::FileFormatOptionsExt;
 
 pub struct FieldJsonAstDecoder {
     jiff_timezone: TimeZone,
@@ -71,12 +71,12 @@ impl FieldDecoder for FieldJsonAstDecoder {
 }
 
 impl FieldJsonAstDecoder {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(settings: &InputFormatSettings, is_select: bool) -> Self {
         FieldJsonAstDecoder {
-            jiff_timezone: options.jiff_timezone.clone(),
-            ident_case_sensitive: options.ident_case_sensitive,
-            is_select: options.is_select,
-            is_rounding_mode: options.is_rounding_mode,
+            jiff_timezone: settings.jiff_timezone.clone(),
+            ident_case_sensitive: false,
+            is_select,
+            is_rounding_mode: settings.is_rounding_mode,
         }
     }
 
