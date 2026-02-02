@@ -4,6 +4,7 @@ option go_package = "databend.com/cloudcontrol/proto";
 package resourceproto;
 
 message ApplyResourceRequest {
+  string resource_name = 1;
   string type = 3;
   string script = 4;
 }

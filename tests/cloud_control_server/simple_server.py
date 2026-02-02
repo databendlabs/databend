@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -20,6 +21,14 @@ import notification_pb2_grpc
 import timestamp_pb2
 import resource_pb2
 import resource_pb2_grpc
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        tomllib = None
 
 # Simple in-memory database
 TASK_DB = {}
@@ -47,10 +56,82 @@ RESOURCE_IMAGE_BY_TYPE = {
 RESOURCE_SERVICE_PORT_BY_TYPE = {
     "udf": UDF_DOCKER_CONTAINER_PORT,
 }
+UDF_ENV_CONFIG_PATH = os.getenv(
+    "UDF_ENV_CONFIG",
+    os.path.join(os.path.dirname(__file__), "udf_env.toml"),
+)
+UDF_ENV_CONFIG_LOCK = threading.Lock()
+UDF_ENV_CONFIG_CACHE = {"mtime": None, "data": {}}
+ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+RESERVED_ENV_KEYS = {"RESOURCE_STATUS_ADDR", "UDF_SERVER_ADDR"}
 
 
 def _log(*args):
     print(*args, flush=True)
+
+
+def _get_metadata_value(context, key):
+    target = key.lower()
+    for meta_key, meta_value in context.invocation_metadata():
+        if meta_key.lower() == target:
+            return meta_value
+    return ""
+
+
+def _stringify_env_value(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(value, sort_keys=True)
+
+
+def _sanitize_env_vars(env_vars):
+    cleaned = {}
+    for key, value in (env_vars or {}).items():
+        if not isinstance(key, str) or not ENV_KEY_RE.match(key):
+            _log(f"Skip invalid env key: {key!r}")
+            continue
+        if key in RESERVED_ENV_KEYS:
+            _log(f"Skip reserved env key: {key}")
+            continue
+        cleaned[key] = _stringify_env_value(value)
+    return cleaned
+
+
+def _load_udf_env_config():
+    if tomllib is None:
+        raise RuntimeError("tomllib is required to parse udf_env.toml")
+    path = UDF_ENV_CONFIG_PATH
+    if not os.path.isfile(path):
+        with UDF_ENV_CONFIG_LOCK:
+            UDF_ENV_CONFIG_CACHE["mtime"] = None
+            UDF_ENV_CONFIG_CACHE["data"] = {}
+        return {}
+    mtime = os.path.getmtime(path)
+    with UDF_ENV_CONFIG_LOCK:
+        if UDF_ENV_CONFIG_CACHE["mtime"] != mtime:
+            with open(path, "rb") as handle:
+                data = tomllib.load(handle)
+            UDF_ENV_CONFIG_CACHE["mtime"] = mtime
+            UDF_ENV_CONFIG_CACHE["data"] = data
+        return UDF_ENV_CONFIG_CACHE["data"]
+
+
+def _get_udf_env_vars(tenant, resource_name):
+    if not tenant or not resource_name:
+        return {}
+    data = _load_udf_env_config()
+    udf_env = data.get("udf_env") or {}
+    if not isinstance(udf_env, dict):
+        return {}
+    key = f"{tenant}.{resource_name}"
+    udf_cfg = udf_env.get(key) or {}
+    if not isinstance(udf_cfg, dict):
+        return {}
+    return _sanitize_env_vars(udf_cfg)
 
 
 def _run_command(args, input_text=None):
@@ -128,6 +209,7 @@ def _start_resource_container(
     status_port,
     container_name,
     script,
+    env_vars,
 ):
     if UDF_DOCKER_LOG_COMMANDS:
         _log(
@@ -148,6 +230,9 @@ def _start_resource_container(
         "-e",
         f"UDF_SERVER_ADDR=0.0.0.0:{host_port}",
     ]
+    if env_vars:
+        for key, value in env_vars.items():
+            cmd.extend(["-e", f"{key}={value}"])
     if not UDF_DOCKER_KEEP_CONTAINER:
         cmd.append("--rm")
     cmd.extend(
@@ -167,11 +252,16 @@ def _start_resource_container(
             _log(f"Sandbox docker container_id={container_id}")
 
 
-def _ensure_resource_endpoint(resource_type, script):
+def _ensure_resource_endpoint(resource_type, script, env_vars):
     image_tag = _get_resource_image(resource_type)
     service_port = _get_resource_service_port(resource_type)
     key_payload = json.dumps(
-        {"type": resource_type, "image": image_tag, "script": script},
+        {
+            "type": resource_type,
+            "image": image_tag,
+            "script": script,
+            "env": env_vars or {},
+        },
         sort_keys=True,
     )
     key_hash = hashlib.sha256(key_payload.encode("utf-8")).hexdigest()[:12]
@@ -200,6 +290,7 @@ def _ensure_resource_endpoint(resource_type, script):
             status_port,
             container_name,
             script,
+            env_vars,
         )
 
         endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
@@ -669,13 +760,32 @@ class ResourceService(resource_pb2_grpc.ResourceServiceServicer):
             )
 
         resource_type = request.type or "udf"
+        resource_name = request.resource_name
         script = request.script
         if not script:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing script")
         _log("Sandbox script:\n", script)
 
+        env_vars = {}
+        if resource_type == "udf":
+            tenant = _get_metadata_value(context, "x-databend-tenant")
+            try:
+                env_vars = _get_udf_env_vars(tenant, resource_name)
+            except Exception as exc:
+                context.abort(
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    f"failed to load udf env config: {exc}",
+                )
+            if env_vars:
+                _log(
+                    "Sandbox env keys:",
+                    ",".join(sorted(env_vars.keys())),
+                )
+
         try:
-            endpoint, _status_endpoint = _ensure_resource_endpoint(resource_type, script)
+            endpoint, _status_endpoint = _ensure_resource_endpoint(
+                resource_type, script, env_vars
+            )
         except Exception as exc:
             context.abort(
                 grpc.StatusCode.INTERNAL,

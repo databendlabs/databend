@@ -5677,6 +5677,7 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
+        resource_name: &str,
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
@@ -5707,6 +5708,7 @@ impl<'a> TypeChecker<'a> {
         cfg.add_resource_version_info();
 
         let req = ApplyResourceRequest {
+            resource_name: resource_name.to_string(),
             r#type: resource_type.to_string(),
             script,
         };
@@ -5937,7 +5939,7 @@ impl<'a> TypeChecker<'a> {
                 &arg_types,
                 &return_type,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource("udf", script)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource(&name, "udf", script)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,

@@ -8,6 +8,7 @@ dependencies = [
     "grpcio",
     "grpcio-reflection",
     "protobuf",
+    "tomli; python_version < '3.11'",
 ]
 
 [dependency-groups]

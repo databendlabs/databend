@@ -332,6 +332,25 @@ $$
     ctx.check_result("SELECT read_pkg() AS result", [["zip-whl-egg"]])
 
 
+def env_case(ctx: SandboxContext):
+    print("Creating env reader UDF")
+    create_env_udf_sql = """CREATE OR REPLACE FUNCTION read_env()
+RETURNS STRING
+LANGUAGE PYTHON
+PACKAGES = ()
+HANDLER = 'read_env'
+AS $$
+import os
+
+def read_env() -> str:
+    return os.getenv("UDF_ENV_TEST", "")
+$$
+"""
+    ctx.execute_query(create_env_udf_sql)
+    print("Executing env reader UDF")
+    ctx.check_result("SELECT read_env() AS result", [["sandbox_env_ok"]])
+
+
 def read_stage(ctx: SandboxContext):
     print("Creating import reader UDF")
     create_reader_udf_sql = f"""CREATE OR REPLACE FUNCTION read_stage()
@@ -609,6 +628,7 @@ def main():
     metadata_imports(ctx)
     numpy_case(ctx)
     zip_whl_egg(ctx)
+    env_case(ctx)
     read_stage(ctx)
     read_archive(ctx)
     presign_errors(ctx)

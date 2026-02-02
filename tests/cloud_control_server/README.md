@@ -24,3 +24,11 @@ cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 ```sh
 ./target/debug/databend-sqllogictests --run_dir task
 ```
+
+#### sandbox UDF env config (mock)
+The mock server reads `tests/cloud_control_server/udf_env.toml` and hot-reloads
+when the file changes. Bind variables by tenant + UDF name:
+```toml
+[udf_env]
+"tenant_a.my_udf" = { API_HOST = "https://api.example.com", FEATURE_FLAG = "true" }
+```

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eresource.proto\x12\rresourceproto\"4\n\x14\x41pplyResourceRequest\x12\x0c\n\x04type\x18\x03 \x01(\t\x12\x0e\n\x06script\x18\x04 \x01(\t\"\x9d\x01\n\x15\x41pplyResourceResponse\x12\x10\n\x08\x65ndpoint\x18\x01 \x01(\t\x12\x42\n\x07headers\x18\x02 \x03(\x0b\x32\x31.resourceproto.ApplyResourceResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32m\n\x0fResourceService\x12Z\n\rApplyResource\x12#.resourceproto.ApplyResourceRequest\x1a$.resourceproto.ApplyResourceResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eresource.proto\x12\rresourceproto\"K\n\x14\x41pplyResourceRequest\x12\x15\n\rresource_name\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x03 \x01(\t\x12\x0e\n\x06script\x18\x04 \x01(\t\"\x9d\x01\n\x15\x41pplyResourceResponse\x12\x10\n\x08\x65ndpoint\x18\x01 \x01(\t\x12\x42\n\x07headers\x18\x02 \x03(\x0b\x32\x31.resourceproto.ApplyResourceResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32m\n\x0fResourceService\x12Z\n\rApplyResource\x12#.resourceproto.ApplyResourceRequest\x1a$.resourceproto.ApplyResourceResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,11 +35,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._loaded_options = None
   _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_options = b'8\001'
   _globals['_APPLYRESOURCEREQUEST']._serialized_start=33
-  _globals['_APPLYRESOURCEREQUEST']._serialized_end=85
-  _globals['_APPLYRESOURCERESPONSE']._serialized_start=88
-  _globals['_APPLYRESOURCERESPONSE']._serialized_end=245
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_start=199
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_end=245
-  _globals['_RESOURCESERVICE']._serialized_start=247
-  _globals['_RESOURCESERVICE']._serialized_end=356
+  _globals['_APPLYRESOURCEREQUEST']._serialized_end=108
+  _globals['_APPLYRESOURCERESPONSE']._serialized_start=111
+  _globals['_APPLYRESOURCERESPONSE']._serialized_end=268
+  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_start=222
+  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_end=268
+  _globals['_RESOURCESERVICE']._serialized_start=270
+  _globals['_RESOURCESERVICE']._serialized_end=379
 # @@protoc_insertion_point(module_scope)
