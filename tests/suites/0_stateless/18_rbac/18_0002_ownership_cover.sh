@@ -5,9 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_NAME="owner"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=owner --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=owner --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-export TEST_TRANSFER_USER_CONNECT="bendsql --user=owner1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_TRANSFER_USER_CONNECT="bendsql -A --user=owner1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 ## cleanup
 echo "drop database if exists d_0002;" | $BENDSQL_CLIENT_CONNECT
@@ -94,8 +94,8 @@ echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
 
 echo "create user b identified by '123';" | $BENDSQL_CLIENT_CONNECT
 
-export USER_A_CONNECT="bendsql --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql -A --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_B_CONNECT="bendsql -A --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "set default role role1;" | $USER_A_CONNECT
 echo "show roles;" | $USER_A_CONNECT
@@ -136,7 +136,7 @@ echo "create role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create user u1 identified by '123' with DEFAULT_ROLE='drop_role'" | $BENDSQL_CLIENT_CONNECT
 echo "grant role drop_role to u1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant create database on *.* to role drop_role;" | $BENDSQL_CLIENT_CONNECT
-export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_U1_CONNECT="bendsql -A --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "create database a" | $USER_U1_CONNECT
 echo "create table a.t(id int)" | $USER_U1_CONNECT
@@ -195,7 +195,7 @@ echo "set role role1;insert into db1.t1 values(1);" | $USER_U1_CONNECT
 echo "set role role1;insert into db1.t2 values(2);" | $USER_U1_CONNECT
 echo "set role role1;select * from db1.t1;" | $USER_U1_CONNECT
 echo "set role role1;select * from db1.t2;" | $USER_U1_CONNECT
-export USER_U2_CONNECT="bendsql --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_U2_CONNECT="bendsql -A --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo "set role role2;select * from db1.t1;" | $USER_U2_CONNECT
 echo "set role role2;select * from db1.t2;" | $USER_U2_CONNECT
 

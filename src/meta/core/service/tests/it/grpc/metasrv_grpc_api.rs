@@ -15,9 +15,8 @@
 //! Test arrow-grpc API of metasrv
 use std::collections::HashSet;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_sled_store::openraft::async_runtime::WatchReceiver;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -32,7 +31,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
@@ -41,7 +40,7 @@ async fn test_restart() -> anyhow::Result<()> {
     // - restart
     // - Test read the db and read the table.
 
-    let (mut tc, _addr) = crate::tests::start_metasrv().await?;
+    let (mut tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 
@@ -80,7 +79,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        crate::tests::start_metasrv_with_context(&mut tc).await?;
+        crate::tests::start_metasrv_with_context::<TokioRuntime>(&mut tc).await?;
     }
 
     tokio::time::sleep(Duration::from_millis(10_000)).await;
@@ -103,25 +102,25 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_retry_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv retry cluster case
 
-    let mut tc0 = MetaSrvTestContext::new(0);
-    start_metasrv_with_context(&mut tc0).await?;
+    let mut tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    start_metasrv_with_context::<TokioRuntime>(&mut tc0).await?;
 
     let bad_addr = "127.0.0.1:1".to_string();
 
     // first test join has only bad_addr case, MUST return JoinClusterFail
     {
-        let mut tc1 = MetaSrvTestContext::new(1);
+        let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
         tc1.config.raft_config.single = false;
 
         tc1.config.raft_config.join = vec![bad_addr.clone()];
-        let ret = start_metasrv_with_context(&mut tc1).await;
+        let ret = start_metasrv_with_context::<TokioRuntime>(&mut tc1).await;
         let expect = format!(
             "fail to join node-{} to cluster via {:?}",
             1, tc1.config.raft_config.join
@@ -137,13 +136,17 @@ async fn test_retry_join() -> anyhow::Result<()> {
 
     // second test join has bad_addr and tc0 addr case, MUST return success
     {
-        let mut tc1 = MetaSrvTestContext::new(1);
+        let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
         tc1.config.raft_config.single = false;
         tc1.config.raft_config.join = vec![
             bad_addr,
-            tc0.config.raft_config.raft_api_addr().await?.to_string(),
+            tc0.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
         ];
-        let ret = start_metasrv_with_context(&mut tc1).await;
+        let ret = start_metasrv_with_context::<TokioRuntime>(&mut tc1).await;
         match ret {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -153,21 +156,27 @@ async fn test_retry_join() -> anyhow::Result<()> {
     }
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv api
 
-    let mut tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
+    let mut tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
-    start_metasrv_with_context(&mut tc0).await?;
-    start_metasrv_with_context(&mut tc1).await?;
+    start_metasrv_with_context::<TokioRuntime>(&mut tc0).await?;
+    start_metasrv_with_context::<TokioRuntime>(&mut tc1).await?;
 
     let client0 = tc0.grpc_client().await?;
     let client1 = tc1.grpc_client().await?;
@@ -213,7 +222,7 @@ async fn test_join() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Start 3 metasrv.
@@ -223,23 +232,35 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     // - Restart terminated node and rejoin to meta cluster
     // - Test auto sync again.
 
-    let mut tc0 = MetaSrvTestContext::new(0);
-    let mut tc1 = MetaSrvTestContext::new(1);
-    let mut tc2 = MetaSrvTestContext::new(2);
+    let mut tc0 = MetaSrvTestContext::<TokioRuntime>::new(0);
+    let mut tc1 = MetaSrvTestContext::<TokioRuntime>::new(1);
+    let mut tc2 = MetaSrvTestContext::<TokioRuntime>::new(2);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc1.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
     tc2.config.raft_config.single = false;
-    tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
+    tc2.config.raft_config.join = vec![
+        tc0.config
+            .raft_config
+            .raft_api_addr::<TokioRuntime>()
+            .await?
+            .to_string(),
+    ];
 
-    start_metasrv_with_context(&mut tc0).await?;
-    start_metasrv_with_context(&mut tc1).await?;
-    start_metasrv_with_context(&mut tc2).await?;
+    start_metasrv_with_context::<TokioRuntime>(&mut tc0).await?;
+    start_metasrv_with_context::<TokioRuntime>(&mut tc1).await?;
+    start_metasrv_with_context::<TokioRuntime>(&mut tc2).await?;
 
-    let addr0 = tc0.config.grpc.api_address.clone();
-    let addr1 = tc1.config.grpc.api_address.clone();
-    let addr2 = tc2.config.grpc.api_address.clone();
+    let addr0 = tc0.config.grpc.api_address().unwrap();
+    let addr1 = tc1.config.grpc.api_address().unwrap();
+    let addr2 = tc2.config.grpc.api_address().unwrap();
 
     let client = tc1.grpc_client().await?;
 
@@ -319,14 +340,22 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
     info!("--- endpoints should changed when add node");
     {
-        let mut tc3 = MetaSrvTestContext::new(3);
+        let mut tc3 = MetaSrvTestContext::<TokioRuntime>::new(3);
         tc3.config.raft_config.single = false;
         tc3.config.raft_config.join = vec![
-            tc1.config.raft_config.raft_api_addr().await?.to_string(),
-            tc2.config.raft_config.raft_api_addr().await?.to_string(),
+            tc1.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
+            tc2.config
+                .raft_config
+                .raft_api_addr::<TokioRuntime>()
+                .await?
+                .to_string(),
         ];
 
-        start_metasrv_with_context(&mut tc3).await?;
+        start_metasrv_with_context::<TokioRuntime>(&mut tc3).await?;
 
         let g = tc3.grpc_srv.as_ref().unwrap();
         let meta_handle = g.get_meta_handle();
@@ -339,7 +368,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
 
         debug!("got leader, metrics: {metrics:?}");
 
-        let addr3 = tc3.config.grpc.api_address.clone();
+        let addr3 = tc3.config.grpc.api_address().unwrap();
 
         let mut i = 0;
         let mut res = vec![];

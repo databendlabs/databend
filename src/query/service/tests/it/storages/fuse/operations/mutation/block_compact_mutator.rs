@@ -231,6 +231,7 @@ async fn test_safety() -> anyhow::Result<()> {
             summary,
             locations.clone(),
             None,
+            None,
             TestFixture::default_table_meta_timestamps(),
         )?;
 

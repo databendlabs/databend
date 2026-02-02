@@ -82,7 +82,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
@@ -96,6 +97,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -214,7 +216,7 @@ impl QueryContext {
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
-        branch_name: Option<&str>,
+        branch_info: &Option<BranchInfo>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog_name = table_info.catalog();
@@ -226,7 +228,7 @@ impl QueryContext {
             ))?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
-        let tbl = match (table_args, is_default) {
+        let mut table = match (table_args, is_default) {
             (Some(table_args), true) => {
                 let default_catalog = self
                     .shared
@@ -276,7 +278,11 @@ impl QueryContext {
             (None, false) => catalog.get_table_by_info(table_info),
         }?;
 
-        table_with_opt_branch(tbl, branch_name)
+        if let Some(branch_info) = branch_info {
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            table = fuse_table.with_branch_info(branch_info.clone())?;
+        }
+        Ok(table)
     }
 
     // Build external table by stage info, this is used in:
@@ -842,9 +848,9 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
-                &table_info.inner,
-                table_info.branch.as_deref(),
+            DataSourceInfo::TableSource(extend_info) => self.build_table_by_table_info(
+                &extend_info.table_info,
+                &extend_info.branch_info,
                 plan.tbl_args.clone(),
             ),
             DataSourceInfo::StageSource(stage_info) => {
@@ -1213,24 +1219,12 @@ impl TableContext for QueryContext {
         self.shared.version
     }
 
-    fn get_format_settings(&self) -> Result<FormatSettings> {
-        let tz = self.get_settings().get_timezone()?;
-        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
-        })?;
-        let settings = self.get_settings();
-        let geometry_format = settings.get_geometry_output_format()?;
-        let binary_format = settings.get_binary_output_format()?;
-        let format_null_as_str = settings.get_format_null_as_str()?;
-        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
-        let format = FormatSettings {
-            jiff_timezone,
-            geometry_format,
-            binary_format,
-            enable_dst_hour_fix,
-            format_null_as_str,
-        };
-        Ok(format)
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        self.get_settings().get_input_format_settings()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        self.get_settings().get_output_format_settings()
     }
 
     fn get_tenant(&self) -> Tenant {
@@ -2368,12 +2362,4 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
-}
-
-fn table_with_opt_branch(tbl: Arc<dyn Table>, branch_name: Option<&str>) -> Result<Arc<dyn Table>> {
-    if let Some(branch) = branch_name {
-        tbl.with_branch(branch)
-    } else {
-        Ok(tbl)
-    }
 }

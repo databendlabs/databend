@@ -28,13 +28,13 @@ use tokio::time::sleep;
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::MetaSrvTestContext;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_member_list() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get member list
 
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 
@@ -72,18 +72,18 @@ async fn test_member_list() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_member_list_with_learner() -> anyhow::Result<()> {
     // This test verifies that member_list API returns both voters and learners
     // Start with 2 voters, then add 1 learner
 
     // Start initial cluster with 2 voters
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1]).await?;
 
     // Create a learner node but don't start it as part of the initial cluster
     let learner_node_id = 2;
-    let learner_tc = MetaSrvTestContext::new(learner_node_id);
+    let learner_tc = MetaSrvTestContext::<TokioRuntime>::new(learner_node_id);
     let learner_mn = MetaNode::<TokioRuntime>::open(&learner_tc.config.raft_config).await?;
 
     // Get the leader to send join request
@@ -97,7 +97,11 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
         .unwrap();
 
     // Join the learner to the cluster
-    let endpoint = learner_tc.config.raft_config.raft_api_addr().await?;
+    let endpoint = learner_tc
+        .config
+        .raft_config
+        .raft_api_addr::<TokioRuntime>()
+        .await?;
     let grpc_api_advertise_address = learner_tc
         .config
         .grpc

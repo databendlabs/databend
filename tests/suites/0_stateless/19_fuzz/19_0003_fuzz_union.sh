@@ -21,7 +21,7 @@ insert into union_fuzz2 select * from union_fuzz_r limit ${rows};
 insert into union_fuzz2 select * from union_fuzz_r limit ${rows};
 """ | $BENDSQL_CLIENT_OUTPUT_NULL
 
-fields=(a b c d e f g)
+fields=(a b e f)
 length=${#fields[@]}
 
 for ((i=0; i<$length; i++)); do

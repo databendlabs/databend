@@ -21,8 +21,8 @@ stmt "GRANT ROLE role_rap_apply TO rap_apply"
 stmt "CREATE ROLE role_rap_create"
 stmt "GRANT ROLE role_rap_create TO rap_create"
 
-export USER_RAP_CREATE="bendsql --user=rap_create --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
-export USER_RAP_APPLY="bendsql --user=rap_apply --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export USER_RAP_CREATE="bendsql -A --user=rap_create --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export USER_RAP_APPLY="bendsql -A --user=rap_apply --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
 
 echo "SET enable_experimental_row_access_policy = 1;" | $USER_RAP_CREATE
 echo "SET enable_experimental_row_access_policy = 1;" | $USER_RAP_APPLY

@@ -25,16 +25,11 @@ const SUFFIX_STRINGS: &str = "strings";
 const SUFFIX_EACHROW: &str = "eachrow";
 
 #[derive(Default, Clone)]
-pub struct ClickhouseTypeSuffixJson {
+pub struct ClickhouseSuffix {
+    pub headers: u8,
     pub is_compact: bool,
     pub is_strings: bool,
     pub is_eachrow: bool,
-}
-
-#[derive(Default, Clone)]
-pub struct ClickhouseSuffix {
-    pub headers: usize,
-    pub json: Option<ClickhouseTypeSuffixJson>,
 }
 
 #[derive(Default, Clone)]
@@ -68,20 +63,18 @@ impl ClickhouseFormatType {
         }
 
         if base.starts_with("json") {
-            let mut json = ClickhouseTypeSuffixJson::default();
-            (base, json.is_eachrow) = try_remove_suffix(base, SUFFIX_EACHROW);
-            (base, json.is_strings) = try_remove_suffix(base, SUFFIX_STRINGS);
-            (base, json.is_compact) = try_remove_suffix(base, SUFFIX_COMPACT);
+            (base, suffixes.is_eachrow) = try_remove_suffix(base, SUFFIX_EACHROW);
+            (base, suffixes.is_strings) = try_remove_suffix(base, SUFFIX_STRINGS);
+            (base, suffixes.is_compact) = try_remove_suffix(base, SUFFIX_COMPACT);
             if base != "json" {
                 return Err(ErrorCode::UnknownFormat(name));
             } else {
-                if !json.is_compact && suffixes.headers != 0 {
+                if !suffixes.is_compact && suffixes.headers != 0 {
                     return Err(ErrorCode::UnknownFormat(name));
                 }
-                if json.is_eachrow {
+                if suffixes.is_eachrow {
                     base = "ndjson"
                 }
-                suffixes.json = Some(json);
             }
         }
 

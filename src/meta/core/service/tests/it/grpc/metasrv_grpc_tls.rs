@@ -14,15 +14,13 @@
 
 use std::time::Duration;
 
-use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_api::TableApi;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
+use databend_common_meta_client::RpcClientTlsConfig;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_version::BUILD_INFO;
-use databend_meta_runtime::DatabendRuntime;
+use databend_common_version::DATABEND_SEMVER;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -33,27 +31,27 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server() -> anyhow::Result<()> {
-    let mut tc = MetaSrvTestContext::new(0);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
     tc.config.grpc.tls.key = TEST_SERVER_KEY.to_owned();
     tc.config.grpc.tls.cert = TEST_SERVER_CERT.to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_metasrv_with_context::<TokioRuntime>(&mut tc).await;
     assert!(r.is_ok());
 
-    let addr = tc.config.grpc.api_address.clone();
+    let addr = tc.config.grpc.api_address().unwrap();
 
     let tls_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+    let client = MetaGrpcClient::<TokioRuntime>::try_create(
         vec![addr],
-        BUILD_INFO.semver(),
+        DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,
@@ -61,28 +59,27 @@ async fn test_tls_server() -> anyhow::Result<()> {
         Some(tls_conf),
     )?;
 
-    let r = client
-        .get_table(("do not care", "do not care", "do not care").into())
-        .await;
-    assert!(r.is_err());
+    // Use get_cluster_status to verify TLS connection works (this connects to server)
+    let r = client.get_cluster_status().await;
+    assert!(r.is_ok());
 
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
-    let mut tc = MetaSrvTestContext::new(0);
+    let mut tc = MetaSrvTestContext::<TokioRuntime>::new(0);
 
     tc.config.grpc.tls.key = "../tests/data/certs/not_exist.key".to_owned();
     tc.config.grpc.tls.cert = "../tests/data/certs/not_exist.pem".to_owned();
 
-    let r = start_metasrv_with_context(&mut tc).await;
+    let r = start_metasrv_with_context::<TokioRuntime>(&mut tc).await;
     assert!(r.is_err());
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let tls_conf = RpcClientTlsConfig {
@@ -90,9 +87,9 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaGrpcClient::<DatabendRuntime>::try_create(
+    let r = MetaGrpcClient::<TokioRuntime>::try_create(
         vec!["addr".to_string()],
-        BUILD_INFO.semver(),
+        DATABEND_SEMVER.clone(),
         "root",
         "xxx",
         None,

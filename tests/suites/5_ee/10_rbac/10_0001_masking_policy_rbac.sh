@@ -22,10 +22,10 @@ stmt "CREATE ROLE role_mask_create"
 stmt "GRANT ROLE role_mask_create TO mask_create"
 stmt "CREATE USER mask_desc IDENTIFIED BY '123' with default_role='mask_desc'"
 
-export USER_MASK_DESC="bendsql --user=mask_desc --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export USER_MASK_DESC="bendsql -A --user=mask_desc --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
 
-export USER_MASK_CREATE="bendsql --user=mask_create --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
-export USER_MASK_APPLY="bendsql --user=mask_apply --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export USER_MASK_CREATE="bendsql -A --user=mask_create --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export USER_MASK_APPLY="bendsql -A --user=mask_apply --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
 
 comment "create privilege requires CREATE MASKING POLICY"
 echo "CREATE MASKING POLICY mask_phone AS (val STRING) RETURNS STRING -> concat('***', right(val, 2));" | $USER_MASK_CREATE

@@ -51,7 +51,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -289,6 +290,7 @@ async fn test_commit_to_meta_server() -> anyhow::Result<()> {
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
+                None,
                 None,
                 TestFixture::default_table_meta_timestamps(),
             )
@@ -627,7 +629,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_format_settings(&self) -> Result<FormatSettings> {
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        todo!()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
         todo!()
     }
 

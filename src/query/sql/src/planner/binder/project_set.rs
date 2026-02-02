@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::BindContext;
@@ -56,6 +57,15 @@ pub struct SetReturningInfo {
 pub(crate) struct SetReturningAnalyzer<'a> {
     bind_context: &'a mut BindContext,
     metadata: MetadataRef,
+}
+
+// Keep SRF output type as tuple in metadata even if a single field was extracted.
+fn normalize_srf_return_type(data_type: DataType) -> DataType {
+    if data_type.as_tuple().is_some() {
+        data_type
+    } else {
+        DataType::Tuple(vec![data_type])
+    }
 }
 
 impl<'a> SetReturningAnalyzer<'a> {
@@ -109,10 +119,11 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     return Ok(());
                 }
 
+                let data_type = normalize_srf_return_type(replaced_expr.data_type()?);
                 let index = self
                     .metadata
                     .write()
-                    .add_derived_column(srf_display_name.clone(), replaced_expr.data_type()?);
+                    .add_derived_column(srf_display_name.clone(), data_type.clone());
 
                 // Add the srf to bind context, build ProjectSet plan later.
                 self.bind_context.srf_info.srfs.push(ScalarItem {
@@ -127,7 +138,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 let column_binding = ColumnBindingBuilder::new(
                     srf_display_name,
                     index,
-                    Box::new(replaced_expr.data_type()?),
+                    Box::new(data_type),
                     Visibility::Visible,
                 )
                 .build();
@@ -283,10 +294,11 @@ pub fn find_replaced_set_returning_function(
     srf_info.srfs_map.get(srf_display_name).map(|i| {
         // This expression is already replaced.
         let scalar_item = &srf_info.srfs[*i];
+        let data_type = normalize_srf_return_type(scalar_item.scalar.data_type().unwrap());
         ColumnBindingBuilder::new(
             srf_display_name.to_string(),
             scalar_item.index,
-            Box::new(scalar_item.scalar.data_type().unwrap()),
+            Box::new(data_type),
             Visibility::Visible,
         )
         .build()

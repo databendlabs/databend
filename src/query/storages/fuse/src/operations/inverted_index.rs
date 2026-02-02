@@ -86,7 +86,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let table_schema = &self.get_table_info().meta.schema;
+        let table_schema = self.schema();
         // Collect field indices used by inverted index.
         let mut field_indices = Vec::new();
         for field in &index_schema.fields {
@@ -100,8 +100,7 @@ impl FuseTable {
         let block_reader =
             self.create_block_reader(ctx.clone(), projection, false, false, false)?;
 
-        let segment_reader =
-            MetaReaders::segment_info_reader(self.get_operator(), table_schema.clone());
+        let segment_reader = MetaReaders::segment_info_reader(self.get_operator(), table_schema);
 
         // If no segment locations are specified, iterates through all segments
         let segment_locs = if let Some(segment_locs) = segment_locs {

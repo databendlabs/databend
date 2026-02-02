@@ -382,6 +382,7 @@ impl ReportContext {
                     }
 
                     let mut table_info = table.table().get_table_info().clone();
+                    let schema = table.table().schema();
 
                     if table_info.engine() == VIEW_ENGINE || table_info.engine() == STREAM_ENGINE {
                         return Err(ErrorCode::Unimplemented(
@@ -390,8 +391,7 @@ impl ReportContext {
                     }
 
                     table_info.meta.comment = String::new();
-                    table_info.meta.field_comments =
-                        vec!["".to_string(); table_info.schema().fields.len()];
+                    table_info.meta.field_comments = vec!["".to_string(); schema.fields.len()];
                     table_info.name = mapping.get(table.name()).unwrap().clone();
                     table_info.desc = format!(
                         "{}.{}",
@@ -401,7 +401,7 @@ impl ReportContext {
 
                     let mut table_schema = TableSchema::empty();
 
-                    for field in table_info.schema().fields() {
+                    for field in schema.fields() {
                         if !mapping.contains_key(field.name()) {
                             mapping.insert(field.name().to_string(), visitor.unique_name());
                         }

@@ -15,6 +15,7 @@
 // Logs from this module will show up as "[FUSE-PARTITIONS] ...".
 databend_common_tracing::register_module_tag!("[FUSE-PARTITIONS]");
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -42,8 +43,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::DefaultExprBinder;
@@ -666,11 +667,8 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         dal: Operator,
     ) -> Result<FusePruner> {
-        let ngram_args = Self::create_ngram_index_args(
-            &self.table_info.meta,
-            &self.table_info.meta.schema,
-            false,
-        )?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -712,7 +710,7 @@ impl FuseTable {
                     dal,
                     table_schema,
                     &push_downs,
-                    self.cluster_key_meta.clone(),
+                    self.cluster_key_meta(),
                     cluster_keys,
                     self.bloom_index_cols(),
                     ngram_args,
@@ -723,12 +721,12 @@ impl FuseTable {
     }
 
     pub fn create_ngram_index_args(
-        table_meta: &TableMeta,
+        indexes: &BTreeMap<String, TableIndex>,
         table_schema: &TableSchema,
         is_sync_write: bool,
     ) -> Result<Vec<NgramArgs>> {
-        let mut ngram_index_args = Vec::with_capacity(table_meta.indexes.len());
-        for index in table_meta.indexes.values() {
+        let mut ngram_index_args = Vec::with_capacity(indexes.len());
+        for index in indexes.values() {
             if !matches!(index.index_type, TableIndexType::Ngram) {
                 continue;
             }

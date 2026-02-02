@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use pretty_assertions::assert_eq;
 use regex::Regex;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip
 
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 

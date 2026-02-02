@@ -296,6 +296,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    async fn get_table_with_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        let table = self.get_table(tenant, db_name, table_name).await?;
+        match branch {
+            Some(v) => table.with_branch(v),
+            None => Ok(table),
+        }
+    }
+
     /// Get multiple tables by db and table names.
     /// Returns tables in the same order as the input table_names.
     /// If a table is not found, it will not be included in the result.

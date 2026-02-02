@@ -194,7 +194,7 @@ where
 mod kvapi_key_impl {
     use std::fmt::Debug;
 
-    use databend_common_meta_app_types::non_empty::NonEmptyString;
+    use databend_base::non_empty::NonEmptyString;
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyCodec;
     use databend_common_meta_kvapi::kvapi::KeyError;

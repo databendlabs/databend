@@ -40,13 +40,14 @@ async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+#[allow(clippy::disallowed_methods)]
 async fn test_blocking_wait_ok() -> anyhow::Result<()> {
     let lm = SMV003::default();
 
     let _c = lm.acquire_compactor("").await;
 
     let (tx, rx) = oneshot::channel();
-    databend_common_base::runtime::spawn(async move {
+    tokio::spawn(async move {
         let _got = lm.acquire_compactor("").await;
         let _ = tx.send(true);
     });

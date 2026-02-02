@@ -143,6 +143,9 @@ message TableMeta {
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 
   map<string, SnapshotRef> refs = 37;
+
+  // The main cluster key id.
+  optional uint32 cluster_key_id = 38;
 }
 
 message SnapshotRef {

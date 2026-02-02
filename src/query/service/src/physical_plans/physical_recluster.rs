@@ -18,9 +18,9 @@ use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ExtendedTableInfo;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableInfoWithBranch;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -117,7 +117,7 @@ impl IPhysicalPlan for Recluster {
             1 => {
                 let table = builder
                     .ctx
-                    .build_table_by_table_info(&self.table_info, None, None)?;
+                    .build_table_by_table_info(&self.table_info, &None, None)?;
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
                 let task = &self.tasks[0];
@@ -126,9 +126,11 @@ impl IPhysicalPlan for Recluster {
                 let table_info = table.get_table_info();
                 let schema = table.schema_with_stream();
                 let description = task.stats.get_description(&table_info.desc);
-                let table_info_with_branch = TableInfoWithBranch::new(table_info);
                 let plan = DataSourcePlan {
-                    source_info: DataSourceInfo::TableSource(table_info_with_branch),
+                    source_info: DataSourceInfo::TableSource(ExtendedTableInfo {
+                        table_info: table_info.clone(),
+                        branch_info: None,
+                    }),
                     output_schema: schema.clone(),
                     parts: task.parts.clone(),
                     statistics: task.stats.clone(),
@@ -313,7 +315,7 @@ impl IPhysicalPlan for HilbertPartition {
         let num_processors = builder.main_pipeline.output_len();
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, None, None)?;
+            .build_table_by_table_info(&self.table_info, &None, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         builder.main_pipeline.exchange(

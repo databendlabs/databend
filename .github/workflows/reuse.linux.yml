@@ -219,6 +219,23 @@ jobs:
       - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
 
+  test_sandbox_udf:
+    needs: [build, check]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 8c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_sandbox_udf
+        timeout-minutes: 20
+
   test_meta_cluster:
     needs: [build, check]
     runs-on:
@@ -243,7 +260,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 18
+        timeout-minutes: 25
 
   test_stateless_cluster:
     needs: [build, check]
@@ -260,7 +277,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 18
+        timeout-minutes: 25
 
   test_stateful_standalone:
     needs: [build, check]
@@ -273,7 +290,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

@@ -6,9 +6,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Define connection strings for each user
 echo "=== Setting up user connection strings ==="
-export USER_ADMIN_USER_CONNECT="bendsql --user=admin_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_DEV_USER_CONNECT="bendsql --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_TEST_USER_CONNECT="bendsql --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_ADMIN_USER_CONNECT="bendsql -A --user=admin_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_DEV_USER_CONNECT="bendsql -A --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_TEST_USER_CONNECT="bendsql -A --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 # Create roles
 echo "=== Creating roles ==="

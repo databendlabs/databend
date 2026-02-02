@@ -36,6 +36,8 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::*;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::srfs::normalize_series_params;
+use databend_common_functions::srfs::series_type_from_data_type;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -86,23 +88,11 @@ impl RangeTable {
         let start = table_args.positioned[0].clone();
         let end = table_args.positioned[1].clone();
 
-        let mut step = if table_args.positioned.len() == 3 {
+        let step = if table_args.positioned.len() == 3 {
             table_args.positioned[2].clone()
         } else {
             Scalar::Number(NumberScalar::Int64(1))
         };
-        if let Scalar::Timestamp(_) = start {
-            // since `to_timestamp` return value in micro seconds, we need to to change step as the same unit
-            let step_i64 = get_i64_number(&step)?;
-            if step_i64 < 1000 {
-                // treat step as seconds
-                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000000));
-            } else if step_i64 < 1000000 {
-                // treat step as mills seconds
-                step = Scalar::Number(NumberScalar::Int64(step_i64 * 1000));
-            }
-        }
-
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
@@ -249,28 +239,18 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
         step: Scalar,
     ) -> Result<ProcessorPtr> {
         let start = get_i64_number(&start)?;
-        let mut end = get_i64_number(&end)?;
+        let end = get_i64_number(&end)?;
         let step = get_i64_number(&step)?;
-
-        if INCLUSIVE {
-            if step > 0 {
-                end += 1;
-            } else {
-                end -= 1;
-            }
-        }
-
-        if step == 0 {
-            return Err(ErrorCode::BadArguments("step must not be zero".to_string()));
-        } else if step > 0 && start > end {
-            return Err(ErrorCode::BadArguments(
-                "start must be less than or equal to end when step is positive".to_string(),
-            ));
-        } else if step < 0 && start < end {
-            return Err(ErrorCode::BadArguments(
-                "start must be greater than or equal to end when step is negative".to_string(),
-            ));
-        }
+        let series_type = series_type_from_data_type(&data_type).ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Unsupported data type for generate_series: {:?}",
+                data_type
+            ))
+        })?;
+        let normalized = normalize_series_params(&series_type, start, end, step, INCLUSIVE)?;
+        let start = normalized.start;
+        let end = normalized.end;
+        let step = normalized.step;
 
         SyncSourcer::create(ctx.get_scan_progress(), output, Self {
             current_idx: 0,

@@ -14,16 +14,17 @@
 
 use std::fmt;
 use std::fs;
-use std::net::TcpListener;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use databend_base::testutil::next_port;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_version::BUILD_INFO;
@@ -33,27 +34,43 @@ use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
-use databend_meta_runtime::DatabendRuntime;
 use log::info;
 use log::warn;
+use tonic::transport::server::TcpIncoming;
 
 /// Start one random service and get the session manager.
 #[fastrace::trace]
-pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
+pub async fn start_metasrv<R: RuntimeApi>() -> Result<(MetaSrvTestContext<R>, String)> {
     let mut tc = MetaSrvTestContext::new(0);
 
     start_metasrv_with_context(&mut tc).await?;
 
-    let addr = tc.config.grpc.api_address.clone();
+    let addr = tc
+        .config
+        .grpc
+        .api_address()
+        .expect("gRPC port should be assigned after server start");
 
     Ok((tc, addr))
 }
 
-pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let runtime = TokioRuntime::new_testing("meta-io-rt-ut");
+pub async fn start_metasrv_with_context<R: RuntimeApi>(
+    tc: &mut MetaSrvTestContext<R>,
+) -> Result<()> {
+    // Bind first to get the actual port before creating MetaWorker.
+    // This ensures init_cluster (for single=true) uses the correct port.
+    let port = tc.config.grpc.listen_port.unwrap_or(0);
+    let addr: SocketAddr = format!("{}:{}", tc.config.grpc.listen_host, port).parse()?;
+    let incoming = TcpIncoming::bind(addr)?;
+    let actual_port = incoming.local_addr()?.port();
+    tc.config.grpc.listen_port = Some(actual_port);
+
+    // Now create MetaWorker with the correct config (including the actual port)
+    let runtime = R::new_testing("meta-io-rt-ut");
     let mh = MetaWorker::create_meta_worker(tc.config.clone(), Arc::new(runtime)).await?;
     let mh = Arc::new(mh);
 
+    // Join cluster if needed (for nodes joining an existing cluster)
     let c = tc.config.clone();
     let _ = mh
         .request(move |mn| {
@@ -62,8 +79,8 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
         })
         .await??;
 
-    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh);
-    srv.do_start().await?;
+    let mut srv = GrpcServer::create(&tc.config, BUILD_INFO.semver(), mh.clone());
+    srv.do_start_with_incoming(incoming).await?;
     tc.grpc_srv = Some(Box::new(srv));
 
     Ok(())
@@ -72,19 +89,21 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
 /// Bring up a cluster of metasrv, the first one is the leader.
 ///
 /// It returns a vec of test-context.
-pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<MetaSrvTestContext>> {
+pub async fn start_metasrv_cluster<R: RuntimeApi>(
+    node_ids: &[NodeId],
+) -> anyhow::Result<Vec<MetaSrvTestContext<R>>> {
     let mut res = vec![];
 
     let leader_id = node_ids[0];
 
-    let mut tc0 = MetaSrvTestContext::new(leader_id);
+    let mut tc0 = MetaSrvTestContext::<R>::new(leader_id);
     start_metasrv_with_context(&mut tc0).await?;
 
-    let leader_addr = tc0.config.raft_config.raft_api_addr().await?;
+    let leader_addr = tc0.config.raft_config.raft_api_addr::<R>().await?;
     res.push(tc0);
 
     for node_id in node_ids.iter().skip(1) {
-        let mut tc = MetaSrvTestContext::new(*node_id);
+        let mut tc = MetaSrvTestContext::<R>::new(*node_id);
         tc.config.raft_config.single = false;
         tc.config.raft_config.join = vec![leader_addr.to_string()];
         start_metasrv_with_context(&mut tc).await?;
@@ -95,10 +114,10 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     Ok(res)
 }
 
-pub fn make_grpc_client(
+pub fn make_grpc_client<R: RuntimeApi>(
     addresses: Vec<String>,
-) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+) -> Result<Arc<ClientHandle<R>>, CreationError> {
+    let client = MetaGrpcClient::<R>::try_create(
         addresses,
         BUILD_INFO.semver(),
         "root",
@@ -111,21 +130,8 @@ pub fn make_grpc_client(
     Ok(client)
 }
 
-/// Get an available port by asking the OS to assign one.
-///
-/// This binds to port 0, retrieves the assigned port, then drops the listener.
-/// There's a small race window between dropping and actual use, but it's
-/// acceptable for tests and avoids conflicts between parallel test processes.
-pub fn next_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to port 0");
-    listener
-        .local_addr()
-        .expect("Failed to get local address")
-        .port()
-}
-
 /// It holds a reference to a MetaNode or a GrpcServer, for testing MetaNode or GrpcServer.
-pub struct MetaSrvTestContext {
+pub struct MetaSrvTestContext<R: RuntimeApi> {
     pub _temp_dir: tempfile::TempDir,
 
     pub config: configs::MetaServiceConfig,
@@ -135,29 +141,29 @@ pub struct MetaSrvTestContext {
     /// is a CLI-level concern, not a service-level concern.
     pub admin: configs::AdminConfig,
 
-    pub meta_node: Option<Arc<MetaNode<TokioRuntime>>>,
+    pub meta_node: Option<Arc<MetaNode<R>>>,
 
-    pub grpc_srv: Option<Box<GrpcServer<TokioRuntime>>>,
+    pub grpc_srv: Option<Box<GrpcServer<R>>>,
 }
 
-impl Drop for MetaSrvTestContext {
+impl<R: RuntimeApi> Drop for MetaSrvTestContext<R> {
     fn drop(&mut self) {
         self.rm_raft_dir("Drop MetaSrvTestContext");
     }
 }
 
-impl MetaSrvTestContext {
+impl<R: RuntimeApi> MetaSrvTestContext<R> {
     /// Create a new Config for test, with unique port assigned
-    pub fn new(id: u64) -> MetaSrvTestContext {
+    pub fn new(id: u64) -> MetaSrvTestContext<R> {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        let config_id = next_port();
+        let config_id = GlobalUniq::unique();
 
         let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = id;
 
-        config.raft_config.config_id = config_id.to_string();
+        config.raft_config.config_id = config_id.clone();
 
         // Use a unique dir for each test case.
         config.raft_config.raft_dir =
@@ -166,25 +172,20 @@ impl MetaSrvTestContext {
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;
 
-        config.raft_config.raft_api_port = config_id;
+        config.raft_config.raft_api_port = next_port();
 
         // when running unit tests, set raft_listen_host to "127.0.0.1" and raft_advertise_host to localhost,
         // so if something wrong in raft meta nodes communication we will catch bug in unit tests.
         config.raft_config.raft_listen_host = "127.0.0.1".to_string();
         config.raft_config.raft_advertise_host = "localhost".to_string();
 
-        let host = "127.0.0.1";
-
-        {
-            let grpc_port = next_port();
-            config.grpc.api_address = format!("{}:{}", host, grpc_port);
-            config.grpc.advertise_host = Some(host.to_string());
-        }
+        // gRPC port will be assigned by OS when server starts
+        config.grpc = configs::GrpcConfig::new_local("127.0.0.1");
 
         let admin = {
             let http_port = next_port();
             configs::AdminConfig {
-                api_address: format!("{}:{}", host, http_port),
+                api_address: format!("127.0.0.1:{}", http_port),
                 tls: configs::TlsConfig::default(),
             }
         };
@@ -217,14 +218,18 @@ impl MetaSrvTestContext {
         }
     }
 
-    pub fn meta_node(&self) -> Arc<MetaNode<TokioRuntime>> {
+    pub fn meta_node(&self) -> Arc<MetaNode<R>> {
         self.meta_node.clone().unwrap()
     }
 
-    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
-        let addr = self.config.grpc.api_address.clone();
+    pub async fn grpc_client(&self) -> anyhow::Result<Arc<ClientHandle<R>>> {
+        let addr = self
+            .config
+            .grpc
+            .api_address()
+            .ok_or_else(|| anyhow::anyhow!("gRPC port not assigned yet"))?;
 
-        let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+        let client = MetaGrpcClient::<R>::try_create(
             vec![addr],
             BUILD_INFO.semver(),
             "root",
@@ -239,7 +244,7 @@ impl MetaSrvTestContext {
     pub async fn raft_client(
         &self,
     ) -> anyhow::Result<RaftServiceClient<tonic::transport::Channel>> {
-        let addr = self.config.raft_config.raft_api_addr().await?;
+        let addr = self.config.raft_config.raft_api_addr::<R>().await?;
 
         // retry 3 times until server starts listening.
         for _ in 0..3 {

@@ -142,8 +142,9 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
         println!("      Dir: {}", r.raft_dir);
         println!("      Status: {}", single_or_join);
         println!();
+        let grpc_listen = conf.service.grpc.api_address().unwrap_or_else(|| "-".to_string());
         println!("HTTP API listen at: {}", conf.admin.api_address);
-        println!("gRPC API listen at: {} advertise: {}", conf.service.grpc.api_address, grpc_advertise);
+        println!("gRPC API listen at: {} advertise: {}", grpc_listen, grpc_advertise);
         println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
         println!();
     }
@@ -187,8 +188,8 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
         let mut srv =
             GrpcServer::<RT>::create(&conf.service, DATABEND_SEMVER.clone(), meta_handle.clone());
         info!(
-            "Databend meta server listening on {}",
-            conf.service.grpc.api_address.clone()
+            "Databend meta server listening on {:?}",
+            conf.service.grpc.api_address()
         );
         srv.do_start().await.expect("Databend meta service error");
         stop_handler.push(Box::new(srv));

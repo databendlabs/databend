@@ -42,6 +42,7 @@ use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
+use crate::Binder;
 use crate::ClusterKeyNormalizer;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
@@ -474,16 +475,8 @@ pub fn analyze_cluster_keys(
             )));
         }
 
-        let data_type = expr.data_type().remove_nullable();
-        if !matches!(
-            data_type,
-            DataType::Number(_)
-                | DataType::String
-                | DataType::Timestamp
-                | DataType::Date
-                | DataType::Boolean
-                | DataType::Decimal(_)
-        ) {
+        let data_type = expr.data_type();
+        if !Binder::valid_cluster_key_type(data_type) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Unsupported data type '{}' for cluster by expression `{:#}`",
                 data_type, ast

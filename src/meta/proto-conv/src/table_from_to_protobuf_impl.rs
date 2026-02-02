@@ -21,13 +21,13 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_base::non_empty::NonEmptyString;
 use databend_common_expression as ex;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app_types::non_empty::NonEmptyString;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -224,7 +224,11 @@ impl FromToProto for mt::TableMeta {
             },
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
-            cluster_key: p.cluster_key,
+            cluster_key: None,
+            cluster_key_v2: p.cluster_key.map(|k| {
+                let id = p.cluster_key_id.unwrap_or(cluster_key_seq);
+                (id, k)
+            }),
             cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
@@ -276,6 +280,7 @@ impl FromToProto for mt::TableMeta {
         for (ref_name, snapshot_ref) in &self.refs {
             refs.insert(ref_name.clone(), snapshot_ref.to_pb()?);
         }
+        let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         let p = pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -292,7 +297,8 @@ impl FromToProto for mt::TableMeta {
                 Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
-            cluster_key: self.cluster_key.clone(),
+            cluster_key,
+            cluster_key_id,
             // cluster_keys is deprecated.
             cluster_keys: vec![],
             cluster_key_seq: Some(self.cluster_key_seq),

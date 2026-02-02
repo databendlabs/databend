@@ -16,12 +16,59 @@ mod tokio_impl;
 
 use std::fmt::Debug;
 use std::future::Future;
+use std::net::IpAddr;
 use std::pin::Pin;
+use std::time::Duration;
 
 pub use tokio::task::JoinHandle;
+pub use tokio_impl::NoopMetrics;
 pub use tokio_impl::TokioRuntime;
+pub use tonic::transport::Channel;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// TLS configuration for gRPC client connections.
+#[derive(Clone, Debug)]
+pub struct TlsConfig {
+    /// Path to the root CA certificate file.
+    pub root_ca_cert_path: String,
+    /// Domain name for TLS verification.
+    pub domain_name: String,
+}
+
+/// Errors that can occur when creating a gRPC channel.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ChannelError {
+    /// The provided address could not be parsed as a valid URI.
+    #[error("invalid uri: {uri}, error: {message}")]
+    InvalidUri { uri: String, message: String },
+
+    /// Failed to load or apply TLS configuration.
+    #[error("{action} TLS config: {message}")]
+    TlsConfig { action: String, message: String },
+
+    /// Failed to establish connection to the server.
+    #[error("cannot connect to {uri}: {message}")]
+    CannotConnect { uri: String, message: String },
+}
+
+/// Metrics API for gRPC client operations.
+pub trait ClientMetricsApi: Send + Sync + 'static {
+    /// Record gRPC request duration in milliseconds.
+    fn record_request_duration(endpoint: &str, request: &str, duration_ms: f64);
+
+    /// Adjust in-flight request counter by delta (positive to increment, negative to decrement).
+    fn request_inflight(delta: i64);
+
+    /// Record a successful gRPC request.
+    fn record_request_success(endpoint: &str, request: &str);
+
+    /// Record a failed gRPC request.
+    fn record_request_failed(endpoint: &str, request: &str, error_name: &str);
+
+    /// Record a gRPC client creation failure.
+    fn record_make_client_fail(endpoint: &str);
+}
 
 pub enum TrackingData {
     QueryId(Option<String>),
@@ -35,6 +82,9 @@ impl TrackingData {
 
 /// Spawn tasks on the current runtime context.
 pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
+    /// Client metrics implementation for this runtime.
+    type ClientMetrics: ClientMetricsApi;
+
     fn spawn<F>(future: F, name: Option<String>) -> JoinHandle<F::Output>
     where
         Self: Sized,
@@ -97,6 +147,64 @@ pub trait SpawnApi: Clone + Debug + Send + Sync + 'static {
         F: FnOnce(tonic::Request<T>) -> Fut,
         Fut: Future<Output = R> + Send + 'a,
         R: Send + 'a;
+
+    /// Capture the current tracking context, returning a guard creator.
+    ///
+    /// The tracking context is captured when this method is called. The returned
+    /// closure, when invoked, enters that captured context and returns a guard.
+    /// The guard must be held for the duration of the tracked operation - dropping
+    /// it ends the tracking scope.
+    ///
+    /// `TokioRuntime` returns a no-op closure.
+    /// `DatabendRuntime` captures ThreadTracker payload and returns tracking guard.
+    fn capture_tracking_context() -> Box<dyn FnOnce() -> Box<dyn std::any::Any + Send> + Send>
+    where Self: Sized;
+
+    /// Create a gRPC channel to the specified address.
+    ///
+    /// Establishes a connection with optional TLS and timeout configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - The address to connect to (e.g., "127.0.0.1:9191").
+    /// * `timeout` - Optional timeout applied to each request on the channel.
+    ///   Note: This does NOT set the `grpc-timeout` header, so the server
+    ///   will not be informed of this timeout. The timeout is enforced
+    ///   client-side only.
+    /// * `tls_config` - Optional TLS configuration for secure connections.
+    ///
+    /// # Implementations
+    ///
+    /// * `TokioRuntime` uses tonic's built-in endpoint connection.
+    /// * `DatabendRuntime` uses `ConnectionFactory` with DNS resolution.
+    fn connect(
+        addr: String,
+        timeout: Option<Duration>,
+        tls_config: Option<TlsConfig>,
+    ) -> BoxFuture<'static, Result<Channel, ChannelError>>
+    where
+        Self: Sized;
+
+    /// Resolve a hostname to IP addresses.
+    ///
+    /// # Implementations
+    ///
+    /// * `TokioRuntime` uses `hickory_resolver::TokioResolver`.
+    /// * `DatabendRuntime` uses `databend_common_grpc::DNSResolver`.
+    fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>>
+    where Self: Sized;
+
+    /// Initialize logging for test environments.
+    ///
+    /// Called once at test setup. Returns a guard that should be kept alive
+    /// for the duration of the test.
+    ///
+    /// # Implementations
+    ///
+    /// * `TokioRuntime` initializes basic env_logger.
+    /// * `DatabendRuntime` uses `databend_common_tracing::init_logging()`.
+    fn init_test_logging() -> Box<dyn std::any::Any + Send>
+    where Self: Sized;
 }
 
 /// Owned runtime instance that can spawn tasks.

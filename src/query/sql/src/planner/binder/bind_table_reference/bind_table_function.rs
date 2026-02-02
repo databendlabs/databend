@@ -460,6 +460,14 @@ impl Binder {
                 ));
             }
         }
+        // Preserve the legacy output column name for generate_series to keep existing queries working.
+        if func_name.name.eq_ignore_ascii_case("generate_series") {
+            bind_context.columns[0].column_name = func_name.name.clone();
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+            }
+            return Ok((srf_expr, bind_context.clone()));
+        }
         // Set name for srf result column
         bind_context.columns[0].column_name = "value".to_string();
         if let Some(alias) = alias {

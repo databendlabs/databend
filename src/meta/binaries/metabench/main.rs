@@ -21,7 +21,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -44,12 +43,12 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::required;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_semaphore::Semaphore;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
@@ -130,7 +129,7 @@ async fn main() {
         return;
     }
 
-    let client = MetaGrpcClient::try_create_with_features(
+    let client_handle = MetaGrpcClient::try_create_with_features(
         vec![config.grpc_api_address.clone()],
         BUILD_INFO.semver(),
         "root",
@@ -141,6 +140,7 @@ async fn main() {
         required::read_write(),
     )
     .unwrap();
+    let client = MetaStore::R(client_handle);
 
     let start = Instant::now();
     let mut client_num = 0;
@@ -193,12 +193,7 @@ async fn main() {
     );
 }
 
-async fn benchmark_upsert(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
-    prefix: u64,
-    client_num: u64,
-    i: u64,
-) {
+async fn benchmark_upsert(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
     let node_key = || format!("{}-{}-{}", prefix, client_num, i);
 
     let seq = MatchSeq::Any;
@@ -211,12 +206,7 @@ async fn benchmark_upsert(
     print_res(i, "upsert_kv", &res);
 }
 
-async fn benchmark_table(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
-    prefix: u64,
-    client_num: u64,
-    i: u64,
-) {
+async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -304,12 +294,7 @@ async fn benchmark_table(
     print_res(i, "create_table again", &res);
 }
 
-async fn benchmark_get_table(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
-    prefix: u64,
-    client_num: u64,
-    i: u64,
-) {
+async fn benchmark_get_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -338,7 +323,7 @@ impl Default for TableCopyFileConfig {
 
 /// Benchmark upsert table with copy file.
 async fn benchmark_table_copy_file(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &MetaStore,
     prefix: u64,
     client_num: u64,
     i: u64,
@@ -425,7 +410,7 @@ impl SemaphoreConfig {
 /// - `i` is the index of the current client.
 /// - `param` is a json string of bench specific config.
 async fn benchmark_semaphore(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &MetaStore,
     key_prefix: u64,
     client_num: u64,
     i: u64,
@@ -442,7 +427,13 @@ async fn benchmark_semaphore(
 
     let permit_str = format!("({sem_key}, id={id})");
 
-    let mut sem = Semaphore::new(client.clone(), &sem_key, param.capacity, param.ttl()).await;
+    let mut sem = Semaphore::new(
+        client.inner().clone(),
+        &sem_key,
+        param.capacity,
+        param.ttl(),
+    )
+    .await;
     if param.time_based {
         sem.set_time_based_seq(None);
     } else {
@@ -487,13 +478,7 @@ struct ListConfig {
 }
 
 /// Benchmark listing keys with a prefix.
-async fn benchmark_list(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
-    prefix: u64,
-    client_num: u64,
-    i: u64,
-    param: &str,
-) {
+async fn benchmark_list(client: &MetaStore, prefix: u64, client_num: u64, i: u64, param: &str) {
     let name = format!("client[{:>05}]-{}th", client_num, i);
 
     let config = if param.is_empty() {
@@ -512,7 +497,7 @@ async fn benchmark_list(
     }
 
     let start_time = Instant::now();
-    let stream_res = client.list(&key_prefix).await;
+    let stream_res = client.inner().list(&key_prefix).await;
     let stream_returned_time = Instant::now();
 
     static TOTAL: AtomicU64 = AtomicU64::new(0);

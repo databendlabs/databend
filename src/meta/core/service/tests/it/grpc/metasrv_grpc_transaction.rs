@@ -16,6 +16,7 @@
 
 use std::collections::BTreeSet;
 
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::TxnRequest;
 use test_harness::test;
 
@@ -23,25 +24,25 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::make_grpc_client;
 
 /// When invoke transaction() on a follower, the leader endpoint is responded in the response header.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
-        .map(|tc| tc.config.grpc.api_address.clone())
+        .map(|tc| tc.config.grpc.api_address().unwrap())
         .collect::<BTreeSet<_>>();
 
     let addresses = addresses.into_iter().collect::<Vec<_>>();
 
-    let leader_address = tcs[0].config.grpc.api_address.clone();
+    let leader_address = tcs[0].config.grpc.api_address().unwrap();
 
     let a0 = || addresses[0].clone();
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let client = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let client = make_grpc_client::<TokioRuntime>(vec![a1(), a2(), a0()])?;
     {
         let eclient = client.make_established_client().await?;
         assert_eq!(a0(), eclient.target_endpoint(),);

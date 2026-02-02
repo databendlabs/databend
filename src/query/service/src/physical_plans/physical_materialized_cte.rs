@@ -16,8 +16,9 @@ use std::any::Any;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_sql::ColumnBinding;
-use databend_common_sql::optimizer::ir::RelExpr;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::IPhysicalPlan;
@@ -38,7 +39,7 @@ pub struct MaterializedCTE {
     pub stat_info: Option<PlanStatsInfo>,
     pub input: PhysicalPlan,
     pub cte_name: String,
-    pub cte_output_columns: Option<Vec<ColumnBinding>>,
+    pub cte_output_columns: Option<Vec<usize>>,
     pub ref_count: usize,
     pub channel_size: Option<usize>,
     pub meta: PhysicalPlanMeta,
@@ -95,13 +96,20 @@ impl IPhysicalPlan for MaterializedCTE {
 
         let input_schema = self.input.output_schema()?;
         if let Some(output_columns) = &self.cte_output_columns {
-            PipelineBuilder::build_result_projection(
-                &builder.func_ctx,
-                input_schema,
-                output_columns,
-                &mut builder.main_pipeline,
-                false,
-            )?;
+            let mut projections = Vec::with_capacity(output_columns.len());
+            for index in output_columns {
+                projections.push(input_schema.index_of(index.to_string().as_str())?);
+            }
+            let num_input_columns = input_schema.num_fields();
+            builder.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projections.clone(),
+                    }],
+                    builder.func_ctx.clone(),
+                    num_input_columns,
+                )
+            });
         }
 
         builder.main_pipeline.try_resize(1)?;
@@ -123,20 +131,19 @@ impl PhysicalPlanBuilder {
         materialized_cte: &databend_common_sql::plans::MaterializedCTE,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let required = match &materialized_cte.cte_output_columns {
-            Some(o) => o.iter().map(|c| c.index).collect(),
-            None => RelExpr::with_s_expr(s_expr.child(0)?)
-                .derive_relational_prop()?
-                .output_columns
-                .clone(),
-        };
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let required = self
+            .cte_required_columns
+            .get(&materialized_cte.cte_name)
+            .unwrap()
+            .clone();
+        let cte_output_columns = Some(required.iter().copied().collect());
+        let input = self.build_physical_plan(s_expr.child(0)?, required).await?;
         Ok(PhysicalPlan::new(MaterializedCTE {
             plan_id: 0,
             stat_info: Some(stat_info),
             input,
             cte_name: materialized_cte.cte_name.clone(),
-            cte_output_columns: materialized_cte.cte_output_columns.clone(),
+            cte_output_columns,
             ref_count: materialized_cte.ref_count,
             channel_size: materialized_cte.channel_size,
             meta: PhysicalPlanMeta::new("MaterializedCTE"),

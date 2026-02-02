@@ -52,7 +52,6 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::deserialize_bitmap;
 use databend_common_sql::resolve_type_name;
 use itertools::join;
-use jiff::tz::TimeZone;
 use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
@@ -592,13 +591,10 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                         null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                         nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                        jiff_timezone: TimeZone::UTC,
-                        binary_format: Default::default(),
-                        geometry_format: Default::default(),
+                        settings: Default::default(),
                     },
                     escape_char: b'\\',
                     quote_char: b'"',
-                    binary_format: Default::default(),
                 };
 
                 for i in 0..row_count {

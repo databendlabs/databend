@@ -19,7 +19,6 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
 
-use crate::FileFormatOptionsExt;
 use crate::output_format::OutputFormat;
 
 #[derive(Default)]
@@ -29,7 +28,7 @@ pub struct ParquetOutputFormat {
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: TableSchemaRef, _options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef) -> Self {
         Self {
             schema,
             data_blocks: vec![],

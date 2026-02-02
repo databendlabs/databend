@@ -332,6 +332,7 @@ pub struct AddTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub field: TableField,
     pub comment: String,
     pub option: AddColumnOption,
@@ -360,6 +361,7 @@ pub struct RenameTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub schema: TableSchema,
     pub old_column: String,
     pub new_column: String,
@@ -377,6 +379,7 @@ pub struct DropTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub column: String,
 }
 
@@ -407,6 +410,7 @@ pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub action: ModifyColumnAction,
     pub lock_guard: Option<SharedLockGuard>,
 }
@@ -423,6 +427,7 @@ impl std::fmt::Debug for ModifyTableColumnPlan {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
+            .field("branch", &self.branch)
             .field("action", &self.action)
             .finish()
     }
@@ -525,6 +530,7 @@ pub struct AlterTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
     pub cluster_type: String,
 }
@@ -541,6 +547,7 @@ pub struct DropTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl DropTableClusterKeyPlan {

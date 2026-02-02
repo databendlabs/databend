@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo '-- reset user, roles, and tables'
 echo "DROP USER IF EXISTS 'testuser1'" | $BENDSQL_CLIENT_CONNECT
@@ -90,7 +90,7 @@ echo 'CREATE ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ALL ON *.* TO ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
 echo 'GRANT ROLE `role_c` to test_c' | $BENDSQL_CLIENT_CONNECT
 
-export TEST_C_CONNECT="bendsql --user=test_c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_C_CONNECT="bendsql -A --user=test_c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo 'drop database if exists db_c' | $BENDSQL_CLIENT_CONNECT
 echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
 echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT

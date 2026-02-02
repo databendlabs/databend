@@ -16,7 +16,6 @@ test = true
 [dependencies]
 codeq = { workspace = true }
 databend-common-meta-client = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-meta-runtime = { workspace = true }

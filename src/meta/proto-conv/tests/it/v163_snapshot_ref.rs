@@ -56,6 +56,7 @@ fn test_decode_v163_snapshot_ref() -> anyhow::Result<()> {
         engine_options: btreemap! {},
         options: btreemap! {},
         cluster_key: None,
+        cluster_key_v2: None,
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
