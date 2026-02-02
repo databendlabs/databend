@@ -41,14 +41,17 @@ fn compute_s_expr_signature_rec(
     path: &mut Vec<usize>,
     metadata: &Metadata,
     signature_to_exprs: &mut HashMap<SExprSignature, Vec<(Vec<usize>, SExpr)>>,
-) {
+) -> Option<SExprSignature> {
+    let mut child_signatures = Vec::with_capacity(expr.children.len());
     for (child_index, child) in expr.children().enumerate() {
         path.push(child_index);
-        compute_s_expr_signature_rec(child, path, metadata, signature_to_exprs);
+        let child_signature =
+            compute_s_expr_signature_rec(child, path, metadata, signature_to_exprs);
         path.pop();
+        child_signatures.push(child_signature);
     }
 
-    match expr.plan.as_ref() {
+    let signature = match expr.plan.as_ref() {
         RelOperator::Scan(scan) => {
             let has_internal_column = scan.columns.iter().any(|column_index| {
                 let column = metadata.column(*column_index);
@@ -64,70 +67,49 @@ fn compute_s_expr_signature_rec(
                 || scan.is_lazy_table
                 || scan.sample.is_some()
             {
-                return;
+                return None;
             }
 
             let table_entry = metadata.table(scan.table_index);
             let table = table_entry.table();
             if table.engine() != "FUSE" {
-                return;
+                return None;
             }
 
             let mut tables = BTreeSet::new();
             tables.insert(table.get_id() as IndexType);
-            signature_to_exprs
-                .entry(SExprSignature { tables })
-                .or_default()
-                .push((path.clone(), expr.clone()));
+            Some(SExprSignature { tables })
         }
         RelOperator::Join(join) => {
             if join.from_correlated_subquery || join.is_lateral {
-                return;
+                return None;
             }
             if !matches!(
                 join.join_type,
                 crate::plans::JoinType::Inner | crate::plans::JoinType::Cross
             ) {
-                return;
-            }
-
-            let mut left_signature = None;
-            let mut left_path = path.clone();
-            left_path.push(0);
-            'left: for (signature, entries) in signature_to_exprs.iter() {
-                for (entry_path, _) in entries {
-                    if entry_path == &left_path {
-                        left_signature = Some(signature.clone());
-                        break 'left;
-                    }
-                }
-            }
-
-            let mut right_signature = None;
-            let mut right_path = path.clone();
-            right_path.push(1);
-            'right: for (signature, entries) in signature_to_exprs.iter() {
-                for (entry_path, _) in entries {
-                    if entry_path == &right_path {
-                        right_signature = Some(signature.clone());
-                        break 'right;
-                    }
-                }
+                return None;
             }
 
             let (Some(left_signature), Some(right_signature)) =
-                (left_signature, right_signature)
+                (&child_signatures[0], &child_signatures[1])
             else {
-                return;
+                return None;
             };
 
             let mut tables = left_signature.tables.clone();
             tables.extend(right_signature.tables.iter().copied());
-            signature_to_exprs
-                .entry(SExprSignature { tables })
-                .or_default()
-                .push((path.clone(), expr.clone()));
+            Some(SExprSignature { tables })
         }
-        _ => {}
+        _ => None,
+    };
+
+    if let Some(signature) = &signature {
+        signature_to_exprs
+            .entry(signature.clone())
+            .or_default()
+            .push((path.clone(), expr.clone()));
     }
+
+    signature
 }
