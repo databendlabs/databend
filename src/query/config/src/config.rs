@@ -3409,6 +3409,22 @@ pub struct CacheConfig {
     )]
     pub vector_index_filter_memory_ratio: u64,
 
+    /// Max number of cached virtual column meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-virtual-column-meta-count",
+        value_name = "VALUE",
+        default_value = "30000"
+    )]
+    pub virtual_column_meta_count: u64,
+
+    /// Max bytes of cached virtual column metadata on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-virtual-column-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_virtual_column_meta_size: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -3759,6 +3775,8 @@ mod cache_config_converters {
                 vector_index_filter_size: value.vector_index_filter_size,
                 disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
+                virtual_column_meta_count: value.virtual_column_meta_count,
+                disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -3803,6 +3821,8 @@ mod cache_config_converters {
                 vector_index_filter_size: value.vector_index_filter_size,
                 disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
+                virtual_column_meta_count: value.virtual_column_meta_count,
+                disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),

@@ -20,9 +20,12 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
@@ -33,7 +36,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VariantDataType;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
@@ -44,6 +46,7 @@ use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_hashtable::StackHashMap;
@@ -51,6 +54,8 @@ use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_index::VirtualColumnNameIndex;
+use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -64,20 +69,24 @@ use jsonb::Interval as JsonbInterval;
 use jsonb::Number as JsonbNumber;
 use jsonb::RawJsonb;
 use jsonb::Timestamp as JsonbTimestamp;
+use jsonb::TimestampTz as JsonbTimestampTz;
 use jsonb::Value as JsonbValue;
 use jsonb::keypath::KeyPath as JsonbKeyPath;
 use jsonb::keypath::KeyPaths as JsonbKeyPaths;
+use parquet::file::metadata::KeyValue;
 use parquet::format::FileMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use crate::index::VIRTUAL_COLUMN_NODES_KEY;
+use crate::index::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
+use crate::index::VIRTUAL_COLUMN_STRING_TABLE_KEY;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::WriteSettings;
 use crate::statistics::gen_columns_statistics;
 
-const SAMPLE_ROWS: usize = 10;
-const NULL_PERCENTAGE: f64 = 0.7;
 const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
+const DYNAMIC_PRESENCE_THRESHOLD: f64 = 0.3;
 
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
@@ -95,8 +104,6 @@ pub struct VirtualColumnBuilder {
     virtual_paths: Vec<HashMap<OwnedKeyPaths, usize>>,
     // Store virtual values across multiple blocks
     virtual_values: Vec<Vec<JsonbScalarValue>>,
-    // Ignored fields
-    ignored_fields: HashSet<usize>,
     // Total number of rows processed
     total_rows: usize,
 }
@@ -136,13 +143,11 @@ impl VirtualColumnBuilder {
             virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
         }
         let virtual_values = Vec::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER);
-        let ignored_fields = HashSet::new();
         Ok(VirtualColumnBuilder {
             variant_offsets,
             variant_fields,
             virtual_paths,
             virtual_values,
-            ignored_fields,
             total_rows: 0,
         })
     }
@@ -179,18 +184,7 @@ impl VirtualColumnBuilder {
             hash_to_index.push(field_hash_to_index);
         }
 
-        // use first 10 rows as sample to check whether the block is suitable for generating virtual columns
-        if self.total_rows < SAMPLE_ROWS {
-            let sample_rows = num_rows.min(SAMPLE_ROWS);
-            self.extract_virtual_values(block, 0, sample_rows, &mut hash_to_index);
-
-            self.check_sample_virtual_values(self.total_rows + sample_rows);
-            if sample_rows < num_rows {
-                self.extract_virtual_values(block, sample_rows, num_rows, &mut hash_to_index);
-            }
-        } else {
-            self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index);
-        }
+        self.extract_virtual_values(block, 0, num_rows, &mut hash_to_index);
 
         self.total_rows += num_rows;
 
@@ -205,9 +199,6 @@ impl VirtualColumnBuilder {
         hash_to_index: &mut [StackHashMap<u128, usize, 16>],
     ) {
         for (i, offset) in self.variant_offsets.iter().enumerate() {
-            if self.ignored_fields.contains(&i) {
-                continue;
-            }
             let column = block.get_by_offset(*offset);
             for row in start_row..end_row {
                 let val = unsafe { column.index_unchecked(row) };
@@ -216,7 +207,7 @@ impl VirtualColumnBuilder {
                 };
                 let raw_jsonb = RawJsonb::new(jsonb_bytes);
 
-                let key_values = raw_jsonb.extract_scalar_key_values().unwrap();
+                let key_values = raw_jsonb.extract_scalar_key_values(true).unwrap();
                 for (key_paths, jsonb_value) in key_values {
                     let scalar = Self::jsonb_value_to_scalar(jsonb_value);
                     // Blocks are added repeatedly, so the actual rows need to add the rows of the previous blocks
@@ -285,11 +276,11 @@ impl VirtualColumnBuilder {
             JsonbValue::Binary(v) => Scalar::Binary(v.to_vec()),
             JsonbValue::Date(v) => Scalar::Date(v.value),
             JsonbValue::Timestamp(v) => Scalar::Timestamp(v.value),
-            JsonbValue::TimestampTz(v) => Scalar::Timestamp(v.value),
+            JsonbValue::TimestampTz(v) => Scalar::TimestampTz(timestamp_tz::new(v.value, v.offset)),
             JsonbValue::Interval(v) => {
                 Scalar::Interval(months_days_micros::new(v.months, v.days, v.micros))
             }
-            _ => unreachable!(),
+            _ => Scalar::Variant(value.to_vec()),
         }
     }
 
@@ -326,13 +317,218 @@ impl VirtualColumnBuilder {
             ScalarRef::Binary(v) => JsonbValue::Binary(v),
             ScalarRef::Date(v) => JsonbValue::Date(JsonbDate { value: v }),
             ScalarRef::Timestamp(v) => JsonbValue::Timestamp(JsonbTimestamp { value: v }),
+            ScalarRef::TimestampTz(v) => JsonbValue::TimestampTz(JsonbTimestampTz {
+                value: v.timestamp(),
+                offset: v.seconds_offset(),
+            }),
             ScalarRef::Interval(v) => JsonbValue::Interval(JsonbInterval {
                 months: v.months(),
                 days: v.days(),
                 micros: v.microseconds(),
             }),
+            ScalarRef::Variant(v) => RawJsonb::new(v).to_value().unwrap(),
             _ => unreachable!(),
         }
+    }
+
+    fn scalar_to_variant_bytes(scalar: ScalarRef<'_>) -> Vec<u8> {
+        let jsonb_value = Self::scalar_to_jsonb_value(scalar);
+        let mut buf = Vec::new();
+        jsonb_value.write_to_vec(&mut buf);
+        buf
+    }
+
+    fn format_key_name(field_virtual_path: &OwnedKeyPaths) -> String {
+        let mut key_name = String::new();
+        for path in &field_virtual_path.paths {
+            key_name.push('[');
+            match path {
+                OwnedKeyPath::Index(idx) => {
+                    key_name.push_str(&format!("{idx}"));
+                }
+                OwnedKeyPath::Name(name) => {
+                    key_name.push('\'');
+                    key_name.push_str(name);
+                    key_name.push('\'');
+                }
+            }
+            key_name.push(']');
+        }
+        key_name
+    }
+
+    fn key_path_segment(path: &OwnedKeyPath) -> String {
+        match path {
+            OwnedKeyPath::Index(idx) => idx.to_string(),
+            OwnedKeyPath::Name(name) => name.to_string(),
+        }
+    }
+
+    fn get_string_table_id(
+        name: &str,
+        string_table: &mut Vec<String>,
+        string_table_index: &mut HashMap<String, u32>,
+    ) -> u32 {
+        if let Some(id) = string_table_index.get(name) {
+            return *id;
+        }
+        let id = string_table.len() as u32;
+        string_table.push(name.to_string());
+        string_table_index.insert(name.to_string(), id);
+        id
+    }
+
+    fn insert_virtual_column_node(
+        root: &mut VirtualColumnNode,
+        path: &OwnedKeyPaths,
+        leaf: VirtualColumnNameIndex,
+        string_table: &mut Vec<String>,
+        string_table_index: &mut HashMap<String, u32>,
+    ) {
+        // Build a trie from key path segments. Each segment is stored once in the
+        // string table and referenced by id to keep parquet metadata compact.
+        let mut current = root;
+        for segment in &path.paths {
+            let segment_name = Self::key_path_segment(segment);
+            let segment_id =
+                Self::get_string_table_id(&segment_name, string_table, string_table_index);
+            current = current
+                .children
+                .entry(segment_id)
+                .or_insert_with(|| VirtualColumnNode {
+                    children: HashMap::new(),
+                    leaf: None,
+                });
+        }
+        current.leaf = Some(leaf);
+    }
+
+    fn classify_path(
+        total_rows: usize,
+        value_len: usize,
+        value_type: VariantDataType,
+    ) -> PathClass {
+        let presence = value_len as f64 / total_rows as f64;
+        if presence >= DYNAMIC_PRESENCE_THRESHOLD {
+            if matches!(value_type, VariantDataType::Jsonb) {
+                PathClass::Dynamic
+            } else {
+                PathClass::Typed(value_type)
+            }
+        } else {
+            PathClass::Shared
+        }
+    }
+
+    fn build_variant_column(total_rows: usize, values: &[JsonbScalarValue]) -> Column {
+        let mut bitmap = MutableBitmap::from_len_zeroed(total_rows);
+        let mut builder =
+            BinaryColumnBuilder::with_capacity(total_rows, values.len().saturating_mul(10));
+        let mut last_row = 0usize;
+        for val in values {
+            while last_row < val.row {
+                builder.commit_row();
+                last_row += 1;
+            }
+            bitmap.set(val.row, true);
+            let bytes = Self::scalar_to_variant_bytes(val.scalar.as_ref());
+            builder.put_slice(&bytes);
+            builder.commit_row();
+            last_row += 1;
+        }
+        while last_row < total_rows {
+            builder.commit_row();
+            last_row += 1;
+        }
+        let nullable_column = NullableColumn {
+            column: Column::Variant(builder.build()),
+            validity: bitmap.into(),
+        };
+        Column::Nullable(Box::new(nullable_column))
+    }
+
+    fn build_typed_column(
+        total_rows: usize,
+        values: &[JsonbScalarValue],
+        value_type: VariantDataType,
+    ) -> (Column, TableDataType) {
+        let data_type = match value_type {
+            VariantDataType::Boolean => DataType::Nullable(Box::new(DataType::Boolean)),
+            VariantDataType::UInt64 => {
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
+            }
+            VariantDataType::Int64 => {
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
+            }
+            VariantDataType::Float64 => {
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)))
+            }
+            VariantDataType::String => DataType::Nullable(Box::new(DataType::String)),
+            _ => DataType::Nullable(Box::new(DataType::Variant)),
+        };
+
+        let mut builder = ColumnBuilder::with_capacity(&data_type, total_rows);
+        let mut last_row = 0usize;
+        let null_scalar = ScalarRef::Null;
+        for val in values {
+            if val.row > last_row {
+                let default_len = val.row - last_row;
+                builder.push_repeat(&null_scalar, default_len);
+                last_row = val.row;
+            }
+            builder.push(val.scalar.as_ref());
+            last_row += 1;
+        }
+        if last_row < total_rows {
+            builder.push_repeat(&null_scalar, total_rows - last_row);
+        }
+        let column = builder.build();
+        let table_type = infer_schema_type(&data_type).unwrap();
+        (column, table_type)
+    }
+
+    fn build_shared_map_column(
+        shared_value_indexes: Vec<usize>,
+        virtual_values: &[Vec<JsonbScalarValue>],
+        total_rows: usize,
+    ) -> Column {
+        let mut shared_jsonb_values: HashMap<usize, Vec<(u32, Vec<u8>)>> = HashMap::new();
+        for (index, value_index) in shared_value_indexes.into_iter().enumerate() {
+            let key_name_index = index as u32;
+            let values = &virtual_values[value_index];
+            for val in values {
+                let jsonb_bytes = Self::scalar_to_variant_bytes(val.scalar.as_ref());
+                if let Some(shared_rows) = shared_jsonb_values.get_mut(&val.row) {
+                    shared_rows.push((key_name_index, jsonb_bytes));
+                } else {
+                    let shared_rows = vec![(key_name_index, jsonb_bytes)];
+                    shared_jsonb_values.insert(val.row, shared_rows);
+                }
+            }
+        }
+
+        let mut key_builder =
+            ColumnBuilder::with_capacity(&DataType::Number(NumberDataType::UInt32), total_rows);
+        let mut value_builder = ColumnBuilder::with_capacity(&DataType::Variant, total_rows);
+        let mut offsets = Vec::with_capacity(total_rows + 1);
+        offsets.push(0);
+        let mut current = 0u64;
+        for row in 0..total_rows {
+            if let Some(shared_rows) = shared_jsonb_values.remove(&row) {
+                for (key_name_index, jsonb_bytes) in shared_rows {
+                    key_builder.push(ScalarRef::Number(NumberScalar::UInt32(key_name_index)));
+                    value_builder.push(ScalarRef::Variant(jsonb_bytes.as_slice()));
+                    current += 1;
+                }
+            }
+            offsets.push(current);
+        }
+
+        let keys_column = key_builder.build();
+        let values_column = value_builder.build();
+        let tuple = Column::Tuple(vec![keys_column, values_column]);
+        let array_col = ArrayColumn::new(tuple, Buffer::from(offsets));
+        Column::Map(Box::new(array_col))
     }
 
     #[async_backtrace::framed]
@@ -352,14 +548,8 @@ impl VirtualColumnBuilder {
 
         let total_rows = self.total_rows;
         self.total_rows = 0;
-        self.ignored_fields.clear();
 
-        // Process the collected virtual values
-        let virtual_field_num =
-            Self::discard_virtual_values(total_rows, &virtual_paths, &mut virtual_values);
-
-        // If after discarding, no virtual values remain, return empty state
-        if virtual_field_num == 0 {
+        if total_rows == 0 || virtual_values.iter().all(|vals| vals.is_empty()) {
             let draft_virtual_block_meta = DraftVirtualBlockMeta {
                 virtual_column_metas: vec![],
                 virtual_column_size: 0,
@@ -372,138 +562,154 @@ impl VirtualColumnBuilder {
             });
         }
 
-        let mut virtual_column_names = Vec::with_capacity(virtual_field_num);
-        let mut virtual_fields = Vec::with_capacity(virtual_field_num);
-        let mut virtual_columns = Vec::with_capacity(virtual_field_num);
-
-        // use a tmp column id to generate statistics for virtual columns.
-        let mut tmp_column_id = 0;
+        let mut virtual_column_names = HashMap::new();
+        let mut virtual_fields = Vec::new();
+        let mut virtual_columns = Vec::new();
+        let mut string_table = Vec::new();
+        let mut string_table_index = HashMap::new();
+        let mut virtual_column_nodes = HashMap::new();
+        let mut shared_column_names = HashMap::new();
+        // leaf_index tracks the parquet column id for virtual columns and shared maps.
+        // It stays aligned with the VirtualColumnNameIndex used by the trie.
+        let mut leaf_index: u32 = 0;
         for (source_field, field_virtual_paths) in
             self.variant_fields.iter().zip(virtual_paths.into_iter())
         {
             // Collect virtual paths and index as BTreeMap to keep order
             let sorted_virtual_paths: BTreeMap<_, _> = field_virtual_paths.into_iter().collect();
-
+            let mut shared_value_indexes: Vec<usize> = Vec::new();
+            let mut shared_paths: Vec<OwnedKeyPaths> = Vec::new();
+            let node = virtual_column_nodes
+                .entry(source_field.column_id)
+                .or_insert_with(|| VirtualColumnNode {
+                    children: HashMap::new(),
+                    leaf: None,
+                });
             for (field_virtual_path, index) in sorted_virtual_paths {
-                if virtual_values[index].is_empty() {
+                let values = &virtual_values[index];
+                if values.is_empty() {
                     continue;
                 }
-                let val_type = Self::inference_data_type(&virtual_values[index]);
-                let virtual_type = match val_type {
-                    VariantDataType::Jsonb => DataType::Nullable(Box::new(DataType::Variant)),
-                    VariantDataType::Boolean => DataType::Nullable(Box::new(DataType::Boolean)),
-                    VariantDataType::UInt64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
+                let key_name = Self::format_key_name(&field_virtual_path);
+                let val_type = Self::inference_data_type(values);
+                match Self::classify_path(total_rows, values.len(), val_type) {
+                    PathClass::Typed(value_type) => {
+                        let (column, table_type) =
+                            Self::build_typed_column(total_rows, values, value_type.clone());
+                        let virtual_name = format!("{}{}", source_field.name, key_name);
+                        let column_id = leaf_index;
+                        let field =
+                            TableField::new_from_column_id(&virtual_name, table_type, column_id);
+                        virtual_columns.push(BlockEntry::Column(column));
+                        virtual_fields.push(field);
+                        let source_column_id = source_field.column_id;
+                        virtual_column_names
+                            .insert(virtual_name, (source_column_id, key_name, value_type));
+                        Self::insert_virtual_column_node(
+                            node,
+                            &field_virtual_path,
+                            VirtualColumnNameIndex::Column(leaf_index),
+                            &mut string_table,
+                            &mut string_table_index,
+                        );
+                        leaf_index += 1;
                     }
-                    VariantDataType::Int64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
+                    PathClass::Dynamic => {
+                        let column = Self::build_variant_column(total_rows, values);
+                        let virtual_type =
+                            infer_schema_type(&DataType::Nullable(Box::new(DataType::Variant)))
+                                .unwrap();
+                        let virtual_name = format!("{}{}", source_field.name, key_name);
+                        let column_id = leaf_index;
+                        let field =
+                            TableField::new_from_column_id(&virtual_name, virtual_type, column_id);
+                        virtual_columns.push(BlockEntry::Column(column));
+                        virtual_fields.push(field);
+                        let source_column_id = source_field.column_id;
+                        virtual_column_names.insert(
+                            virtual_name,
+                            (source_column_id, key_name, VariantDataType::Jsonb),
+                        );
+                        Self::insert_virtual_column_node(
+                            node,
+                            &field_virtual_path,
+                            VirtualColumnNameIndex::Column(leaf_index),
+                            &mut string_table,
+                            &mut string_table_index,
+                        );
+                        leaf_index += 1;
                     }
-                    VariantDataType::Float64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)))
+                    PathClass::Shared => {
+                        shared_value_indexes.push(index);
+                        shared_paths.push(field_virtual_path);
                     }
-                    VariantDataType::String => DataType::Nullable(Box::new(DataType::String)),
-                    _ => unreachable!(),
-                };
-
-                let mut last_row = virtual_values[index][0].row;
-                let column = if matches!(val_type, VariantDataType::Jsonb) {
-                    // Use `BinaryColumnBuilder` to build jsonb variant column,
-                    // because we can directly insert jsonb data into the builder buffer
-                    // without the need for additional memory allocation
-                    let mut bitmap = MutableBitmap::from_len_zeroed(total_rows);
-                    let mut builder = BinaryColumnBuilder::with_capacity(
-                        total_rows,
-                        virtual_values[index].len() * 10,
-                    );
-                    for _ in 0..last_row {
-                        builder.commit_row();
-                    }
-                    for val in &virtual_values[index] {
-                        if val.row - last_row > 1 {
-                            for _ in (last_row + 1)..val.row {
-                                builder.commit_row();
-                            }
-                        }
-                        bitmap.set(val.row, true);
-                        let jsonb_value = Self::scalar_to_jsonb_value(val.scalar.as_ref());
-                        jsonb_value.write_to_vec(&mut builder.data);
-                        builder.commit_row();
-                        last_row = val.row;
-                    }
-                    if total_rows - last_row > 1 {
-                        for _ in (last_row + 1)..total_rows {
-                            builder.commit_row();
-                        }
-                    }
-                    let nullable_column = NullableColumn {
-                        column: Column::Variant(builder.build()),
-                        validity: bitmap.into(),
-                    };
-                    Column::Nullable(Box::new(nullable_column))
-                } else {
-                    let mut builder = ColumnBuilder::with_capacity(&virtual_type, total_rows);
-                    if last_row != 0 {
-                        builder.push_repeat(&ScalarRef::Null, last_row);
-                    }
-                    for val in &virtual_values[index] {
-                        if val.row - last_row > 1 {
-                            let default_len = val.row - last_row - 1;
-                            builder.push_repeat(&ScalarRef::Null, default_len);
-                        }
-                        builder.push(val.scalar.as_ref());
-                        last_row = val.row;
-                    }
-                    if total_rows - last_row > 1 {
-                        let default_len = total_rows - last_row - 1;
-                        builder.push_repeat(&ScalarRef::Null, default_len);
-                    }
-                    builder.build()
-                };
-
-                let virtual_table_type = infer_schema_type(&virtual_type).unwrap();
-                virtual_columns.push(column.into());
-
-                let mut key_name = String::new();
-                for path in &field_virtual_path.paths {
-                    key_name.push('[');
-                    match path {
-                        OwnedKeyPath::Index(idx) => {
-                            key_name.push_str(&format!("{idx}"));
-                        }
-                        OwnedKeyPath::Name(name) => {
-                            key_name.push('\'');
-                            key_name.push_str(name);
-                            key_name.push('\'');
-                        }
-                    }
-                    key_name.push(']');
-                }
-
-                let virtual_name = format!("{}{}", source_field.name, key_name);
-                let virtual_field = TableField::new_from_column_id(
-                    &virtual_name,
-                    virtual_table_type,
-                    tmp_column_id,
-                );
-                virtual_fields.push(virtual_field);
-                tmp_column_id += 1;
-
-                let source_column_id = source_field.column_id;
-                virtual_column_names.push((source_column_id, key_name, val_type));
-
-                if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
-                    break;
                 }
             }
-            if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
-                break;
+
+            if !shared_value_indexes.is_empty() {
+                let column = Self::build_shared_map_column(
+                    shared_value_indexes,
+                    &virtual_values,
+                    total_rows,
+                );
+
+                let map_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::UInt32),
+                        TableDataType::Variant,
+                    ],
+                }));
+
+                let virtual_name = format!("{}.__shared_virtual_column_data__", source_field.name);
+                let column_id = leaf_index;
+                let field = TableField::new_from_column_id(&virtual_name, map_type, column_id);
+                virtual_columns.push(BlockEntry::Column(column));
+                virtual_fields.push(field);
+                let source_column_id = source_field.column_id;
+                shared_column_names.insert(source_column_id, virtual_name);
+                for (shared_index, shared_path) in shared_paths.into_iter().enumerate() {
+                    Self::insert_virtual_column_node(
+                        node,
+                        &shared_path,
+                        VirtualColumnNameIndex::Shared(shared_index as u32),
+                        &mut string_table,
+                        &mut string_table_index,
+                    );
+                }
+                leaf_index += 2;
             }
         }
-
-        // Create the virtual block and convert to parquet
         let virtual_block_schema = TableSchemaRefExt::create(virtual_fields);
         let virtual_block = DataBlock::new(virtual_columns, total_rows);
 
+        let shared_column_ids =
+            Self::build_shared_column_ids(&virtual_block_schema, &shared_column_names);
+
+        let mut metadata = Vec::new();
+        // Parquet metadata stores only the trie (virtual_column_nodes), string table, and
+        // shared column ids. Column metas (offset/len/num_values), column ids, and data types
+        // are derived from the parquet schema + row group metadata during read.
+        let string_table_json = serde_json::to_string(&string_table)?;
+        metadata.push(KeyValue {
+            key: VIRTUAL_COLUMN_STRING_TABLE_KEY.to_string(),
+            value: Some(string_table_json),
+        });
+        let nodes_json = serde_json::to_string(&virtual_column_nodes)?;
+        metadata.push(KeyValue {
+            key: VIRTUAL_COLUMN_NODES_KEY.to_string(),
+            value: Some(nodes_json),
+        });
+        if !shared_column_ids.is_empty() {
+            let shared_ids_json = serde_json::to_string(&shared_column_ids)?;
+            metadata.push(KeyValue {
+                key: VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY.to_string(),
+                value: Some(shared_ids_json),
+            });
+        }
+        let metadata = Some(metadata);
+
+        // Create the virtual block and convert to parquet
         let columns_statistics =
             gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
 
@@ -514,7 +720,7 @@ impl VirtualColumnBuilder {
             &mut data,
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
-            None,
+            metadata,
             Some(&columns_statistics),
         )?;
 
@@ -523,7 +729,6 @@ impl VirtualColumnBuilder {
             virtual_column_names,
             columns_statistics,
         )?;
-
         let data_size = data.len() as u64;
         let virtual_column_location =
             TableMetaLocationGenerator::gen_virtual_block_location(&location.0);
@@ -538,99 +743,6 @@ impl VirtualColumnBuilder {
             data,
             draft_virtual_block_meta,
         })
-    }
-
-    fn check_sample_virtual_values(&mut self, sample_rows: usize) {
-        // ignore small samples
-        if sample_rows < SAMPLE_ROWS {
-            return;
-        }
-
-        for (i, _) in self.variant_offsets.iter().enumerate() {
-            // all samples are scalar value
-            if self.virtual_paths[i].is_empty() {
-                self.ignored_fields.insert(i);
-            }
-            let mut most_null_count = 0;
-            for (_, index) in self.virtual_paths[i].iter() {
-                let value_count = self.virtual_values[*index].len();
-                let null_count = sample_rows - value_count;
-                let null_percentage = null_count as f64 / sample_rows as f64;
-                if null_percentage > NULL_PERCENTAGE {
-                    most_null_count += 1;
-                }
-            }
-            let most_null_percentage = most_null_count as f64 / self.virtual_paths[i].len() as f64;
-            // most virtual values are null
-            if most_null_percentage > NULL_PERCENTAGE {
-                for (_, index) in self.virtual_paths[i].iter() {
-                    self.virtual_values[*index].clear();
-                }
-                self.ignored_fields.insert(i);
-            }
-        }
-    }
-
-    fn discard_virtual_values(
-        num_rows: usize,
-        virtual_paths: &[HashMap<OwnedKeyPaths, usize>],
-        virtual_values: &mut [Vec<JsonbScalarValue>],
-    ) -> usize {
-        if virtual_values.is_empty() {
-            return 0;
-        }
-
-        // 1. Discard virtual columns with most values are Null values.
-        for values in virtual_values.iter_mut() {
-            if values.is_empty() {
-                continue;
-            }
-            let not_null_count = values
-                .iter()
-                .filter(|x| !matches!(x.scalar, Scalar::Null))
-                .count();
-            let null_count = num_rows - not_null_count;
-            let null_percentage = null_count as f64 / num_rows as f64;
-            if null_percentage > NULL_PERCENTAGE {
-                values.clear();
-            }
-        }
-
-        // 2. Discard names with the same prefix and ensure that the values of the virtual columns are leaf nodes
-        // for example, we have following variant values.
-        // {"k1":{"k2":"val"}}
-        // {"k1":100}
-        // we should not create virtual column for `k1`.
-        for virtual_paths in virtual_paths {
-            for (virtual_path, index) in virtual_paths {
-                if virtual_values[*index].is_empty() {
-                    continue;
-                }
-                for other_virtual_path in virtual_paths.keys() {
-                    if virtual_path.is_prefix_path(other_virtual_path) {
-                        virtual_values[*index].clear();
-                    }
-                }
-            }
-        }
-
-        // 3. Discard redundant virtual values to avoid generating too much virtual fields.
-        let virtual_values_count = virtual_values.iter().filter(|x| !x.is_empty()).count();
-        if virtual_values_count > VIRTUAL_COLUMNS_LIMIT {
-            let mut redundant_num = virtual_values_count - VIRTUAL_COLUMNS_LIMIT;
-            for virtual_value in virtual_values.iter_mut().rev() {
-                if redundant_num == 0 {
-                    break;
-                }
-                if !virtual_value.is_empty() {
-                    virtual_value.clear();
-                    redundant_num -= 1;
-                }
-            }
-            VIRTUAL_COLUMNS_LIMIT
-        } else {
-            virtual_values_count
-        }
     }
 
     fn inference_data_type(virtual_values: &[JsonbScalarValue]) -> VariantDataType {
@@ -663,10 +775,39 @@ impl VirtualColumnBuilder {
         }
     }
 
+    fn build_shared_column_ids(
+        schema: &TableSchemaRef,
+        shared_column_names: &HashMap<ColumnId, String>,
+    ) -> HashMap<u32, (u32, u32)> {
+        if shared_column_names.is_empty() {
+            return HashMap::new();
+        }
+
+        let mut leaf_name_to_id = HashMap::new();
+        for (idx, field) in schema.leaf_fields().iter().enumerate() {
+            leaf_name_to_id.insert(field.name.clone(), idx as u32);
+        }
+
+        let mut shared_column_ids = HashMap::new();
+        for (source_id, name) in shared_column_names {
+            let key_name = format!("{name}:key");
+            let value_name = format!("{name}:value");
+            let Some(key_id) = leaf_name_to_id.get(&key_name) else {
+                continue;
+            };
+            let Some(value_id) = leaf_name_to_id.get(&value_name) else {
+                continue;
+            };
+            shared_column_ids.insert(*source_id, (*key_id, *value_id));
+        }
+
+        shared_column_ids
+    }
+
     fn file_meta_to_virtual_column_metas(
         &self,
         file_meta: FileMetaData,
-        virtual_column_names: Vec<(ColumnId, String, VariantDataType)>,
+        mut virtual_column_names: HashMap<String, (u32, String, VariantDataType)>,
         mut columns_statistics: StatisticsOfColumns,
     ) -> Result<Vec<DraftVirtualColumnMeta>> {
         let num_row_groups = file_meta.row_groups.len();
@@ -679,14 +820,16 @@ impl VirtualColumnBuilder {
         let row_group = &file_meta.row_groups[0];
 
         let mut draft_virtual_column_metas = Vec::with_capacity(virtual_column_names.len());
-        for ((i, (source_column_id, name, variant_type)), col_chunk) in virtual_column_names
-            .into_iter()
-            .enumerate()
-            .zip(row_group.columns.iter())
-        {
+        for (i, col_chunk) in row_group.columns.iter().enumerate() {
             let tmp_column_id = i as u32;
             match &col_chunk.meta_data {
                 Some(chunk_meta) => {
+                    let Some((source_column_id, key_name, variant_type)) =
+                        virtual_column_names.remove(&chunk_meta.path_in_schema[0])
+                    else {
+                        continue;
+                    };
+
                     let col_start =
                         if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
                             dict_page_offset
@@ -712,7 +855,7 @@ impl VirtualColumnBuilder {
 
                     let draft_virtual_column_meta = DraftVirtualColumnMeta {
                         source_column_id,
-                        name,
+                        name: key_name,
                         data_type: variant_type,
                         column_meta: virtual_column_meta,
                     };
@@ -778,22 +921,20 @@ impl OwnedKeyPaths {
             .collect::<Vec<_>>();
         OwnedKeyPaths { paths }
     }
-
-    fn is_prefix_path(&self, other: &OwnedKeyPaths) -> bool {
-        if self.paths.len() >= other.paths.len() {
-            return false;
-        }
-        for (self_path, other_path) in self.paths.iter().zip(other.paths.iter()) {
-            if !self_path.eq(other_path) {
-                return false;
-            }
-        }
-        true
-    }
 }
 
 #[derive(Debug, Clone)]
 struct JsonbScalarValue {
     row: usize,
     scalar: Scalar,
+}
+
+// PathClass decides how a JSON path is materialized:
+// - Typed: extracted as a dedicated column with a concrete scalar type.
+// - Dynamic: extracted as a dedicated column but kept as JSONB/Variant.
+// - Shared: stored in the shared map column because it is too sparse.
+enum PathClass {
+    Typed(VariantDataType),
+    Dynamic,
+    Shared,
 }

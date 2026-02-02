@@ -50,6 +50,7 @@ use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::caches::VectorIndexFileCache;
 use crate::caches::VectorIndexMetaCache;
+use crate::caches::VirtualColumnMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
 
@@ -110,6 +111,7 @@ pub struct CacheManager {
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
     vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
+    virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
@@ -231,6 +233,7 @@ impl CacheManager {
                 inverted_index_file_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
                 vector_index_file_cache: CacheSlot::new(None),
+                virtual_column_meta_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
@@ -386,6 +389,24 @@ impl CacheManager {
                 )?
             };
 
+            let virtual_column_meta_cache = {
+                let virtual_column_meta_on_disk_cache_path =
+                    PathBuf::from(&config.disk_cache_config.path)
+                        .join(tenant_id.clone())
+                        .join("virtual_column_meta_v1");
+                Self::new_hybrid_cache_slot(
+                    HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA,
+                    config.virtual_column_meta_count as usize,
+                    Unit::Count,
+                    &virtual_column_meta_on_disk_cache_path,
+                    on_disk_cache_queue_size,
+                    config.disk_cache_virtual_column_meta_size as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )?
+            };
+
             let prune_partitions_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PRUNE_PARTITIONS,
                 config.table_prune_partitions_count as usize,
@@ -421,6 +442,7 @@ impl CacheManager {
                 inverted_index_file_cache,
                 vector_index_meta_cache,
                 vector_index_file_cache,
+                virtual_column_meta_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
                 segment_statistics_cache,
@@ -537,6 +559,14 @@ impl CacheManager {
             HYBRID_CACHE_VECTOR_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE => {
                 Self::set_hybrid_cache_bytes_capacity(
                     &self.vector_index_file_cache,
+                    new_capacity,
+                    name,
+                );
+            }
+            HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA
+            | IN_MEMORY_HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA => {
+                Self::set_hybrid_cache_items_capacity(
+                    &self.virtual_column_meta_cache,
                     new_capacity,
                     name,
                 );
@@ -714,6 +744,10 @@ impl CacheManager {
         self.get_hybrid_cache(self.vector_index_file_cache.get())
     }
 
+    pub fn get_virtual_column_meta_cache(&self) -> Option<VirtualColumnMetaCache> {
+        self.get_hybrid_cache(self.virtual_column_meta_cache.get())
+    }
+
     pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
         self.prune_partitions_cache.get()
     }
@@ -865,6 +899,10 @@ const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_
 const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str =
     "memory_cache_vector_index_file_meta_data";
 
+const HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str = "cache_virtual_column_file_meta_data";
+const IN_MEMORY_HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str =
+    "memory_cache_virtual_column_file_meta_data";
+
 const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_COLUMN_DATA: &str = "cache_column_data";
 const IN_MEMORY_HYBRID_CACHE_COLUMN_DATA: &str = "memory_cache_column_data";
@@ -918,6 +956,7 @@ mod tests {
             disk_cache_inverted_index_data_size: 1024 * 1024,
             disk_cache_vector_index_meta_size: 1024 * 1024,
             disk_cache_vector_index_data_size: 1024 * 1024,
+            disk_cache_virtual_column_meta_size: 1024 * 1024,
             ..CacheConfig::default()
         }
     }
@@ -931,6 +970,7 @@ mod tests {
             disk_cache_inverted_index_data_size: 0,
             disk_cache_vector_index_meta_size: 0,
             disk_cache_vector_index_data_size: 0,
+            disk_cache_virtual_column_meta_size: 0,
             ..CacheConfig::default()
         }
     }
@@ -964,6 +1004,10 @@ mod tests {
                 .get_vector_index_file_cache()
                 .on_disk_cache()
                 .is_some()
+            && cache_manager
+                .get_virtual_column_meta_cache()
+                .on_disk_cache()
+                .is_some()
     }
 
     fn all_disk_cache_disabled(cache_manager: &CacheManager) -> bool {
@@ -993,6 +1037,10 @@ mod tests {
                 .is_none()
             && cache_manager
                 .get_vector_index_file_cache()
+                .on_disk_cache()
+                .is_none()
+            && cache_manager
+                .get_virtual_column_meta_cache()
                 .on_disk_cache()
                 .is_none()
     }

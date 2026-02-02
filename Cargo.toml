@@ -615,7 +615,7 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.9" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "fc84214" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }

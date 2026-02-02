@@ -28,6 +28,7 @@ use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
+use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -55,6 +56,8 @@ pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type InvertedIndexMetaReader = HybridCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
+pub type VirtualColumnMetaReader =
+    HybridCacheReader<VirtualColumnFileMeta, LoaderWrapper<Operator>>;
 pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
@@ -116,6 +119,13 @@ impl MetaReaders {
     pub fn vector_index_meta_reader(dal: Operator) -> VectorIndexMetaReader {
         VectorIndexMetaReader::new(
             CacheManager::instance().get_vector_index_meta_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn virtual_column_meta_reader(dal: Operator) -> VirtualColumnMetaReader {
+        VirtualColumnMetaReader::new(
+            CacheManager::instance().get_virtual_column_meta_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -311,6 +321,24 @@ impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
             })?;
 
         VectorIndexMeta::try_from(meta)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<VirtualColumnFileMeta> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<VirtualColumnFileMeta> {
+        // read the ThriftFileMetaData, omit unnecessary conversions
+        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?;
+
+        VirtualColumnFileMeta::try_from(meta)
     }
 }
 

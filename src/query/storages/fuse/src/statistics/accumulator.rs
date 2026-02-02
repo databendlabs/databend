@@ -163,7 +163,6 @@ impl VirtualColumnAccumulator {
                 };
                 self.virtual_schema.add_field(new_virtual_field).unwrap()
             };
-
             virtual_column_metas.insert(column_id, draft_virtual_column_meta.column_meta.clone());
         }
         self.number_of_blocks += 1;

@@ -3512,6 +3512,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "dyn-clone",
  "goldenfile",
+ "jsonb",
  "log",
  "maplit",
  "parking_lot 0.12.3",
@@ -5306,6 +5307,7 @@ dependencies = [
  "databend-query",
  "databend-storages-common-cache",
  "databend-storages-common-io",
+ "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "futures",
  "futures-util",
@@ -5957,6 +5959,9 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "arrow-ipc 56.2.0",
+ "arrow-schema 56.2.0",
+ "base64 0.22.1",
  "bincode 2.0.1",
  "bitvec",
  "bytemuck",
@@ -10137,7 +10142,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.5"
-source = "git+https://github.com/databendlabs/jsonb?rev=1868abf#1868abfa1698a4c67fc17428da0cff5f33a2f4ad"
+source = "git+https://github.com/databendlabs/jsonb?rev=fc84214#fc84214882e862940a11a28abeb5e046107248a0"
 dependencies = [
  "byteorder",
  "ethnum",
