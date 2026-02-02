@@ -103,7 +103,7 @@ pub enum PartitionsShuffleKind {
     ConsistentHash,
     // Bind the Partition to executor by partition.rand() order.
     Rand,
-    // Bind the Partition to executor by block-level modulo (block_idx % num_executors)
+    // Bind the Partition to executor by block-level hash (hash(segment_location, block_idx) % num_executors)
     // Carries optional slot description for filtering blocks at each executor
     BlockMod(Option<databend_storages_common_table_meta::meta::BlockSlotDescription>),
     // Bind the Partition to executor by broadcast
@@ -197,7 +197,7 @@ impl Partitions {
                 parts
             }
             // These shuffle kinds distribute all partitions to all executors (broadcast pattern):
-            // - BlockMod: Each executor filters blocks using block_idx % num_executors during execution
+            // - BlockMod: Each executor filters blocks using hash(segment_location, block_idx) % num_executors
             // - BroadcastCluster/BroadcastWarehouse: Each executor processes all blocks
             // The actual filtering logic is handled during partition processing, not here.
             PartitionsShuffleKind::BlockMod(_)

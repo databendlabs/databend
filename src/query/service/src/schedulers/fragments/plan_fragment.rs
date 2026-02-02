@@ -175,7 +175,8 @@ impl PlanFragment {
                 DataSource::Table(data_source_plan) => {
                     // Redistribute partitions of ReadDataSourcePlan.
                     let partitions = &data_source_plan.parts;
-                    let use_block_mod = matches!(partitions.kind, PartitionsShuffleKind::BlockMod(_));
+                    let use_block_mod =
+                        matches!(partitions.kind, PartitionsShuffleKind::BlockMod(_));
                     let partition_reshuffle = partitions.reshuffle(executors.clone())?;
 
                     for (executor_id, parts) in partition_reshuffle {

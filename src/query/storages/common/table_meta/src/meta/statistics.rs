@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::io::Cursor;
 
 use databend_common_exception::Result;
@@ -44,10 +47,19 @@ pub struct BlockSlotDescription {
     // number of slots
     pub num_slots: usize,
     // index of slot that current executor should take care of:
-    // let `block_index` be the index of block in segment,
-    // `block_index` mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
+    // let `block_index` be the index of block in segment, and `segment_location` the segment location,
+    // hash(segment_location, block_index) mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
     // otherwise, the block should be taken care of by other executors
     pub slot: u32,
+}
+
+impl BlockSlotDescription {
+    pub fn matches(&self, segment_location: &Location, block_idx: usize) -> bool {
+        let mut hasher = DefaultHasher::new();
+        segment_location.hash(&mut hasher);
+        block_idx.hash(&mut hasher);
+        (hasher.finish() % self.num_slots as u64) == self.slot as u64
+    }
 }
 
 pub fn supported_stat_type(data_type: &DataType) -> bool {
