@@ -19,8 +19,8 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::Identifier;
-use crate::ast::write_comma_separated_list;
 use crate::ast::statements::tag::TagSetItem;
+use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowWorkersStmt {}

@@ -93,10 +93,6 @@ use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
-use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
-use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
-use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
-use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInterpreter;
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
@@ -121,6 +117,10 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
+use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
+use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
+use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
+use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 

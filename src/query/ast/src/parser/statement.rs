@@ -633,10 +633,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             DROP ~ WORKER ~ ( IF ~ ^EXISTS )? ~ #ident
         },
-        |(_, _, opt_if_exists, name)| Statement::DropWorker(DropWorkerStmt {
-            if_exists: opt_if_exists.is_some(),
-            name,
-        }),
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropWorker(DropWorkerStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
     );
 
     let rename_warehouse = map(

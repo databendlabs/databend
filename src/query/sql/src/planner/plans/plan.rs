@@ -47,9 +47,9 @@ use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
-use crate::plans::AlterWorkerPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterWorkerPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -120,10 +120,10 @@ use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
-use crate::plans::DropWorkerPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
+use crate::plans::DropWorkerPlan;
 use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
@@ -187,12 +187,12 @@ use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
-use crate::plans::worker_schema;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
+use crate::plans::worker_schema;
 
 #[derive(Educe)]
 #[educe(
