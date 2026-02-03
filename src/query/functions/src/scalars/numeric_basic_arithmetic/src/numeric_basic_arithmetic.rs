@@ -15,10 +15,15 @@
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Scalar;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::function_stat::ArgStat;
+use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
@@ -65,11 +70,53 @@ where
             }
             .unwrap_or(FunctionDomain::Full)
         })
+        .derive_stat(|stat, _| {
+            if let Some(value) = stat.args[0].domain.as_singleton() {
+                return derive_plus_with_const::<L, R, AddMulResult<L, R>>(&value, &stat.args[1]);
+            }
+            if let Some(value) = stat.args[1].domain.as_singleton() {
+                return derive_plus_with_const::<R, L, AddMulResult<L, R>>(&value, &stat.args[0]);
+            }
+            Ok(None)
+        })
         .each_row(|a, b, _| {
             (AsPrimitive::<AddMulResult<L, R>>::as_(a))
                 + (AsPrimitive::<AddMulResult<L, R>>::as_(b))
         })
         .register();
+}
+
+fn derive_plus_with_const<C, O, R>(
+    cnst: &Scalar,
+    other_arg: &ArgStat,
+) -> Result<Option<ReturnStat>, String>
+where
+    C: Number + AsPrimitive<R>,
+    O: Number + AsPrimitive<R>,
+    R: Number + ResultTypeOfUnary + std::ops::Add<Output = R>,
+{
+    if cnst.is_null() {
+        return Ok(None);
+    }
+
+    let cnst = NumberType::<C>::try_downcast_scalar(&cnst.as_ref())
+        .map_err(|e| e.to_string())?
+        .as_();
+
+    let domain =
+        NumberType::<O>::try_downcast_domain(&other_arg.domain).map_err(|e| e.to_string())?;
+
+    Ok(try {
+        ReturnStat {
+            domain: NumberType::<R>::upcast_domain(SimpleDomain {
+                min: domain.min.as_().checked_add(cnst)?,
+                max: domain.max.as_().checked_add(cnst)?,
+            }),
+            ndv: other_arg.ndv,
+            null_count: other_arg.null_count,
+            histogram: None,
+        }
+    })
 }
 
 pub fn register_minus<L, R>(registry: &mut FunctionRegistry)

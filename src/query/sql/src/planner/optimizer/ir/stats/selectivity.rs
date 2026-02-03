@@ -956,6 +956,8 @@ mod tests {
         run_test(file, "a <= 20", columns, column_stats.clone())?;
         run_test(file, "a <= 25", columns, column_stats.clone())?;
 
+        run_test(file, "a + 1 = 15", columns, column_stats.clone())?;
+
         Ok(())
     }
 

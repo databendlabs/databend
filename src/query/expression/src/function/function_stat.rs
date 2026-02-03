@@ -17,7 +17,6 @@ use std::convert::TryFrom;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 pub use databend_common_statistics::Ndv;
-use enum_as_inner::EnumAsInner;
 
 use crate::Domain;
 use crate::FunctionContext;
@@ -43,6 +42,14 @@ pub trait ScalarFunctionStat: Send + Sync + 'static {
     ) -> Result<Option<ReturnStat>, String>;
 }
 
+#[derive(Clone, Copy)]
+pub enum DeriveStat {
+    Nullary(fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+    Unary(fn(StatUnaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+    Binary(fn(StatBinaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+    Other(fn(StatArgs, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+}
+
 impl ScalarFunctionStat for DeriveStat {
     fn stat_eval(
         &self,
@@ -50,7 +57,10 @@ impl ScalarFunctionStat for DeriveStat {
         stat_args: StatArgs<'_>,
     ) -> Result<Option<ReturnStat>, String> {
         match self {
-            DeriveStat::Nullary(func) => func(stat_args.cardinality, ctx),
+            DeriveStat::Nullary(func) => {
+                assert!(stat_args.args.is_empty());
+                func(stat_args.cardinality, ctx)
+            }
             DeriveStat::Unary(func) => func(
                 StatUnaryArg {
                     cardinality: stat_args.cardinality,
@@ -68,14 +78,6 @@ impl ScalarFunctionStat for DeriveStat {
             DeriveStat::Other(func) => func(stat_args, ctx),
         }
     }
-}
-
-#[derive(Clone, Copy, EnumAsInner)]
-pub enum DeriveStat {
-    Nullary(fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
-    Unary(fn(StatUnaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
-    Binary(fn(StatBinaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
-    Other(fn(StatArgs, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
 }
 
 #[derive(Debug, Clone)]
