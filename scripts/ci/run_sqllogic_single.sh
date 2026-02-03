@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
 
-TEST_FILE="tests/sqllogictests/suites/query/cte/r_cte_union_all.test"
+TEST_FILE="r_cte_union_all.test"
 HANDLERS="${HANDLERS:-mysql,http}"
 PARALLEL="${PARALLEL:-8}"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
