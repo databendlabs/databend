@@ -262,7 +262,7 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v.clone() {
+            if let Some(col_stat) = v {
                 let Some(min) = col_stat.min.clone() else {
                     continue;
                 };

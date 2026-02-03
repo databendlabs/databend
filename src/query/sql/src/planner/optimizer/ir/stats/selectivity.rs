@@ -24,6 +24,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::function_stat::ArgStat;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
@@ -187,6 +188,16 @@ impl SelectivityVisitor<'_> {
             let Some(column_stat) = self.get_column_stat(binding.index) else {
                 return Ok(None);
             };
+
+            match data_type.remove_nullable() {
+                DataType::Boolean
+                | DataType::Binary
+                | DataType::String
+                | DataType::Number(_)
+                | DataType::Decimal(_) => (),
+                _ => return Ok(None),
+            }
+
             match column_stat.to_arg_stat(&data_type) {
                 Ok(arg_stat) => {
                     input_stats.insert(binding, arg_stat);

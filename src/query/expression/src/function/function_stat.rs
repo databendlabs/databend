@@ -126,11 +126,9 @@ impl Scalar {
             Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
             Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
             Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
-            Scalar::Number(NumberScalar::Float32(v)) => {
-                Some(Datum::Float(F64::from(f32::from(v) as f64)))
-            }
-            Scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
+            Scalar::Number(NumberScalar::Float32(v)) => Some(Datum::Float(F64::from(v.0 as f64))),
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
+            Scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
             Scalar::Binary(v) => Some(Datum::Bytes(v)),
             Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),
             _ => None,

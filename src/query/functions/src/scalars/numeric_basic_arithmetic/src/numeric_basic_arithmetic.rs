@@ -30,6 +30,7 @@ use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_float_mapped_type;
@@ -89,7 +90,7 @@ where
 
 fn derive_plus_with_const<C, O, R>(
     cnst: &Scalar,
-    other_arg: &ArgStat,
+    stat: &ArgStat,
 ) -> Result<Option<ReturnStat>, String>
 where
     C: Number + AsPrimitive<R>,
@@ -104,17 +105,39 @@ where
         .map_err(|e| e.to_string())?
         .as_();
 
-    let domain =
-        NumberType::<O>::try_downcast_domain(&other_arg.domain).map_err(|e| e.to_string())?;
+    if let Ok(NullableDomain { has_null, value }) =
+        NullableType::<NumberType<O>>::try_downcast_domain(&stat.domain)
+    {
+        return Ok(try {
+            ReturnStat {
+                domain: NullableType::<NumberType<R>>::upcast_domain(NullableDomain {
+                    has_null,
+                    value: {
+                        match value {
+                            Some(domain) => Some(Box::new(SimpleDomain {
+                                min: domain.min.as_().checked_add(cnst)?,
+                                max: domain.max.as_().checked_add(cnst)?,
+                            })),
+                            None => None,
+                        }
+                    },
+                }),
+                ndv: stat.ndv,
+                null_count: stat.null_count,
+                histogram: None,
+            }
+        });
+    }
 
+    let domain = NumberType::<O>::try_downcast_domain(&stat.domain).map_err(|e| e.to_string())?;
     Ok(try {
         ReturnStat {
             domain: NumberType::<R>::upcast_domain(SimpleDomain {
                 min: domain.min.as_().checked_add(cnst)?,
                 max: domain.max.as_().checked_add(cnst)?,
             }),
-            ndv: other_arg.ndv,
-            null_count: other_arg.null_count,
+            ndv: stat.ndv,
+            null_count: stat.null_count,
             histogram: None,
         }
     })
