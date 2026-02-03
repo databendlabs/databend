@@ -93,6 +93,10 @@ use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
+use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
+use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
+use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
+use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInterpreter;
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
@@ -150,6 +154,7 @@ impl InterpreterFactory {
             Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(
                 ctx.clone(),
             )?)),
+            Plan::ShowWorkers => Ok(Arc::new(ShowWorkersInterpreter::try_create(ctx.clone())?)),
             Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(
                 ctx.clone(),
             )?)),
@@ -161,7 +166,15 @@ impl InterpreterFactory {
                 ctx.clone(),
                 *v.clone(),
             )?)),
+            Plan::CreateWorker(v) => Ok(Arc::new(CreateWorkerInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
             Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::DropWorker(v) => Ok(Arc::new(DropWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
@@ -174,6 +187,10 @@ impl InterpreterFactory {
                 *v.clone(),
             )?)),
             Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::AlterWorker(v) => Ok(Arc::new(AlterWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),

@@ -3,17 +3,58 @@ option go_package = "databend.com/cloudcontrol/proto";
 
 package resourceproto;
 
-message ApplyResourceRequest {
-  string resource_name = 1;
-  string type = 3;
-  string script = 4;
+message Worker {
+  string name = 1;
+  map<string, string> tags = 2;
+  string created_at = 3;
+  string updated_at = 4;
 }
 
-message ApplyResourceResponse {
-  string endpoint = 1;
-  map<string, string> headers = 2;
+message CreateWorkerRequest {
+  string tenant_id = 1;
+  string name = 2;
+  bool if_not_exists = 3;
+  map<string, string> tags = 4;
+  string type = 5;
+  string script = 6;
 }
 
-service ResourceService {
-  rpc ApplyResource(ApplyResourceRequest) returns (ApplyResourceResponse);
+message CreateWorkerResponse {
+  Worker worker = 1;
+  string endpoint = 2;
+  map<string, string> headers = 3;
+}
+
+message AlterWorkerRequest {
+  string tenant_id = 1;
+  string name = 2;
+  map<string, string> set_tags = 3;
+  repeated string unset_tags = 4;
+}
+
+message AlterWorkerResponse {
+  Worker worker = 1;
+}
+
+message DropWorkerRequest {
+  string tenant_id = 1;
+  string name = 2;
+  bool if_exists = 3;
+}
+
+message DropWorkerResponse {}
+
+message ListWorkersRequest {
+  string tenant_id = 1;
+}
+
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+}
+
+service WorkerService {
+  rpc CreateWorker(CreateWorkerRequest) returns (CreateWorkerResponse);
+  rpc AlterWorker(AlterWorkerRequest) returns (AlterWorkerResponse);
+  rpc DropWorker(DropWorkerRequest) returns (DropWorkerResponse);
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);
 }

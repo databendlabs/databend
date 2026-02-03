@@ -332,6 +332,27 @@ $$
     ctx.check_result("SELECT read_pkg() AS result", [["zip-whl-egg"]])
 
 
+def worker_case(ctx: SandboxContext):
+    print("Creating worker")
+    ctx.execute_query("CREATE WORKER IF NOT EXISTS read_env")
+    ctx.execute_query("ALTER WORKER read_env SET TAG purpose='sandbox'")
+    response = ctx.execute_query("SHOW WORKERS")
+    rows = ctx.collect_query_data(response)
+    matched = False
+    for row in rows:
+        if not row:
+            continue
+        if row[0] == "read_env":
+            tags_raw = row[1]
+            tags = json.loads(tags_raw) if tags_raw else {}
+            if tags.get("purpose") == "sandbox":
+                matched = True
+                break
+    if not matched:
+        raise RuntimeError("Worker tag verification failed for read_env")
+    ctx.execute_query("DROP WORKER IF EXISTS read_env")
+
+
 def env_case(ctx: SandboxContext):
     print("Creating env reader UDF")
     create_env_udf_sql = """CREATE OR REPLACE FUNCTION read_env()
@@ -628,6 +649,7 @@ def main():
     metadata_imports(ctx)
     numpy_case(ctx)
     zip_whl_egg(ctx)
+    worker_case(ctx)
     env_case(ctx)
     read_stage(ctx)
     read_archive(ctx)

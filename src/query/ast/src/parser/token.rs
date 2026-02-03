@@ -1435,6 +1435,8 @@ pub enum TokenKind {
     TOP,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
+    #[token("WORKER", ignore(ascii_case))]
+    WORKER,
     #[token("SCHEDULE", ignore(ascii_case))]
     SCHEDULE,
     #[token("SUSPEND_TASK_AFTER_NUM_FAILURES", ignore(ascii_case))]
@@ -1503,6 +1505,8 @@ pub enum TokenKind {
     SUNDAY,
     #[token("WAREHOUSES", ignore(ascii_case))]
     WAREHOUSES,
+    #[token("WORKERS", ignore(ascii_case))]
+    WORKERS,
     #[token("INSPECT", ignore(ascii_case))]
     INSPECT,
     #[token("ASSIGN", ignore(ascii_case))]

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eresource.proto\x12\rresourceproto\"K\n\x14\x41pplyResourceRequest\x12\x15\n\rresource_name\x18\x01 \x01(\t\x12\x0c\n\x04type\x18\x03 \x01(\t\x12\x0e\n\x06script\x18\x04 \x01(\t\"\x9d\x01\n\x15\x41pplyResourceResponse\x12\x10\n\x08\x65ndpoint\x18\x01 \x01(\t\x12\x42\n\x07headers\x18\x02 \x03(\x0b\x32\x31.resourceproto.ApplyResourceResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32m\n\x0fResourceService\x12Z\n\rApplyResource\x12#.resourceproto.ApplyResourceRequest\x1a$.resourceproto.ApplyResourceResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eresource.proto\x12\rresourceproto\"\x9a\x01\n\x06Worker\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x04tags\x18\x02 \x03(\x0b\x32\x1f.resourceproto.Worker.TagsEntry\x12\x12\n\ncreated_at\x18\x03 \x01(\t\x12\x12\n\nupdated_at\x18\x04 \x01(\t\x1a+\n\tTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xd4\x01\n\x13\x43reateWorkerRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x15\n\rif_not_exists\x18\x03 \x01(\x08\x12:\n\x04tags\x18\x04 \x03(\x0b\x32,.resourceproto.CreateWorkerRequest.TagsEntry\x12\x0c\n\x04type\x18\x05 \x01(\t\x12\x0e\n\x06script\x18\x06 \x01(\t\x1a+\n\tTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xc2\x01\n\x14\x43reateWorkerResponse\x12%\n\x06worker\x18\x01 \x01(\x0b\x32\x15.resourceproto.Worker\x12\x10\n\x08\x65ndpoint\x18\x02 \x01(\t\x12\x41\n\x07headers\x18\x03 \x03(\x0b\x32\x30.resourceproto.CreateWorkerResponse.HeadersEntry\x1a.\n\x0cHeadersEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xbb\x01\n\x12\x41lterWorkerRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12@\n\x08set_tags\x18\x03 \x03(\x0b\x32..resourceproto.AlterWorkerRequest.SetTagsEntry\x12\x12\n\nunset_tags\x18\x04 \x03(\t\x1a.\n\x0cSetTagsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"<\n\x13\x41lterWorkerResponse\x12%\n\x06worker\x18\x01 \x01(\x0b\x32\x15.resourceproto.Worker\"G\n\x11\x44ropWorkerRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x11\n\tif_exists\x18\x03 \x01(\x08\"\x14\n\x12\x44ropWorkerResponse\"\'\n\x12ListWorkersRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\"=\n\x13ListWorkersResponse\x12&\n\x07workers\x18\x01 \x03(\x0b\x32\x15.resourceproto.Worker2\xe7\x02\n\rWorkerService\x12W\n\x0c\x43reateWorker\x12\".resourceproto.CreateWorkerRequest\x1a#.resourceproto.CreateWorkerResponse\x12T\n\x0b\x41lterWorker\x12!.resourceproto.AlterWorkerRequest\x1a\".resourceproto.AlterWorkerResponse\x12Q\n\nDropWorker\x12 .resourceproto.DropWorkerRequest\x1a!.resourceproto.DropWorkerResponse\x12T\n\x0bListWorkers\x12!.resourceproto.ListWorkersRequest\x1a\".resourceproto.ListWorkersResponseB!Z\x1f\x64\x61tabend.com/cloudcontrol/protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,14 +32,40 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'resource_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\037databend.com/cloudcontrol/proto'
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._loaded_options = None
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_options = b'8\001'
-  _globals['_APPLYRESOURCEREQUEST']._serialized_start=33
-  _globals['_APPLYRESOURCEREQUEST']._serialized_end=108
-  _globals['_APPLYRESOURCERESPONSE']._serialized_start=111
-  _globals['_APPLYRESOURCERESPONSE']._serialized_end=268
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_start=222
-  _globals['_APPLYRESOURCERESPONSE_HEADERSENTRY']._serialized_end=268
-  _globals['_RESOURCESERVICE']._serialized_start=270
-  _globals['_RESOURCESERVICE']._serialized_end=379
+  _globals['_WORKER_TAGSENTRY']._loaded_options = None
+  _globals['_WORKER_TAGSENTRY']._serialized_options = b'8\001'
+  _globals['_CREATEWORKERREQUEST_TAGSENTRY']._loaded_options = None
+  _globals['_CREATEWORKERREQUEST_TAGSENTRY']._serialized_options = b'8\001'
+  _globals['_CREATEWORKERRESPONSE_HEADERSENTRY']._loaded_options = None
+  _globals['_CREATEWORKERRESPONSE_HEADERSENTRY']._serialized_options = b'8\001'
+  _globals['_ALTERWORKERREQUEST_SETTAGSENTRY']._loaded_options = None
+  _globals['_ALTERWORKERREQUEST_SETTAGSENTRY']._serialized_options = b'8\001'
+  _globals['_WORKER']._serialized_start=34
+  _globals['_WORKER']._serialized_end=188
+  _globals['_WORKER_TAGSENTRY']._serialized_start=145
+  _globals['_WORKER_TAGSENTRY']._serialized_end=188
+  _globals['_CREATEWORKERREQUEST']._serialized_start=191
+  _globals['_CREATEWORKERREQUEST']._serialized_end=403
+  _globals['_CREATEWORKERREQUEST_TAGSENTRY']._serialized_start=145
+  _globals['_CREATEWORKERREQUEST_TAGSENTRY']._serialized_end=188
+  _globals['_CREATEWORKERRESPONSE']._serialized_start=406
+  _globals['_CREATEWORKERRESPONSE']._serialized_end=600
+  _globals['_CREATEWORKERRESPONSE_HEADERSENTRY']._serialized_start=554
+  _globals['_CREATEWORKERRESPONSE_HEADERSENTRY']._serialized_end=600
+  _globals['_ALTERWORKERREQUEST']._serialized_start=603
+  _globals['_ALTERWORKERREQUEST']._serialized_end=790
+  _globals['_ALTERWORKERREQUEST_SETTAGSENTRY']._serialized_start=744
+  _globals['_ALTERWORKERREQUEST_SETTAGSENTRY']._serialized_end=790
+  _globals['_ALTERWORKERRESPONSE']._serialized_start=792
+  _globals['_ALTERWORKERRESPONSE']._serialized_end=852
+  _globals['_DROPWORKERREQUEST']._serialized_start=854
+  _globals['_DROPWORKERREQUEST']._serialized_end=925
+  _globals['_DROPWORKERRESPONSE']._serialized_start=927
+  _globals['_DROPWORKERRESPONSE']._serialized_end=947
+  _globals['_LISTWORKERSREQUEST']._serialized_start=949
+  _globals['_LISTWORKERSREQUEST']._serialized_end=988
+  _globals['_LISTWORKERSRESPONSE']._serialized_start=990
+  _globals['_LISTWORKERSRESPONSE']._serialized_end=1051
+  _globals['_WORKERSERVICE']._serialized_start=1054
+  _globals['_WORKERSERVICE']._serialized_end=1413
 # @@protoc_insertion_point(module_scope)

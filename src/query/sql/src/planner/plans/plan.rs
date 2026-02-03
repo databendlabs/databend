@@ -47,6 +47,7 @@ use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
+use crate::plans::AlterWorkerPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -78,6 +79,7 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateWarehousePlan;
+use crate::plans::CreateWorkerPlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
@@ -118,6 +120,7 @@ use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
+use crate::plans::DropWorkerPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
@@ -184,6 +187,7 @@ use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
+use crate::plans::worker_schema;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
@@ -252,6 +256,12 @@ pub enum Plan {
     RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
     AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
     UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
+
+    // Workers
+    ShowWorkers,
+    CreateWorker(Box<CreateWorkerPlan>),
+    AlterWorker(Box<AlterWorkerPlan>),
+    DropWorker(Box<DropWorkerPlan>),
 
     // Workloads
     ShowWorkloadGroups,
@@ -595,6 +605,7 @@ impl Plan {
                 DataField::new("type", DataType::String),
                 DataField::new("status", DataType::String),
             ]),
+            Plan::ShowWorkers => worker_schema(),
             Plan::ShowOnlineNodes => DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::String),
                 DataField::new("type", DataType::String),

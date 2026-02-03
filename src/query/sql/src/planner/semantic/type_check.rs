@@ -63,7 +63,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::ApplyResourceRequest;
+use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
@@ -5705,18 +5705,21 @@ impl<'a> TypeChecker<'a> {
             query_id,
             provider.get_timeout(),
         );
-        cfg.add_resource_version_info();
+        cfg.add_worker_version_info();
 
-        let req = ApplyResourceRequest {
-            resource_name: resource_name.to_string(),
+        let req = CreateWorkerRequest {
+            tenant_id: tenant.tenant_name().to_string(),
+            name: resource_name.to_string(),
+            if_not_exists: true,
+            tags: Default::default(),
             r#type: resource_type.to_string(),
             script,
         };
 
         let resp = databend_common_base::runtime::block_on(
             provider
-                .get_resource_client()
-                .apply_resource(make_request(req, cfg)),
+                .get_worker_client()
+                .create_worker(make_request(req, cfg)),
         )?;
 
         let endpoint = resp.endpoint;

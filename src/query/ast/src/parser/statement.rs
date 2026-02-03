@@ -583,6 +583,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
+    let show_workers = map(
+        rule! {
+            SHOW ~ WORKERS
+        },
+        |(_, _)| Statement::ShowWorkers(ShowWorkersStmt {}),
+    );
+
     let use_warehouse = map(
         rule! {
             USE ~ WAREHOUSE ~ #ident
@@ -603,11 +610,33 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_worker = map(
+        rule! {
+            CREATE ~ WORKER ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_not_exists, name)| {
+            Statement::CreateWorker(CreateWorkerStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name,
+            })
+        },
+    );
+
     let drop_warehouse = map(
         rule! {
             DROP ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let drop_worker = map(
+        rule! {
+            DROP ~ WORKER ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| Statement::DropWorker(DropWorkerStmt {
+            if_exists: opt_if_exists.is_some(),
+            name,
+        }),
     );
 
     let rename_warehouse = map(
@@ -641,6 +670,26 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             INSPECT ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let alter_worker_action = map(
+        rule! {
+            SET ~ TAG ~ #tag_set_items
+        },
+        |(_, _, tags)| AlterWorkerAction::SetTag { tags },
+    )
+    .or(map(
+        rule! {
+            UNSET ~ TAG ~ #tag_unset_items
+        },
+        |(_, _, tags)| AlterWorkerAction::UnsetTag { tags },
+    ));
+
+    let alter_worker = map(
+        rule! {
+            ALTER ~ WORKER ~ #ident ~ #alter_worker_action
+        },
+        |(_, _, name, action)| Statement::AlterWorker(AlterWorkerStmt { name, action }),
     );
 
     let add_warehouse_cluster = map(
@@ -2719,6 +2768,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
                 | #show_online_nodes: "`SHOW ONLINE NODES`"
                 | #show_warehouses: "`SHOW WAREHOUSES`"
+                | #show_workers: "`SHOW WORKERS`"
                 | #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
                 | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
                 | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
@@ -2861,6 +2911,7 @@ AS
   <sql>`"
                 | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+                | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name>`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
                 | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
@@ -2907,6 +2958,7 @@ AS
                 #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
                 | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
                 | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+                | #drop_worker: "`DROP WORKER [IF EXISTS] <name>`"
                 | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
                 | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
                 | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
@@ -2944,6 +2996,7 @@ AS
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
             | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
             | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"

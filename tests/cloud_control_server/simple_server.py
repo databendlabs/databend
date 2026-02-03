@@ -36,6 +36,7 @@ TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+WORKER_DB = {}
 
 UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
 UDF_DOCKER_KEEP_CONTAINER = True
@@ -132,6 +133,25 @@ def _get_udf_env_vars(tenant, resource_name):
     if not isinstance(udf_cfg, dict):
         return {}
     return _sanitize_env_vars(udf_cfg)
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_worker_store(tenant_id):
+    if not tenant_id:
+        tenant_id = "default"
+    return WORKER_DB.setdefault(tenant_id, {})
+
+
+def _worker_to_pb(worker):
+    return resource_pb2.Worker(
+        name=worker["name"],
+        tags=worker.get("tags") or {},
+        created_at=worker.get("created_at") or "",
+        updated_at=worker.get("updated_at") or "",
+    )
 
 
 def _run_command(args, input_text=None):
@@ -750,51 +770,110 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         )
 
 
-class ResourceService(resource_pb2_grpc.ResourceServiceServicer):
-    def ApplyResource(self, request, context):
-        _log("ApplyResource", request)
-        if not _docker_available():
-            context.abort(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "docker not found; a working docker CLI is required",
-            )
+class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
+    def CreateWorker(self, request, context):
+        _log("CreateWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        worker = store.get(name)
+        if worker is None:
+            now = _now_iso()
+            worker = {
+                "name": name,
+                "tags": dict(request.tags),
+                "created_at": now,
+                "updated_at": now,
+            }
+            store[name] = worker
+        elif not request.if_not_exists:
+            context.abort(grpc.StatusCode.ALREADY_EXISTS, "worker already exists")
 
-        resource_type = request.type or "udf"
-        resource_name = request.resource_name
-        script = request.script
-        if not script:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing script")
-        _log("Sandbox script:\n", script)
-
-        env_vars = {}
-        if resource_type == "udf":
-            tenant = _get_metadata_value(context, "x-databend-tenant")
-            try:
-                env_vars = _get_udf_env_vars(tenant, resource_name)
-            except Exception as exc:
+        endpoint = ""
+        headers = {}
+        if request.script:
+            if not _docker_available():
                 context.abort(
                     grpc.StatusCode.FAILED_PRECONDITION,
-                    f"failed to load udf env config: {exc}",
-                )
-            if env_vars:
-                _log(
-                    "Sandbox env keys:",
-                    ",".join(sorted(env_vars.keys())),
+                    "docker not found; a working docker CLI is required",
                 )
 
-        try:
-            endpoint, _status_endpoint = _ensure_resource_endpoint(
-                resource_type, script, env_vars
-            )
-        except Exception as exc:
-            context.abort(
-                grpc.StatusCode.INTERNAL,
-                f"failed to provision sandbox container: {exc}",
-            )
+            resource_type = request.type or "udf"
+            resource_name = name
+            script = request.script
+            _log("Sandbox script:\n", script)
 
-        return resource_pb2.ApplyResourceResponse(
-            endpoint=endpoint, headers=UDF_HEADERS
+            env_vars = {}
+            if resource_type == "udf":
+                tenant = request.tenant_id or _get_metadata_value(
+                    context, "x-databend-tenant"
+                )
+                try:
+                    env_vars = _get_udf_env_vars(tenant, resource_name)
+                except Exception as exc:
+                    context.abort(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        f"failed to load udf env config: {exc}",
+                    )
+                if env_vars:
+                    _log(
+                        "Sandbox env keys:",
+                        ",".join(sorted(env_vars.keys())),
+                    )
+
+            try:
+                endpoint, _status_endpoint = _ensure_resource_endpoint(
+                    resource_type, script, env_vars
+                )
+            except Exception as exc:
+                context.abort(
+                    grpc.StatusCode.INTERNAL,
+                    f"failed to provision sandbox container: {exc}",
+                )
+            headers = UDF_HEADERS
+
+        return resource_pb2.CreateWorkerResponse(
+            worker=_worker_to_pb(worker), endpoint=endpoint, headers=headers
         )
+
+    def AlterWorker(self, request, context):
+        _log("AlterWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        if name not in store:
+            context.abort(grpc.StatusCode.NOT_FOUND, "worker not found")
+        worker = store[name]
+        if request.set_tags:
+            worker.setdefault("tags", {}).update(dict(request.set_tags))
+        if request.unset_tags:
+            tags = worker.get("tags") or {}
+            for key in request.unset_tags:
+                tags.pop(key, None)
+            worker["tags"] = tags
+        worker["updated_at"] = _now_iso()
+        return resource_pb2.AlterWorkerResponse(worker=_worker_to_pb(worker))
+
+    def DropWorker(self, request, context):
+        _log("DropWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        if name not in store:
+            if request.if_exists:
+                return resource_pb2.DropWorkerResponse()
+            context.abort(grpc.StatusCode.NOT_FOUND, "worker not found")
+        del store[name]
+        return resource_pb2.DropWorkerResponse()
+
+    def ListWorkers(self, request, context):
+        _log("ListWorkers", request)
+        store = _get_worker_store(request.tenant_id)
+        workers = [_worker_to_pb(worker) for worker in store.values()]
+        return resource_pb2.ListWorkersResponse(workers=workers)
 
 
 def serve():
@@ -803,14 +882,12 @@ def serve():
     notification_pb2_grpc.add_NotificationServiceServicer_to_server(
         NotificationService(), server
     )
-    resource_pb2_grpc.add_ResourceServiceServicer_to_server(
-        ResourceService(), server
-    )
+    resource_pb2_grpc.add_WorkerServiceServicer_to_server(WorkerService(), server)
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
         notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
-        resource_pb2.DESCRIPTOR.services_by_name["ResourceService"].full_name,
+        resource_pb2.DESCRIPTOR.services_by_name["WorkerService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
