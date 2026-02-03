@@ -20,9 +20,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::KeysState;
 use databend_common_expression::filter::FilterExecutor;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::RowPtr;
 
 use super::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sql::plans::JoinType;
 
 #[derive(Debug)]
