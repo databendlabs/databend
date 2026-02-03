@@ -89,3 +89,40 @@ drop table if EXISTS world
 statement ok
 DROP DATABASE db1
 
+statement ok
+CREATE TABLE stage_partition_src(dt DATE, ts TIMESTAMP, val INT)
+
+statement ok
+INSERT INTO stage_partition_src VALUES
+    ('2020-01-28', '2020-01-28 18:00:00', 1),
+    ('2020-01-28', '2020-01-28 22:00:00', 2),
+    ('2020-01-29', '2020-01-29 02:00:00', 3),
+    (NULL, NULL, 4)
+
+statement ok
+DROP STAGE IF EXISTS hello_partition
+
+statement ok
+CREATE STAGE hello_partition
+
+statement ok
+COPY INTO @hello_partition
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+
+query TTTT
+SELECT
+    count_if(name LIKE 'date=2020-01-28/hour=18/%'),
+    count_if(name LIKE 'date=2020-01-28/hour=22/%'),
+    count_if(name LIKE 'date=2020-01-29/hour=02/%'),
+    count_if(name LIKE '_NULL_/%')
+FROM list_stage(location=>'@hello_partition')
+----
+1 1 1 1
+
+statement ok
+DROP STAGE hello_partition
+
+statement ok
+DROP TABLE stage_partition_src

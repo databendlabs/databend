@@ -47,7 +47,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::plans::ConstantTableScan;
-use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
@@ -150,11 +149,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             graphical,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
-        Plan::CopyIntoLocation(CopyIntoLocationPlan { info, from }) => {
-            Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
-                info,
-                from: Box::new(Box::pin(optimize(opt_ctx, *from)).await?),
-            }))
+        Plan::CopyIntoLocation(mut plan) => {
+            plan.from = Box::new(Box::pin(optimize(opt_ctx, *plan.from)).await?);
+            Ok(Plan::CopyIntoLocation(plan))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
             plan.enable_distributed = opt_ctx.get_enable_distributed_optimization()

@@ -94,6 +94,11 @@ impl CopyIntoLocationInterpreter {
             input_data_schema: query_result_schema,
             input_table_schema: table_schema,
             info: info.clone(),
+            partition_by: self
+                .plan
+                .partition_by
+                .as_ref()
+                .map(|desc| desc.remote_expr.clone()),
             meta: PhysicalPlanMeta::new("CopyIntoLocation"),
         });
 
