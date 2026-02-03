@@ -165,8 +165,10 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                // if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
-                if self.is_column_oriented() || distributed_pruning {
+                let use_prune_pipeline =
+                    self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning);
+
+                if use_prune_pipeline {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -212,12 +214,16 @@ impl FuseTable {
                     };
 
                     let block_count = snapshot.summary.block_count as usize;
+                    let partitions_total = match shuffle_kind {
+                        PartitionsShuffleKind::BlockMod(_) => block_count,
+                        _ => segment_len,
+                    };
                     let mut part_stats = PartStatistics::new_estimated(
                         Some(snapshot_loc),
                         snapshot.summary.row_count as usize,
                         snapshot.summary.compressed_byte_size as usize,
-                        block_count,
-                        block_count,
+                        partitions_total,
+                        partitions_total,
                     );
                     part_stats.shuffle_kind = Some(shuffle_kind.clone());
 
