@@ -80,8 +80,6 @@ impl NestedValues {
     pub fn create(settings: InputFormatSettings) -> Self {
         NestedValues {
             common_settings: InputCommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
@@ -97,6 +95,16 @@ impl NestedValues {
     fn match_bytes<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: &[u8]) -> bool {
         let pos = reader.checkpoint();
         if reader.ignore_bytes(bs) {
+            true
+        } else {
+            reader.rollback(pos);
+            false
+        }
+    }
+
+    fn match_byte<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: u8) -> bool {
+        let pos = reader.checkpoint();
+        if reader.ignore_byte(bs) {
             true
         } else {
             reader.rollback(pos);
@@ -159,20 +167,20 @@ impl NestedValues {
         column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        if self.match_bytes(reader, &self.common_settings.true_bytes) {
+        if self.match_byte(reader, b'1') {
             column.push(true);
-            Ok(())
-        } else if self.match_bytes(reader, &self.common_settings.false_bytes) {
+        } else if self.match_byte(reader, b'0') {
             column.push(false);
-            Ok(())
+        } else if self.match_bytes(reader, b"true") {
+            column.push(true);
+        } else if self.match_bytes(reader, b"false") {
+            column.push(false);
         } else {
-            let err_msg = format!(
-                "Incorrect boolean value, expect {} or {}",
-                self.common_settings.true_bytes.to_str().unwrap(),
-                self.common_settings.false_bytes.to_str().unwrap()
-            );
-            Err(ErrorCode::BadBytes(err_msg))
+            return Err(ErrorCode::BadBytes(
+                "Incorrect boolean value, expect one of 0/1/false/true",
+            ));
         }
+        Ok(())
     }
 
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
