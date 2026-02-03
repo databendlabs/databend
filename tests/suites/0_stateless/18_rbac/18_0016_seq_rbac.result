@@ -36,7 +36,6 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq2 for user 'b'@'%' with roles [public,role1,role_b]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
-Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2 for user b
 --- revoke access sequence from role3 , thne user c can not drop/use sequence seq1,3 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq1
@@ -64,8 +63,8 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence
 1
 4	1
 4	1
-OWNERSHIP	seq1	NULL	ROLE	role1	
-OWNERSHIP	seq3	NULL	ROLE	role1	
+OWNERSHIP	seq1	NULL	ROLE	role1
+OWNERSHIP	seq3	NULL	ROLE	role1
 CREATE,CREATE SEQUENCE	*.*	NULL	ROLE	role1	GRANT CREATE,CREATE SEQUENCE ON *.* TO ROLE `role1`
 OWNERSHIP	seq3	NULL	ROLE	role1	GRANT OWNERSHIP ON SEQUENCE seq3 TO ROLE `role1`
 --- user c can drop/use sequence seq2 ---
@@ -77,4 +76,4 @@ OWNERSHIP	seq3	NULL	ROLE	role1	GRANT OWNERSHIP ON SEQUENCE seq3 TO ROLE `role1`
 1
 4	1
 OWNERSHIP	seq2	NULL	ROLE	role2	GRANT OWNERSHIP ON SEQUENCE seq2 TO ROLE `role2`
-OWNERSHIP	seq2	NULL	ROLE	role2	
+OWNERSHIP	seq2	NULL	ROLE	role2
