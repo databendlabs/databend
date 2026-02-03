@@ -35,7 +35,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -256,7 +257,8 @@ pub trait TableContext: Send + Sync {
     ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_version(&self) -> BuildInfoRef;
-    fn get_format_settings(&self) -> Result<FormatSettings>;
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings>;
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings>;
     fn get_tenant(&self) -> Tenant;
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> QueryKind;
@@ -418,6 +420,7 @@ pub trait TableContext: Send + Sync {
         _files_to_copy: Option<Vec<StageFileInfo>>,
         _max_column_position: usize,
         _case_sensitive: bool,
+        _on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()
     }

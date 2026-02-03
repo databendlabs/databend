@@ -21,7 +21,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
-use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceMemoryJoin;
@@ -30,6 +29,7 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::JoinStream;
 use crate::pipelines::processors::transforms::NestedLoopDesc;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 
 pub struct NestedLoopJoin<T> {

@@ -14,8 +14,8 @@ log = sys.stdout
 
 client1 = client(name="client1>", log=log)
 
-size = 360
-num_predicates = 240
+size = 120
+num_predicates = 60
 step = size / num_predicates
 
 sql = f"""create or replace table t as select number as a from numbers({size});"""

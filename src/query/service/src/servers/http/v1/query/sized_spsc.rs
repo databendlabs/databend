@@ -24,7 +24,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
 use log::debug;
@@ -244,7 +244,7 @@ struct SizedChannel<S> {
     notify_on_recv: Notify,
 
     is_plan_ready: WatchNotify,
-    format_settings: Mutex<Option<FormatSettings>>,
+    format_settings: Mutex<Option<OutputFormatSettings>>,
     spiller: Mutex<Option<S>>,
 }
 
@@ -522,7 +522,7 @@ where S: DataBlockSpill
         }
     }
 
-    pub fn plan_ready(&mut self, format_settings: FormatSettings, spiller: Option<S>) {
+    pub fn plan_ready(&mut self, format_settings: OutputFormatSettings, spiller: Option<S>) {
         assert!(!self.chan.is_plan_ready.has_notified());
         *self.chan.format_settings.lock().unwrap() = Some(format_settings);
         *self.chan.spiller.lock().unwrap() = spiller;
@@ -555,7 +555,6 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::Number;
     use databend_common_expression::types::NumberType;
-    use databend_common_io::prelude::FormatSettings;
     use databend_common_pipeline_transforms::traits::DataBlockSpill;
     use databend_common_pipeline_transforms::traits::Location;
     use proptest::prelude::*;
@@ -608,7 +607,7 @@ mod tests {
 
         let sender_data = test_data.clone();
         let send_task = databend_common_base::runtime::spawn(async move {
-            let format_settings = FormatSettings::default();
+            let format_settings = OutputFormatSettings::default();
             let spiller = MockSpiller::default();
             sender.plan_ready(format_settings, Some(spiller));
 
@@ -650,7 +649,7 @@ mod tests {
         let sender_wait = wait.clone();
         let sender_data = test_data.clone();
         let send_task = databend_common_base::runtime::spawn(async move {
-            let format_settings = FormatSettings::default();
+            let format_settings = OutputFormatSettings::default();
             sender.plan_ready(format_settings, None);
 
             sender_wait.notified().await;
@@ -693,7 +692,7 @@ mod tests {
 
         let sender_data = test_data.clone();
         let send_task = databend_common_base::runtime::spawn(async move {
-            let format_settings = FormatSettings::default();
+            let format_settings = OutputFormatSettings::default();
             sender.plan_ready(format_settings, None);
 
             for (i, block) in sender_data.into_iter().enumerate() {
@@ -768,7 +767,7 @@ mod tests {
 
             let sender_data = test_data.clone();
             let send_task = databend_common_base::runtime::spawn(async move {
-                let format_settings = FormatSettings::default();
+                let format_settings = OutputFormatSettings::default();
                 sender.plan_ready(format_settings, has_spiller.then(MockSpiller::default));
 
                 for block in sender_data {

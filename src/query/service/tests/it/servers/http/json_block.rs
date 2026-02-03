@@ -21,7 +21,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_query::servers::http::v1::BlocksCollector;
 use pretty_assertions::assert_eq;
 
@@ -41,7 +41,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .collect();
     }
 
-    let format = FormatSettings::default();
+    let format = OutputFormatSettings::default();
     let mut collector = BlocksCollector::new();
     collector.append_columns(columns, 3);
     let serializer = collector.into_serializer(format);
@@ -75,7 +75,7 @@ fn test_data_block_not_nullable() -> anyhow::Result<()> {
 
 #[test]
 fn test_empty_block() -> anyhow::Result<()> {
-    let format = FormatSettings::default();
+    let format = OutputFormatSettings::default();
     let collector = BlocksCollector::new();
     let serializer = collector.into_serializer(format);
     assert!(serializer.is_empty());

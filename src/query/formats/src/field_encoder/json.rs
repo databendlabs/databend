@@ -26,11 +26,11 @@ use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 
-use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
 use crate::field_encoder::FieldEncoderValues;
 use crate::field_encoder::helpers::write_json_string;
@@ -39,11 +39,10 @@ pub struct FieldEncoderJSON {
     pub simple: FieldEncoderValues,
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
-    pub binary_format: BinaryDisplayFormat,
 }
 
 impl FieldEncoderJSON {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create(settings: OutputFormatSettings) -> Self {
         FieldEncoderJSON {
             simple: FieldEncoderValues {
                 common_settings: OutputCommonSettings {
@@ -52,17 +51,13 @@ impl FieldEncoderJSON {
                     nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-                    jiff_timezone: options.jiff_timezone.clone(),
-                    binary_format: Default::default(),
-                    geometry_format: Default::default(),
+                    settings,
                 },
                 escape_char: 0,
                 quote_char: 0,
-                binary_format: options.binary_format,
             },
             quote_denormals: false,
             escape_forward_slashes: true,
-            binary_format: options.binary_format,
         }
     }
 }
@@ -221,7 +216,7 @@ impl FieldEncoderJSON {
     }
 
     fn encode_binary<'a>(&self, buf: &'a [u8]) -> Cow<'a, str> {
-        match self.binary_format {
+        match self.simple.common_settings.settings.binary_format {
             BinaryDisplayFormat::Hex => Cow::Owned(hex::encode_upper(buf)),
             BinaryDisplayFormat::Base64 => Cow::Owned(general_purpose::STANDARD.encode(buf)),
             BinaryDisplayFormat::Utf8 => match std::str::from_utf8(buf) {

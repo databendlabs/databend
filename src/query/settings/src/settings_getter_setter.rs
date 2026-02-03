@@ -381,6 +381,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    pub fn get_enable_cse_optimizer(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_cse_optimizer")? != 0)
+    }
+
     pub fn get_force_eager_aggregate(&self) -> Result<bool> {
         Ok(self.try_get_u64("force_eager_aggregate")? != 0)
     }
@@ -797,6 +801,10 @@ impl Settings {
 
     pub fn get_external_server_request_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_timeout_secs")
+    }
+
+    pub fn get_udf_cloud_import_presign_expire_secs(&self) -> Result<u64> {
+        self.try_get_u64("udf_cloud_import_presign_expire_secs")
     }
 
     pub fn get_external_server_request_batch_rows(&self) -> Result<u64> {

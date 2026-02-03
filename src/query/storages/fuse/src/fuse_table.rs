@@ -305,9 +305,11 @@ impl FuseTable {
         seq: u64,
         table_meta: TableMeta,
         storage_class: S3StorageClass,
+        desc: &str,
     ) -> Result<Box<FuseTable>> {
         let table_info = TableInfo {
             ident: TableIdent { table_id: id, seq },
+            desc: desc.to_string(),
             meta: table_meta,
             ..Default::default()
         };

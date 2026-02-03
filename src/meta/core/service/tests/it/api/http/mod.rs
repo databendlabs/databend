@@ -13,7 +13,3 @@
 // limitations under the License.
 
 pub mod cluster_state_test;
-pub mod config;
-pub mod features;
-pub mod metrics;
-pub mod transfer_leader;

@@ -26,12 +26,12 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_grpc::RpcClientConf;
-use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_client::RpcClientConf;
+use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 
@@ -248,6 +248,7 @@ pub struct QueryConfig {
     pub enable_udf_python_script: bool,
     pub enable_udf_js_script: bool,
     pub enable_udf_wasm_script: bool,
+    pub enable_udf_sandbox: bool,
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
@@ -336,6 +337,7 @@ impl Default for QueryConfig {
             enable_udf_js_script: true,
             enable_udf_python_script: true,
             enable_udf_wasm_script: true,
+            enable_udf_sandbox: false,
 
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
@@ -356,6 +358,14 @@ impl Default for QueryConfig {
 impl QueryConfig {
     pub fn to_rpc_client_tls_config(&self) -> RpcClientTlsConfig {
         RpcClientTlsConfig {
+            rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
+            domain_name: self.rpc_tls_query_service_domain_name.clone(),
+        }
+    }
+
+    /// Returns TLS config for use with `ConnectionFactory`.
+    pub fn to_grpc_tls_config(&self) -> databend_common_grpc::RpcClientTlsConfig {
+        databend_common_grpc::RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
         }
@@ -648,6 +658,12 @@ pub struct CacheConfig {
     /// Max percentage of in memory vector index filters cache relative to whole memory. By default it is 0 (disabled).
     pub vector_index_filter_memory_ratio: u64,
 
+    /// Max number of cached virtual column meta objects. Set it to 0 to disable it.
+    pub virtual_column_meta_count: u64,
+
+    /// Max bytes of cached virtual column meta data on disk. Set it to 0 to disable it.
+    pub disk_cache_virtual_column_meta_size: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -789,6 +805,8 @@ impl Default for CacheConfig {
             vector_index_filter_size: 64424509440,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
+            virtual_column_meta_count: 30000,
+            disk_cache_virtual_column_meta_size: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,

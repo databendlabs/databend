@@ -14,6 +14,7 @@ storage-hdfs = ["databend-common-config/storage-hdfs"]
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
+databend-common-cloud-control = { workspace = true }
 databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -73,6 +74,7 @@ similar = { workspace = true }
 simsearch = { workspace = true }
 tantivy-query-grammar = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }

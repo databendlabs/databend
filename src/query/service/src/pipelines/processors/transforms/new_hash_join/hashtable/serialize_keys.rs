@@ -21,13 +21,13 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::HashJoinHashtableLike;
-use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::STRING_EARLY_SIZE;
-use databend_common_hashtable::StringRawEntry;
 
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
+use crate::pipelines::processors::transforms::hash_join_table::STRING_EARLY_SIZE;
+use crate::pipelines::processors::transforms::hash_join_table::StringRawEntry;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;

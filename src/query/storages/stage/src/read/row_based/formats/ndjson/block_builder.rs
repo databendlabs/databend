@@ -36,7 +36,8 @@ pub struct NdJsonDecoder {
 
 impl NdJsonDecoder {
     pub fn create(fmt: NdJsonInputFormat, load_context: Arc<LoadContext>) -> Self {
-        let field_decoder = FieldJsonAstDecoder::create(&load_context.file_format_options_ext);
+        let field_decoder =
+            FieldJsonAstDecoder::create(&load_context.settings, load_context.is_select);
         Self {
             load_context,
             fmt,
@@ -167,7 +168,7 @@ impl RowDecoder for NdJsonDecoder {
             let row = row.trim();
             let row_id = batch.start_pos.rows + row_id;
             if !row.is_empty() {
-                if let Err(e) = self.read_row(row, columns, &null_if, &state.file_full_path) {
+                if let Err(e) = self.read_row(row, columns, &null_if, &state.file_path) {
                     self.load_context.error_handler.on_error(
                         e.with_row(row_id),
                         Some((columns, state.num_rows)),

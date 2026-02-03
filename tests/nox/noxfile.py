@@ -1,5 +1,6 @@
-import nox
 import os
+
+import nox
 
 
 PYTHON_DRIVER = ["0.33.1", "0.33.4"]
@@ -57,11 +58,6 @@ def run_jdbc_test(session, driver_version, main_version):
     )
 
 
-@nox.session
-def test_suites(session):
-    session.install("pytest", "requests", "pytest-asyncio", "pyarrow", "databend-driver")
-    # Usage: nox -s test_suites -- suites/1_stateful/09_http_handler/test_09_0007_session.py::test_session
-    session.run("pytest", *session.posargs)
 
 
 @nox.session
@@ -76,3 +72,20 @@ def go_client(session, driver_version):
             session.run("make", "-o", "up", "integration", external=True, env=env)
         else:
             session.run("make", "-o", "up", "compat", external=True, env=env)
+
+# test API with requests directly.
+# some of the tests will fail with cluster behind nginx.
+# so run it in .github/actions/test_stateful_cluster_linux/action.yml.
+@nox.session
+def test_suites(session):
+    session.install("pytest", "requests", "pytest-asyncio", "pyarrow", "databend-driver")
+    # Usage: nox -s test_suites -- suites/http_handler/test_session.py::test_session
+    session.run("pytest", *session.posargs)
+
+
+@nox.session
+def udf_sandbox(session):
+    session.install("requests")
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    with session.chdir(repo_root):
+        session.run("python", "tests/udf/sandbox_udf.py", *session.posargs)

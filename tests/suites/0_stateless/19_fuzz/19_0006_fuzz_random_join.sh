@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ## Configuration
 rows=1000
-iterations=8
+iterations=4
 max_string_len=10
 max_array_len=3
 

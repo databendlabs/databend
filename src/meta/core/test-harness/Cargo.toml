@@ -17,10 +17,8 @@ databend-base = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-runtime-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
-databend-meta-runtime = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 tempfile = { workspace = true }

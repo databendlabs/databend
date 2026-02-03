@@ -41,7 +41,7 @@ pub struct TsvDecoder {
 impl TsvDecoder {
     pub fn create(fmt: TsvInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
-            SeparatedTextDecoder::create_tsv(&fmt.params, &load_context.file_format_options_ext);
+            SeparatedTextDecoder::create_tsv(&fmt.params, load_context.settings.clone());
         let field_delimiter = fmt.params.field_delimiter.as_bytes()[0];
 
         // we only accept \r\n when len > 1

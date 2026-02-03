@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::KvGetManyRequest;
@@ -37,10 +37,10 @@ fn make_key_stream(
 }
 
 /// Test: KvGetMany on leader returns correct values for streamed keys.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_get_many_on_leader() -> anyhow::Result<()> {
-    let (tc, _) = crate::tests::start_metasrv().await?;
+    let (tc, _) = crate::tests::start_metasrv::<TokioRuntime>().await?;
     let client = tc.grpc_client().await?;
 
     // Insert test data
@@ -101,15 +101,15 @@ async fn test_kv_get_many_on_leader() -> anyhow::Result<()> {
 }
 
 /// Test: KvGetMany on follower returns error with leader endpoint.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_get_many_on_follower_returns_leader() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let leader_addr = &tcs[0].config.grpc.api_address().unwrap();
     let follower_addr = &tcs[1].config.grpc.api_address().unwrap();
 
-    let client = make_grpc_client(vec![follower_addr.clone()])?;
+    let client = make_grpc_client::<TokioRuntime>(vec![follower_addr.clone()])?;
     let mut ec = client.make_established_client().await?;
 
     let status = ec
@@ -129,10 +129,10 @@ async fn test_kv_get_many_on_follower_returns_leader() -> anyhow::Result<()> {
 }
 
 /// Test: KvGetMany on single node (no quorum) returns error.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_get_many_no_quorum_no_leader() -> anyhow::Result<()> {
-    let mut tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let mut tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let remaining_addr = tcs[2].config.grpc.api_address().unwrap().clone();
 
@@ -142,7 +142,7 @@ async fn test_kv_get_many_no_quorum_no_leader() -> anyhow::Result<()> {
     // Wait for quorum loss detection
     tokio::time::sleep(Duration::from_secs(10)).await;
 
-    let client = make_grpc_client(vec![remaining_addr])?;
+    let client = make_grpc_client::<TokioRuntime>(vec![remaining_addr])?;
     let mut ec = client.make_established_client().await?;
 
     let status = ec

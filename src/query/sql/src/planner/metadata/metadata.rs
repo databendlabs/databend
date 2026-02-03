@@ -14,7 +14,6 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
@@ -26,12 +25,14 @@ use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
+use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
@@ -249,7 +250,7 @@ impl Metadata {
         data_type: TableDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
-        column_id: Option<u32>,
+        column_id: ColumnId,
         column_position: Option<usize>,
         virtual_expr: Option<String>,
     ) -> IndexType {
@@ -301,6 +302,7 @@ impl Metadata {
         source_column_id: u32,
         column_id: u32,
         column_name: String,
+        key_paths: OwnedKeyPaths,
         data_type: TableDataType,
         is_try: bool,
     ) -> IndexType {
@@ -312,6 +314,7 @@ impl Metadata {
             column_id,
             column_index,
             column_name,
+            key_paths,
             data_type,
             is_try,
         });
@@ -365,7 +368,6 @@ impl Metadata {
         source_of_index: bool,
         source_of_stage: bool,
         cte_suffix_name: Option<String>,
-        allow_virtual_column: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_name = Self::remove_cte_suffix(table_name, cte_suffix_name);
@@ -404,7 +406,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     None,
-                    Some(field.column_id),
+                    field.column_id,
                     None,
                     Some(field.computed_expr().unwrap().expr().clone()),
                 );
@@ -426,7 +428,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    Some(field.column_id),
+                    field.column_id,
                     None,
                     None,
                 );
@@ -457,72 +459,14 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
-                    Some(field.column_id),
+                    field.column_id,
                     Some(indices[0] + 1),
                     None,
                 );
             }
         }
-        if allow_virtual_column {
-            self.add_virtual_columns(&table_meta, table_index);
-        }
 
         table_index
-    }
-
-    fn add_virtual_columns(&mut self, table_meta: &Arc<dyn Table>, table_index: IndexType) {
-        // Ignore tables that do not support virtual columns
-        if !table_meta.support_virtual_columns() {
-            return;
-        }
-
-        let table_meta = &table_meta.get_table_info().meta;
-        let Some(ref virtual_schema) = table_meta.virtual_schema else {
-            return;
-        };
-
-        let source_column_ids = virtual_schema
-            .fields
-            .iter()
-            .map(|field| field.source_column_id)
-            .collect::<HashSet<_>>();
-        let mut base_column_map = HashMap::new();
-        for column in self.columns_by_table_index(table_index).into_iter() {
-            if let ColumnEntry::BaseTableColumn(base_column) = column {
-                if let Some(column_id) = base_column.column_id {
-                    if source_column_ids.contains(&column_id) {
-                        base_column_map.insert(column_id, base_column);
-                    }
-                }
-            }
-        }
-
-        for virtual_field in virtual_schema.fields.iter() {
-            let Some(base_column) = base_column_map.get(&virtual_field.source_column_id) else {
-                continue;
-            };
-
-            let name = format!("{}{}", base_column.column_name, virtual_field.name);
-            let column_id = virtual_field.column_id;
-
-            // It's not possible to determine the actual type based on the type of generated virtual columns,
-            // as fields in non-leaf nodes are not generated with virtual columns,
-            // and these ungenerated nodes may have inconsistent types.
-            let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
-
-            // The type of source column is variant, not a nested type, must have `column_id`.
-            let source_column_id = base_column.column_id.unwrap();
-
-            self.add_virtual_column(
-                base_column.table_index,
-                base_column.column_name.clone(),
-                source_column_id,
-                column_id,
-                name.clone(),
-                table_data_type,
-                true,
-            );
-        }
     }
 
     pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {
@@ -675,7 +619,7 @@ pub struct BaseTableColumn {
     /// Path indices for inner column of struct data type.
     pub path_indices: Option<Vec<usize>>,
     /// The column id in table schema.
-    pub column_id: Option<u32>,
+    pub column_id: ColumnId,
     /// Virtual computed expression, generated in query.
     pub virtual_expr: Option<String>,
 }
@@ -702,6 +646,7 @@ pub struct VirtualColumn {
     pub column_id: u32,
     pub column_index: IndexType,
     pub column_name: String,
+    pub key_paths: OwnedKeyPaths,
     pub data_type: TableDataType,
     /// try cast to target type or not
     pub is_try: bool,
@@ -775,11 +720,7 @@ impl ColumnEntry {
     }
 
     pub fn is_stream_column(&self) -> bool {
-        if let ColumnEntry::BaseTableColumn(BaseTableColumn {
-            column_id: Some(column_id),
-            ..
-        }) = self
-        {
+        if let ColumnEntry::BaseTableColumn(BaseTableColumn { column_id, .. }) = self {
             if is_stream_column_id(*column_id) {
                 return true;
             }

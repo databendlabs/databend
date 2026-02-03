@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf as pb;
 use log::info;
@@ -25,7 +25,7 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
@@ -35,7 +35,7 @@ async fn test_export() -> anyhow::Result<()> {
     // State machine will not be exported, only snapshot will.
     // Thus in this test we'll gonna trigger a snapshot manually.
 
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 

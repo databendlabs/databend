@@ -20,11 +20,11 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
-use databend_common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
 use crate::sql::planner::plans::JoinType;
 
 impl HashJoinProbeState {

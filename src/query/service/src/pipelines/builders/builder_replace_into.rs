@@ -144,14 +144,8 @@ impl AsyncSource for RawValueSource {
             return Ok(None);
         }
 
-        let format = self.ctx.get_format_settings()?;
-        let rounding_mode = self
-            .ctx
-            .get_settings()
-            .get_numeric_cast_option()
-            .map(|s| s == "rounding")
-            .unwrap_or(true);
-        let field_decoder = FastFieldDecoderValues::create_for_insert(format, rounding_mode);
+        let format = self.ctx.get_input_format_settings()?;
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
         let estimated_rows = values_decoder.estimated_rows();

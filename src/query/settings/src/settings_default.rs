@@ -425,6 +425,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_cse_optimizer", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables common subexpression elimination optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("force_eager_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Force apply rule eager aggregate.",
@@ -1005,6 +1012,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("udf_cloud_import_presign_expire_secs", DefaultSettingValue {
+                    // 3 day
+                    value: UserSettingValue::UInt64(259200),
+                    desc: "Presign expiry for cloud UDF stage imports",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("external_server_request_batch_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Request batch rows to external server",
@@ -1512,7 +1527,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_new_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental new join implement",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

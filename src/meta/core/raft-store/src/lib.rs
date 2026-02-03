@@ -44,7 +44,6 @@
 
 pub mod applier;
 pub mod config;
-mod dns_resolver;
 pub mod immutable_compactor;
 pub mod key_spaces;
 pub mod leveled_store;

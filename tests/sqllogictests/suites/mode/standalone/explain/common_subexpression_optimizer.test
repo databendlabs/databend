@@ -1,0 +1,70 @@
+statement ok
+set enable_cse_optimizer=1;
+
+statement ok
+create or replace table cse_t as
+select number as a, number % 3 as b, number + 100 as c
+from numbers(6);
+
+query T nosort
+explain select t.a, t.b, agg.max_a
+from cse_t t
+join (select b, max(a) as max_a from cse_t group by b) agg
+on t.b = agg.b;
+----
+Sequence
+├── MaterializedCTE: cte_cse_0
+│   └── TableScan
+│       ├── table: default.default.cse_t
+│       ├── scan id: 2
+│       ├── output columns: [a (#0), b (#1)]
+│       ├── read rows: 6
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 6.00
+└── HashJoin
+    ├── output columns: [t.a (#0), t.b (#1), max(a) (#6)]
+    ├── join type: INNER
+    ├── build keys: [agg.b (#4)]
+    ├── probe keys: [t.b (#1)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:agg.b (#4), probe targets:[t.b (#1)@scan0], filter type:bloom,inlist,min_max
+    ├── estimated rows: 12.00
+    ├── AggregateFinal(Build)
+    │   ├── output columns: [max(a) (#6), cse_t.b (#4)]
+    │   ├── group by: [b]
+    │   ├── aggregate functions: [max(a)]
+    │   ├── estimated rows: 3.00
+    │   └── AggregatePartial
+    │       ├── group by: [b]
+    │       ├── aggregate functions: [max(a)]
+    │       ├── estimated rows: 3.00
+    │       └── MaterializeCTERef
+    │           ├── cte_name: cte_cse_0
+    │           ├── cte_schema: [a (#3), b (#4)]
+    │           └── estimated rows: 6.00
+    └── MaterializeCTERef(Probe)
+        ├── cte_name: cte_cse_0
+        ├── cte_schema: [a (#0), b (#1)]
+        └── estimated rows: 6.00
+
+query III rowsort
+select t.a, t.b, agg.max_a
+from cse_t t
+join (select b, max(a) as max_a from cse_t group by b) agg
+on t.b = agg.b;
+----
+0 0 3
+1 1 4
+2 2 5
+3 0 3
+4 1 4
+5 2 5
+
+statement ok
+drop table cse_t;

@@ -23,8 +23,8 @@ use arrow_flight::BasicAuth;
 use databend_base::counter::Counted;
 use databend_base::counter::Counter;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_grpc::GrpcClaim;
-use databend_common_grpc::GrpcToken;
+use databend_base::grpc_token::GrpcClaim;
+use databend_base::grpc_token::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_runtime_api::SpawnApi;
@@ -202,7 +202,7 @@ impl<SP: SpawnApi> MetaServiceImpl<SP> {
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
             .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
-        let claim = self.token.try_verify_token(token.clone()).map_err(|e| {
+        let claim = self.token.try_verify_token(&token).map_err(|e| {
             Status::unauthenticated(format!("token verify failed: {}, {}", token, e))
         })?;
         Ok(claim)

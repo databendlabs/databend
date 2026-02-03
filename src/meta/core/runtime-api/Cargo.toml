@@ -7,6 +7,10 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+env_logger = { workspace = true }
+hickory-resolver = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 

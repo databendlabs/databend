@@ -34,7 +34,7 @@ runs:
         ref: main
         path: tests/nox/cache/databend-jdbc
 
-    - name: checkout databend-jdbc
+    - name: checkout databend-go
       uses: actions/checkout@v4
       with:
         repository: databendlabs/databend-go

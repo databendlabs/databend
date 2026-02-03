@@ -10,6 +10,18 @@ copy /*+ set_var(max_threads=1) */ into wrong_ndjson from @data/ndjson/ pattern 
 ndjson/wrong_sample.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample.ndjson', next byte is 'h' 2
 ndjson/wrong_sample2.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample2.ndjson', next byte is 'h' 2
 
+statement ok
+drop table if exists wrong_ndjson_variant
+
+statement ok
+create table wrong_ndjson_variant (v Variant)
+
+query ?????
+copy /*+ set_var(max_threads=1) */ into wrong_ndjson_variant from (select $1 from @data/ndjson/ t) pattern = 'wrong_sample.*[.]ndjson' file_format = (type = NDJSON) ON_ERROR=continue
+----
+ndjson/wrong_sample.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample.ndjson', next byte is 'h' 2
+ndjson/wrong_sample2.ndjson 3 1 Invalid NDJSON row: key must be a string at line 1, position 88 of size 114 for File 'ndjson/wrong_sample2.ndjson', next byte is 'h' 2
+
 query ?????????
 select * from wrong_ndjson order by a
 ----

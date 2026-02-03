@@ -33,6 +33,10 @@
 #![allow(clippy::let_unit_value)]
 #![feature(box_patterns)]
 
+mod auth;
+pub use auth::RefreshableToken;
+pub use auth::TokenFile;
+
 mod config;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;

@@ -26,6 +26,7 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::OnErrorMode;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -129,6 +130,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
         case_sensitive: bool,
+        on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
@@ -139,6 +141,7 @@ impl Binder {
                 files_to_copy,
                 max_column_position,
                 case_sensitive,
+                on_error_mode,
             )
             .await?;
 
@@ -158,7 +161,6 @@ impl Binder {
             false,
             true,
             None,
-            bind_context.allow_virtual_column,
         );
 
         let (s_expr, mut bind_context) =
@@ -182,6 +184,7 @@ impl Binder {
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
+            bound_virtual_columns: BTreeMap::new(),
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),

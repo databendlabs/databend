@@ -40,6 +40,10 @@ use tonic::transport::Endpoint;
 
 use crate::RpcClientTlsConfig;
 
+/// Async DNS resolver using hickory-resolver.
+///
+/// Provides hostname to IP address resolution for gRPC connections.
+/// Uses a global singleton instance for efficiency.
 pub struct DNSResolver {
     inner: TokioResolver,
 }
@@ -56,6 +60,7 @@ static INSTANCE: LazyLock<Result<Arc<DNSResolver>>> =
     });
 
 impl DNSResolver {
+    /// Returns the global DNS resolver instance.
     pub fn instance() -> Result<Arc<DNSResolver>> {
         match INSTANCE.as_ref() {
             Ok(resolver) => Ok(resolver.clone()),
@@ -70,6 +75,7 @@ impl DNSResolver {
         }
     }
 
+    /// Resolves a hostname to a list of IP addresses.
     pub async fn resolve(&self, hostname: impl Into<String>) -> Result<Vec<IpAddr>> {
         let hostname = hostname.into();
         match self.inner.lookup_ip(hostname.clone()).await {
@@ -82,6 +88,9 @@ impl DNSResolver {
     }
 }
 
+/// Tower service adapter for DNS resolution.
+///
+/// Implements `tower_service::Service<Name>` to integrate with hyper's HTTP connector.
 #[derive(Clone)]
 pub struct DNSService;
 
@@ -109,10 +118,12 @@ impl tower_service::Service<Name> for DNSService {
     }
 }
 
+/// Future returned by [`DNSService`] for async DNS resolution.
 pub struct DNSServiceFuture {
     inner: JoinHandle<Result<DNSServiceAddrs>>,
 }
 
+/// Iterator over resolved IP addresses from DNS lookup.
 pub struct DNSServiceAddrs {
     inner: std::vec::IntoIter<IpAddr>,
 }
@@ -140,16 +151,25 @@ impl Future for DNSServiceFuture {
     }
 }
 
+/// TCP keep-alive configuration for gRPC connections.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TcpKeepAliveConfig {
+    /// Time before sending keep-alive probes.
     pub time: Option<Duration>,
+    /// Interval between keep-alive probes.
     pub interval: Option<Duration>,
+    /// Number of failed probes before closing connection.
     pub retries: Option<u32>,
 }
 
+/// Factory for creating gRPC channels with DNS resolution and TLS support.
 pub struct ConnectionFactory;
 
 impl ConnectionFactory {
+    /// Creates a gRPC channel to the specified address.
+    ///
+    /// Establishes a connection with optional TLS and TCP keep-alive configuration.
+    /// Uses [`DNSService`] for hostname resolution.
     pub async fn create_rpc_channel(
         addr: impl ToString,
         timeout: Option<Duration>,
@@ -185,63 +205,75 @@ impl ConnectionFactory {
         }
     }
 
-    pub fn create_rpc_endpoint(
+    /// Creates a gRPC endpoint with optional TLS and timeout.
+    fn create_rpc_endpoint(
         addr: impl ToString,
         timeout: Option<Duration>,
-        rpc_client_tls_config: Option<RpcClientTlsConfig>,
+        tls_config: Option<RpcClientTlsConfig>,
     ) -> std::result::Result<Endpoint, GrpcConnectionError> {
-        let u = if rpc_client_tls_config.is_some() {
-            format!("https://{}", addr.to_string())
-        } else {
-            format!("http://{}", addr.to_string())
-        };
-        match u.parse::<Uri>() {
-            Err(error) => Err(GrpcConnectionError::InvalidUri {
-                uri: addr.to_string(),
-                source: AnyError::new(&error),
-            }),
-            Ok(uri) => {
-                let builder = Channel::builder(uri);
-                let mut endpoint = if let Some(conf) = rpc_client_tls_config {
-                    info!("tls rpc enabled");
-                    let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
-                        GrpcConnectionError::TLSConfigError {
-                            action: "loading".to_string(),
-                            source: AnyError::new(&e),
-                        }
-                    })?;
-                    builder.tls_config(client_tls_config).map_err(|e| {
-                        GrpcConnectionError::TLSConfigError {
-                            action: "building".to_string(),
-                            source: AnyError::new(&e),
-                        }
-                    })?
-                } else {
-                    builder
-                };
+        let addr = addr.to_string();
 
-                if let Some(timeout) = timeout {
-                    endpoint = endpoint.timeout(timeout);
-                }
-
-                Ok(endpoint)
+        let uri = Self::build_uri(&addr, tls_config.is_some()).map_err(|e| {
+            GrpcConnectionError::InvalidUri {
+                uri: addr.clone(),
+                source: AnyError::new(&e),
             }
+        })?;
+        let mut endpoint = Channel::builder(uri);
+
+        if let Some(conf) = tls_config {
+            endpoint = Self::apply_tls_config(endpoint, &conf)?;
         }
+
+        if let Some(t) = timeout {
+            endpoint = endpoint.timeout(t);
+        }
+
+        Ok(endpoint)
     }
 
-    fn client_tls_config(conf: &RpcClientTlsConfig) -> Result<ClientTlsConfig> {
-        let server_root_ca_cert = std::fs::read(conf.rpc_tls_server_root_ca_cert.as_str())?;
-        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+    /// Builds a URI with http or https scheme based on TLS setting.
+    fn build_uri(
+        addr: &str,
+        use_tls: bool,
+    ) -> std::result::Result<Uri, hyper::http::uri::InvalidUri> {
+        let scheme = if use_tls { "https" } else { "http" };
+        format!("{}://{}", scheme, addr).parse::<Uri>()
+    }
 
-        let tls = ClientTlsConfig::new()
-            .domain_name(conf.domain_name.to_string())
-            .ca_certificate(server_root_ca_cert);
-        Ok(tls)
+    /// Applies TLS configuration to an endpoint.
+    ///
+    /// Loads the CA certificate from disk and configures the endpoint for TLS.
+    fn apply_tls_config(
+        endpoint: Endpoint,
+        conf: &RpcClientTlsConfig,
+    ) -> std::result::Result<Endpoint, GrpcConnectionError> {
+        info!("tls rpc enabled");
+
+        let cert = std::fs::read(&conf.rpc_tls_server_root_ca_cert).map_err(|e| {
+            GrpcConnectionError::TLSConfigError {
+                action: "loading".to_string(),
+                source: AnyError::new(&e),
+            }
+        })?;
+
+        let tls_config = ClientTlsConfig::new()
+            .domain_name(&conf.domain_name)
+            .ca_certificate(Certificate::from_pem(cert));
+
+        endpoint
+            .tls_config(tls_config)
+            .map_err(|e| GrpcConnectionError::TLSConfigError {
+                action: "building".to_string(),
+                source: AnyError::new(&e),
+            })
     }
 }
 
+/// Errors that can occur when creating a gRPC connection.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum GrpcConnectionError {
+    /// The provided address could not be parsed as a valid URI.
     #[error("invalid uri: {uri}, error: {source}")]
     InvalidUri {
         uri: String,
@@ -249,13 +281,16 @@ pub enum GrpcConnectionError {
         source: AnyError,
     },
 
+    /// Failed to load or apply TLS configuration.
     #[error("{action} client tls config, error: {source}")]
     TLSConfigError {
+        /// The TLS operation that failed: "loading" or "building".
         action: String,
         #[source]
         source: AnyError,
     },
 
+    /// Failed to establish connection to the server.
     #[error("can not connect to {uri}, error: {source}")]
     CannotConnect {
         uri: String,

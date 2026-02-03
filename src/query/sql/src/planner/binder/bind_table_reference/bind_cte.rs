@@ -209,10 +209,8 @@ impl Binder {
             })?;
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 let s_expr = materialized_cte_info.bound_s_expr.clone();
-                let bind_context = materialized_cte_info.bound_context.clone();
 
-                let materialized_cte =
-                    MaterializedCTE::new(cte_name, Some(bind_context.columns.clone()), None);
+                let materialized_cte = MaterializedCTE::new(cte_name, None);
                 let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
                 current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);

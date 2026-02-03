@@ -19,16 +19,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::ListKVReq;
+use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::Streamed;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::ListKVReq;
-use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::protobuf as pb;
-use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
 use futures::stream::StreamExt;
 use log::info;
@@ -40,12 +39,12 @@ use crate::testing::meta_service_test_harness;
 use crate::testing::since_epoch_sec;
 use crate::tests::service::make_grpc_client;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     let now_sec = since_epoch_sec();
 
-    let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv::<TokioRuntime>().await?;
 
     let client = tc.grpc_client().await?;
 
@@ -56,12 +55,12 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
     let now_sec = since_epoch_sec();
 
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let client = tcs[0].grpc_client().await?;
 
@@ -75,10 +74,10 @@ async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
 }
 
 /// When invoke kv_read_v1() on a follower, the leader endpoint is responded in the response header.
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<TokioRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<()> {
-    let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
+    let tcs = crate::tests::start_metasrv_cluster::<TokioRuntime>(&[0, 1, 2]).await?;
 
     let addresses = tcs
         .iter()
@@ -93,7 +92,7 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
     let a1 = || addresses[1].clone();
     let a2 = || addresses[2].clone();
 
-    let client = make_grpc_client(vec![a1(), a2(), a0()])?;
+    let client = make_grpc_client::<TokioRuntime>(vec![a1(), a2(), a0()])?;
     {
         let eclient = client.make_established_client().await?;
         assert_eq!(a0(), eclient.target_endpoint(),);
@@ -133,7 +132,7 @@ async fn test_kv_read_v1_follower_responds_leader_endpoint() -> anyhow::Result<(
 ///
 /// Insert keys:
 /// a(meta), c, c1, c2
-async fn initialize_kvs(client: &Arc<ClientHandle<DatabendRuntime>>) -> anyhow::Result<()> {
+async fn initialize_kvs(client: &Arc<ClientHandle<TokioRuntime>>) -> anyhow::Result<()> {
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
@@ -152,7 +151,7 @@ async fn initialize_kvs(client: &Arc<ClientHandle<DatabendRuntime>>) -> anyhow::
 
 /// Test streamed mget on a grpc meta-service client
 async fn test_streamed_mget(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &Arc<ClientHandle<TokioRuntime>>,
     now_sec: u64,
 ) -> anyhow::Result<()> {
     info!("--- test streamed mget");
@@ -200,7 +199,7 @@ async fn test_streamed_mget(
 
 /// Test streamed list on a grpc meta-service client
 async fn test_streamed_list(
-    client: &Arc<ClientHandle<DatabendRuntime>>,
+    client: &Arc<ClientHandle<TokioRuntime>>,
     _now_sec: u64,
 ) -> anyhow::Result<()> {
     info!("--- test streamed list");

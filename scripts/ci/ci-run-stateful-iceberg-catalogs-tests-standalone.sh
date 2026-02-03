@@ -12,4 +12,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
-./databend-test --mode 'standalone' --run-dir 3_stateful_iceberg
+./databend-test --mode 'standalone' --run-dir 3_stateful_iceberg --print-time

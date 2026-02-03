@@ -33,7 +33,7 @@ fn default_test_auth_info() -> AuthInfo {
 }
 
 mod add {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_version::BUILD_INFO;
 
@@ -46,7 +46,7 @@ mod add {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Test normal case - should succeed
         let res = user_mgr
@@ -70,7 +70,7 @@ mod add {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // First creation should succeed
         let res = user_mgr
@@ -89,7 +89,7 @@ mod add {
 }
 
 mod get {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_version::BUILD_INFO;
 
@@ -102,7 +102,7 @@ mod get {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -129,7 +129,7 @@ mod get {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -151,7 +151,7 @@ mod get {
         let test_hostname = "localhost";
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
             .get_user(
@@ -173,7 +173,7 @@ mod get {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user
         user_mgr
@@ -209,7 +209,7 @@ mod get {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -236,7 +236,7 @@ mod get {
 }
 
 mod get_users {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_version::BUILD_INFO;
 
@@ -245,7 +245,7 @@ mod get_users {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_empty() -> databend_common_exception::Result<()> {
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         let users = user_mgr.get_users().await?;
         assert!(users.is_empty());
@@ -256,7 +256,7 @@ mod get_users {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_multiple() -> databend_common_exception::Result<()> {
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add multiple users
         for i in 0..5 {
@@ -281,7 +281,7 @@ mod get_users {
 }
 
 mod drop {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_version::BUILD_INFO;
 
@@ -294,7 +294,7 @@ mod drop {
         let user_info = UserInfo::new(test_user, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -329,7 +329,7 @@ mod drop {
         let test_hostname = "localhost";
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
             .drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1))
@@ -343,7 +343,7 @@ mod drop {
 }
 
 mod update {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_meta_app::principal::AuthInfo;
     use databend_common_meta_app::principal::PasswordHashMethod;
@@ -382,7 +382,7 @@ mod update {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -426,7 +426,7 @@ mod update {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -470,7 +470,7 @@ mod update {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -513,7 +513,7 @@ mod update {
         let test_hostname = "localhost";
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         let res = user_mgr
             .update_user_with(
@@ -536,7 +536,7 @@ mod update {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -561,7 +561,7 @@ mod update {
 }
 
 mod set_user_privileges {
-    use std::ops::Deref;
+    use std::sync::Arc;
 
     use databend_common_meta_app::principal::GrantObject;
     use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -577,7 +577,7 @@ mod set_user_privileges {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
@@ -620,7 +620,7 @@ mod set_user_privileges {
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+        let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add user first
         user_mgr
