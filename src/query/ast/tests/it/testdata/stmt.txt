@@ -3450,6 +3450,180 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE WORKER read_env
+---------- Output ---------
+CREATE WORKER read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER IF NOT EXISTS read_env
+---------- Output ---------
+CREATE WORKER IF NOT EXISTS read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: true,
+        name: Identifier {
+            span: Some(
+                28..36,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'
+---------- Output ---------
+ALTER WORKER read_env SET TAG purpose = 'sandbox', owner = 'ci'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetTag {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            30..37,
+                        ),
+                        name: "purpose",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "sandbox",
+                },
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            49..54,
+                        ),
+                        name: "owner",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "ci",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- Output ---------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetTag {
+            tags: [
+                Identifier {
+                    span: Some(
+                        32..39,
+                    ),
+                    name: "purpose",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        41..46,
+                    ),
+                    name: "owner",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW WORKERS
+---------- Output ---------
+SHOW WORKERS
+---------- AST ------------
+ShowWorkers(
+    ShowWorkersStmt,
+)
+
+
+---------- Input ----------
+DROP WORKER read_env
+---------- Output ---------
+DROP WORKER read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: false,
+        name: Identifier {
+            span: Some(
+                12..20,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP WORKER IF EXISTS read_env
+---------- Output ---------
+DROP WORKER IF EXISTS read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: true,
+        name: Identifier {
+            span: Some(
+                22..30,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a
