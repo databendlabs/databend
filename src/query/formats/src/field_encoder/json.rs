@@ -201,17 +201,14 @@ impl FieldEncoderJSON {
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
         // write tuple as JSON Object
-        out_buf.push(b'{');
+        out_buf.push(b'[');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
                 out_buf.push(b',');
             }
-            let key = format!("{}", i + 1);
-            self.write_string(key.as_bytes(), out_buf);
-            out_buf.push(b':');
             self.write_field(inner, row_index, out_buf)?;
         }
-        out_buf.push(b'}');
+        out_buf.push(b']');
         Ok(())
     }
 

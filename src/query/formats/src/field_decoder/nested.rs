@@ -42,10 +42,8 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
-use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
@@ -473,7 +471,12 @@ impl NestedValues {
         fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        reader.must_ignore_byte(b'(')?;
+        let closing = if reader.ignore_byte(b'(') {
+            b')'
+        } else {
+            reader.must_ignore_byte(b'[')?;
+            b']'
+        };
         for (idx, field) in fields.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces_or_comments();
             if idx != 0 {
@@ -482,7 +485,7 @@ impl NestedValues {
             let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(field, reader)?;
         }
-        reader.must_ignore_byte(b')')?;
+        reader.must_ignore_byte(closing)?;
         Ok(())
     }
 
