@@ -189,7 +189,7 @@ pub async fn do_vacuum2(
     if need_update_lvt {
         let cat = ctx.get_default_catalog()?;
         cat.set_table_lvt(
-            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_table_id()),
             &LeastVisibleTime::new(gc_root.timestamp.unwrap()),
         )
         .await?;
@@ -335,7 +335,7 @@ pub async fn do_vacuum2(
     let table_agg_index_ids = catalog
         .list_index_ids_by_table_id(ListIndexesByIdReq::new(
             ctx.get_tenant(),
-            fuse_table.get_id(),
+            fuse_table.get_table_id(),
         ))
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
@@ -471,7 +471,7 @@ async fn set_lvt(
 
     let lvt_point = cat
         .set_table_lvt(
-            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_table_id()),
             &LeastVisibleTime::new(lvt_point_candidate),
         )
         .await?

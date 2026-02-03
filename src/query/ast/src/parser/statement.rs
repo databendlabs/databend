@@ -3108,13 +3108,11 @@ fn into_clause(i: Input) -> IResult<IntoClause> {
     map(
         rule! {
             INTO
-            ~ #dot_separated_idents_1_to_3
+            ~ #table_ref
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
         },
-        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
-            catalog,
-            database,
+        |(_, table, opt_target_columns, opt_source_columns)| IntoClause {
             table,
             target_columns: opt_target_columns
                 .map(|(_, columns, _)| columns)

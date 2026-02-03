@@ -610,9 +610,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.snapshot_gen
                         .fill_default_values(&table_schema, &previous)
                         .await?;
-                    let table_stats_gen = fuse_table
-                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
-                        .await?;
+                    let table_stats_gen = FuseTable::generate_table_stats(
+                        fuse_table.get_operator(),
+                        fuse_table.meta_location_generator(),
+                        &previous,
+                        fuse_table.get_branch_id(),
+                        &self.insert_hll,
+                        self.insert_rows,
+                    )
+                    .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
                         table_stats_gen,
@@ -782,9 +788,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
-                let table_stats_gen = fuse_table
-                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
-                    .await?;
+                let table_stats_gen = FuseTable::generate_table_stats(
+                    fuse_table.get_operator(),
+                    fuse_table.meta_location_generator(),
+                    &previous,
+                    fuse_table.get_branch_id(),
+                    &self.insert_hll,
+                    self.insert_rows,
+                )
+                .await?;
 
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail

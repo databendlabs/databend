@@ -578,6 +578,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
+                None,
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );

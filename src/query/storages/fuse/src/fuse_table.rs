@@ -395,17 +395,6 @@ impl FuseTable {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub async fn read_table_snapshot_with_location(
-        &self,
-        loc: Option<String>,
-    ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
         let loc = self.snapshot_loc();
@@ -429,6 +418,37 @@ impl FuseTable {
         } else {
             Ok(None)
         }
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_snapshot_with_opt_location(
+        dal: Operator,
+        loc: Option<String>,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        if let Some(loc) = loc {
+            let snapshot = Self::read_snapshot_with_location(dal, loc).await?;
+            Ok(Some(snapshot))
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_snapshot_with_location(
+        dal: Operator,
+        location: String,
+    ) -> Result<Arc<TableSnapshot>> {
+        let reader = MetaReaders::table_snapshot_reader(dal);
+        let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
+        let params = LoadParams {
+            location,
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        reader.read(&params).await
     }
 
     #[async_backtrace::framed]
@@ -456,6 +476,13 @@ impl FuseTable {
             // for backward compatibility, we check the legacy table option
             .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
             .cloned()
+    }
+
+    pub fn base_snapshot_locations(&self) -> HashMap<Option<u64>, Option<String>> {
+        let mut locations = HashMap::new();
+        let branch_id = self.get_branch_id();
+        locations.insert(branch_id, self.snapshot_loc());
+        locations
     }
 
     /// Returns a stable identifier for query result cache invalidation.

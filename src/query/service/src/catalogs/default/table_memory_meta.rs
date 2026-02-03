@@ -66,7 +66,9 @@ impl InMemoryMetas {
         if let Some(db_tables) = self.db_tables.get_mut(db) {
             let name = tbl_ref.name().to_owned();
             db_tables.name_to_table.insert(name, tbl_ref.clone());
-            db_tables.id_to_table.insert(tbl_ref.get_id(), tbl_ref);
+            db_tables
+                .id_to_table
+                .insert(tbl_ref.get_table_id(), tbl_ref);
         } else {
             panic!("Logical Error: Need create database `{}` first", db)
         }

@@ -2728,7 +2728,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
 
@@ -2754,7 +2754,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version + 1),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
                 let res = mt
@@ -2781,7 +2781,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
                 let res = mt
@@ -2863,7 +2863,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2914,7 +2914,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2965,7 +2965,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: None,
                 };
                 let result = mt
@@ -2995,7 +2995,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table.ident.seq),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
                         time: small_ts,
@@ -3022,7 +3022,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table.ident.seq),
                     new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
                         time: small_ts,
@@ -3044,7 +3044,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table.ident.seq),
                     new_table_meta: ok_table_meta.clone(),
-                    base_snapshot_location: None,
+                    base_snapshot_locations: HashMap::new(),
                     lvt_check: Some(TableLvtCheck {
                         tenant: tenant.clone(),
                         time: big_time,
@@ -4394,7 +4394,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -4536,7 +4536,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: create_table_meta.clone(),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -6325,7 +6325,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -6377,7 +6377,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -7898,7 +7898,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -7958,7 +7958,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 
@@ -8015,7 +8015,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                base_snapshot_location: None,
+                base_snapshot_locations: HashMap::new(),
                 lvt_check: None,
             };
 

@@ -60,7 +60,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let settings = ReadSettings::from_ctx(&table_ctx)?;
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
-    let table_id = table.get_id();
+    let table_id = table.get_table_id();
     let index_name = "idx1".to_string();
     let mut options = BTreeMap::new();
     options.insert("tokenizer".to_string(), "english".to_string());

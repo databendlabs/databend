@@ -85,7 +85,7 @@ async fn test_vacuum2_all() -> anyhow::Result<()> {
 
         let path = Path::new(storage_root)
             .join(db.get_db_info().database_id.db_id.to_string())
-            .join(table.get_id().to_string());
+            .join(table.get_table_id().to_string());
 
         let walker = walkdir::WalkDir::new(path).into_iter();
 

@@ -398,7 +398,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     .map(|t| OwnershipObject::Table {
                         catalog_name: ctl_name.to_string(),
                         db_id,
-                        table_id: t.get_id(),
+                        table_id: t.get_table_id(),
                     })
                     .collect();
                 let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
@@ -809,7 +809,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     };
 
                     for table in tables {
-                        let table_id = table.get_id();
+                        let table_id = table.get_table_id();
                         let check_table_visibility = visibility_checker
                             .as_ref()
                             .map(|c| {

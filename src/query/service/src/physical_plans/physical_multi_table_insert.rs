@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::ExtendedTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,7 +28,6 @@ use databend_common_expression::LimitType;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::DynTransformBuilder;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -526,8 +526,8 @@ impl IPhysicalPlan for ChunkFillAndReorder {
         for fill_and_reorder in &self.fill_and_reorders {
             if let Some(fill_and_reorder) = fill_and_reorder {
                 let table = builder.ctx.build_table_by_table_info(
-                    &fill_and_reorder.target_table_info,
-                    &None,
+                    &fill_and_reorder.target_table_info.table_info,
+                    &fill_and_reorder.target_table_info.branch_info,
                     None,
                 )?;
 
@@ -540,7 +540,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
 
                 if fill_and_reorder.source_schema != default_schema {
                     let mut binder = DefaultExprBinder::try_new(builder.ctx.clone())?
-                        .auto_increment_table_id(table.get_id());
+                        .auto_increment_table_id(table.get_table_id());
 
                     if let Some((async_funcs, new_default_schema, new_default_schema_no_cast)) =
                         binder.split_async_default_exprs(
@@ -617,7 +617,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FillAndReorder {
     pub source_schema: DataSchemaRef,
-    pub target_table_info: TableInfo,
+    pub target_table_info: ExtendedTableInfo,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -680,8 +680,8 @@ impl IPhysicalPlan for ChunkAppendData {
 
         for append_data in self.target_tables.iter() {
             let table = builder.ctx.build_table_by_table_info(
-                &append_data.target_table_info,
-                &None,
+                &append_data.target_table_info.table_info,
+                &append_data.target_table_info.branch_info,
                 None,
             )?;
             let block_thresholds = table.get_block_thresholds();
@@ -777,7 +777,7 @@ impl IPhysicalPlan for ChunkAppendData {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SerializableTable {
     pub target_catalog_info: Arc<CatalogInfo>,
-    pub target_table_info: TableInfo,
+    pub target_table_info: ExtendedTableInfo,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -906,10 +906,11 @@ impl IPhysicalPlan for ChunkCommitInsert {
         let mut tables = HashMap::new();
 
         for target in &self.targets {
-            let table =
-                builder
-                    .ctx
-                    .build_table_by_table_info(&target.target_table_info, &None, None)?;
+            let table = builder.ctx.build_table_by_table_info(
+                &target.target_table_info.table_info,
+                &target.target_table_info.branch_info,
+                None,
+            )?;
             let block_thresholds = table.get_block_thresholds();
             serialize_segment_builders.push(Box::new(
                 builder.serialize_segment_transform_builder(
@@ -924,8 +925,9 @@ impl IPhysicalPlan for ChunkCommitInsert {
                     target.table_meta_timestamps,
                 )?,
             ));
-            table_meta_timestampss.insert(table.get_id(), target.table_meta_timestamps);
-            tables.insert(table.get_id(), table);
+            let id = table.get_unique_id();
+            table_meta_timestampss.insert(id, target.table_meta_timestamps);
+            tables.insert(id, table);
         }
 
         builder

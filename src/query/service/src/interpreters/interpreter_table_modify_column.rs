@@ -906,10 +906,7 @@ pub(crate) async fn build_select_insert_plan(
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
         input: select_plan,
-        table_info: ExtendedTableInfo {
-            table_info: new_table.get_table_info().clone(),
-            branch_info,
-        },
+        table_info: ExtendedTableInfo::from_table(new_table.as_ref()),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),

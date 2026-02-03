@@ -287,7 +287,7 @@ impl IndexesTable {
                     db_name,
                     table.name(),
                     db_id,
-                    table.get_id(),
+                    table.get_table_id(),
                 ) {
                     index_tables.push(table_info.clone());
                 }

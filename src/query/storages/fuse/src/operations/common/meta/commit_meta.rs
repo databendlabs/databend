@@ -29,19 +29,20 @@ use crate::operations::common::SnapshotChanges;
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub new_segment_locs: Vec<Location>,
-    pub table_id: u64,
+    // The table id (or branch id) that this commit meta belongs to.
+    pub table_ref_id: u64,
     pub virtual_schema: Option<VirtualDataSchema>,
     pub hll: BlockHLL,
 }
 
 impl CommitMeta {
-    pub fn empty(table_id: u64) -> Self {
+    pub fn empty(table_ref_id: u64) -> Self {
         CommitMeta {
             conflict_resolve_context: ConflictResolveContext::ModifiedSegmentExistsInLatest(
                 SnapshotChanges::default(),
             ),
             new_segment_locs: vec![],
-            table_id,
+            table_ref_id,
             virtual_schema: None,
             hll: HashMap::new(),
         }
@@ -50,14 +51,14 @@ impl CommitMeta {
     pub fn new(
         conflict_resolve_context: ConflictResolveContext,
         new_segment_locs: Vec<Location>,
-        table_id: u64,
+        table_ref_id: u64,
         virtual_schema: Option<VirtualDataSchema>,
         hll: BlockHLL,
     ) -> Self {
         CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
-            table_id,
+            table_ref_id,
             virtual_schema,
             hll,
         }

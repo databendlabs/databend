@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -67,7 +68,7 @@ pub enum TxnState {
 pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
-    base_snapshot_location: HashMap<u64, Option<String>>,
+    base_snapshot_locations: HashMap<u64, HashMap<Option<u64>, Option<String>>>,
     lvt_check: HashMap<u64, Option<TableLvtCheck>>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
@@ -105,9 +106,17 @@ impl TxnBuffer {
                 ..table_info.clone()
             });
 
-            self.base_snapshot_location
-                .entry(table_id)
-                .or_insert(req.base_snapshot_location);
+            match self.base_snapshot_locations.entry(table_id) {
+                Entry::Vacant(e) => {
+                    e.insert(req.base_snapshot_locations);
+                }
+                Entry::Occupied(mut e) => {
+                    let locations = e.get_mut();
+                    for (branch_id, loc) in req.base_snapshot_locations {
+                        locations.entry(branch_id).or_insert(loc);
+                    }
+                }
+            }
 
             self.lvt_check.entry(table_id).or_insert(req.lvt_check);
         }
@@ -317,7 +326,7 @@ impl TxnManager {
                             table_id: *id,
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
-                            base_snapshot_location: None,
+                            base_snapshot_locations: HashMap::new(),
                             lvt_check: self.txn_buffer.lvt_check.get(id).cloned().flatten(),
                         },
                         info.clone(),
@@ -414,9 +423,12 @@ impl TxnManager {
             .insert(table_unique_id, timestamps);
     }
 
-    pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {
+    pub fn get_base_snapshot_locations(
+        &self,
+        table_id: u64,
+    ) -> HashMap<Option<u64>, Option<String>> {
         self.txn_buffer
-            .base_snapshot_location
+            .base_snapshot_locations
             .get(&table_id)
             .unwrap()
             .clone()

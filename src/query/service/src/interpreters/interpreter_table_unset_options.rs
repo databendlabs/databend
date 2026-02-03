@@ -84,7 +84,7 @@ impl Interpreter for UnsetOptionsInterpreter {
         }
 
         let req = UpsertTableOptionReq {
-            table_id: table.get_id(),
+            table_id: table.get_table_id(),
             seq: MatchSeq::Exact(table_version),
             options: opts_to_be_del,
         };

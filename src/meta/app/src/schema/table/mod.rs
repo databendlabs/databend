@@ -451,6 +451,17 @@ impl TableInfo {
         }
         Ok(table_ref)
     }
+
+    pub fn get_table_ref_by_id(&self, id: u64) -> Result<(String, &SnapshotRef)> {
+        self.meta
+            .refs
+            .iter()
+            .find(|(_, r)| r.id == id)
+            .map(|(name, r)| (name.clone(), r))
+            .ok_or_else(|| {
+                ErrorCode::ReferenceExpired(format!("table ref with id {} not found", id))
+            })
+    }
 }
 
 impl Default for TablePartition {
@@ -871,7 +882,8 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
-    pub base_snapshot_location: Option<String>,
+    // base snapshot location with branch id
+    pub base_snapshot_locations: HashMap<Option<u64>, Option<String>>,
     /// Optional optimistic LVT check.
     pub lvt_check: Option<TableLvtCheck>,
 }

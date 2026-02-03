@@ -18,6 +18,8 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::TableInfo;
 
+use crate::table::Table;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ExtendedTableInfo {
     pub table_info: TableInfo,
@@ -25,6 +27,13 @@ pub struct ExtendedTableInfo {
 }
 
 impl ExtendedTableInfo {
+    pub fn from_table(table: &dyn Table) -> Self {
+        Self {
+            table_info: table.get_table_info().clone(),
+            branch_info: table.get_branch_info().cloned(),
+        }
+    }
+
     pub fn schema(&self) -> Arc<TableSchema> {
         self.branch_info
             .as_ref()

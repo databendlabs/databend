@@ -157,6 +157,7 @@ impl MutationInterpreter {
             mutation.catalog_name.clone(),
             mutation.database_name.clone(),
             mutation.table_name.clone(),
+            None,
             mutation_kind,
             hook_lock_opt,
         );

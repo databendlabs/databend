@@ -126,7 +126,7 @@ impl FuseTable {
             // writers/committers will only reference data newer than the gc root.
             catalog
                 .set_table_lvt(
-                    &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
+                    &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_table_id()),
                     &LeastVisibleTime::new(root_snapshot.timestamp.unwrap()),
                 )
                 .await?;
@@ -166,7 +166,10 @@ impl FuseTable {
         let mut purged_snapshot_count = 0;
 
         let table_agg_index_ids = catalog
-            .list_index_ids_by_table_id(ListIndexesByIdReq::new(ctx.get_tenant(), self.get_id()))
+            .list_index_ids_by_table_id(ListIndexesByIdReq::new(
+                ctx.get_tenant(),
+                self.get_table_id(),
+            ))
             .await?;
 
         let inverted_indexes = &self.table_info.meta.indexes;

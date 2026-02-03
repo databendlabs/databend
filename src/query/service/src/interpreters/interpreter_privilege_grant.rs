@@ -87,7 +87,7 @@ impl GrantPrivilegeInterpreter {
                 let table_id = catalog
                     .get_table(tenant, db_name.as_str(), table_name)
                     .await?
-                    .get_id();
+                    .get_table_id();
                 Ok(OwnershipObject::Table {
                     catalog_name,
                     db_id,

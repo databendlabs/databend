@@ -21,13 +21,13 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::schema::TableStatistics;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
+use databend_common_storages_fuse::statistics::gen_table_statistics;
 use databend_enterprise_attach_table::AttachTableHandler;
 use databend_enterprise_attach_table::AttachTableHandlerWrapper;
 use databend_storages_common_cache::LoadParams;
@@ -76,19 +76,7 @@ impl AttachTableHandler for RealAttachTableHandler {
         };
 
         let snapshot = reader.read(&params).await?;
-        let stat = TableStatistics {
-            number_of_rows: snapshot.summary.row_count,
-            data_bytes: snapshot.summary.uncompressed_byte_size,
-            compressed_data_bytes: snapshot.summary.compressed_byte_size,
-            index_data_bytes: snapshot.summary.index_size,
-            bloom_index_size: snapshot.summary.bloom_index_size,
-            ngram_index_size: snapshot.summary.ngram_index_size,
-            inverted_index_size: snapshot.summary.inverted_index_size,
-            vector_index_size: snapshot.summary.vector_index_size,
-            virtual_column_size: snapshot.summary.virtual_column_size,
-            number_of_segments: Some(snapshot.segments.len() as u64),
-            number_of_blocks: Some(snapshot.summary.block_count),
-        };
+        let stat = gen_table_statistics(&snapshot);
 
         let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 

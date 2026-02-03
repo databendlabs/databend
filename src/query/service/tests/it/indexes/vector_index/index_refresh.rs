@@ -84,7 +84,7 @@ async fn test_fuse_do_refresh_vector_index() -> anyhow::Result<()> {
     fixture.execute_command(&sql).await?;
 
     let table = fixture.latest_default_table().await?;
-    let table_id = table.get_id();
+    let table_id = table.get_table_id();
     let tenant = ctx.get_tenant();
 
     // Create first vector index on embedding1
