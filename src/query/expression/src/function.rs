@@ -42,6 +42,7 @@ use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
 use crate::function_stat::DeriveStat;
+use crate::function_stat::ScalarFunctionStat;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -93,7 +94,7 @@ pub struct FunctionSignature {
 }
 
 pub trait ScalarFunctionDomain: Send + Sync + 'static {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType>;
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType>;
 }
 
 pub trait ScalarFunction: Send + Sync + 'static {
@@ -106,11 +107,11 @@ pub enum FunctionEval {
     Scalar {
         /// Given the domains of the arguments, return the domain of the output value.
         calc_domain: Box<dyn ScalarFunctionDomain>,
+
+        derive_stat: Option<Box<dyn ScalarFunctionStat>>,
         /// Given a set of arguments, return a single value.
         /// The result must be in the same length as the input arguments if its a column.
         eval: Box<dyn ScalarFunction>,
-
-        derive_stat: Option<DeriveStat>,
     },
     /// Set-returning-function that input a scalar and then return a set.
     SRF {

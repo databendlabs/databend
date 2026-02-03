@@ -14,6 +14,9 @@
 
 use std::collections::HashMap;
 
+use databend_common_expression::Domain;
+use databend_common_expression::function_stat::ArgStat;
+use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 pub use databend_common_statistics::Ndv;
@@ -39,4 +42,31 @@ pub struct ColumnStat {
 
     /// Histogram of column
     pub histogram: Option<Histogram>,
+}
+
+impl ColumnStat {
+    pub fn to_arg_stat(&self, data_type: &DataType) -> Result<ArgStat<'_>, String> {
+        let domain = Domain::from_datum(
+            data_type,
+            self.min.clone(),
+            self.max.clone(),
+            self.null_count != 0,
+        )?;
+        Ok(ArgStat {
+            domain,
+            ndv: self.ndv,
+            null_count: self.null_count,
+            histogram: self.histogram.as_ref(),
+        })
+    }
+
+    pub fn from_const(datum: Datum) -> Self {
+        Self {
+            min: datum.clone(),
+            max: datum,
+            ndv: Ndv::Stat(1.0),
+            null_count: 0,
+            histogram: None,
+        }
+    }
 }

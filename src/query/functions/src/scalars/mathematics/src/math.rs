@@ -134,15 +134,15 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         })
         .derive_stat(|_, _| {
-            let pi = Float64Type::upcast_scalar(OrderedFloat(PI))
-                .to_datum()
-                .unwrap();
-            Ok(ReturnStat {
-                ndv: Some(Ndv::Stat(1.0)),
-                null_count: Some(0),
-                min_max: Some((pi.clone(), pi)),
+            Ok(Some(ReturnStat {
+                ndv: Ndv::Stat(1.0),
+                null_count: 0,
+                domain: Float64Type::upcast_domain(SimpleDomain {
+                    min: OrderedFloat(PI),
+                    max: OrderedFloat(PI),
+                }),
                 histogram: None,
-            })
+            }))
         })
         .vectorized(|_| Value::Scalar(OrderedFloat(PI)))
         .register();

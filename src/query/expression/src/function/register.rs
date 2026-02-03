@@ -665,7 +665,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
         (self.func)(ctx).map(|d| O::upcast_domain(d))
     }
 }
@@ -681,7 +681,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         (self.calc_domain)(ctx, &arg1).map(|d| O::upcast_domain(d))
     }
@@ -699,7 +699,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         (self.calc_domain)(ctx, &arg1, &arg2).map(|d| O::upcast_domain(d))
@@ -722,7 +722,7 @@ where
         + Sync
         + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&domains[2]).unwrap();
@@ -753,7 +753,7 @@ where
         + Sync
         + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&domains[2]).unwrap();

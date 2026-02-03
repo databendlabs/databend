@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 
 pub type F64 = OrderedFloat<f64>;
 
@@ -43,7 +42,7 @@ impl Datum {
         }
     }
 
-    pub fn as_double(&self) -> Result<f64> {
+    pub fn as_double(&self) -> Result<f64, ErrorCode> {
         match self {
             Datum::Bool(v) => Ok(*v as u8 as f64),
             Datum::Int(v) => Ok(*v as f64),
@@ -56,7 +55,7 @@ impl Datum {
         }
     }
 
-    pub fn to_string(&self) -> Result<String> {
+    pub fn to_string(&self) -> Result<String, ErrorCode> {
         match self {
             Datum::Bool(v) => Ok(v.to_string()),
             Datum::Int(v) => Ok(v.to_string()),
@@ -133,7 +132,7 @@ impl Datum {
         }
     }
 
-    pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
+    pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering, ErrorCode> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),
 

@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnRef as ExprColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionCall as ExprFunctionCall;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::StatEvaluator;
+use databend_common_expression::function_stat::ArgStat;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
@@ -35,8 +36,8 @@ use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::Ndv;
-use crate::plans;
 use crate::plans::ComparisonOp;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 /// A default selectivity factor for a predicate
@@ -89,7 +90,7 @@ impl SelectivityEstimator {
     pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
         let scalar_expr = match predicates {
             [pred] => pred.clone(),
-            predicates => ScalarExpr::FunctionCall(plans::FunctionCall {
+            predicates => ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: "and_filters".to_string(),
                 params: vec![],
@@ -169,133 +170,125 @@ pub enum Selectivity {
     N(f64),
 }
 
+type ExprCall = databend_common_expression::FunctionCall<ColumnBinding>;
+
 impl SelectivityVisitor<'_> {
-    fn compute_comparison(
-        &mut self,
-        mut op: ComparisonOp,
-        func: &ExprFunctionCall<ColumnBinding>,
-    ) -> Result<Selectivity> {
+    fn build_input_stats<'s>(
+        &'s self,
+        expr: &Expr<ColumnBinding>,
+    ) -> Result<Option<HashMap<ColumnBinding, ArgStat<'s>>>> {
+        let column_refs = expr.column_refs();
+        if column_refs.is_empty() {
+            return Ok(None);
+        }
+
+        let mut input_stats = HashMap::with_capacity(column_refs.len());
+        for (binding, data_type) in column_refs {
+            let Some(column_stat) = self.get_column_stat(binding.index) else {
+                return Ok(None);
+            };
+            match column_stat.to_arg_stat(&data_type) {
+                Ok(arg_stat) => {
+                    input_stats.insert(binding, arg_stat);
+                }
+                Err(msg) => {
+                    return if cfg!(debug_assertions) {
+                        Err(ErrorCode::Internal(format!(
+                            "Failed to_arg_stat {msg} {:?} {:?}",
+                            column_stat, data_type
+                        )))
+                    } else {
+                        log::warn!(data_type:?, msg; "to_arg_stat failed");
+                        Ok(None)
+                    };
+                }
+            }
+        }
+
+        Ok(Some(input_stats))
+    }
+
+    fn derive_expr_stat(&self, expr: &Expr<ColumnBinding>) -> Result<Option<ColumnStat>> {
+        let Some(input_stats) = self.build_input_stats(expr)? else {
+            return Ok(None);
+        };
+        let Some(stat) = StatEvaluator::run(
+            expr,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+            self.cardinality,
+            &input_stats,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        let stat = stat.as_ref();
+        Ok(try {
+            let (min, max) = stat.domain.to_minmax();
+            let min = min.to_datum()?;
+            let max = max.to_datum()?;
+            ColumnStat {
+                min,
+                max,
+                ndv: stat.ndv,
+                null_count: stat.null_count,
+                histogram: stat.histogram.cloned(),
+            }
+        })
+    }
+
+    fn compute_comparison(&mut self, op: ComparisonOp, func: &ExprCall) -> Result<Selectivity> {
         let left = &func.args[0];
         let right = &func.args[1];
         match (left, right) {
             (Expr::ColumnRef(column_ref), Expr::Constant(constant))
             | (Expr::Constant(constant), Expr::ColumnRef(column_ref)) => {
-                // Check if there is available histogram for the column.
                 let column_index = column_ref.id.index;
-                let Some(column_stat) = self.get_column_stat(column_index) else {
+                let Some(_) = self.get_column_stat(column_index) else {
                     // The column is derived column, give a small selectivity currently.
                     // Need to improve it later.
                     // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
                     return Ok(Selectivity::LowerBound);
                 };
-                let const_datum = if let Some(datum) = constant.scalar.clone().to_datum() {
-                    datum
-                } else {
+                let Some(const_datum) = constant.scalar.clone().to_datum() else {
                     return Ok(Selectivity::Unknown);
                 };
-
-                return match op {
-                    ComparisonOp::Equal => {
-                        // For equal predicate, we just use cardinality of a single
-                        // value to estimate the selectivity. This assumes that
-                        // the column is in a uniform distribution.
-                        let selectivity = evaluate_equal(column_stat, false, constant);
-                        let column_stat = self
-                            .ensure_column_stat(column_index)
-                            .expect("checked above");
-                        update_statistic_eq(column_stat, const_datum);
-                        Ok(selectivity)
-                    }
-                    ComparisonOp::NotEqual => {
-                        let selectivity = evaluate_equal(column_stat, true, constant);
-                        if let Selectivity::N(n) = selectivity {
-                            let column_stat = self
-                                .ensure_column_stat(column_index)
-                                .expect("checked above");
-                            update_statistic(
-                                column_stat,
-                                column_stat.min.clone(),
-                                column_stat.max.clone(),
-                                n,
-                            )?;
-                        }
-                        Ok(selectivity)
-                    }
-                    _ => {
-                        if matches!(left, Expr::Constant(_)) {
-                            op = op.reverse();
-                        }
-                        match &column_stat.histogram {
-                            Some(histogram) => {
-                                let selectivity = Self::compute_histogram_comparison(
-                                    histogram,
-                                    op,
-                                    &const_datum,
-                                )?;
-                                if let Selectivity::N(n) = selectivity {
-                                    let (new_min, new_max) = match op {
-                                        ComparisonOp::GT | ComparisonOp::GTE => {
-                                            let new_min = const_datum.clone();
-                                            let new_max = column_stat.max.clone();
-                                            (new_min, new_max)
-                                        }
-                                        ComparisonOp::LT | ComparisonOp::LTE => {
-                                            let new_max = const_datum.clone();
-                                            let new_min = column_stat.min.clone();
-                                            (new_min, new_max)
-                                        }
-                                        _ => unreachable!(),
-                                    };
-                                    let column_stat = self
-                                        .ensure_column_stat(column_index)
-                                        .expect("checked above");
-                                    update_statistic(column_stat, new_min, new_max, n)?;
-                                }
-                                Ok(selectivity)
-                            }
-                            None => {
-                                if column_ref.data_type.remove_nullable().is_integer() {
-                                    self.compute_ndv_comparison(op, &const_datum, column_index)
-                                } else {
-                                    Ok(Selectivity::Unknown)
-                                }
-                            }
-                        }
-                    }
-                };
+                let column_stat = self
+                    .ensure_column_stat(column_index)
+                    .expect("checked above");
+                return Self::compute_comparison_with_stat(
+                    column_stat,
+                    constant,
+                    if left.is_constant() { op.reverse() } else { op },
+                    const_datum,
+                    column_ref.data_type.remove_nullable().is_integer(),
+                );
             }
-            (Expr::Constant(_), Expr::Constant(_)) => {
-                let expr = Expr::FunctionCall(func.clone());
-                let (expr, _) =
-                    ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let Expr::Constant(Constant {
-                    scalar: Scalar::Boolean(v),
-                    ..
-                }) = expr
+            (Expr::FunctionCall(func), Expr::Constant(val))
+                if op == ComparisonOp::Equal && func.function.signature.name == "modulo" =>
+            {
+                if let Expr::Constant(mod_num) = &func.args[1]
+                    && let Some(mod_num) = mod_num.scalar.clone().to_datum()
                 {
-                    return Ok(Selectivity::N(if v { 1.0 } else { 0.0 }));
+                    let mod_num = mod_num.as_double()?;
+                    if mod_num == 0.0 {
+                        return Err(ErrorCode::SemanticError("modulus by zero".to_string()));
+                    }
+                    return if let Some(remainder) = val.scalar.clone().to_datum()
+                        && remainder.as_double()? >= mod_num
+                    {
+                        Ok(Selectivity::N(0.0))
+                    } else {
+                        Ok(Selectivity::N(1.0 / mod_num))
+                    };
                 }
             }
-            (Expr::FunctionCall(func), Expr::Constant(val)) => {
-                if op == ComparisonOp::Equal && func.function.signature.name == "modulo" {
-                    if let Expr::Constant(mod_num) = &func.args[1] {
-                        if let Some(mod_num) = mod_num.scalar.clone().to_datum() {
-                            let mod_num = mod_num.as_double()?;
-                            if mod_num == 0.0 {
-                                return Err(ErrorCode::SemanticError(
-                                    "modulus by zero".to_string(),
-                                ));
-                            }
-                            if let Some(remainder) = val.scalar.clone().to_datum() {
-                                let remainder = remainder.as_double()?;
-                                if remainder >= mod_num {
-                                    return Ok(Selectivity::N(0.0));
-                                }
-                            }
-                            return Ok(Selectivity::N(1.0 / mod_num));
-                        }
-                    }
-                }
+            (expr, Expr::Constant(constant)) => {
+                return self.compute_comparison_expr(expr, constant, op);
+            }
+            (Expr::Constant(constant), expr) => {
+                return self.compute_comparison_expr(expr, constant, op.reverse());
             }
             _ => (),
         }
@@ -303,14 +296,87 @@ impl SelectivityVisitor<'_> {
         Ok(Selectivity::Unknown)
     }
 
-    fn compute_ndv_comparison(
+    fn compute_comparison_expr(
         &mut self,
+        expr: &Expr<ColumnBinding>,
+        constant: &Constant,
+        op: ComparisonOp,
+    ) -> Result<Selectivity> {
+        let Some(const_datum) = constant.scalar.clone().to_datum() else {
+            return Ok(Selectivity::Unknown);
+        };
+        let Some(mut column_stat) = self.derive_expr_stat(expr)? else {
+            return Ok(Selectivity::Unknown);
+        };
+
+        Self::compute_comparison_with_stat(
+            &mut column_stat,
+            constant,
+            op,
+            const_datum,
+            expr.data_type().remove_nullable().is_integer(),
+        )
+    }
+
+    fn compute_comparison_with_stat(
+        column_stat: &mut ColumnStat,
+        constant: &Constant,
+        op: ComparisonOp,
+        const_datum: Datum,
+        column_is_integer: bool,
+    ) -> Result<Selectivity> {
+        match op {
+            ComparisonOp::Equal => {
+                let selectivity = evaluate_equal(column_stat, false, constant);
+                *column_stat = ColumnStat::from_const(const_datum);
+                Ok(selectivity)
+            }
+            ComparisonOp::NotEqual => {
+                let selectivity = evaluate_equal(column_stat, true, constant);
+                if let Selectivity::N(n) = selectivity {
+                    update_statistic(
+                        column_stat,
+                        column_stat.min.clone(),
+                        column_stat.max.clone(),
+                        n,
+                    )?;
+                }
+                Ok(selectivity)
+            }
+            _ => match &column_stat.histogram {
+                Some(histogram) => {
+                    let selectivity =
+                        Self::compute_histogram_comparison(histogram, op, &const_datum)?;
+                    if let Selectivity::N(n) = selectivity {
+                        let (new_min, new_max) = match op {
+                            ComparisonOp::GT | ComparisonOp::GTE => {
+                                (const_datum.clone(), column_stat.max.clone())
+                            }
+                            ComparisonOp::LT | ComparisonOp::LTE => {
+                                (column_stat.min.clone(), const_datum.clone())
+                            }
+                            _ => unreachable!(),
+                        };
+                        update_statistic(column_stat, new_min, new_max, n)?;
+                    }
+                    Ok(selectivity)
+                }
+                None => {
+                    if column_is_integer {
+                        Self::compute_ndv_comparison(column_stat, op, &const_datum)
+                    } else {
+                        Ok(Selectivity::Unknown)
+                    }
+                }
+            },
+        }
+    }
+
+    fn compute_ndv_comparison(
+        column_stat: &mut ColumnStat,
         comparison_op: ComparisonOp,
         const_datum: &Datum,
-        column_index: IndexType,
     ) -> Result<Selectivity> {
-        let column_stat = self.ensure_column_stat(column_index).unwrap();
-
         let min = column_stat.min.as_double()?;
         let max = column_stat.max.as_double()?;
         let ndv = column_stat.ndv;
@@ -324,7 +390,7 @@ impl SelectivityVisitor<'_> {
             (ComparisonOp::LT, Less | Equal, _) => 0.0,
             (ComparisonOp::LTE, Less, _) => 0.0,
             (ComparisonOp::LTE, Equal, _) => {
-                update_statistic_eq(column_stat, const_datum.clone());
+                *column_stat = ColumnStat::from_const(const_datum.clone());
                 return Ok(Selectivity::equal_selectivity(ndv, false));
             }
             (ComparisonOp::LT | ComparisonOp::LTE, Greater, Greater) => 1.0,
@@ -363,7 +429,7 @@ impl SelectivityVisitor<'_> {
                 return Ok(selectivity);
             }
             (ComparisonOp::GTE, _, Equal) => {
-                update_statistic_eq(column_stat, const_datum.clone());
+                *column_stat = ColumnStat::from_const(const_datum.clone());
                 return Ok(Selectivity::equal_selectivity(ndv, false));
             }
             (ComparisonOp::GT | ComparisonOp::GTE, _, _) => {
@@ -461,7 +527,7 @@ impl SelectivityVisitor<'_> {
 
     // The method uses probability predication to compute like selectivity.
     // The core idea is from postgresql.
-    fn compute_like(&mut self, func: &ExprFunctionCall<ColumnBinding>) -> Result<Selectivity> {
+    fn compute_like(&mut self, func: &ExprCall) -> Result<Selectivity> {
         let Expr::Constant(Constant {
             scalar: Scalar::String(patt),
             ..
@@ -538,8 +604,18 @@ impl SelectivityVisitor<'_> {
 
     fn visit_expr(&mut self, expr: &Expr<ColumnBinding>) -> Result<()> {
         match expr {
-            Expr::Constant(constant) => self.visit_constant(constant),
-            Expr::ColumnRef(column_ref) => self.visit_column_ref(column_ref),
+            Expr::Constant(constant) => {
+                self.selectivity = if is_true_constant_predicate(constant) {
+                    Selectivity::N(1.0)
+                } else {
+                    Selectivity::N(0.0)
+                };
+                Ok(())
+            }
+            Expr::ColumnRef(_) => {
+                self.selectivity = Selectivity::LowerBound;
+                Ok(())
+            }
             Expr::Cast(cast) => self.visit_expr(&cast.expr),
             Expr::FunctionCall(func) => self.visit_function_call(func),
             Expr::LambdaFunctionCall(_) => {
@@ -549,7 +625,7 @@ impl SelectivityVisitor<'_> {
         }
     }
 
-    fn visit_function_call(&mut self, func: &ExprFunctionCall<ColumnBinding>) -> Result<()> {
+    fn visit_function_call(&mut self, func: &ExprCall) -> Result<()> {
         let func_name = func.function.signature.name.as_str();
         match func_name {
             "and_filters" => {
@@ -632,20 +708,6 @@ impl SelectivityVisitor<'_> {
 
         Ok(())
     }
-
-    fn visit_column_ref(&mut self, _: &ExprColumnRef<ColumnBinding>) -> Result<()> {
-        self.selectivity = Selectivity::LowerBound;
-        Ok(())
-    }
-
-    fn visit_constant(&mut self, constant: &Constant) -> Result<()> {
-        self.selectivity = if is_true_constant_predicate(constant) {
-            Selectivity::N(1.0)
-        } else {
-            Selectivity::N(0.0)
-        };
-        Ok(())
-    }
 }
 
 // TODO(andylokandy): match on non-null boolean only once we have constant folding in the optimizer.
@@ -711,14 +773,6 @@ fn update_statistic(
     Ok(())
 }
 
-fn update_statistic_eq(column_stat: &mut ColumnStat, value: Datum) {
-    column_stat.min = value.clone();
-    column_stat.max = value;
-    column_stat.ndv = Ndv::Stat(1.0);
-    column_stat.null_count = 0;
-    column_stat.histogram = None;
-}
-
 impl Selectivity {
     pub fn equal_selectivity(ndv: Ndv, not: bool) -> Self {
         let v = ndv.value();
@@ -753,7 +807,6 @@ mod tests {
     use crate::plans::BoundColumnRef;
     use crate::plans::CastExpr;
     use crate::plans::ConstantExpr;
-    use crate::plans::FunctionCall;
     use crate::plans::ScalarExpr;
 
     fn run_test(

@@ -62,6 +62,7 @@ mod hilbert;
 mod kernels;
 mod projected_block;
 mod property;
+mod stat_evaluator;
 
 pub mod row_encoding;
 pub mod sampler;
@@ -91,6 +92,7 @@ pub use crate::projected_block::*;
 pub use crate::property::*;
 pub use crate::row_encoding::*;
 pub use crate::schema::*;
+pub use crate::stat_evaluator::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

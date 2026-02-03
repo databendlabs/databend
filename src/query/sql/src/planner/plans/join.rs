@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::F64;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -415,8 +414,8 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            left.min = left.min.cast_float();
-            left.max = left.max.cast_float();
+            left.min = left.min.clone().cast_float();
+            left.max = left.max.clone().cast_float();
             left.histogram = Some(HistogramBuilder::from_ndv(
                 left.ndv.value() as u64,
                 max(join_card as u64, left.ndv.value() as u64),
@@ -434,8 +433,8 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            right.min = right.min.cast_float();
-            right.max = right.max.cast_float();
+            right.min = right.min.clone().cast_float();
+            right.max = right.max.clone().cast_float();
             right.histogram = Some(HistogramBuilder::from_ndv(
                 right.ndv.value() as u64,
                 max(join_card as u64, right.ndv.value() as u64),

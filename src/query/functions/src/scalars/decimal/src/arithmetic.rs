@@ -383,7 +383,7 @@ struct DecimalBinaryCalcDomain {
 }
 
 impl ScalarFunctionDomain for DecimalBinaryCalcDomain {
-    fn calc_domain(&self, ctx: &FunctionContext, d: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, d: &[Domain]) -> FunctionDomain<AnyType> {
         let (left, right) = (
             DecimalDataType::Decimal256(self.left_size),
             DecimalDataType::Decimal256(self.right_size),

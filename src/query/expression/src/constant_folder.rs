@@ -438,7 +438,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
-                    let res = calc_domain.calc_domain(self.func_ctx, &domains);
+                    let res = calc_domain.domain_eval(self.func_ctx, &domains);
                     match (res, is_monotonicity) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
                             let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();

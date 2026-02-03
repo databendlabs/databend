@@ -365,7 +365,7 @@ impl<O: ReturnType, B: ScalarFunctionCollect> TypedNullaryFunctionBuilder<O, B> 
 
     pub fn derive_stat(
         mut self,
-        func: fn(cardinality: f64, ctx: &FunctionContext) -> Result<ReturnStat, String>,
+        func: fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>,
     ) -> Self {
         self.derive_stat = Some(DeriveStat::Nullary(func));
         self
@@ -376,11 +376,11 @@ impl<O: ReturnType, B: ScalarFunctionCollect> TypedNullaryFunctionBuilder<O, B> 
         let Self {
             builder,
             return_type,
-            calc_domain: typed_calc_domain,
+            calc_domain,
             derive_stat,
         } = self;
         let mut builder = builder;
-        let calc = typed_calc_domain.expect("typed calc_domain must be specified");
+        let calc_domain = calc_domain.expect("typed calc_domain must be specified");
 
         let signature = FunctionSignature {
             name: builder.name().to_string(),
@@ -389,7 +389,7 @@ impl<O: ReturnType, B: ScalarFunctionCollect> TypedNullaryFunctionBuilder<O, B> 
         };
 
         let calc_wrapper = TypedNullaryCalcDomain {
-            calc_domain: calc,
+            calc_domain,
             return_type: return_type.clone(),
             _marker: PhantomData,
         };
@@ -404,7 +404,7 @@ impl<O: ReturnType, B: ScalarFunctionCollect> TypedNullaryFunctionBuilder<O, B> 
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(calc_wrapper),
                 eval: Box::new(eval_wrapper),
-                derive_stat,
+                derive_stat: derive_stat.map(|eval| Box::new(eval) as _),
             },
         });
         builder
@@ -421,7 +421,7 @@ struct TypedNullaryCalcDomain<O: ReturnType> {
 impl<O> ScalarFunctionDomain for TypedNullaryCalcDomain<O>
 where O: ReturnType
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         debug_assert!(
             domains.is_empty(),
             "nullary functions expect zero arguments"
@@ -505,7 +505,7 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
 
     pub fn derive_stat(
         mut self,
-        func: fn(&StatUnaryArg, ctx: &FunctionContext) -> Result<ReturnStat, String>,
+        func: fn(StatUnaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>,
     ) -> Self {
         self.derive_stat = Some(DeriveStat::Unary(func));
         self
@@ -585,7 +585,7 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
                         return_type,
                         _marker: PhantomData,
                     }),
-                    derive_stat,
+                    derive_stat: derive_stat.map(|eval| Box::new(eval) as _),
                 },
             });
             if B::FOR_FACTORY {
@@ -632,7 +632,7 @@ impl<I: AccessType, O: ReturnType, B: ScalarFunctionCollect> TypedUnaryFunctionB
                     return_type: return_type.wrap_nullable(),
                     _marker: PhantomData,
                 }),
-                derive_stat,
+                derive_stat: derive_stat.map(|eval| Box::new(eval) as _),
             },
         }
     }
@@ -650,7 +650,7 @@ where
     I: AccessType,
     O: ReturnType,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         debug_assert_eq!(domains.len(), 1, "unary functions expect one argument");
         let arg = I::try_downcast_domain(&domains[0]).unwrap();
         (self.calc_domain)(ctx, &arg)
@@ -747,7 +747,7 @@ where
 
     pub fn derive_stat(
         mut self,
-        func: fn(&StatBinaryArg, ctx: &FunctionContext) -> Result<ReturnStat, String>,
+        func: fn(StatBinaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>,
     ) -> Self {
         self.derive_stat = Some(DeriveStat::Binary(func));
         self
@@ -826,7 +826,7 @@ where
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(calc_wrapper.clone()),
                     eval: Box::new(eval_wrapper),
-                    derive_stat,
+                    derive_stat: derive_stat.map(|eval| Box::new(eval) as _),
                 },
             });
             if B::FOR_FACTORY {
@@ -873,7 +873,7 @@ where
                     return_type: return_type.wrap_nullable(),
                     _marker: PhantomData,
                 }),
-                derive_stat,
+                derive_stat: derive_stat.map(|eval| Box::new(eval) as _),
             },
         }
     }
@@ -892,7 +892,7 @@ where
     I2: AccessType,
     O: ReturnType,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         debug_assert_eq!(domains.len(), 2, "binary functions expect two arguments");
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
