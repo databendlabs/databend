@@ -44,6 +44,7 @@ use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
+use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
@@ -107,20 +108,6 @@ impl FieldEncoderValues {
             },
             escape_char: 0, // not used
             quote_char: 0,  // not used
-        }
-    }
-    pub fn create_for_csv_nested(settings: OutputFormatSettings) -> Self {
-        FieldEncoderValues {
-            common_settings: OutputCommonSettings {
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                settings,
-            },
-            escape_char: b'"',
-            quote_char: b'"',
         }
     }
 
