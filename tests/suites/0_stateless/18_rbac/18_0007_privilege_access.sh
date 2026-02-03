@@ -3,6 +3,12 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+run_root_sql() {
+  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+$1
+SQL
+}
+
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
@@ -13,18 +19,16 @@ stmt "drop database if exists dbnotexists;"
 stmt "GRANT SELECT ON db01.tbnotexists TO 'test-user'"
 stmt "GRANT SELECT ON dbnotexists.* TO 'test-user'"
 
-echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists 'test-role1'" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists 'test-role2'" | $BENDSQL_CLIENT_CONNECT
-
-## create user
-echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-## create role
-echo 'create role `test-role1`' | $BENDSQL_CLIENT_CONNECT
-echo 'create role `test-role2`' | $BENDSQL_CLIENT_CONNECT
-## create table
-echo "drop table if exists t20_0012" | $BENDSQL_CLIENT_CONNECT
-echo "create table t20_0012(c int not null)" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists 'test-user';
+drop role if exists 'test-role1';
+drop role if exists 'test-role2';
+create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD';
+create role \`test-role1\`;
+create role \`test-role2\`;
+drop table if exists t20_0012;
+create table t20_0012(c int not null);
+"
 
 echo "=== check list user's local stage ==="
 echo "list @~" | $TEST_USER_CONNECT
@@ -37,10 +41,12 @@ echo "show databases" | $TEST_USER_CONNECT
 echo "select 'test -- insert'" | $TEST_USER_CONNECT
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## grant user privileges via role
-echo 'GRANT INSERT ON * TO ROLE `test-role1`' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT SELECT ON * TO ROLE `test-role2`' | $BENDSQL_CLIENT_CONNECT
-echo "GRANT ROLE \`test-role1\` TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT ROLE \`test-role2\` TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+GRANT INSERT ON * TO ROLE \`test-role1\`;
+GRANT SELECT ON * TO ROLE \`test-role2\`;
+GRANT ROLE \`test-role1\` TO 'test-user';
+GRANT ROLE \`test-role2\` TO 'test-user';
+"
 ## insert data
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## verify
@@ -102,14 +108,15 @@ echo "drop network policy if exists test_user_without_account_admin"  | $TEST_US
 ## select data
 echo "select 'test -- select'" | $TEST_USER_CONNECT
 ## Init tables
-echo "CREATE TABLE default.t20_0012_a(c int not null) CLUSTER BY(c)" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT INSERT ON default.t20_0012_a TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+CREATE TABLE default.t20_0012_a(c int not null) CLUSTER BY(c);
+GRANT INSERT ON default.t20_0012_a TO 'test-user';
+CREATE TABLE default.t20_0012_b(c int not null);
+GRANT INSERT ON default.t20_0012_b TO 'test-user';
+REVOKE SELECT ON * FROM 'test-user';
+"
 echo "INSERT INTO default.t20_0012_a values(1)" | $TEST_USER_CONNECT
-echo "CREATE TABLE default.t20_0012_b(c int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "GRANT INSERT ON default.t20_0012_b TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO default.t20_0012_b values(1)" | $TEST_USER_CONNECT
-## Init privilege
-echo "REVOKE SELECT ON * FROM 'test-user'" | $BENDSQL_CLIENT_CONNECT
 ## Verify table privilege separately
 echo "select * from default.t20_0012_a order by c" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON default.t20_0012_a TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
@@ -122,9 +129,10 @@ echo "select * from default.t20_0012_b order by c" | $TEST_USER_CONNECT
 ## View is not covered with ownership yet, the privilge checks is bound to the database
 ## the view table is created in.
 echo "select 'test -- select view'" | $TEST_USER_CONNECT
-echo "create database default2" | $BENDSQL_CLIENT_CONNECT
-
-echo "create view default2.v_t20_0012 as select * from default.t20_0012_a" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+create database default2;
+create view default2.v_t20_0012 as select * from default.t20_0012_a;
+"
 echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
 ## Only grant privilege for view table, now this user can access the view under default2 db,
 ## but can not access the tables under the `default` database, stil raises permission error
@@ -146,16 +154,14 @@ echo "select count(*)=0 from fuse_segment('default', 't20_0012_a', '')" | $TEST_
 echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
 
 ## Drop table.
-echo "drop table default.t20_0012 all" | $BENDSQL_CLIENT_CONNECT
-echo "drop table default.t20_0012_a all" | $BENDSQL_CLIENT_CONNECT
-echo "drop table default.t20_0012_b all" | $BENDSQL_CLIENT_CONNECT
-echo "drop view default2.v_t20_0012" | $BENDSQL_CLIENT_CONNECT
-
-## Drop database.
-echo "drop database default2" | $BENDSQL_CLIENT_CONNECT
-
-## Drop user
-echo "drop user 'test-user'" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop table default.t20_0012 all;
+drop table default.t20_0012_a all;
+drop table default.t20_0012_b all;
+drop view default2.v_t20_0012;
+drop database default2;
+drop user 'test-user';
+"
 rm -rf password.out
 
 ## Show grants test
@@ -163,17 +169,19 @@ export TEST_USER_PASSWORD="password"
 export USER_A_CONNECT="bendsql --user=a --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "drop user if exists a" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists nogrant" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists grant_db" | $BENDSQL_CLIENT_CONNECT
-echo "create database grant_db" | $BENDSQL_CLIENT_CONNECT
-echo "create table grant_db.t(c1 int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "create database nogrant" | $BENDSQL_CLIENT_CONNECT
-echo "create table nogrant.t(id int not null)" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on default.* to a" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on grant_db.t to a" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.test_t" | $BENDSQL_CLIENT_CONNECT
-echo "create table default.test_t(id int not null)" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+create user a identified by '$TEST_USER_PASSWORD';
+drop database if exists nogrant;
+drop database if exists grant_db;
+create database grant_db;
+create table grant_db.t(c1 int not null);
+create database nogrant;
+create table nogrant.t(id int not null);
+grant select on default.* to a;
+grant select on grant_db.t to a;
+drop table if exists default.test_t;
+create table default.test_t(id int not null);
+"
 echo "show grants for a" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
 echo "show databases" | $USER_A_CONNECT
 echo "select 'test -- show tables from system'" | $BENDSQL_CLIENT_CONNECT
