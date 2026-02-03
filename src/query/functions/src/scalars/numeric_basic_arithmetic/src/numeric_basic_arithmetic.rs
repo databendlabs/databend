@@ -56,6 +56,7 @@ where
         .scalar_builder("plus")
         .function()
         .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<AddMulResult<L, R>>>()
+        .passthrough_nullable()
         .calc_domain(|_, lhs, rhs| {
             try {
                 let lm: AddMulResult<L, R> = num_traits::cast::cast(lhs.max)?;
