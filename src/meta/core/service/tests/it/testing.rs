@@ -15,6 +15,7 @@
 use std::time::Duration;
 use std::time::SystemTime;
 
+pub use databend_common_meta_runtime_api::TokioRuntime;
 pub use databend_meta_test_harness::meta_service_test_harness;
 
 pub fn since_epoch_sec() -> u64 {

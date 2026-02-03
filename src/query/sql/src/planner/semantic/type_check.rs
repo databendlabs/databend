@@ -72,6 +72,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -163,6 +164,7 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
+use crate::binder::VirtualColumnName;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
@@ -4940,8 +4942,8 @@ impl<'a> TypeChecker<'a> {
         if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
             if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                 span,
-                &column.database_name,
-                &column.table_name,
+                base_column.table_index,
+                base_column.column_id,
                 &base_column.column_name,
                 &keypaths,
             ) {
@@ -6812,28 +6814,35 @@ impl<'a> TypeChecker<'a> {
     fn try_rewrite_virtual_column(
         &mut self,
         span: Span,
-        database_name: &Option<String>,
-        table_name: &Option<String>,
+        table_index: IndexType,
+        column_id: ColumnId,
         column_name: &str,
         keypaths: &KeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if !self.bind_context.allow_virtual_column {
             return None;
         }
-        let name = Self::keypaths_to_name(column_name, keypaths);
-        self.resolve(&Expr::ColumnRef {
-            span,
-            column: ColumnRef {
-                database: database_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                table: table_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                column: ColumnID::Name(Identifier::from_name(span, name)),
-            },
-        })
-        .ok()
+        let owned_keypaths = keypaths.to_owned();
+        let key_name = Self::keypaths_to_name(column_name, keypaths);
+        let virtual_column_name = VirtualColumnName {
+            table_index,
+            source_column_id: column_id,
+            key_name,
+        };
+
+        // add virtual column binding into `BindContext`
+        let column = self.bind_context.add_virtual_column_binding(
+            self.metadata.clone(),
+            column_name,
+            virtual_column_name,
+            owned_keypaths,
+        )?;
+
+        let data_type = *column.data_type.clone();
+        Some(Box::new((
+            BoundColumnRef { span, column }.into(),
+            data_type,
+        )))
     }
 
     fn keypaths_to_name(column_name: &str, keypaths: &KeyPaths) -> String {
@@ -6892,8 +6901,8 @@ impl<'a> TypeChecker<'a> {
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
                     if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                         span,
-                        &column.database_name,
-                        &column.table_name,
+                        base_column.table_index,
+                        base_column.column_id,
                         &base_column.column_name,
                         &keypaths,
                     ) {

@@ -23,7 +23,7 @@ SQL
 
 echo "=== test UDF priv"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql -A --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 run_bendsql "
 DROP USER IF EXISTS 'test-user';

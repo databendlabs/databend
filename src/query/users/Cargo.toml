@@ -15,12 +15,12 @@ databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-cache = { workspace = true }
+databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }

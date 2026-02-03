@@ -22,8 +22,6 @@ use std::time::Instant;
 
 use arrow_flight::BasicAuth;
 use databend_base::futures::ElapsedFutureExt;
-use databend_common_grpc::RpcClientConf;
-use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_runtime_api::TlsConfig;
@@ -81,6 +79,8 @@ use crate::ClientWorkerRequest;
 use crate::FeatureSpec;
 use crate::MetaChannelManager;
 use crate::MetaGrpcReadReq;
+use crate::client_conf::RpcClientConf;
+use crate::client_conf::RpcClientTlsConfig;
 use crate::endpoints::Endpoints;
 use crate::endpoints::rotate_failing_endpoint;
 use crate::errors::CreationError;

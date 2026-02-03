@@ -18,6 +18,7 @@
 extern crate core;
 
 mod channel_manager;
+mod client_conf;
 mod client_handle;
 pub mod endpoints;
 pub mod errors;
@@ -30,6 +31,8 @@ pub mod required;
 pub(crate) mod rpc_handler;
 
 pub use channel_manager::MetaChannelManager;
+pub use client_conf::RpcClientConf;
+pub use client_conf::RpcClientTlsConfig;
 pub use client_handle::ClientHandle;
 pub use grpc_action::GetKVReply;
 pub use grpc_action::GetKVReq;

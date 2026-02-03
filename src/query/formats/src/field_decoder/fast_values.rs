@@ -60,7 +60,7 @@ use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
@@ -82,7 +82,7 @@ impl FieldDecoder for FastFieldDecoderValues {
 }
 
 impl FastFieldDecoderValues {
-    pub fn create_for_insert(format: FormatSettings, is_rounding_mode: bool) -> Self {
+    pub fn create_for_insert(settings: InputFormatSettings) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
@@ -91,17 +91,10 @@ impl FastFieldDecoderValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                jiff_timezone: format.jiff_timezone,
-                disable_variant_check: false,
+                settings,
                 binary_format: Default::default(),
-                is_rounding_mode,
-                enable_dst_hour_fix: format.enable_dst_hour_fix,
             },
         }
-    }
-
-    fn common_settings(&self) -> &InputCommonSettings {
-        &self.common_settings
     }
 
     fn ignore_field_end<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> bool {
@@ -175,17 +168,17 @@ impl FastFieldDecoderValues {
         column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        if self.match_bytes(reader, &self.common_settings().true_bytes) {
+        if self.match_bytes(reader, &self.common_settings.true_bytes) {
             column.push(true);
             Ok(())
-        } else if self.match_bytes(reader, &self.common_settings().false_bytes) {
+        } else if self.match_bytes(reader, &self.common_settings.false_bytes) {
             column.push(false);
             Ok(())
         } else {
             let err_msg = format!(
                 "Incorrect boolean value, expect {} or {}",
-                self.common_settings().true_bytes.to_str().unwrap(),
-                self.common_settings().false_bytes.to_str().unwrap()
+                self.common_settings.true_bytes.to_str().unwrap(),
+                self.common_settings.false_bytes.to_str().unwrap()
             );
             Err(ErrorCode::BadBytes(err_msg))
         }
@@ -222,7 +215,7 @@ impl FastFieldDecoderValues {
             Err(_) => {
                 // cast float value to integer value
                 let val: f64 = reader.read_float_text()?;
-                let new_val: Option<T::Native> = if self.common_settings.is_rounding_mode {
+                let new_val: Option<T::Native> = if self.common_settings.settings.is_rounding_mode {
                     num_traits::cast::cast(val.round())
                 } else {
                     num_traits::cast::cast(val)
@@ -315,7 +308,7 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
+        let date = buffer_readr.read_date_text(&self.common_settings.settings.jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -329,7 +322,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp(column, &buf, self.common_settings())
+        read_timestamp(column, &buf, &self.common_settings)
     }
 
     fn read_timestamp_tz<R: AsRef<[u8]>>(
@@ -340,7 +333,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp_tz(column, &buf, self.common_settings())
+        read_timestamp_tz(column, &buf, &self.common_settings)
     }
 
     fn read_array<R: AsRef<[u8]>>(
@@ -489,7 +482,7 @@ impl FastFieldDecoderValues {
                 column.commit_row();
             }
             Err(_) => {
-                if self.common_settings().disable_variant_check {
+                if self.common_settings.settings.disable_variant_check {
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(format!(
@@ -771,7 +764,7 @@ mod test {
     use databend_common_expression::Scalar;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
-    use databend_common_io::prelude::FormatSettings;
+    use databend_common_io::prelude::InputFormatSettings;
     use goldenfile::Mint;
 
     use super::FastFieldDecoderValues;
@@ -864,7 +857,7 @@ mod test {
             writeln!(file, "{:?}", case.column_types)?;
 
             let field_decoder =
-                FastFieldDecoderValues::create_for_insert(FormatSettings::default(), true);
+                FastFieldDecoderValues::create_for_insert(InputFormatSettings::default());
             let mut values_decoder = FastValuesDecoder::new(case.data, &field_decoder);
             let fallback = DummyFastValuesDecodeFallback {};
             let mut columns = case

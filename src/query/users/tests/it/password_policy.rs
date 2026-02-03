@@ -19,7 +19,6 @@ use databend_common_ast::ast::AuthOption;
 use databend_common_ast::ast::AuthType;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::UserIdentity;
@@ -27,6 +26,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::RpcClientConf;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 

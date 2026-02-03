@@ -16,29 +16,24 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::prelude::OutputFormatSettings;
 
-use crate::FileFormatOptionsExt;
 use crate::field_encoder::FieldEncoderJSON;
 use crate::output_format::OutputFormat;
 
-pub struct NDJSONOutputFormatBase<
-    const STRINGS: bool,
-    const COMPACT: bool,
-    const WITH_NAMES: bool,
-    const WITH_TYPES: bool,
-> {
+pub struct NDJSONOutputFormatBase<const STRINGS: bool, const COMPACT: bool> {
     schema: TableSchemaRef,
     field_encoder: FieldEncoderJSON,
+    headers: u8,
 }
 
-impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
-{
-    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
-        let field_encoder = FieldEncoderJSON::create(options);
+impl<const STRINGS: bool, const COMPACT: bool> NDJSONOutputFormatBase<STRINGS, COMPACT> {
+    pub fn create(schema: TableSchemaRef, settings: OutputFormatSettings, headers: u8) -> Self {
+        let field_encoder = FieldEncoderJSON::create(settings);
         Self {
             schema,
             field_encoder,
+            headers,
         }
     }
 
@@ -56,8 +51,8 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
     }
 }
 
-impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    OutputFormat for NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
+impl<const STRINGS: bool, const COMPACT: bool> OutputFormat
+    for NDJSONOutputFormatBase<STRINGS, COMPACT>
 {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
@@ -122,7 +117,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         let mut buf = vec![];
-        if WITH_NAMES {
+        if self.headers > 0 {
             assert!(COMPACT);
             let names = self
                 .schema
@@ -131,7 +126,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
             buf.extend_from_slice(&self.serialize_strings(names));
-            if WITH_TYPES {
+            if self.headers > 1 {
                 let types = self
                     .schema
                     .fields()
@@ -162,9 +157,9 @@ mod test {
     use databend_common_expression::types::number::Int32Type;
     use pretty_assertions::assert_eq;
 
-    use crate::output_format::utils::gen_schema_and_block;
-    use crate::output_format::utils::get_output_format_clickhouse;
-    use crate::output_format::utils::test_data_block;
+    use crate::output_format::test_utils::gen_schema_and_block;
+    use crate::output_format::test_utils::get_output_format_clickhouse;
+    use crate::output_format::test_utils::test_data_block;
 
     #[test]
     fn test_null() -> Result<()> {

@@ -21,14 +21,10 @@ pub mod parquet;
 pub mod tsv;
 
 pub use csv::CSVOutputFormat;
-pub use csv::CSVWithNamesAndTypesOutputFormat;
-pub use csv::CSVWithNamesOutputFormat;
 pub use json::JSONOutputFormat;
 pub use ndjson::NDJSONOutputFormatBase;
 pub use parquet::ParquetOutputFormat;
 pub use tsv::TSVOutputFormat;
-pub use tsv::TSVWithNamesAndTypesOutputFormat;
-pub use tsv::TSVWithNamesOutputFormat;
 
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
@@ -45,7 +41,7 @@ pub trait OutputFormat: Send {
 }
 
 #[cfg(test)]
-mod utils {
+mod test_utils {
     use databend_common_exception::Result;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
@@ -62,12 +58,13 @@ mod utils {
     use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Float64Type;
     use databend_common_expression::types::number::Int32Type;
+    use databend_common_meta_app::principal::FileFormatParams;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_settings::Settings;
 
     use super::OutputFormat;
     use crate::ClickhouseFormatType;
-    use crate::FileFormatOptionsExt;
+    use crate::get_output_format;
 
     pub fn gen_schema_and_block(
         fields: Vec<TableField>,
@@ -132,8 +129,10 @@ mod utils {
         schema: TableSchemaRef,
     ) -> Result<Box<dyn OutputFormat>> {
         let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-        let settings = Settings::create(Tenant::new_literal("default"));
-        FileFormatOptionsExt::get_output_format_from_clickhouse_format(format, schema, &settings)
+        let settings =
+            Settings::create(Tenant::new_literal("default")).get_output_format_settings()?;
+        let params = FileFormatParams::default_by_type(format.typ.clone())?;
+        get_output_format(schema, params, settings, Some(format.suffixes))
     }
 
     pub fn test_data_block(is_nullable: bool) -> Result<()> {

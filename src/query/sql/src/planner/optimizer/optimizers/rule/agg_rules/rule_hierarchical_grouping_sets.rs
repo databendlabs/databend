@@ -425,7 +425,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -476,7 +475,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -516,7 +514,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }
@@ -686,7 +683,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
-                    cte_output_columns: None,
                     ref_count: 1,
                     channel_size: Some(self.cte_channel_size),
                 }

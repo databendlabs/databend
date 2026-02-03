@@ -41,7 +41,7 @@ pub struct CsvDecoder {
 impl CsvDecoder {
     pub fn create(fmt: CsvInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
-            SeparatedTextDecoder::create_csv(&fmt.params, &load_context.file_format_options_ext);
+            SeparatedTextDecoder::create_csv(&fmt.params, load_context.settings.clone());
         Self {
             load_context,
             fmt,

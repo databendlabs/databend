@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
@@ -23,6 +22,7 @@ use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
 use databend_common_meta_client::handshake;
+use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::UpsertKV;
@@ -68,7 +68,7 @@ async fn test_grpc_client_handshake_timeout() {
         // our mock grpc server's handshake impl will sleep 2secs.
         // see: GrpcServiceForTestImp.handshake
         let timeout = Duration::from_secs(1);
-        let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None, None)
+        let c = TokioRuntime::connect(srv_addr.clone(), Some(timeout), None)
             .await
             .unwrap();
 
@@ -85,7 +85,7 @@ async fn test_grpc_client_handshake_timeout() {
     // handshake success
     {
         let timeout = Duration::from_secs(3);
-        let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None, None)
+        let c = TokioRuntime::connect(srv_addr, Some(timeout), None)
             .await
             .unwrap();
 

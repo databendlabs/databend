@@ -81,7 +81,7 @@ echo "grant insert on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role1 to u1" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role2 to u1" | $BENDSQL_CLIENT_CONNECT
 
-export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_U1_CONNECT="bendsql -A --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "show grants for role role1" | $USER_U1_CONNECT
 echo "show grants for role role2" | $USER_U1_CONNECT

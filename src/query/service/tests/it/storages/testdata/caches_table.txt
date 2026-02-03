@@ -18,6 +18,7 @@ DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCach
 | 'test-node' | 'memory_cache_table_statistics'              | 0        | 0        | 256         | 'count'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_vector_index_file'             | 0        | 0        | 64424509440 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_vector_index_file_meta_data'   | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_virtual_column_file_meta_data' | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
 +-------------+----------------------------------------------+----------+----------+-------------+----------+----------+----------+----------+
 
 

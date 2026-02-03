@@ -18,6 +18,7 @@ databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-users = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 log = { workspace = true }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }

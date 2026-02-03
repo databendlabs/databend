@@ -20,14 +20,13 @@ use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::deserialize_bitmap;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
 use jiff::fmt::strtime;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
-use crate::FileFormatOptionsExt;
 use crate::output_format::OutputFormat;
 
 pub struct JSONOutputFormat {
@@ -35,23 +34,17 @@ pub struct JSONOutputFormat {
     first_block: bool,
     first_row: bool,
     rows: usize,
-    format_settings: FormatSettings,
+    format_settings: OutputFormatSettings,
 }
 
 impl JSONOutputFormat {
-    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, format_settings: OutputFormatSettings) -> Self {
         Self {
             schema,
             first_block: true,
             first_row: true,
             rows: 0,
-            format_settings: FormatSettings {
-                jiff_timezone: options.jiff_timezone.clone(),
-                geometry_format: options.geometry_format,
-                binary_format: options.binary_format,
-                enable_dst_hour_fix: options.enable_dst_hour_fix,
-                format_null_as_str: true,
-            },
+            format_settings,
         }
     }
 
@@ -78,7 +71,7 @@ impl JSONOutputFormat {
 
 fn scalar_to_json(
     s: ScalarRef<'_>,
-    format: &FormatSettings,
+    format: &OutputFormatSettings,
 ) -> databend_common_exception::Result<JsonValue> {
     match s {
         ScalarRef::Null => Ok(JsonValue::Null),

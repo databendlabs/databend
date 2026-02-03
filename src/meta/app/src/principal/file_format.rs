@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
@@ -670,6 +671,15 @@ pub enum BinaryFormat {
     #[default]
     Hex,
     Base64,
+}
+
+impl BinaryFormat {
+    pub fn to_display_format(&self) -> BinaryDisplayFormat {
+        match self {
+            BinaryFormat::Hex => BinaryDisplayFormat::Hex,
+            BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
+        }
+    }
 }
 
 impl FromStr for BinaryFormat {

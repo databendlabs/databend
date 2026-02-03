@@ -14,7 +14,6 @@
 
 //! Forward request to another node
 
-use databend_common_meta_api::reply::reply_to_api_result;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
@@ -37,6 +36,7 @@ use crate::meta_node::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::request_handling::Forwarder;
 use crate::store::RaftStore;
+use crate::util::reply_to_api_result;
 
 /// Handle a request locally if it is leader. Otherwise, forward it to the leader.
 pub struct MetaForwarder<'a, SP> {

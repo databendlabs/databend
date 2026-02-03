@@ -30,9 +30,18 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : st_geographyfromewkt('POINT EMPTY')
+raw expr       : st_geographyfromewkt('POINT EMPTY')
+checked expr   : st_geographyfromwkt<String>("POINT EMPTY")
+optimized expr : "MULTIPOINT EMPTY"
+output type    : Geography
+output domain  : Undefined
+output         : 'MULTIPOINT EMPTY'
+
+
 ast            : st_geographyfromewkt('POINT(1 2)')
 raw expr       : st_geographyfromewkt('POINT(1 2)')
-checked expr   : st_geographyfromewkt<String>("POINT(1 2)")
+checked expr   : st_geographyfromwkt<String>("POINT(1 2)")
 optimized expr : "POINT(1 2)"
 output type    : Geography
 output domain  : Undefined
@@ -41,19 +50,433 @@ output         : 'POINT(1 2)'
 
 ast            : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
 raw expr       : st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')
-checked expr   : st_geographyfromewkt<String>("SRID=4326;POINT(-122.35 37.55)")
-optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+checked expr   : st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)")
+optimized expr : "POINT(-122.35 37.55)"
 output type    : Geography
 output domain  : Undefined
-output         : 'SRID=4326;POINT(-122.35 37.55)'
+output         : 'POINT(-122.35 37.55)'
 
 
 ast            : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
 raw expr       : st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)')
-checked expr   : st_geographyfromewkt<String>("LINESTRING(-124.2 42,-120.01 41.99)")
+checked expr   : st_geographyfromwkt<String>("LINESTRING(-124.2 42,-120.01 41.99)")
 optimized expr : "LINESTRING(-124.2 42,-120.01 41.99)"
 output type    : Geography
 output domain  : Undefined
 output         : 'LINESTRING(-124.2 42,-120.01 41.99)'
+
+
+ast            : st_asgeojson(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_asgeojson(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_asgeojson<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : 0x400000021000000b100000045000002010000005636f6f7264696e6174657374797065800000022000000a2000000a70ffffffffffffd03502700000000000000eab02506f696e74
+output type    : Variant
+output domain  : Undefined
+output         : '{"coordinates":[-122.35,37.55],"type":"Point"}'
+
+
+ast            : st_asgeojson(st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)'))
+raw expr       : st_asgeojson(st_geographyfromewkt('LINESTRING(-124.2 42,-120.01 41.99)'))
+checked expr   : st_asgeojson<Geography>(st_geographyfromwkt<String>("LINESTRING(-124.2 42,-120.01 41.99)"))
+optimized expr : 0x400000021000000b10000004500000441000000a636f6f7264696e6174657374797065800000025000001850000020800000022000000a2000000270fffffffffffffb2601502a800000022000000a2000000a70ffffffffffffd11f02700000000000001067024c696e65537472696e67
+output type    : Variant
+output domain  : Undefined
+output         : '{"coordinates":[[-124.2,42],[-120.01,41.99]],"type":"LineString"}'
+
+
+ast            : st_asewkb(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkb(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkb<Geography>(st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : 0101000020E61000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 0101000020E61000006666666666965EC06666666666C64240
+
+
+ast            : st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : 01010000006666666666965EC06666666666C64240
+output type    : Binary
+output domain  : Undefined
+output         : 01010000006666666666965EC06666666666C64240
+
+
+ast            : st_asewkt(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_asewkt(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_asewkt<Geography>(st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"SRID=4326;POINT(-122.35 37.55)"..="SRID=4326;POINT(-122.35 37.55)"}
+output         : 'SRID=4326;POINT(-122.35 37.55)'
+
+
+ast            : st_aswkt(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_aswkt(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_aswkt<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_distance(st_geographyfromewkt('POINT(-122.35 37.55)'), st_geographyfromewkt('POINT(51.30 -0.07)'))
+raw expr       : st_distance(st_geographyfromewkt('POINT(-122.35 37.55)'), st_geographyfromewkt('POINT(51.30 -0.07)'))
+checked expr   : st_distance<Geography, Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"), st_geographyfromwkt<String>("POINT(51.30 -0.07)"))
+optimized expr : 15796856.46316643_f64
+output type    : Float64
+output domain  : {15796856.46316643..=15796856.46316643}
+output         : 15796856.46316643
+
+
+ast            : st_distance(st_geographyfromewkt('POINT(40.42 -74.0)'), st_geographyfromewkt('POINT(51.30 -0.07)'))
+raw expr       : st_distance(st_geographyfromewkt('POINT(40.42 -74.0)'), st_geographyfromewkt('POINT(51.30 -0.07)'))
+checked expr   : st_distance<Geography, Geography>(st_geographyfromwkt<String>("POINT(40.42 -74.0)"), st_geographyfromwkt<String>("POINT(51.30 -0.07)"))
+optimized expr : 8253477.95786488_f64
+output type    : Float64
+output domain  : {8253477.95786488..=8253477.95786488}
+output         : 8253477.95786488
+
+
+ast            : st_length(st_geographyfromewkt('LINESTRING(0 0,0 1)'))
+raw expr       : st_length(st_geographyfromewkt('LINESTRING(0 0,0 1)'))
+checked expr   : st_length<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,0 1)"))
+optimized expr : 110574.388557799_f64
+output type    : Float64
+output domain  : {110574.388557799..=110574.388557799}
+output         : 110574.388557799
+
+
+ast            : st_area(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_area(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_area<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 510053312945727_f64
+output type    : Float64
+output domain  : {510053312945727..=510053312945727}
+output         : 510053312945727
+
+
+ast            : st_endpoint(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+raw expr       : st_endpoint(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+checked expr   : st_endpoint<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,1 1,2 2)"))
+optimized expr : "POINT(2 2)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(2 2)'
+
+
+ast            : st_startpoint(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+raw expr       : st_startpoint(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+checked expr   : st_startpoint<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,1 1,2 2)"))
+optimized expr : "POINT(0 0)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(0 0)'
+
+
+ast            : st_pointn(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'), 2)
+raw expr       : st_pointn(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'), 2)
+checked expr   : st_pointn<Geography, Int32>(st_geographyfromwkt<String>("LINESTRING(0 0,1 1,2 2)"), CAST<UInt8>(2_u8 AS Int32))
+optimized expr : "POINT(1 1)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : st_dimension(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_dimension(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_dimension<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : 0_i32
+output type    : Int32 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_dimension(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+raw expr       : st_dimension(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+checked expr   : st_dimension<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,1 1,2 2)"))
+optimized expr : 1_i32
+output type    : Int32 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_dimension(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_dimension(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_dimension<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 2_i32
+output type    : Int32 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : st_geogfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
+raw expr       : st_geogfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
+checked expr   : st_geogfromgeohash<String>(st_geohash<Geography>(st_makepoint<Float64, Float64>(CAST<Decimal(7, 4)>(-122.3061_d64(7,4) AS Float64), CAST<Decimal(8, 6)>(37.554162_d64(8,6) AS Float64))))
+optimized expr : "POLYGON((-122.30609983205795 37.554161958396435,-122.30609983205795 37.5541621260345,-122.30610016733408 37.5541621260345,-122.30610016733408 37.554161958396435,-122.30609983205795 37.554161958396435))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((-122.30609983205795 37.554161958396435,-122.30609983205795 37.5541621260345,-122.30610016733408 37.5541621260345,-122.30610016733408 37.554161958396435,-122.30609983205795 37.554161958396435))'
+
+
+ast            : st_geogpointfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
+raw expr       : st_geogpointfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
+checked expr   : st_geogpointfromgeohash<String>(st_geohash<Geography>(st_makepoint<Float64, Float64>(CAST<Decimal(7, 4)>(-122.3061_d64(7,4) AS Float64), CAST<Decimal(8, 6)>(37.554162_d64(8,6) AS Float64))))
+optimized expr : "POINT(-122.30609999969602 37.55416204221547)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.30609999969602 37.55416204221547)'
+
+
+ast            : st_makepolygon(st_geographyfromewkt('LINESTRING(0 0,0 1,1 1,1 0,0 0)'))
+raw expr       : st_makepolygon(st_geographyfromewkt('LINESTRING(0 0,0 1,1 1,1 0,0 0)'))
+checked expr   : st_makepolygon<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,0 1,1 1,1 0,0 0)"))
+optimized expr : "POLYGON((0 0,0 1,1 1,1 0,0 0))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((0 0,0 1,1 1,1 0,0 0))'
+
+
+ast            : st_makeline(st_makepoint(0, 0), st_makepoint(1, 1))
+raw expr       : st_makeline(st_makepoint(0, 0), st_makepoint(1, 1))
+checked expr   : st_makeline<Geography, Geography>(st_makepoint<Float64, Float64>(CAST<UInt8>(0_u8 AS Float64), CAST<UInt8>(0_u8 AS Float64)), st_makepoint<Float64, Float64>(CAST<UInt8>(1_u8 AS Float64), CAST<UInt8>(1_u8 AS Float64)))
+optimized expr : "LINESTRING(0 0,1 1)"
+output type    : Geography
+output domain  : Undefined
+output         : 'LINESTRING(0 0,1 1)'
+
+
+ast            : st_geohash(st_makepoint(-122.3061, 37.554162))
+raw expr       : st_geohash(st_makepoint(-122.3061, 37.554162))
+checked expr   : st_geohash<Geography>(st_makepoint<Float64, Float64>(CAST<Decimal(7, 4)>(-122.3061_d64(7,4) AS Float64), CAST<Decimal(8, 6)>(37.554162_d64(8,6) AS Float64)))
+optimized expr : "9q9j8ue2v71y"
+output type    : String
+output domain  : {"9q9j8ue2v71y"..="9q9j8ue2v71y"}
+output         : '9q9j8ue2v71y'
+
+
+ast            : st_geohash(st_makepoint(-122.3061, 37.554162), 8)
+raw expr       : st_geohash(st_makepoint(-122.3061, 37.554162), 8)
+checked expr   : st_geohash<Geography, Int32>(st_makepoint<Float64, Float64>(CAST<Decimal(7, 4)>(-122.3061_d64(7,4) AS Float64), CAST<Decimal(8, 6)>(37.554162_d64(8,6) AS Float64)), CAST<UInt8>(8_u8 AS Int32))
+optimized expr : "9q9j8ue2"
+output type    : String
+output domain  : {"9q9j8ue2"..="9q9j8ue2"}
+output         : '9q9j8ue2'
+
+
+ast            : st_geographyfromwkb(to_hex(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))))
+raw expr       : st_geographyfromwkb(to_hex(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))))
+checked expr   : st_geographyfromwkb<String>(to_hex<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromwkb(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+raw expr       : st_geographyfromwkb(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+checked expr   : st_geographyfromwkb<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromwkb(to_hex(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))))
+raw expr       : st_geographyfromwkb(to_hex(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)'))))
+checked expr   : st_geographyfromwkb<String>(to_hex<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromwkb(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+raw expr       : st_geographyfromwkb(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+checked expr   : st_geographyfromwkb<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")))
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromwkt('POINT(-122.35 37.55)')
+raw expr       : st_geographyfromwkt('POINT(-122.35 37.55)')
+checked expr   : st_geographyfromwkt<String>("POINT(-122.35 37.55)")
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_geographyfromwkt('POINT(-122.35 37.55)')
+raw expr       : st_geographyfromwkt('POINT(-122.35 37.55)')
+checked expr   : st_geographyfromwkt<String>("POINT(-122.35 37.55)")
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : st_x(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_x(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_x<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : -122.35_f64
+output type    : Float64
+output domain  : {-122.35..=-122.35}
+output         : -122.35
+
+
+ast            : st_y(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_y(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_y<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : 37.55_f64
+output type    : Float64
+output domain  : {37.55..=37.55}
+output         : 37.55
+
+
+ast            : st_srid(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : st_srid(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : st_srid<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)"))
+optimized expr : 4326_i32
+output type    : Int32
+output domain  : {4326..=4326}
+output         : 4326
+
+
+ast            : st_srid(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+raw expr       : st_srid(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)'))
+checked expr   : st_srid<Geography>(st_geographyfromwkt<String>("SRID=4326;POINT(-122.35 37.55)"))
+optimized expr : 4326_i32
+output type    : Int32
+output domain  : {4326..=4326}
+output         : 4326
+
+
+ast            : st_xmax(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_xmax(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_xmax<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 1_f64
+output type    : Float64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_xmin(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_xmin(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_xmin<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_ymax(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_ymax(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_ymax<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 1_f64
+output type    : Float64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_ymin(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_ymin(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_ymin<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_npoints(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+raw expr       : st_npoints(st_geographyfromewkt('LINESTRING(0 0,1 1,2 2)'))
+checked expr   : st_npoints<Geography>(st_geographyfromwkt<String>("LINESTRING(0 0,1 1,2 2)"))
+optimized expr : 3_u32
+output type    : UInt32
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : st_npoints(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+raw expr       : st_npoints(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))
+checked expr   : st_npoints<Geography>(st_geographyfromwkt<String>("POLYGON((0 0,0 1,1 1,1 0,0 0))"))
+optimized expr : 5_u32
+output type    : UInt32
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
+raw expr       : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
+checked expr   : CAST<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)") AS String)
+optimized expr : "POINT(-122.35 37.55)"
+output type    : String
+output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : to_geography('POINT(-122.35 37.55)')
+raw expr       : to_geography('POINT(-122.35 37.55)')
+checked expr   : CAST<String>("POINT(-122.35 37.55)" AS Geography)
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+raw expr       : to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+checked expr   : CAST<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")) AS Geography)
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
+raw expr       : to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
+checked expr   : CAST<Variant>(CAST<String>("{\"type\":\"Point\",\"coordinates\":[1,2]}" AS Variant) AS Geography)
+optimized expr : "POINT(1 2)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(1 2)'
+
+
+ast            : try_to_geography('POINT(-122.35 37.55)')
+raw expr       : try_to_geography('POINT(-122.35 37.55)')
+checked expr   : TRY_CAST<String>("POINT(-122.35 37.55)" AS Geography NULL)
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
+
+
+ast            : try_to_geography('INVALID')
+raw expr       : try_to_geography('INVALID')
+checked expr   : TRY_CAST<String>("INVALID" AS Geography NULL)
+optimized expr : NULL
+output type    : Geography NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
+raw expr       : try_to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
+checked expr   : TRY_CAST<Variant>(CAST<String>("{\"type\":\"Point\",\"coordinates\":[1,2]}" AS Variant) AS Geography NULL)
+optimized expr : "POINT(1 2)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(1 2)'
+
+
+ast            : try_to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+raw expr       : try_to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
+checked expr   : TRY_CAST<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")) AS Geography NULL)
+optimized expr : "POINT(-122.35 37.55)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(-122.35 37.55)'
 
 

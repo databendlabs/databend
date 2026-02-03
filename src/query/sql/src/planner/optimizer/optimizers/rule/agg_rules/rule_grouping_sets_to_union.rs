@@ -128,7 +128,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     .unwrap_or(2);
 
                 let cte_materialized_sexpr = SExpr::create_unary(
-                    MaterializedCTE::new(temp_cte_name.clone(), None, Some(channel_size as usize)),
+                    MaterializedCTE::new(temp_cte_name.clone(), Some(channel_size as usize)),
                     agg_input.clone(),
                 );
 
