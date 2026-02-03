@@ -130,31 +130,25 @@ EXPLAIN ANALYZE SELECT * FROM mod_shuffle_test WHERE id < 10;
 Exchange
 ├── output columns: [mod_shuffle_test.id (#0), mod_shuffle_test.value (#1)]
 ├── exchange type: Merge
-└── Filter
+└── TableScan
     ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
     ├── output rows: 9
-    ├── output bytes: <slt:ignore>
-    ├── output columns: [mod_shuffle_test.id (#0), mod_shuffle_test.value (#1)]
-    ├── filters: [is_true(mod_shuffle_test.id (#0) < 10)]
-    ├── estimated rows: <slt:ignore>
-    └── TableScan
-        ├── cpu time: <slt:ignore>
-        ├── wait time: <slt:ignore>
-        ├── output rows: 9
-        ├── output bytes: <slt:ignore>
-        ├── bytes scanned: <slt:ignore>
-        ├── read from remote: <slt:ignore>
-        ├── runtime filter inlist/min-max time: <slt:ignore>
-        ├── table: default.default.mod_shuffle_test
-        ├── scan id: 0
-        ├── output columns: [id (#0), value (#1)]
-        ├── read rows: 9
-        ├── read size: < 1 KiB
-        ├── partitions total: 20
-        ├── partitions scanned: 9
-        ├── pruning stats: [segments: <range pruning: 20 to 9 cost: <slt:ignore>>, blocks: <range pruning: 9 to 9 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(mod_shuffle_test.id (#0) < 10)], limit: NONE]
-        └── estimated rows: 20.00
+    ├── output bytes: 243.00 B
+    ├── bytes scanned: 243.00 B
+    ├── read from remote: 513.00 B
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.mod_shuffle_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), value (#1)]
+    ├── read rows: 9
+    ├── read size: < 1 KiB
+    ├── partitions total: 20
+    ├── partitions scanned: 9
+    ├── pruning stats: [segments: <range pruning: 20 to 9 cost: 1 ms>, blocks: <range pruning: 9 to 9 cost: 1 ms>]
+    ├── push downs: [filters: [is_true(mod_shuffle_test.id (#0) < 10)], limit: NONE]
+    └── estimated rows: 9.00
 
 statement ok
 drop table mod_shuffle_test;
