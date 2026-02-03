@@ -41,12 +41,6 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::HashJoinHashMap;
-use databend_common_hashtable::RawEntry;
-use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::STRING_EARLY_SIZE;
-use databend_common_hashtable::StringRawEntry;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::plans::JoinType;
@@ -72,6 +66,12 @@ use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHas
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
+use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::RawEntry;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
+use crate::pipelines::processors::transforms::hash_join_table::STRING_EARLY_SIZE;
+use crate::pipelines::processors::transforms::hash_join_table::StringRawEntry;
 use crate::sessions::QueryContext;
 
 /// Define some shared states for all hash join build threads.

@@ -12,7 +12,6 @@ storage-hdfs = ["databend-common-meta-app/storage-hdfs"]
 [dependencies]
 
 databend-common-ast = { workspace = true }
-databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -25,6 +24,7 @@ ahash = { workspace = true }
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
+base64 = { workspace = true }
 borsh = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }

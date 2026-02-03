@@ -18,6 +18,7 @@ databend_common_tracing::register_module_tag!("[TRANSFORMS]");
 pub mod aggregator;
 mod broadcast;
 mod hash_join;
+pub mod hash_join_table;
 mod materialized_cte;
 mod new_hash_join;
 pub(crate) mod range_join;
