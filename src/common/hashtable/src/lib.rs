@@ -23,7 +23,6 @@
 extern crate core;
 
 mod container;
-mod dictionary_string_hashtable;
 
 mod hashjoin_hashtable;
 mod hashjoin_string_hashtable;
@@ -96,9 +95,6 @@ pub type StringHashSet<K> = string_hashtable::StringHashtable<K, ()>;
 pub type StringHashtableEntryRef<'a, K, V> = string_hashtable::StringHashtableEntryRef<'a, K, V>;
 pub type StringHashtableEntryMutRef<'a, K, V> =
     string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
-
-pub type DictionaryStringHashMap<V> = dictionary_string_hashtable::DictionaryStringHashTable<V>;
-pub type DictionaryKeys = dictionary_string_hashtable::DictionaryKeys;
 
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;
