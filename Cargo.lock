@@ -5692,6 +5692,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "bytesize 2.0.1",
+ "cfg-if",
  "chrono",
  "chrono-tz 0.8.6",
  "concurrent-queue",
