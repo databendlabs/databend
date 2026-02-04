@@ -18,6 +18,7 @@
 use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_runtime_api::TokioRuntime;
 use databend_common_meta_types::UpsertKV;
@@ -170,6 +171,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         Some(Duration::from_secs(1)),
         Some(Duration::from_secs(10)),
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     info!("--- test write on a fresh cluster");

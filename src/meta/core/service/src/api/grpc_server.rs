@@ -20,7 +20,6 @@ use anyerror::AnyError;
 use databend_base::shutdown::Graceful;
 use databend_common_meta_runtime_api::JoinHandle;
 use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::GrpcConfig as GrpcLimits;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer;
@@ -159,9 +158,10 @@ impl<SP: SpawnApi> GrpcServer<SP> {
         info!("start gRPC listening: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(self.version.clone(), Arc::downgrade(&meta_handle));
+        let max_msg_size = self.config.grpc.max_message_size();
         let grpc_srv = MetaServiceServer::new(grpc_impl)
-            .max_decoding_message_size(GrpcLimits::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcLimits::MAX_ENCODING_SIZE);
+            .max_decoding_message_size(max_msg_size)
+            .max_encoding_message_size(max_msg_size);
 
         let router = builder.add_service(reflect_srv).add_service(grpc_srv);
 

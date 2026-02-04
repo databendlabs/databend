@@ -27,6 +27,7 @@ use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::MatchSeq;
@@ -136,6 +137,7 @@ async fn main() -> Result<()> {
                     None,
                     None,
                     None,
+                    DEFAULT_GRPC_MESSAGE_SIZE,
                 );
 
                 let client = match client {

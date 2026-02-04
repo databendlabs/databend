@@ -43,6 +43,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::required;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -138,6 +139,7 @@ async fn main() {
         None,
         None,
         required::read_write(),
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )
     .unwrap();
     let client = MetaStore::R(client_handle);
