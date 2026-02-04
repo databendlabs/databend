@@ -66,6 +66,7 @@ where T: AsRef<[u8]>
                     b'\'' => buf.push(b'\''),
                     b'\"' => buf.push(b'\"'),
                     b'\\' => buf.push(b'\\'),
+                    b'/' => buf.push(b'/'),
                     _ => {
                         buf.push(b'\\');
                         buf.push(c);
