@@ -7,9 +7,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
 
 TEST_FILE="r_cte_union_all.test"
 HANDLERS="${HANDLERS:-mysql,http}"
-PARALLEL="${PARALLEL:-8}"
+PARALLEL="${PARALLEL:-16}"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
-RUNS="${RUNS:-1}"
+RUNS="${RUNS:100}"
 
 cd "${ROOT_DIR}"
 

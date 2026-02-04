@@ -480,11 +480,11 @@ jobs:
         with:
           artifacts: sqllogictests,meta,query
       - name: Run r_cte_union_all loop
-        timeout-minutes: 60
+        timeout-minutes: 180
         env:
           HANDLERS: "mysql,http"
-          PARALLEL: "8"
-          RUNS: "50"
+          PARALLEL: "16"
+          RUNS: "100"
         run: |
           bash scripts/ci/run_sqllogic_single.sh
       - name: Upload failure
