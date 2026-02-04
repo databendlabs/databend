@@ -112,6 +112,18 @@ impl AdminService {
                     get(super::v1::user_functions::user_functions),
                 )
                 .at(
+                    "/v1/tenants/:tenant/procedures",
+                    get(super::v1::procedures::list_procedures),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:procedure_id",
+                    get(super::v1::procedures::get_procedure_by_id),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:name/:args",
+                    get(super::v1::procedures::get_procedure),
+                )
+                .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",
                     get(super::v1::table_statistics::get_table_stats_handler),
                 );
