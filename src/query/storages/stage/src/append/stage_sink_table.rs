@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::StageTable;
 use crate::append::output::SumSummaryTransform;
 use crate::append::parquet_file::append_data_to_parquet_files;
+use crate::append::partition::PartitionByRuntime;
 use crate::append::row_based_file::append_data_to_row_based_files;
 
 pub struct StageSinkTable {
@@ -82,6 +83,16 @@ impl StageSinkTable {
             pipeline.try_resize(1)?;
         }
 
+        let partition_runtime = if let Some(expr) = &self.info.partition_by {
+            let func_ctx = ctx.get_function_context()?;
+            Some(Arc::new(PartitionByRuntime::try_create(
+                expr.clone(),
+                func_ctx,
+            )?))
+        } else {
+            None
+        };
+
         let op = StageTable::get_op(stage_info)?;
         let query_id = ctx.get_id();
         let group_id = AtomicUsize::new(0);
@@ -96,6 +107,7 @@ impl StageSinkTable {
                 mem_limit,
                 max_threads,
                 self.create_by.clone(),
+                partition_runtime.clone(),
             )?,
             _ => append_data_to_row_based_files(
                 pipeline,
@@ -107,6 +119,7 @@ impl StageSinkTable {
                 &group_id,
                 mem_limit,
                 max_threads,
+                partition_runtime.clone(),
             )?,
         };
         if !self.info.options.detailed_output {

@@ -192,6 +192,7 @@ impl Binder {
             path,
             options: copy_options,
             is_ordered,
+            partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
         Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
             from: Box::new(query),

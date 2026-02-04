@@ -87,9 +87,6 @@ statement ok
 drop table if EXISTS world
 
 statement ok
-DROP DATABASE db1
-
-statement ok
 CREATE TABLE stage_partition_src(dt DATE, ts TIMESTAMP, val INT)
 
 statement ok
@@ -124,5 +121,6 @@ FROM list_stage(location=>'@hello_partition')
 statement ok
 DROP STAGE hello_partition
 
+
 statement ok
-DROP TABLE stage_partition_src
+DROP DATABASE db1
