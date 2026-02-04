@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;

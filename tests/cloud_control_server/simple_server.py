@@ -488,12 +488,12 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                         code=8,
                     )
                 )
-        elif request.alter_task_type == task_pb2.AlterTaskRequest.ChangeOwner:
+        elif request.alter_task_type == task_pb2.AlterTaskRequest.ChangeOwnerRole:
             if request.owner == "":
                 return task_pb2.AlterTaskResponse(
                     error=task_pb2.TaskError(
                         kind="INVALID_ARGUMENT",
-                        message="owner is required for ChangeOwner",
+                        message="owner role is required for ChangeOwnerRole",
                         code=7,
                     )
                 )

@@ -94,23 +94,35 @@ pub async fn validate_grant_object_exists(
         }
         GrantObject::Task(task) => {
             let config = GlobalConfig::instance();
-            if config.query.cloud_control_grpc_server_address.is_none() {
+            // Check if private task mode is enabled
+            if config.task.on {
+                // In private task mode, check task existence via Meta
+                let result = UserApiProvider::instance()
+                    .task_api(&tenant)
+                    .describe_task(task)
+                    .await??;
+                if result.is_none() {
+                    return Err(ErrorCode::UnknownTask(format!("task {task} not exists")));
+                }
+            } else if config.query.cloud_control_grpc_server_address.is_some() {
+                // In cloud task mode, check task existence via CloudControl
+                let cloud_api = CloudControlApiProvider::instance();
+                let task_client = cloud_api.get_task_client();
+                let req = DescribeTaskRequest {
+                    task_name: task.to_string(),
+                    tenant_id: tenant.tenant_name().to_string(),
+                    if_exist: false,
+                };
+                let client_config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+                let req = make_request(req, client_config);
+                let resp = task_client.describe_task(req).await?;
+                if resp.task.is_none() {
+                    return Err(ErrorCode::UnknownTask(format!("task {task} not exists")));
+                }
+            } else {
                 return Err(ErrorCode::CloudControlNotEnabled(
-                    "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+                    "cannot check task existence: neither private task mode nor cloud control is enabled",
                 ));
-            }
-            let cloud_api = CloudControlApiProvider::instance();
-            let task_client = cloud_api.get_task_client();
-            let req = DescribeTaskRequest {
-                task_name: task.to_string(),
-                tenant_id: tenant.tenant_name().to_string(),
-                if_exist: false,
-            };
-            let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
-            let req = make_request(req, config);
-            let resp = task_client.describe_task(req).await?;
-            if resp.task.is_none() {
-                return Err(ErrorCode::UnknownTask(format!("task {task} not exists")));
             }
         }
         GrantObject::Stage(stage) => {

@@ -42,8 +42,8 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
-use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::UserApiProvider;
 use jiff::tz::TimeZone;
 
 use crate::table::AsyncOneBlockSystemTable;

@@ -33,7 +33,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
+use crate::BindContext;
 use crate::Binder;
+use crate::SelectBuilder;
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::DescribeTaskPlan;
@@ -41,8 +43,6 @@ use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::SelectBuilder;
 
 fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {

@@ -239,7 +239,7 @@ impl GrantPrivilegeInterpreter {
     ///
     /// Flow:
     /// 1. DescribeTask from CloudControl to get current owner (for rollback)
-    /// 2. AlterTask(ChangeOwner) to new owner - fail directly if error
+    /// 2. AlterTask(ChangeOwnerRole) to new owner role - fail directly if error
     async fn change_task_owner_in_cloud_control(
         &self,
         ctx: &Arc<QueryContext>,
@@ -291,7 +291,7 @@ impl GrantPrivilegeInterpreter {
         let alter_req = AlterTaskRequest {
             task_name: task_name.to_string(),
             tenant_id: tenant.tenant_name().to_string(),
-            alter_task_type: AlterTaskType::ChangeOwner as i32,
+            alter_task_type: AlterTaskType::ChangeOwnerRole as i32,
             owner: new_owner.to_string(),
             if_exist: false,
             query_text: None,
@@ -359,7 +359,7 @@ impl GrantPrivilegeInterpreter {
         let alter_req = AlterTaskRequest {
             task_name: task_name.to_string(),
             tenant_id: tenant.tenant_name().to_string(),
-            alter_task_type: AlterTaskType::ChangeOwner as i32,
+            alter_task_type: AlterTaskType::ChangeOwnerRole as i32,
             owner: old_owner.to_string(),
             if_exist: false,
             query_text: None,
