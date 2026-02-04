@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use databend_base::testutil::next_port;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
@@ -192,6 +193,7 @@ impl LocalMetaService {
             None,
             Some(Duration::from_secs(10)),
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )?;
 
         Ok(client)

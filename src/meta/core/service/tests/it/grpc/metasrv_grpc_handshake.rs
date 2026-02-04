@@ -55,7 +55,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
 
     let c =
         TokioRuntime::connect(addr.to_string(), Some(Duration::from_millis(1000)), None).await?;
-    let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
+    let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client_for_testing(c);
 
     info!("--- client has smaller ver than S.min_cli_ver");
     {

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
@@ -44,6 +45,7 @@ impl kvapi::ApiBuilder<MetaStore> for MetaSrvBuilder {
             None,
             None,
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )
         .unwrap();
 

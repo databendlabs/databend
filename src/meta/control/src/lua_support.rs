@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_types::UpsertKV;
@@ -185,6 +186,7 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
                 Some(Duration::from_secs(2)),
                 Some(Duration::from_secs(1)),
                 None,
+                DEFAULT_GRPC_MESSAGE_SIZE,
             )
             .map_err(|e| mlua::Error::external(format!("Failed to create gRPC client: {}", e)))?;
 
@@ -279,6 +281,7 @@ pub fn new_grpc_client(
         Some(Duration::from_secs(2)),
         Some(Duration::from_secs(1)),
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )
 }
 

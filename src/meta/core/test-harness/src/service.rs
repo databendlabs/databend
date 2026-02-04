@@ -22,6 +22,7 @@ use anyhow::Result;
 use databend_base::testutil::next_port;
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_runtime_api::RuntimeApi;
@@ -125,6 +126,7 @@ pub fn make_grpc_client<R: RuntimeApi>(
         Some(Duration::from_secs(2)), // timeout
         Some(Duration::from_secs(10)),
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     Ok(client)
@@ -237,6 +239,7 @@ impl<R: RuntimeApi> MetaSrvTestContext<R> {
             None,
             Some(Duration::from_secs(10)),
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )?;
         Ok(client)
     }

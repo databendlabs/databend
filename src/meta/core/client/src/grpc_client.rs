@@ -158,6 +158,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
             conf.timeout,
             conf.auto_sync_interval,
             conf.tls_conf.clone(),
+            conf.grpc_max_message_size,
         )
     }
 
@@ -171,6 +172,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
+        grpc_max_message_size: usize,
     ) -> Result<Arc<ClientHandle<RT>>, CreationError> {
         Self::try_create_with_features(
             endpoints_str,
@@ -181,6 +183,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
             auto_sync_interval,
             tls_config,
             std(),
+            grpc_max_message_size,
         )
     }
 
@@ -207,6 +210,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
         required_features: &'static [FeatureSpec],
+        grpc_max_message_size: usize,
     ) -> Result<Arc<ClientHandle<RT>>, CreationError> {
         Self::endpoints_non_empty(&endpoints_str)?;
 
@@ -226,6 +230,7 @@ impl<RT: RuntimeApi> MetaGrpcClient<RT> {
             required_features,
             endpoints.clone(),
             None, // Use default connection TTL
+            grpc_max_message_size,
         );
 
         let rt = RT::new(

@@ -21,7 +21,6 @@ use databend_common_meta_runtime_api::ChannelError;
 use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_runtime_api::TlsConfig;
 use databend_common_meta_types::ConnectionError;
-use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -49,6 +48,9 @@ use crate::pool::ItemManager;
 /// hitting this limit.
 pub const DEFAULT_CONNECTION_TTL: Duration = Duration::from_secs(20);
 
+/// Default gRPC message size limit: 32MB.
+pub const DEFAULT_GRPC_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+
 #[derive(Debug)]
 pub struct MetaChannelManager<R> {
     version: Version,
@@ -71,6 +73,9 @@ pub struct MetaChannelManager<R> {
     /// `too_many_internal_resets` errors.
     connection_ttl: Duration,
 
+    /// Maximum message size for gRPC communication.
+    grpc_max_message_size: usize,
+
     _phantom: PhantomData<R>,
 }
 
@@ -84,6 +89,7 @@ impl<R: SpawnApi> MetaChannelManager<R> {
         required_features: &'static [FeatureSpec],
         endpoints: Arc<Mutex<Endpoints>>,
         connection_ttl: Option<Duration>,
+        grpc_max_message_size: usize,
     ) -> Self {
         Self {
             version,
@@ -94,6 +100,7 @@ impl<R: SpawnApi> MetaChannelManager<R> {
             required_features,
             endpoints,
             connection_ttl: connection_ttl.unwrap_or(DEFAULT_CONNECTION_TTL),
+            grpc_max_message_size,
             _phantom: PhantomData,
         }
     }
@@ -105,7 +112,7 @@ impl<R: SpawnApi> MetaChannelManager<R> {
     ) -> Result<EstablishedClient, MetaClientError> {
         let chan = self.build_channel(addr).await?;
 
-        let (mut real_client, once) = Self::new_real_client(chan);
+        let (mut real_client, once) = self.new_real_client(chan);
 
         info!(
             "MetaChannelManager done building RealClient to {}, start handshake",
@@ -145,7 +152,21 @@ impl<R: SpawnApi> MetaChannelManager<R> {
     /// Create a MetaServiceClient with authentication interceptor
     ///
     /// The returned `OnceCell` is used to fill in a token for the interceptor.
-    pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
+    fn new_real_client(&self, chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
+        Self::new_real_client_with_size(chan, self.grpc_max_message_size)
+    }
+
+    /// Create a MetaServiceClient with default gRPC message size for testing.
+    ///
+    /// The returned `OnceCell` is used to fill in a token for the interceptor.
+    pub fn new_real_client_for_testing(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
+        Self::new_real_client_with_size(chan, DEFAULT_GRPC_MESSAGE_SIZE)
+    }
+
+    fn new_real_client_with_size(
+        chan: Channel,
+        max_message_size: usize,
+    ) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
         let once = Arc::new(OnceCell::new());
 
         let interceptor = AuthInterceptor {
@@ -153,8 +174,8 @@ impl<R: SpawnApi> MetaChannelManager<R> {
         };
 
         let client = MetaServiceClient::with_interceptor(chan, interceptor)
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+            .max_decoding_message_size(max_message_size)
+            .max_encoding_message_size(max_message_size);
 
         (client, once)
     }
