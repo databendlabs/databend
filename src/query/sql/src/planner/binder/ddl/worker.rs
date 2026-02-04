@@ -45,6 +45,11 @@ impl Binder {
             tenant,
             name: stmt.name.to_string(),
             tags: BTreeMap::new(),
+            options: stmt
+                .options
+                .iter()
+                .map(|(k, v)| (k.to_lowercase(), v.clone()))
+                .collect(),
         })))
     }
 

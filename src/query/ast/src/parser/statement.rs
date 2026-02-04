@@ -612,12 +612,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let create_worker = map(
         rule! {
-            CREATE ~ WORKER ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
+            CREATE ~ WORKER ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ (WITH ~ #warehouse_cluster_option)?
         },
-        |(_, _, opt_if_not_exists, name)| {
+        |(_, _, opt_if_not_exists, name, options)| {
             Statement::CreateWorker(CreateWorkerStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name,
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
             })
         },
     );
@@ -2913,7 +2914,7 @@ AS
   <sql>`"
                 | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
-                | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name>`"
+                | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name> [WITH <key>=<value> [, ...]]`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
                 | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"

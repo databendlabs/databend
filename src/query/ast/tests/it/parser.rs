@@ -148,6 +148,7 @@ fn test_statement() {
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE WORKER read_env"#,
         r#"CREATE WORKER IF NOT EXISTS read_env"#,
+        r#"CREATE WORKER read_env WITH size='small', auto_suspend='300', auto_resume='true', max_cluster_count='3', min_cluster_count='1'"#,
         r#"ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'"#,
         r#"ALTER WORKER read_env UNSET TAG purpose, owner"#,
         r#"SHOW WORKERS"#,

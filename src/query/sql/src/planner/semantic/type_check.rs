@@ -5712,6 +5712,7 @@ impl<'a> TypeChecker<'a> {
             name: resource_name.to_string(),
             if_not_exists: true,
             tags: Default::default(),
+            options: Default::default(),
             r#type: resource_type.to_string(),
             script,
         };

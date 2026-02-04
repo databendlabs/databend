@@ -3465,6 +3465,7 @@ CreateWorker(
             quote: None,
             ident_type: None,
         },
+        options: {},
     },
 )
 
@@ -3484,6 +3485,34 @@ CreateWorker(
             name: "read_env",
             quote: None,
             ident_type: None,
+        },
+        options: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER read_env WITH size='small', auto_suspend='300', auto_resume='true', max_cluster_count='3', min_cluster_count='1'
+---------- Output ---------
+CREATE WORKER read_env WITH  auto_resume = 'true', auto_suspend = '300', max_cluster_count = '3', min_cluster_count = '1', size = 'small'
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {
+            "auto_resume": "true",
+            "auto_suspend": "300",
+            "max_cluster_count": "3",
+            "min_cluster_count": "1",
+            "size": "small",
         },
     },
 )

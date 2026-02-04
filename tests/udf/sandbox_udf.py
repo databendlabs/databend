@@ -334,7 +334,11 @@ $$
 
 def worker_case(ctx: SandboxContext):
     print("Creating worker")
-    ctx.execute_query("CREATE WORKER IF NOT EXISTS read_env")
+    ctx.execute_query(
+        "CREATE WORKER IF NOT EXISTS read_env "
+        "WITH size='small', auto_suspend='300', auto_resume='true', "
+        "max_cluster_count='3', min_cluster_count='1'"
+    )
     ctx.execute_query("ALTER WORKER read_env SET TAG purpose='sandbox'")
     response = ctx.execute_query("SHOW WORKERS")
     rows = ctx.collect_query_data(response)
@@ -344,8 +348,10 @@ def worker_case(ctx: SandboxContext):
             continue
         if row[0] == "read_env":
             tags_raw = row[1]
+            options_raw = row[2]
             tags = json.loads(tags_raw) if tags_raw else {}
-            if tags.get("purpose") == "sandbox":
+            options = json.loads(options_raw) if options_raw else {}
+            if tags.get("purpose") == "sandbox" and options.get("size") == "small":
                 matched = True
                 break
     if not matched:

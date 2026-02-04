@@ -45,6 +45,7 @@ impl CreateWorkerInterpreter {
             name: plan.name,
             if_not_exists: plan.if_not_exists,
             tags: plan.tags,
+            options: plan.options,
             r#type: String::new(),
             script: String::new(),
         }

@@ -8,6 +8,7 @@ message Worker {
   map<string, string> tags = 2;
   string created_at = 3;
   string updated_at = 4;
+  map<string, string> options = 5;
 }
 
 message CreateWorkerRequest {
@@ -17,6 +18,7 @@ message CreateWorkerRequest {
   map<string, string> tags = 4;
   string type = 5;
   string script = 6;
+  map<string, string> options = 7;
 }
 
 message CreateWorkerResponse {

@@ -26,6 +26,7 @@ pub fn worker_schema() -> DataSchemaRef {
     Arc::new(DataSchema::new(vec![
         DataField::new("name", DataType::String),
         DataField::new("tags", DataType::String),
+        DataField::new("options", DataType::String),
         DataField::new("created_at", DataType::String),
         DataField::new("updated_at", DataType::String),
     ]))
@@ -37,6 +38,7 @@ pub struct CreateWorkerPlan {
     pub tenant: Tenant,
     pub name: String,
     pub tags: BTreeMap<String, String>,
+    pub options: BTreeMap<String, String>,
 }
 
 impl CreateWorkerPlan {

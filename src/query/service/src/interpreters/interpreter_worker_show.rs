@@ -71,17 +71,20 @@ impl Interpreter for ShowWorkersInterpreter {
         let resp = worker_client.list_workers(req).await?;
         let mut names = Vec::new();
         let mut tags = Vec::new();
+        let mut options = Vec::new();
         let mut created_at = Vec::new();
         let mut updated_at = Vec::new();
         for worker in resp.workers {
             names.push(worker.name);
             tags.push(to_string(&worker.tags).unwrap_or_default());
+            options.push(to_string(&worker.options).unwrap_or_default());
             created_at.push(worker.created_at);
             updated_at.push(worker.updated_at);
         }
         let block = DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(tags),
+            StringType::from_data(options),
             StringType::from_data(created_at),
             StringType::from_data(updated_at),
         ]);

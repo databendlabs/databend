@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -35,6 +36,7 @@ impl Display for ShowWorkersStmt {
 pub struct CreateWorkerStmt {
     pub if_not_exists: bool,
     pub name: Identifier,
+    pub options: BTreeMap<String, String>,
 }
 
 impl Display for CreateWorkerStmt {
@@ -43,7 +45,19 @@ impl Display for CreateWorkerStmt {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name)?;
+
+        if !self.options.is_empty() {
+            write!(f, " WITH ")?;
+            for (idx, (key, value)) in self.options.iter().enumerate() {
+                if idx != 0 {
+                    write!(f, ",")?;
+                }
+                write!(f, " {} = '{}'", key, value)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

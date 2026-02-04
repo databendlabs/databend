@@ -151,6 +151,7 @@ def _worker_to_pb(worker):
         tags=worker.get("tags") or {},
         created_at=worker.get("created_at") or "",
         updated_at=worker.get("updated_at") or "",
+        options=worker.get("options") or {},
     )
 
 
@@ -783,6 +784,7 @@ class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
             worker = {
                 "name": name,
                 "tags": dict(request.tags),
+                "options": dict(request.options),
                 "created_at": now,
                 "updated_at": now,
             }
