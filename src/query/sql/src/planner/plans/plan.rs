@@ -169,7 +169,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SwapTablePlan;
 use crate::plans::SystemPlan;
@@ -431,7 +430,6 @@ pub enum Plan {
     AlterTask(Box<AlterTaskPlan>),
     DropTask(Box<DropTaskPlan>),
     DescribeTask(Box<DescribeTaskPlan>),
-    ShowTasks(Box<ShowTasksPlan>),
     ExecuteTask(Box<ExecuteTaskPlan>),
 
     CreateDynamicTable(Box<CreateDynamicTablePlan>),
@@ -484,6 +482,7 @@ pub enum RewriteKind {
     ShowDropDatabases,
     ShowTables(String, String),
     ShowColumns(String, String, String),
+    ShowTasks,
     ShowTablesStatus,
     ShowVirtualColumns,
     ShowDictionaries(String),
@@ -578,7 +577,6 @@ impl Plan {
             Plan::CopyIntoLocation(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
-            Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
             Plan::DescNotification(plan) => plan.schema(),

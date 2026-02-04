@@ -106,6 +106,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::RowAccessPolicy(
                 pb::ownership_object::OwnershipRowAccessPolicyObject { policy_id },
             ) => Ok(mt::principal::OwnershipObject::RowAccessPolicy { policy_id }),
+            pb::ownership_object::Object::Task(
+                pb::ownership_object::OwnershipTaskObject { task },
+            ) => Ok(mt::principal::OwnershipObject::Task { name: task }),
         }
     }
 
@@ -134,6 +137,11 @@ impl FromToProto for mt::principal::OwnershipObject {
             mt::principal::OwnershipObject::UDF { name } => {
                 Some(pb::ownership_object::Object::Udf(
                     pb::ownership_object::OwnershipUdfObject { udf: name.clone() },
+                ))
+            }
+            mt::principal::OwnershipObject::Task { name } => {
+                Some(pb::ownership_object::Object::Task(
+                    pb::ownership_object::OwnershipTaskObject { task: name.clone() },
                 ))
             }
             mt::principal::OwnershipObject::Stage { name } => Some(

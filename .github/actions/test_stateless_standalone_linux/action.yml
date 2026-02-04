@@ -17,6 +17,17 @@ runs:
         python3 tests/udf/udf_server.py &
         sleep 2
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Start Cloud Control Server
+      shell: bash
+      working-directory: tests/cloud_control_server
+      run: |
+        uv sync
+        uv run python simple_server.py &
+        sleep 2
+
     - name: Run Stateless Tests with Standalone mode
       shell: bash
       run: |

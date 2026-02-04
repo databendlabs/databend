@@ -20,6 +20,9 @@ use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -60,6 +63,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
 use crate::interpreters::access::AccessChecker;
+use crate::interpreters::common::get_task_client_config;
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
@@ -181,6 +185,9 @@ impl PrivilegeAccess {
             },
             GrantObject::RowAccessPolicy(policy_id) => OwnershipObject::RowAccessPolicy {
                 policy_id: *policy_id,
+            },
+            GrantObject::Task(name) => OwnershipObject::Task {
+                name: name.to_string(),
             },
             GrantObject::Global => return Ok(None),
         };
@@ -724,6 +731,7 @@ impl PrivilegeAccess {
             | GrantObject::Table(_, _, _)
             | GrantObject::DatabaseById(_, _)
             | GrantObject::UDF(_)
+            | GrantObject::Task(_)
             | GrantObject::Stage(_)
             | GrantObject::Warehouse(_)
             | GrantObject::Connection(_)
@@ -791,6 +799,7 @@ impl PrivilegeAccess {
                     | GrantObject::Warehouse(_)
                     | GrantObject::Connection(_)
                     | GrantObject::Sequence(_)
+                    | GrantObject::Task(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _)
@@ -1123,6 +1132,22 @@ impl PrivilegeAccess {
         }
     }
 
+    async fn validate_task_access(
+        &self,
+        task: &str,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        self.validate_access(
+            &GrantObject::Task(task.to_owned()),
+            privilege,
+            false,
+            false,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn convert_to_id(
         &self,
         tenant: &Tenant,
@@ -1233,9 +1258,8 @@ impl AccessChecker for PrivilegeAccess {
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
-                    | Some(RewriteKind::ShowDictionaries(_)) => {
-                        return Ok(());
-                    }
+                    | Some(RewriteKind::ShowDictionaries(_))
+                    | Some(RewriteKind::ShowTasks)
                     | Some(RewriteKind::ShowTableFunctions) => {
                         return Ok(());
                     }
@@ -1362,6 +1386,83 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateDatabase(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true, false)
                     .await?;
+            }
+            Plan::CreateTask(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateTask, true, false)
+                    .await?;
+            }
+            Plan::AlterTask(plan) => {
+                if plan.if_exists
+                    && !check_task_exists(
+                        &self.ctx,
+                        plan.task_name.to_string(),
+                        plan.tenant.tenant_name().to_string(),
+                    )
+                    .await?
+                {
+                    // has if exists tag, but task not exists, should skip priv check.
+                    return Ok(());
+                }
+
+                if self
+                    .validate_task_access(&plan.task_name, UserPrivilegeType::Alter)
+                    .await
+                    .is_err()
+                {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::DropTask(plan) => {
+                if plan.if_exists
+                    && !check_task_exists(
+                        &self.ctx,
+                        plan.task_name.to_string(),
+                        plan.tenant.tenant_name().to_string(),
+                    )
+                    .await?
+                {
+                    // has if exists tag, but task not exists, should skip priv check.
+                    return Ok(());
+                }
+                if self
+                    .validate_task_access(&plan.task_name, UserPrivilegeType::Drop)
+                    .await
+                    .is_err()
+                {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::DescribeTask(plan) => {
+                let session = self.ctx.get_current_session();
+                if !self
+                    .has_ownership(
+                        &session,
+                        &GrantObject::Task(plan.task_name.to_owned()),
+                        false,
+                        false,
+                    )
+                    .await?
+                {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::ExecuteTask(plan) => {
+                let session = self.ctx.get_current_session();
+                if !self
+                    .has_ownership(
+                        &session,
+                        &GrantObject::Task(plan.task_name.to_owned()),
+                        false,
+                        false,
+                    )
+                    .await?
+                {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
             }
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
@@ -1947,12 +2048,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
             | Plan::DescUser(_)
-            | Plan::CreateTask(_)   // TODO: need to build ownership info for task
-            | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
-            | Plan::DescribeTask(_) // TODO: need to build ownership info for task
-            | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
-            | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_) => {
+            => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -2195,6 +2291,7 @@ fn check_db_tb_ownership_access(
                 }
                 OwnershipObject::UDF { .. }
                 | OwnershipObject::Stage { .. }
+                | OwnershipObject::Task { .. }
                 | OwnershipObject::Warehouse { .. }
                 | OwnershipObject::Connection { .. }
                 | OwnershipObject::Procedure { .. }
@@ -2296,4 +2393,28 @@ async fn has_priv(
                 _ => false,
             }
         }))
+}
+
+async fn check_task_exists(
+    ctx: &Arc<QueryContext>,
+    task_name: String,
+    tenant_id: String,
+) -> Result<bool> {
+    let config = GlobalConfig::instance();
+    if config.query.cloud_control_grpc_server_address.is_none() {
+        return Err(ErrorCode::CloudControlNotEnabled(
+            "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+        ));
+    }
+    let cloud_api = CloudControlApiProvider::instance();
+    let task_client = cloud_api.get_task_client();
+    let req = DescribeTaskRequest {
+        task_name,
+        tenant_id,
+        if_exist: false,
+    };
+    let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+    let req = make_request(req, config);
+    let resp = task_client.describe_task(req).await?;
+    Ok(resp.task.is_some())
 }

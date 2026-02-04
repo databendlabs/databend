@@ -133,10 +133,11 @@ pub struct GrantObjectVisibilityChecker {
     granted_global_seq: bool,
     granted_global_procedure: bool,
     granted_global_masking_policy: bool,
+    granted_global_row_access_policy: bool,
+    granted_global_task: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
     granted_global_db_table: bool,
-    granted_global_row_access_policy: bool,
 
     // Catalog ID pool for efficient name → ID mapping
     catalog_pool: CatalogIdPool,
@@ -158,6 +159,7 @@ pub struct GrantObjectVisibilityChecker {
 
     // Other name-based grants
     granted_udfs: FxHashSet<Arc<str>>,
+    granted_tasks: FxHashSet<Arc<str>>,
     granted_write_stages: FxHashSet<Arc<str>>,
     granted_read_stages: FxHashSet<Arc<str>>,
     granted_ws: FxHashSet<Arc<str>>,
@@ -262,11 +264,12 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global_c = false;
         let mut granted_global_seq = false;
         let mut granted_global_procedure = false;
+        let mut granted_global_masking_policy = false;
+        let mut granted_global_row_access_policy = false;
+        let mut granted_global_task = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
         let mut granted_global_db_table = false;
-        let mut granted_global_masking_policy = false;
-        let mut granted_global_row_access_policy = false;
         let mut catalog_pool = CatalogIdPool::new();
         let total_objects = ownership_objects.len();
         // Most deployments use only the default catalog
@@ -302,6 +305,7 @@ impl GrantObjectVisibilityChecker {
             FxHashSet::with_capacity_and_hasher(total_objects, Default::default());
 
         let mut granted_udfs: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_tasks: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut granted_write_stages: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut granted_read_stages: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut granted_ws: FxHashSet<Arc<str>> = FxHashSet::default();
@@ -398,6 +402,15 @@ impl GrantObjectVisibilityChecker {
                         );
 
                         check_privilege(
+                            &mut granted_global_task,
+                            grant_entry.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_task(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
                             &mut granted_global_read_stage,
                             grant_entry.privileges().iter(),
                             |privilege| privilege == UserPrivilegeType::Read,
@@ -470,6 +483,9 @@ impl GrantObjectVisibilityChecker {
                     }
                     GrantObject::UDF(udf) => {
                         granted_udfs.insert(Arc::from(udf.as_str()));
+                    }
+                    GrantObject::Task(task) => {
+                        granted_tasks.insert(Arc::from(task.as_str()));
                     }
                     GrantObject::Stage(stage) => {
                         if grant_entry
@@ -554,6 +570,9 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::UDF { name } => {
                     granted_udfs.insert(Arc::from(name.as_str()));
                 }
+                OwnershipObject::Task { name } => {
+                    granted_tasks.insert(Arc::from(name.as_str()));
+                }
                 OwnershipObject::Warehouse { id } => {
                     granted_ws.insert(Arc::from(id.as_str()));
                 }
@@ -592,6 +611,7 @@ impl GrantObjectVisibilityChecker {
             granted_global_procedure,
             granted_global_masking_policy,
             granted_global_row_access_policy,
+            granted_global_task,
             granted_global_stage,
             granted_global_read_stage,
             granted_global_db_table,
@@ -604,6 +624,7 @@ impl GrantObjectVisibilityChecker {
             granted_tables,
             sys_databases,
             granted_udfs,
+            granted_tasks,
             granted_write_stages,
             granted_read_stages,
             granted_ws,
@@ -761,6 +782,17 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
         if self.granted_udfs.contains(udf) {
+            return true;
+        }
+        false
+    }
+
+    // TODO: Need to call this check in task_history.rs::get_full_data
+    pub fn check_task_visibility(&self, task: &str) -> bool {
+        if self.granted_global_task {
+            return true;
+        }
+        if self.granted_tasks.contains(task) {
             return true;
         }
         false

@@ -262,16 +262,17 @@ impl Display for AccountMgrSource {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AccountMgrLevel {
     Global,
-    Database(Option<String>),
-    Table(Option<String>, String),
-    UDF(String),
-    Stage(String),
-    Warehouse(String),
-    Connection(String),
-    Sequence(String),
-    Procedure(ProcedureIdentity),
-    MaskingPolicy(String),
-    RowAccessPolicy(String),
+    Database(#[drive(skip)] Option<String>),
+    Table(#[drive(skip)] Option<String>, #[drive(skip)] String),
+    UDF(#[drive(skip)] String),
+    Stage(#[drive(skip)] String),
+    Warehouse(#[drive(skip)] String),
+    Connection(#[drive(skip)] String),
+    Sequence(#[drive(skip)] String),
+    Procedure(#[drive(skip)] ProcedureIdentity),
+    MaskingPolicy(#[drive(skip)] String),
+    RowAccessPolicy(#[drive(skip)] String),
+    Task(#[drive(skip)] String),
 }
 
 impl Display for AccountMgrLevel {
@@ -302,6 +303,7 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::RowAccessPolicy(policy) => {
                 write!(f, " ROW ACCESS POLICY {policy}")
             }
+            AccountMgrLevel::Task(task) => write!(f, " TASK {task}"),
         }
     }
 }

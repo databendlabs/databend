@@ -437,6 +437,34 @@ impl RoleApi for RoleMgr {
         Ok(ws)
     }
 
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_tasks_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
+        let mut task_object_owner_prefix = self.ownership_object_prefix();
+        task_object_owner_prefix.push_str("task-by-name/");
+        let values = self
+            .kv_api
+            .list_kv_collect(ListOptions::unlimited(task_object_owner_prefix.as_str()))
+            .await
+            .map_err(meta_service_error)?;
+
+        let mut r = vec![];
+
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
+
+        for (key, val) in values {
+            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
+                Ok(u) => r.push(u),
+                Err(err) => error!(
+                    "deserialize key {} Got err {} while (list_tasks_ownerships)",
+                    &key, err
+                ),
+            }
+        }
+
+        Ok(r)
+    }
+
     /// General role update.
     ///
     /// It fetch the role that matches the specified seq number, update it in place, then write it back with the seq it sees.
@@ -777,6 +805,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Procedure { procedure_id } => GrantObject::Procedure(*procedure_id),
         OwnershipObject::MaskingPolicy { policy_id } => GrantObject::MaskingPolicy(*policy_id),
         OwnershipObject::RowAccessPolicy { policy_id } => GrantObject::RowAccessPolicy(*policy_id),
+        OwnershipObject::Task { name } => GrantObject::Task(name.to_string()),
     }
 }
 

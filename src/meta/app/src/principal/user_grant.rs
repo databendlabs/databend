@@ -24,7 +24,7 @@ use crate::principal::UserPrivilegeType;
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
+pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 23] = [
     "catalogs",
     "columns",
     "databases",
@@ -45,6 +45,8 @@ pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "processes",
     "user_functions",
     "functions",
+    "tasks",
+    "task_history",
     "indexes",
 ];
 
@@ -65,6 +67,7 @@ pub enum GrantObject {
     Procedure(u64),
     MaskingPolicy(u64),
     RowAccessPolicy(u64),
+    Task(String),
 }
 
 impl GrantObject {
@@ -103,6 +106,7 @@ impl GrantObject {
             (GrantObject::Procedure(p), GrantObject::Procedure(rp)) => p == rp,
             (GrantObject::MaskingPolicy(lp), GrantObject::MaskingPolicy(rp)) => lp == rp,
             (GrantObject::RowAccessPolicy(lp), GrantObject::RowAccessPolicy(rp)) => lp == rp,
+            (GrantObject::Task(task), GrantObject::Task(rtask)) => task == rtask,
             _ => false,
         }
     }
@@ -141,6 +145,9 @@ impl GrantObject {
             GrantObject::RowAccessPolicy(_) => {
                 UserPrivilegeSet::available_privileges_on_row_access_policy(available_ownership)
             }
+            GrantObject::Task(_) => {
+                UserPrivilegeSet::available_privileges_on_task(available_ownership)
+            }
         }
     }
 
@@ -154,7 +161,8 @@ impl GrantObject {
             | GrantObject::Procedure(_)
             | GrantObject::MaskingPolicy(_)
             | GrantObject::RowAccessPolicy(_)
-            | GrantObject::Connection(_) => None,
+            | GrantObject::Connection(_)
+            | GrantObject::Task(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
@@ -183,6 +191,7 @@ impl fmt::Display for GrantObject {
             GrantObject::RowAccessPolicy(policy_id) => {
                 write!(f, "ROW ACCESS POLICY {policy_id}")
             }
+            GrantObject::Task(task) => write!(f, "task {task}"),
         }
     }
 }
