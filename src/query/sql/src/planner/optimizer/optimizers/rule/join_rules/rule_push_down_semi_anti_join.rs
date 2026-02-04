@@ -118,7 +118,8 @@ impl Rule for RulePushDownSemiAntiJoin {
         let join1_used_columns = join1.used_columns()?;
 
         let can_push_left = join1_used_columns.is_disjoint(&right_child_prop.output_columns);
-        let can_push_right = join1_used_columns.is_disjoint(&left_child_prop.output_columns);
+        let can_push_right = join1_used_columns.is_disjoint(&left_child_prop.output_columns)
+            && join2.join_type != JoinType::LeftAnti;
 
         if !can_push_left && !can_push_right {
             return Ok(());

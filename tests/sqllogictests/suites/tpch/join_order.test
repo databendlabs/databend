@@ -1032,11 +1032,11 @@ order by
     numwait desc,
     s_name;
 ----
-HashJoin: RIGHT ANTI
+HashJoin: RIGHT SEMI
 ├── Build
-│   └── HashJoin: RIGHT SEMI
+│   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER
+│       │   └── HashJoin: RIGHT ANTI
 │       │       ├── Build
 │       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
@@ -1048,11 +1048,11 @@ HashJoin: RIGHT ANTI
 │       │       │       └── Probe
 │       │       │           └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
 │       │       └── Probe
-│       │           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
+│       │           └── Scan: default.tpch_test.lineitem (#5) (read rows: 6001215)
 │       └── Probe
-│           └── Scan: default.tpch_test.lineitem (#4) (read rows: 6001215)
+│           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
 └── Probe
-    └── Scan: default.tpch_test.lineitem (#5) (read rows: 6001215)
+    └── Scan: default.tpch_test.lineitem (#4) (read rows: 6001215)
 
 # Q22
 query T

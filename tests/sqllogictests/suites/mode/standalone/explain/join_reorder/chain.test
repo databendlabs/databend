@@ -600,7 +600,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t.a (#0), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── scan id: 0
@@ -635,7 +635,7 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 9.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── scan id: 0
