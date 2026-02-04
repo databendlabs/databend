@@ -3708,6 +3708,16 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let task_privs = map(
+        rule! {
+            #comma_separated_list1(task_priv_type) ~ ON ~ TASK ~ #ident
+        },
+        |(privileges, _, _, task_name)| AccountMgrSource::Privs {
+            privileges,
+            level: AccountMgrLevel::Task(task_name.to_string()),
+        },
+    );
+
     let warehouse_privs = map(
         rule! {
             USAGE ~ ON ~ WAREHOUSE ~ #ident
@@ -3849,6 +3859,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #row_access_policy_all_privs: "ALL [ PRIVILEGES ] ON ROW ACCESS POLICY <policy_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
+        | #task_privs : "<task_privileges> ON TASK <task_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
         | #procedure_privs: "ACCESS PROCEDURE ON PROCEDURE <procedure_identity>"
         | #procedure_all_privs: "ALL [ PRIVILEGES ] ON PROCEDURE <procedure_identity>"
@@ -3922,6 +3933,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         UserPrivilegeType::ApplyRowAccessPolicy,
         rule! { APPLY ~ ROW ~ ACCESS ~ POLICY },
     );
+    let create_task = value(UserPrivilegeType::CreateTask, rule! { CREATE ~ TASK });
 
     alt((
         rule!(
@@ -3943,6 +3955,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #create_sequence
             | #access_procedure
             | #create_procedure
+            | #create_task
             | #drop_user
             | #create_role
             | #drop_role
@@ -3964,6 +3977,14 @@ pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
     alt((
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
+    ))
+    .parse(i)
+}
+
+pub fn task_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(UserPrivilegeType::Drop, rule! { DROP }),
+        value(UserPrivilegeType::Alter, rule! { ALTER }),
     ))
     .parse(i)
 }
@@ -4165,6 +4186,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Sequence,
         MaskingPolicy,
         RowAccessPolicy,
+        Task,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
@@ -4174,6 +4196,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         value(Object::Sequence, rule! { SEQUENCE }),
         value(Object::MaskingPolicy, rule! { MASKING ~ POLICY }),
         value(Object::RowAccessPolicy, rule! { ROW ~ ACCESS ~ POLICY }),
+        value(Object::Task, rule! { TASK }),
     ));
 
     // Object object_name
@@ -4187,6 +4210,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Sequence => AccountMgrLevel::Sequence(object_name.to_string()),
             Object::MaskingPolicy => AccountMgrLevel::MaskingPolicy(object_name.to_string()),
             Object::RowAccessPolicy => AccountMgrLevel::RowAccessPolicy(object_name.to_string()),
+            Object::Task => AccountMgrLevel::Task(object_name.to_string()),
         },
     );
 
@@ -4205,7 +4229,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE | MASKING POLICY | ROW ACCESS POLICY | TASK <object_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
     )
     .parse(i)

@@ -73,6 +73,10 @@ message GrantObject {
     string udf = 1;
   }
 
+  message GrantTaskObject {
+    string task = 1;
+  }
+
   message GrantStageObject {
     string stage = 1;
   }
@@ -115,6 +119,7 @@ message GrantObject {
     GrantProcedureObject procedure = 11;
     GrantMaskingPolicyObject maskingpolicy = 12;
     GrantRowAccessPolicyObject row_access_policy = 13;
+    GrantTaskObject task = 14;
   }
 }
 

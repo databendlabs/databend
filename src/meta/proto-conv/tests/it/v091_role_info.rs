@@ -33,8 +33,8 @@ use crate::common;
 //
 
 #[test]
-fn test_decode_v90_role() -> anyhow::Result<()> {
-    let role_info_v90 = vec![
+fn test_decode_v91_role() -> anyhow::Result<()> {
+    let role_info_v91 = vec![
         10, 2, 114, 49, 18, 6, 160, 6, 90, 168, 6, 24, 160, 6, 90, 168, 6, 24,
     ];
 
@@ -46,7 +46,7 @@ fn test_decode_v90_role() -> anyhow::Result<()> {
         update_on: DateTime::<Utc>::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), role_info_v90.as_slice(), 90, want())?;
+    common::test_load_old(func_name!(), role_info_v91.as_slice(), 90, want())?;
 
     Ok(())
 }

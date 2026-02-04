@@ -212,6 +212,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::RowAccessPolicy(
                 pb::grant_object::GrantRowAccessPolicyObject { policy_id },
             ) => Ok(mt::principal::GrantObject::RowAccessPolicy(policy_id)),
+            pb::grant_object::Object::Task(pb::grant_object::GrantTaskObject { task }) => {
+                Ok(mt::principal::GrantObject::Task(task))
+            }
         }
     }
 
@@ -286,6 +289,9 @@ impl FromToProto for mt::principal::GrantObject {
                     },
                 ))
             }
+            mt::principal::GrantObject::Task(task) => Some(pb::grant_object::Object::Task(
+                pb::grant_object::GrantTaskObject { task: task.clone() },
+            )),
         };
         Ok(pb::GrantObject {
             ver: VER,

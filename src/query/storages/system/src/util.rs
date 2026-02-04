@@ -115,6 +115,42 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
     }
 }
 
+pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+    match expr {
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
+        Expr::Cast(Cast { expr, .. }) => find_eq_filter(expr, visitor),
+        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
+            if function.signature.name == "eq" {
+                match args.as_slice() {
+                    [
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                        Expr::Constant(Constant { scalar, .. }),
+                    ]
+                    | [
+                        Expr::Constant(Constant { scalar, .. }),
+                        Expr::ColumnRef(ColumnRef { id, .. }),
+                    ] => {
+                        visitor(id, scalar);
+                    }
+                    _ => {}
+                }
+            } else if function.signature.name == "and_filters" {
+                // only support this:
+                // 1. where xx and xx and xx
+                // 2. filter: Column `table`, Column `database`
+                for arg in args {
+                    find_eq_filter(arg, visitor)
+                }
+            }
+        }
+        Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
+            for arg in args {
+                find_eq_filter(arg, visitor)
+            }
+        }
+    }
+}
+
 pub fn extract_leveled_strings(
     expr: &Expr<String>,
     level_names: &[&str],
@@ -459,4 +495,28 @@ async fn get_tables(
 /// Disable table info refresh for catalog (for performance).
 pub fn disable_catalog_refresh(catalog: Arc<dyn Catalog>) -> Result<Arc<dyn Catalog>> {
     catalog.disable_table_info_refresh()
+}
+
+pub(crate) async fn get_owned_task_names(
+    user_api: Arc<UserApiProvider>,
+    tenant: &Tenant,
+    all_effective_roles: &[String],
+    has_admin_role: bool,
+) -> Vec<String> {
+    let mut owned_tasks_names = vec![];
+    if !has_admin_role {
+        // Note: In old version databend-query the hashmap maybe empty
+        let task_ownerships = user_api
+            .list_tasks_ownerships(tenant)
+            .await
+            .unwrap_or_default();
+        for (ownership, role) in task_ownerships {
+            if let OwnershipObject::Task { name } = ownership {
+                if all_effective_roles.contains(&role) && !owned_tasks_names.contains(&name) {
+                    owned_tasks_names.push(name);
+                }
+            }
+        }
+    }
+    owned_tasks_names
 }

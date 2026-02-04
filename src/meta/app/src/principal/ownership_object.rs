@@ -32,6 +32,7 @@ use databend_meta_kvapi::kvapi::KeyCodec;
 /// - `udf-by-name/<udf_name>`
 /// - `procedure-by-id/<procedure_id>`
 /// - `masking-policy-by-id/<policy_id>`
+/// - `task-by-name/<task_name>`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum OwnershipObject {
     /// used on the fuse databases
@@ -78,6 +79,9 @@ pub enum OwnershipObject {
     RowAccessPolicy {
         policy_id: u64,
     },
+    Task {
+        name: String,
+    },
 }
 
 impl OwnershipObject {
@@ -116,6 +120,7 @@ impl fmt::Display for OwnershipObject {
             OwnershipObject::RowAccessPolicy { policy_id } => {
                 write!(f, "ROW ACCESS POLICY {policy_id}")
             }
+            OwnershipObject::Task { name } => write!(f, "TASK {name}"),
         }
     }
 }
@@ -167,6 +172,7 @@ impl KeyCodec for OwnershipObject {
             OwnershipObject::RowAccessPolicy { policy_id } => {
                 b.push_raw("row-access-policy-by-id").push_u64(*policy_id)
             }
+            OwnershipObject::Task { name } => b.push_raw("task-by-name").push_str(name),
         }
     }
 
@@ -237,9 +243,13 @@ impl KeyCodec for OwnershipObject {
                 let policy_id = p.next_u64()?;
                 Ok(OwnershipObject::RowAccessPolicy { policy_id })
             }
+            "task-by-name" => {
+                let name = p.next_str()?;
+                Ok(OwnershipObject::Task { name })
+            }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name|masking-policy-by-id|row-access-policy-by-id"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name|sequence-by-name|procedure-by-id|masking-policy-by-id|row-access-policy-by-id|task-by-name"
                     .to_string(),
                 got: q.to_string(),
             }),

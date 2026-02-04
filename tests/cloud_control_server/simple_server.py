@@ -488,6 +488,16 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
                         code=8,
                     )
                 )
+        elif request.alter_task_type == task_pb2.AlterTaskRequest.ChangeOwner:
+            if request.owner == "":
+                return task_pb2.AlterTaskResponse(
+                    error=task_pb2.TaskError(
+                        kind="INVALID_ARGUMENT",
+                        message="owner is required for ChangeOwner",
+                        code=7,
+                    )
+                )
+            task.owner = request.owner
         else:
             # not supported
             return task_pb2.AlterTaskResponse(
@@ -513,6 +523,9 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
     def ShowTasks(self, request, context):
         print("ShowTasks", request)
         tasks = list(TASK_DB.values())
+        # Filter by task_names if provided
+        if len(request.task_names) > 0:
+            tasks = [t for t in tasks if t.task_name in request.task_names]
         return task_pb2.ShowTasksResponse(tasks=tasks)
 
     def ShowTaskRuns(self, request, context):

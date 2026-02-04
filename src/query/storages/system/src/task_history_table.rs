@@ -36,10 +36,14 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
+use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use jiff::tz::TimeZone;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -47,6 +51,7 @@ use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
 use crate::util::find_gt_filter;
 use crate::util::find_lt_filter;
+use crate::util::get_owned_task_names;
 
 pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock> {
     let mut name: Vec<String> = Vec::with_capacity(task_runs.len());
@@ -130,6 +135,7 @@ impl AsyncSystemTable for TaskHistoryTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let user_api = UserApiProvider::instance();
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
@@ -140,7 +146,12 @@ impl AsyncSystemTable for TaskHistoryTable {
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
         let user = ctx.get_current_user()?.identity().display().to_string();
-        let available_roles = ctx.get_all_available_roles().await?;
+        let all_effective_roles: Vec<String> = ctx
+            .get_all_effective_roles()
+            .await?
+            .into_iter()
+            .map(|x| x.identity().to_string())
+            .collect();
         // TODO: limit push_down does NOT work during tests,we need to fix it later.
         let result_limit = push_downs
             .as_ref()
@@ -177,23 +188,58 @@ impl AsyncSystemTable for TaskHistoryTable {
                 });
             }
         }
-        let req = ShowTaskRunsRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
-            scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
-            task_name: task_name.unwrap_or("".to_string()),
-            result_limit: result_limit.unwrap_or(0), // 0 means default
-            error_only: false,
-            owners: available_roles
-                .into_iter()
-                .map(|x| x.identity().to_string())
-                .collect(),
-            next_page_token: None,
-            page_size: None,
-            previous_page_token: None,
-            task_ids: vec![],
-            task_names: vec![],
-            root_task_id: None,
+
+        let has_admin_role = all_effective_roles
+            .iter()
+            .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+        let has_super_priv = ctx
+            .get_current_user()?
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super);
+        let req = if has_admin_role || has_super_priv {
+            ShowTaskRunsRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
+                scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
+                task_name: task_name.unwrap_or("".to_string()),
+                result_limit: result_limit.unwrap_or(0), // 0 means default
+                error_only: false,
+                owners: all_effective_roles.clone(),
+                next_page_token: None,
+                page_size: None,
+                previous_page_token: None,
+                task_ids: vec![],
+                task_names: vec![],
+                root_task_id: None,
+            }
+        } else {
+            let owned_tasks_names =
+                get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            if owned_tasks_names.is_empty() {
+                return parse_task_runs_to_datablock(vec![]);
+            }
+            if let Some(task_name) = &task_name {
+                // The user does not have admin role and not own the task_name
+                // Need directly return empty block
+                if !owned_tasks_names.contains(task_name) {
+                    return parse_task_runs_to_datablock(vec![]);
+                }
+            }
+            ShowTaskRunsRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                scheduled_time_start: scheduled_time_start.unwrap_or("".to_string()),
+                scheduled_time_end: scheduled_time_end.unwrap_or("".to_string()),
+                task_name: task_name.unwrap_or("".to_string()),
+                result_limit: result_limit.unwrap_or(0), // 0 means default
+                error_only: false,
+                owners: all_effective_roles.clone(),
+                next_page_token: None,
+                page_size: None,
+                previous_page_token: None,
+                task_ids: vec![],
+                task_names: owned_tasks_names.clone(),
+                root_task_id: None,
+            }
         };
 
         let cloud_api = CloudControlApiProvider::instance();

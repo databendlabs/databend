@@ -1,0 +1,42 @@
+=== TEST 1: CreateTask privilege ===
+--- user a without CreateTask privilege cannot create task ---
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateTask] is required on *.* for user 'a'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+--- grant CreateTask privilege to role1 ---
+--- user a can create task now ---
+task1
+=== TEST 2: Task ownership access ===
+--- user a (owner) can alter/describe/execute task1 ---
+1
+--- user b (non-owner) cannot alter/describe/execute task1 ---
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'b'@'%' with roles [public,role2]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'b'@'%' with roles [public,role2]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'b'@'%' with roles [public,role2]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+=== TEST 3: Super privilege can access any task ===
+--- grant super privilege to role2 ---
+--- user b with super can alter/describe/execute task1 ---
+1
+=== TEST 4: system.tasks visibility ===
+--- grant CreateTask to role2 so user b can create task2 ---
+--- user a can only see task1 (owned by role1) ---
+task1
+--- user b with super can see all tasks ---
+task1
+task2
+--- admin can see all tasks ---
+task1
+task2
+=== TEST 5: GRANT OWNERSHIP transfer ===
+--- transfer task1 ownership from role1 to role3 ---
+--- user a (old owner) cannot access task1 anymore ---
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'a'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'a'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+--- user c (new owner) can access task1 ---
+1
+--- user c can see task1 in system.tasks ---
+task1
+=== TEST 6: Drop task permission ===
+--- user a cannot drop task1 (not owner anymore) ---
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'a'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+--- user c (owner) can drop task1 ---
+--- user a (owner) can drop task owned by role1 ---
+=== cleanup ===

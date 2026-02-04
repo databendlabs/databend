@@ -199,6 +199,7 @@ impl CloudTaskInterpreter {
         req
     }
 
+    #[allow(dead_code)]
     async fn build_show_tasks_request(
         ctx: &Arc<QueryContext>,
         plan: &ShowTasksPlan,
@@ -214,6 +215,7 @@ impl CloudTaskInterpreter {
                 .map(|x| x.identity().to_string())
                 .collect(),
             task_ids: vec![],
+            task_names: vec![],
         };
         Ok(req)
     }

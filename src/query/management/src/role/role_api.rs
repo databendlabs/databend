@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -47,6 +48,10 @@ pub trait RoleApi: Sync + Send {
     async fn list_procedure_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_connection_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_warehouse_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+
+    async fn list_tasks_ownerships(
+        &self,
+    ) -> std::result::Result<Vec<SeqV<OwnershipInfo>>, ErrorCode>;
 
     /// General role update.
     ///

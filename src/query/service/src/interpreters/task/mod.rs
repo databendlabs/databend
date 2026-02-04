@@ -67,6 +67,7 @@ pub(crate) trait TaskInterpreter {
 
     async fn drop_task(&self, ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()>;
 
+    #[allow(dead_code)]
     async fn show_tasks(
         &self,
         ctx: &Arc<QueryContext>,

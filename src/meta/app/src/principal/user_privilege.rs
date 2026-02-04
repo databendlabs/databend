@@ -96,11 +96,12 @@ pub enum UserPrivilegeType {
     ApplyRowAccessPolicy = 1 << 30,
     // Privilege to Create Row Access Policy.
     CreateRowAccessPolicy = 1 << 31,
+    // Privilege to Create task
+    CreateTask = 1 << 32,
     // Discard Privilege Type
     Set = 1 << 4,
     CreateDataMask = 1 << 16,
 }
-
 impl Display for UserPrivilegeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -136,6 +137,7 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::AccessSequence => "ACCESS SEQUENCE",
             UserPrivilegeType::CreateProcedure => "CREATE PROCEDURE",
             UserPrivilegeType::AccessProcedure => "ACCESS PROCEDURE",
+            UserPrivilegeType::CreateTask => "CREATE TASK",
         })
     }
 }
@@ -203,6 +205,7 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             databend_common_ast::ast::UserPrivilegeType::AccessProcedure => {
                 UserPrivilegeType::AccessProcedure
             }
+            databend_common_ast::ast::UserPrivilegeType::CreateTask => UserPrivilegeType::CreateTask,
             databend_common_ast::ast::UserPrivilegeType::Set => UserPrivilegeType::Set,
         }
     }
@@ -236,15 +239,17 @@ impl UserPrivilegeSet {
         let database_privs = Self::available_privileges_on_database(false);
         let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
         let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
+        let task_privs_without_ownership = Self::available_privileges_on_task(false);
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
         let mask_privs = Self::available_privileges_on_masking_policy(false);
         let row_access_privs = Self::available_privileges_on_row_access_policy(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateRowAccessPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateRowAccessPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure | CreateTask });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
+            | task_privs_without_ownership.privileges
             | wh_privs_without_ownership.privileges
             | connection_privs_without_ownership.privileges
             | seq_privs_without_ownership.privileges
@@ -334,6 +339,14 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy }).into()
+        }
+    }
+
+    pub fn available_privileges_on_task(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ Drop | Alter | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ Drop | Alter }).into()
         }
     }
 
