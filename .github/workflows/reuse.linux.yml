@@ -472,7 +472,7 @@ jobs:
       - self-hosted
       - "${{ inputs.runner_arch }}"
       - Linux
-      - 2c
+      - 8c
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
