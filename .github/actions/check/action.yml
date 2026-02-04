@@ -40,6 +40,10 @@ runs:
       shell: bash
       run: taplo fmt --check
 
+    - name: Install newer cargo-audit
+      shell: bash
+      run: cargo install cargo-audit --locked --force
+
     - name: Audit dependencies
       shell: bash
       if: "!contains(github.event.head_commit.message, 'skip audit')"
