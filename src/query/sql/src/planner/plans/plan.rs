@@ -325,7 +325,7 @@ pub enum Plan {
     },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
+    CopyIntoLocation(Box<CopyIntoLocationPlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),

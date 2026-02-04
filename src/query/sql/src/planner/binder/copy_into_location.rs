@@ -194,11 +194,11 @@ impl Binder {
             is_ordered,
             partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
-        Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+        Ok(Plan::CopyIntoLocation(Box::new(CopyIntoLocationPlan {
             from: Box::new(query),
             info,
             partition_by,
-        }))
+        })))
     }
 
     fn bind_partition_by(
