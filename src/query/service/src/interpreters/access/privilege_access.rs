@@ -1132,18 +1132,9 @@ impl PrivilegeAccess {
         }
     }
 
-    async fn validate_task_access(
-        &self,
-        task: &str,
-        privilege: UserPrivilegeType,
-    ) -> Result<()> {
-        self.validate_access(
-            &GrantObject::Task(task.to_owned()),
-            privilege,
-            false,
-            false,
-        )
-        .await?;
+    async fn validate_task_access(&self, task: &str, privilege: UserPrivilegeType) -> Result<()> {
+        self.validate_access(&GrantObject::Task(task.to_owned()), privilege, false, false)
+            .await?;
 
         Ok(())
     }
@@ -2401,9 +2392,22 @@ async fn check_task_exists(
     tenant_id: String,
 ) -> Result<bool> {
     let config = GlobalConfig::instance();
+    let tenant = ctx.get_tenant();
+
+    // Check if private task mode is enabled
+    if config.task.on {
+        // In private task mode, check task existence via Meta
+        let result = UserApiProvider::instance()
+            .task_api(&tenant)
+            .describe_task(&task_name)
+            .await??;
+        return Ok(result.is_some());
+    }
+
+    // In cloud task mode, check task existence via CloudControl
     if config.query.cloud_control_grpc_server_address.is_none() {
         return Err(ErrorCode::CloudControlNotEnabled(
-            "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
+            "cannot check task existence: neither private task mode nor cloud control is enabled",
         ));
     }
     let cloud_api = CloudControlApiProvider::instance();
@@ -2413,8 +2417,8 @@ async fn check_task_exists(
         tenant_id,
         if_exist: false,
     };
-    let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
-    let req = make_request(req, config);
+    let client_config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+    let req = make_request(req, client_config);
     let resp = task_client.describe_task(req).await?;
     Ok(resp.task.is_some())
 }

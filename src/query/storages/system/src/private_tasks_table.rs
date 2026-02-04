@@ -22,12 +22,15 @@ use databend_common_cloud_control::task_utils;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::infer_table_schema;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
@@ -35,6 +38,7 @@ use crate::meta_service_error;
 use crate::parse_tasks_to_datablock;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::get_owned_task_names;
 
 pub struct PrivateTasksTable {
     table_info: TableInfo,
@@ -54,14 +58,44 @@ impl AsyncSystemTable for PrivateTasksTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
+        let user_api = UserApiProvider::instance();
 
-        let tasks = UserApiProvider::instance()
+        // Get all effective roles
+        let all_effective_roles: Vec<String> = ctx
+            .get_all_effective_roles()
+            .await?
+            .into_iter()
+            .map(|x| x.identity().to_string())
+            .collect();
+
+        let has_admin_role = all_effective_roles
+            .iter()
+            .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+        let has_super_priv = ctx
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+            .await
+            .is_ok();
+
+        let tasks = user_api
             .task_api(&tenant)
             .list_task()
             .await
             .map_err(meta_service_error)?;
-        let tasks_len = tasks.len();
-        let trans_tasks = tasks
+
+        // Filter tasks by ownership (unless admin/super)
+        let filtered_tasks = if has_admin_role || has_super_priv {
+            tasks
+        } else {
+            let owned_task_names =
+                get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            tasks
+                .into_iter()
+                .filter(|task| owned_task_names.contains(&task.task_name))
+                .collect()
+        };
+
+        let tasks_len = filtered_tasks.len();
+        let trans_tasks = filtered_tasks
             .into_iter()
             .take(
                 push_downs

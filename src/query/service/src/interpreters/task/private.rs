@@ -27,7 +27,6 @@ use databend_common_sql::plans::CreateTaskPlan;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
-use databend_common_sql::plans::ShowTasksPlan;
 use databend_common_storages_system::PrivateTasksTable;
 use databend_common_users::UserApiProvider;
 
@@ -116,22 +115,5 @@ impl TaskInterpreter for PrivateTaskInterpreter {
             .map_err(meta_service_error)?;
 
         Ok(())
-    }
-
-    async fn show_tasks(
-        &self,
-        _ctx: &Arc<QueryContext>,
-        plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>> {
-        let tasks = UserApiProvider::instance()
-            .task_api(&plan.tenant)
-            .list_task()
-            .await
-            .map_err(meta_service_error)?;
-
-        tasks
-            .into_iter()
-            .map(PrivateTasksTable::task_trans)
-            .try_collect()
     }
 }

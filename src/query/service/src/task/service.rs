@@ -213,7 +213,7 @@ impl TaskService {
             {
                 if warehouse
                     != &self
-                        .create_context(None)
+                        .create_context(None, None)
                         .await?
                         .get_cluster()
                         .get_warehouse_id()?
@@ -535,9 +535,15 @@ impl TaskService {
 
     async fn spawn_task(task: Task, user: UserInfo) -> Result<()> {
         let task_service = TaskService::instance();
+        // Use the task owner's role for execution
+        let owner_role = if task.owner.is_empty() {
+            None
+        } else {
+            Some(task.owner.clone())
+        };
 
         task_service
-            .execute_sql(Some(user), &task.query_text)
+            .execute_sql_with_role(Some(user), owner_role, &task.query_text)
             .await?;
 
         Ok(())
@@ -551,8 +557,18 @@ impl TaskService {
         let Some(when_condition) = &task.when_condition else {
             return Ok(true);
         };
+        // Use the task owner's role for when condition evaluation
+        let owner_role = if task.owner.is_empty() {
+            None
+        } else {
+            Some(task.owner.clone())
+        };
         let result = task_service
-            .execute_sql(Some(user.clone()), &format!("SELECT {when_condition}"))
+            .execute_sql_with_role(
+                Some(user.clone()),
+                owner_role,
+                &format!("SELECT {when_condition}"),
+            )
             .await?;
         Ok(result
             .first()
@@ -574,7 +590,11 @@ impl TaskService {
             .unwrap_or(false))
     }
 
-    pub async fn create_context(&self, other_user: Option<UserInfo>) -> Result<Arc<QueryContext>> {
+    pub async fn create_context(
+        &self,
+        other_user: Option<UserInfo>,
+        restricted_role: Option<String>,
+    ) -> Result<Arc<QueryContext>> {
         // only need run the sql on the current node
         let cluster_discovery = ClusterDiscovery::instance();
         let dummy_cluster = cluster_discovery
@@ -582,7 +602,7 @@ impl TaskService {
             .await?;
 
         let (user, role) = if let Some(other_user) = other_user {
-            (other_user, None)
+            (other_user, restricted_role)
         } else {
             (
                 get_task_user(self.tenant.tenant_name(), &dummy_cluster.get_cluster_id()?),
@@ -1112,7 +1132,16 @@ WHERE ta.task_name = '{task_name}'
     }
 
     async fn execute_sql(&self, other_user: Option<UserInfo>, sql: &str) -> Result<Vec<DataBlock>> {
-        let context = self.create_context(other_user).await?;
+        self.execute_sql_with_role(other_user, None, sql).await
+    }
+
+    async fn execute_sql_with_role(
+        &self,
+        other_user: Option<UserInfo>,
+        restricted_role: Option<String>,
+        sql: &str,
+    ) -> Result<Vec<DataBlock>> {
+        let context = self.create_context(other_user, restricted_role).await?;
 
         let mut planner = Planner::new_with_query_executor(
             context.clone(),

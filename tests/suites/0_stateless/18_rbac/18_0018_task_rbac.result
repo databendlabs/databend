@@ -1,6 +1,8 @@
 === TEST 1: CreateTask privilege ===
 --- user a without CreateTask privilege cannot create task ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateTask] is required on *.* for user 'a'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+--- grant CreateTask directly to user is rejected ---
+Error: APIError: QueryFailed: [1061]CREATE-like privileges cannot be granted directly to USER; please grant them to a role
 --- grant CreateTask privilege to role1 ---
 --- user a can create task now ---
 task1

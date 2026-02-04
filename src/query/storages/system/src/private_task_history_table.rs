@@ -28,46 +28,17 @@ use databend_common_storages_basic::view_table::ViewTable;
 
 use crate::generate_default_catalog_meta;
 
+// NOTE: This VIEW queries `system_task.task_run` which is an internal table.
+// Regular users likely don't have permission to access `system_task` database,
+// so this VIEW may fail for non-admin users (not a security issue, but a functionality issue).
+//
+// To allow regular users to see their own task history, this should be implemented
+// as a real AsyncSystemTable that:
+// 1. Queries system_task.task_run with elevated privileges
+// 2. Filters results by ownership (like private_tasks_table.rs does)
 pub struct PrivateTaskHistoryTable {}
 
 impl PrivateTaskHistoryTable {
-    // desc  system.task_history;
-    // +------------------------------+---------------------+------+-----+---------------------------+--------+
-    // | Field                        | Type                | Null | Key | Default                   | Extra  |
-    // +------------------------------+---------------------+------+-----+---------------------------+--------+
-    // | task_id                      | bigint unsigned     | YES  |     | NULL                      |        |
-    // | task_name                    | text                | NO   |     | NULL                      |        |
-    // | query_text                   | text                | NO   |     | NULL                      |        |
-    // | when_condition               | text                | YES  |     | NULL                      |        |
-    // | after                        | text                | YES  |     | NULL                      |        |
-    // | comment                      | text                | YES  |     | NULL                      |        |
-    // | owner                        | text                | YES  |     | NULL                      |        |
-    // | owner_user                   | text                | YES  |     | NULL                      |        |
-    // | warehouse_name               | text                | YES  |     | NULL                      |        |
-    // | using_warehouse_size         | text                | YES  |     | NULL                      |        |
-    // | schedule_type                | integer             | YES  |     | NULL                      |        |
-    // | interval                     | integer             | YES  |     | NULL                      |        |
-    // | interval_secs                | integer             | YES  |     | NULL                      |        |
-    // | interval_milliseconds        | bigint unsigned     | YES  |     | NULL                      |        |
-    // | cron                         | text                | YES  |     | NULL                      |        |
-    // | time_zone                    | text                | YES  |     | 'UTC'                     |        |
-    // | run_id                       | bigint unsigned     | YES  |     | NULL                      |        |
-    // | attempt_number               | integer             | YES  |     | NULL                      |        |
-    // | state                        | text                | NO   |     | 'SCHEDULED'               |        |
-    // | error_code                   | bigint              | YES  |     | NULL                      |        |
-    // | error_message                | text                | YES  |     | NULL                      |        |
-    // | root_task_id                 | bigint unsigned     | YES  |     | NULL                      |        |
-    // | scheduled_at                 | timestamp           | YES  |     | CURRENT_TIMESTAMP         |        |
-    // | completed_at                 | timestamp           | YES  |     | NULL                      |        |
-    // | next_scheduled_at            | timestamp           | YES  |     | CURRENT_TIMESTAMP         |        |
-    // | error_integration            | text                | YES  |     | NULL                      |        |
-    // | status                       | text                | YES  |     | NULL                      |        |
-    // | created_at                   | timestamp           | YES  |     | NULL                      |        |
-    // | updated_at                   | timestamp           | YES  |     | NULL                      |        |
-    // | session_params               | variant             | YES  |     | NULL                      |        |
-    // | last_suspended_at            | timestamp           | YES  |     | NULL                      |        |
-    // | suspend_task_after_num_failures | integer         | YES  |     | NULL                      |        |
-    // +------------------------------+---------------------+------+-----+---------------------------+--------+
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
         task_id,

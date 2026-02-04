@@ -106,9 +106,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::RowAccessPolicy(
                 pb::ownership_object::OwnershipRowAccessPolicyObject { policy_id },
             ) => Ok(mt::principal::OwnershipObject::RowAccessPolicy { policy_id }),
-            pb::ownership_object::Object::Task(
-                pb::ownership_object::OwnershipTaskObject { task },
-            ) => Ok(mt::principal::OwnershipObject::Task { name: task }),
+            pb::ownership_object::Object::Task(pb::ownership_object::OwnershipTaskObject {
+                task,
+            }) => Ok(mt::principal::OwnershipObject::Task { name: task }),
         }
     }
 

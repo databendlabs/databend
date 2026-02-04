@@ -39,6 +39,9 @@ echo "=== TEST 1: CreateTask privilege ==="
 echo "--- user a without CreateTask privilege cannot create task ---"
 echo "CREATE TASK task1 WAREHOUSE = 'mywh' SCHEDULE = 1 MINUTE AS SELECT 1;" | $USER_A_CONNECT
 
+echo "--- grant CreateTask directly to user is rejected ---"
+echo "grant create task on *.* to a;" | $BENDSQL_CLIENT_CONNECT
+
 echo "--- grant CreateTask privilege to role1 ---"
 echo "grant create task on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 

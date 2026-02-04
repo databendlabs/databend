@@ -24131,7 +24131,7 @@ CreateDynamicTable(
 ---------- Input ----------
 GRANT CREATE TASK ON *.* TO role role1
 ---------- Output ---------
-GRANT CREATE TASK ON *.* TO ROLE 'role1'
+GRANT CREATE TASK ON  *.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24151,7 +24151,7 @@ Grant(
 ---------- Input ----------
 GRANT ownership ON task MyTask1 TO role role1
 ---------- Output ---------
-GRANT OWNERSHIP ON TASK MyTask1 TO ROLE 'role1'
+GRANT OWNERSHIP ON  TASK MyTask1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24173,7 +24173,7 @@ Grant(
 ---------- Input ----------
 GRANT ownership ON task MyTask1 TO role role2
 ---------- Output ---------
-GRANT OWNERSHIP ON TASK MyTask1 TO ROLE 'role2'
+GRANT OWNERSHIP ON  TASK MyTask1 TO ROLE 'role2'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24195,7 +24195,7 @@ Grant(
 ---------- Input ----------
 GRANT drop ON task MyTask1 TO u2
 ---------- Output ---------
-GRANT DROP ON TASK MyTask1 TO USER 'u2'@'%'
+GRANT DROP ON  TASK MyTask1 TO USER 'u2'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24220,7 +24220,7 @@ Grant(
 ---------- Input ----------
 GRANT alter ON task MyTask1 TO u1
 ---------- Output ---------
-GRANT ALTER ON TASK MyTask1 TO USER 'u1'@'%'
+GRANT ALTER ON  TASK MyTask1 TO USER 'u1'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {

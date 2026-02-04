@@ -163,9 +163,9 @@ impl AsyncSystemTable for TasksTable {
             .iter()
             .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
         let has_super_priv = ctx
-            .get_current_user()?
-            .grants
-            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super);
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+            .await
+            .is_ok();
         let req = if has_admin_role || has_super_priv {
             ShowTasksRequest {
                 tenant_id: tenant.tenant_name().to_string(),
