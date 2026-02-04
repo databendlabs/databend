@@ -19,7 +19,6 @@ use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
-use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf::StreamItem;
@@ -77,9 +76,10 @@ impl<'a, SP: SpawnApi> MetaForwarder<'a, SP> {
                 MetaNetworkError::ConnectionError(conn_err)
             })?;
 
+        let max_msg_size = self.sto.config.raft_grpc_max_message_size();
         let client = client
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+            .max_decoding_message_size(max_msg_size)
+            .max_encoding_message_size(max_msg_size);
 
         Ok((endpoint, client))
     }

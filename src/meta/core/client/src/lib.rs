@@ -30,6 +30,7 @@ mod pool;
 pub mod required;
 pub(crate) mod rpc_handler;
 
+pub use channel_manager::DEFAULT_GRPC_MESSAGE_SIZE;
 pub use channel_manager::MetaChannelManager;
 pub use client_conf::RpcClientConf;
 pub use client_conf::RpcClientTlsConfig;
