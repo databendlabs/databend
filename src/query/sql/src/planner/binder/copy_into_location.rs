@@ -218,11 +218,29 @@ impl Binder {
             &[],
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
-        let scalar = wrap_cast(&scalar, &DataType::String);
+        let scalar = wrap_cast(&scalar, &DataType::String.wrap_nullable());
         let nullable = scalar.data_type()?.is_nullable();
+        let column_positions = partition_bind_context
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(pos, binding)| (binding.index, pos))
+            .collect::<Vec<_>>();
         let remote_expr = scalar
             .as_expr()?
-            .project_column_ref(|col| Ok(col.index))?
+            .project_column_ref(|col| {
+                column_positions
+                    .iter()
+                    .find(|(index, _)| index == &col.index)
+                    .map(|(_, pos)| *pos)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Partition expression references column {} \
+                             that is not present in COPY source output",
+                            col.column_name
+                        ))
+                    })
+            })?
             .as_remote_expr();
 
         Ok(Some(PartitionByDesc {

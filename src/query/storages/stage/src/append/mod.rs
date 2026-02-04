@@ -20,8 +20,4 @@ mod row_based_file;
 mod stage_sink_table;
 
 pub use output::UnloadOutput;
-pub use partition::CopyPartitionMeta;
-pub use partition::PartitionByRuntime;
-pub use partition::TransformPartitionBy;
-pub use partition::sanitize_partition_path;
 pub use stage_sink_table::StageSinkTable;

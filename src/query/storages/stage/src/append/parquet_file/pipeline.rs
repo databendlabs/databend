@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline::core::Pipeline;
@@ -22,9 +20,6 @@ use opendal::Operator;
 
 use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::writer_processor::ParquetFileWriter;
-use crate::append::partition::PartitionByRuntime;
-use crate::append::partition::TransformPartitionBy;
-
 /// - LimitFileSizeProcessor * 1: slice/group block to batches (as a block meta) to avoid files being too small when there are many threads.
 /// - ParquetFileSink * N:  serialize incoming blocks to Vec to reduce memory, and flush when they are large enough.
 #[allow(clippy::too_many_arguments)]
@@ -38,17 +33,11 @@ pub(crate) fn append_data_to_parquet_files(
     mem_limit: usize,
     max_threads: usize,
     create_by: String,
-    partition_runtime: Option<Arc<PartitionByRuntime>>,
 ) -> Result<()> {
     let is_single = info.options.single;
     let max_file_size = info.options.max_file_size;
     // when serializing block to parquet, the memory may be doubled
     let mem_limit = mem_limit / 2;
-    if let Some(runtime) = &partition_runtime {
-        pipeline.add_transform(|input, output| {
-            TransformPartitionBy::try_create(input, output, runtime.clone())
-        })?;
-    }
     pipeline.try_resize(1)?;
     let max_file_size = if is_single {
         None

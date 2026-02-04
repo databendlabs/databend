@@ -27,8 +27,6 @@ use opendal::Operator;
 use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::serialize_processor::SerializeProcessor;
 use super::writer_processor::RowBasedFileWriter;
-use crate::append::partition::PartitionByRuntime;
-use crate::append::partition::TransformPartitionBy;
 use crate::compression::get_compression_with_path;
 
 /// SerializeProcessor * N: serialize each data block to many small byte buffers.
@@ -45,7 +43,6 @@ pub(crate) fn append_data_to_row_based_files(
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
     max_threads: usize,
-    partition_runtime: Option<Arc<PartitionByRuntime>>,
 ) -> Result<()> {
     let is_single = info.options.single;
     let max_file_size = info.options.max_file_size;
@@ -76,12 +73,6 @@ pub(crate) fn append_data_to_row_based_files(
     )?;
     let compression = info.stage.file_format_params.clone().compression();
     let prefix = output_format.serialize_prefix()?;
-
-    if let Some(runtime) = &partition_runtime {
-        pipeline.add_transform(|input, output| {
-            TransformPartitionBy::try_create(input, output, runtime.clone())
-        })?;
-    }
 
     pipeline.try_add_transformer(|| {
         let output_format = get_output_format(

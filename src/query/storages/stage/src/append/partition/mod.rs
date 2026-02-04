@@ -20,6 +20,7 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -38,8 +39,6 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
 const NULL_PARTITION_DIR: &str = "_NULL_";
-const EMPTY_PARTITION_DIR: &str = "_EMPTY_";
-const PARENT_SEGMENT: &str = "_PARENT_";
 
 #[derive(Debug)]
 pub struct CopyPartitionMeta {
@@ -51,15 +50,34 @@ impl CopyPartitionMeta {
         Self { partition }
     }
 
-    pub fn partition(&self) -> &str {
-        &self.partition
+    pub fn partition_arc(&self) -> Arc<str> {
+        self.partition.clone()
     }
 }
 
 local_block_meta_serde!(CopyPartitionMeta);
 
 #[typetag::serde(name = "copy_partition_meta")]
-impl BlockMetaInfo for CopyPartitionMeta {}
+impl BlockMetaInfo for CopyPartitionMeta {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        CopyPartitionMeta::downcast_ref_from(info).is_some_and(|other| {
+            Arc::ptr_eq(&self.partition, &other.partition)
+                || self.partition.as_ref() == other.partition.as_ref()
+        })
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(Self {
+            partition: self.partition.clone(),
+        })
+    }
+}
+
+pub fn partition_from_block(block: &DataBlock) -> Option<Arc<str>> {
+    block
+        .get_meta()
+        .and_then(|meta| CopyPartitionMeta::downcast_ref_from(meta).map(|m| m.partition_arc()))
+}
 
 #[derive(Clone)]
 pub struct PartitionByRuntime {
@@ -91,10 +109,10 @@ impl PartitionByRuntime {
         let column = value.into_full_column(&DataType::String, block.num_rows());
         let (strings, validity) = extract_string_column(column)?;
 
-        let mut groups: HashMap<String, Vec<u32>> = HashMap::new();
-        let mut order: Vec<String> = Vec::new();
+        let mut groups: HashMap<Option<String>, Vec<u32>> = HashMap::new();
+        let mut order: Vec<Option<String>> = Vec::new();
         for row in 0..block.num_rows() {
-            let key = partition_key(&strings, row, validity.as_ref());
+            let key = partition_key(&strings, row, validity.as_ref())?;
             let entry = groups.entry(key.clone()).or_insert_with(|| {
                 order.push(key.clone());
                 Vec::new()
@@ -105,10 +123,11 @@ impl PartitionByRuntime {
         let mut result = Vec::with_capacity(groups.len());
         for key in order {
             if let Some(indices) = groups.remove(&key) {
-                let partition = Arc::<str>::from(key);
-                let taken = block.clone().take(indices.as_slice())?;
-                let taken =
-                    taken.add_meta(Some(Box::new(CopyPartitionMeta::new(partition.clone()))))?;
+                let partition_arc = key.as_ref().map(|k| Arc::<str>::from(k.as_str()));
+                let mut taken = block.clone().take(indices.as_slice())?;
+                if let Some(partition) = partition_arc.clone() {
+                    taken = taken.add_meta(Some(Box::new(CopyPartitionMeta::new(partition))))?;
+                }
                 result.push(taken);
             }
         }
@@ -132,17 +151,21 @@ fn extract_string_column(column: Column) -> Result<(StringColumn, Option<Bitmap>
     }
 }
 
-fn partition_key(strings: &StringColumn, row: usize, validity: Option<&Bitmap>) -> String {
+fn partition_key(
+    strings: &StringColumn,
+    row: usize,
+    validity: Option<&Bitmap>,
+) -> Result<Option<String>> {
     let is_null = validity.map(|bitmap| !bitmap.get_bit(row)).unwrap_or(false);
     if is_null {
-        return NULL_PARTITION_DIR.to_string();
+        return Ok(Some(NULL_PARTITION_DIR.to_string()));
     }
 
     let raw = unsafe { strings.value_unchecked(row) };
     sanitize_partition_path(raw)
 }
 
-pub fn sanitize_partition_path(raw: &str) -> String {
+pub fn sanitize_partition_path(raw: &str) -> Result<Option<String>> {
     let normalized = raw.replace('\\', "/");
     let mut parts = Vec::new();
     for segment in normalized.split('/') {
@@ -150,16 +173,17 @@ pub fn sanitize_partition_path(raw: &str) -> String {
             continue;
         }
         if segment == ".." {
-            parts.push(PARENT_SEGMENT.to_string());
-        } else {
-            parts.push(segment.to_string());
+            return Err(ErrorCode::InvalidArgument(
+                "PARTITION BY path cannot reference parent directory",
+            ));
         }
+        parts.push(segment.to_string());
     }
 
     if parts.is_empty() {
-        EMPTY_PARTITION_DIR.to_string()
+        Ok(None)
     } else {
-        parts.join("/")
+        Ok(Some(parts.join("/")))
     }
 }
 
@@ -250,13 +274,13 @@ mod tests {
 
     #[test]
     fn test_sanitize_partition_path() {
-        assert_eq!(sanitize_partition_path(""), "_EMPTY_");
-        assert_eq!(sanitize_partition_path("foo//bar"), "foo/bar");
-        assert_eq!(sanitize_partition_path(".."), "_PARENT_");
-        assert_eq!(sanitize_partition_path("./a/../b"), "a/_PARENT_/b");
+        assert_eq!(sanitize_partition_path("").unwrap(), None);
         assert_eq!(
-            sanitize_partition_path("../../evil"),
-            "_PARENT_/_PARENT_/evil"
+            sanitize_partition_path("foo//bar").unwrap(),
+            Some("foo/bar".to_string())
         );
+        assert!(sanitize_partition_path("..").is_err());
+        assert!(sanitize_partition_path("./a/../b").is_err());
+        assert!(sanitize_partition_path("../../evil").is_err());
     }
 }

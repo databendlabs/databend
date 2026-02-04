@@ -31,4 +31,14 @@ done
 stmt "select count() from @s1 where a >= 0 and b <= 1000;"
 
 stmt "remove @s1;"
+
+stmt "create or replace table copy_stage_partition(dt DATE, ts TIMESTAMP, val INT);"
+stmt "insert into copy_stage_partition VALUES ('2020-01-28', '2020-01-28 18:00:00', 1), ('2020-01-28', '2020-01-28 22:00:00', 2), ('2020-01-29', '2020-01-29 02:00:00', 3), (NULL, NULL, 4);"
+
+stmt "COPY INTO @s1 FROM copy_stage_partition PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0')) FILE_FORMAT = (type = PARQUET);"
+
+stmt "select count_if(name LIKE 'date=2020-01-28/hour=18/%'), count_if(name LIKE 'date=2020-01-28/hour=22/%'), count_if(name LIKE 'date=2020-01-29/hour=02/%'), count_if(name LIKE '_NULL_/%') from list_stage(location=>'@s1');"
+
+stmt "drop table if exists copy_stage_partition;"
+
 stmt "drop stage if exists s1;"

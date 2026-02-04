@@ -121,6 +121,102 @@ FROM list_stage(location=>'@hello_partition')
 statement ok
 DROP STAGE hello_partition
 
+statement ok
+DROP STAGE IF EXISTS hello_partition_sanitize
+
+statement ok
+CREATE STAGE hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT '' AS part_key
+            UNION ALL SELECT 'foo/bar'
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+query TT
+SELECT
+    count_if(name LIKE 'foo/%'),
+    count_if(name NOT LIKE '%/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+1 1
+
+
+statement ok
+remove @hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT '' AS part_key
+            UNION ALL SELECT 'foo/bar'
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = CSV)
+
+query TT
+SELECT
+    count_if(name LIKE 'foo/%'),
+    count_if(name NOT LIKE '%/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+1 1
+
+
+statement error 2004
+COPY INTO @hello_partition_sanitize
+    FROM (SELECT '../escape' AS part_key)
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+statement error 2004
+COPY INTO @hello_partition_sanitize
+    FROM (SELECT './foo/../bar' AS part_key)
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+statement ok
+DROP STAGE hello_partition_sanitize
+
+statement ok
+DROP STAGE IF EXISTS hello_partition_conflict
+
+statement ok
+CREATE STAGE hello_partition_conflict
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    SINGLE = TRUE
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    OVERWRITE = TRUE
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    INCLUDE_QUERY_ID = FALSE
+
+statement ok
+DROP STAGE hello_partition_conflict
+
 
 statement ok
 DROP DATABASE db1

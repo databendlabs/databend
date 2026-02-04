@@ -47,6 +47,11 @@ use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
 use crate::append::path::unload_path;
 
+enum PendingInput {
+    Raw(DataBlock),
+    Batch(BlockBatch),
+}
+
 pub struct ParquetFileWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -57,13 +62,13 @@ pub struct ParquetFileWriter {
     compression: Compression,
     create_by: String,
 
-    input_data: VecDeque<DataBlock>,
+    input_data: VecDeque<PendingInput>,
 
     input_bytes: usize,
     row_counts: usize,
     writer: ArrowWriter<Vec<u8>>,
 
-    file_to_write: Option<(Vec<u8>, DataSummary)>,
+    file_to_write: Option<(Vec<u8>, DataSummary, Option<Arc<str>>)>,
     data_accessor: Operator,
 
     // the result of statement
@@ -184,16 +189,65 @@ impl ParquetFileWriter {
         Ok(())
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush_stream_writer(&mut self) -> Result<()> {
         self.writer.finish().ok();
         let buf = mem::take(self.writer.inner_mut());
         let output_bytes = buf.len();
-        self.file_to_write = Some((buf, DataSummary {
-            row_counts: self.row_counts,
-            input_bytes: self.input_bytes,
-            output_bytes,
-        }));
+        self.file_to_write = Some((
+            buf,
+            DataSummary {
+                row_counts: self.row_counts,
+                input_bytes: self.input_bytes,
+                output_bytes,
+            },
+            None,
+        ));
         self.reinit_writer()?;
+        self.row_counts = 0;
+        self.input_bytes = 0;
+        Ok(())
+    }
+
+    fn process_stream_block(&mut self, block: DataBlock) -> Result<()> {
+        self.input_bytes += block.memory_size();
+        self.row_counts += block.num_rows();
+        let batch = block.to_record_batch(&self.schema)?;
+        self.writer.write(&batch)?;
+        Ok(())
+    }
+
+    fn process_block_batch(&mut self, batch: BlockBatch) -> Result<()> {
+        if batch.blocks.is_empty() {
+            return Ok(());
+        }
+        let mut writer = create_writer(
+            self.arrow_schema.clone(),
+            self.targe_file_size,
+            self.compression,
+            self.create_by.clone(),
+        )?;
+        let mut input_bytes = 0;
+        let mut row_counts = 0;
+        for block in batch.blocks {
+            input_bytes += block.memory_size();
+            row_counts += block.num_rows();
+            let record_batch = block.to_record_batch(&self.schema)?;
+            writer.write(&record_batch)?;
+        }
+        writer.finish().ok();
+        let buf = writer
+            .into_inner()
+            .map_err(|e| ErrorCode::Internal(format!("Failed to finish parquet writer: {e}")))?;
+        let output_bytes = buf.len();
+        self.file_to_write = Some((
+            buf,
+            DataSummary {
+                row_counts,
+                input_bytes,
+                output_bytes,
+            },
+            batch.partition.clone(),
+        ));
         Ok(())
     }
 }
@@ -243,11 +297,11 @@ impl Processor for ParquetFileWriter {
         } else if self.input.has_data() {
             let block = self.input.pull_data().unwrap()?;
             if self.targe_file_size.is_none() {
-                self.input_data.push_back(block);
+                self.input_data.push_back(PendingInput::Raw(block));
             } else {
                 let block_meta = block.get_owned_meta().unwrap();
-                let blocks = BlockBatch::downcast_from(block_meta).unwrap();
-                self.input_data.extend(blocks.blocks);
+                let block_batch = BlockBatch::downcast_from(block_meta).unwrap();
+                self.input_data.push_back(PendingInput::Batch(block_batch));
             }
 
             self.input.set_not_need_data();
@@ -259,28 +313,22 @@ impl Processor for ParquetFileWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        while let Some(b) = self.input_data.pop_front() {
-            self.input_bytes += b.memory_size();
-            self.row_counts += b.num_rows();
-            let batch = b.to_record_batch(&self.schema)?;
-            self.writer.write(&batch)?;
-
-            if let Some(target) = self.targe_file_size {
-                if self.row_counts > 0 {
-                    // written row groups: compressed, controlled by MAX_ROW_GROUP_SIZE
-                    let file_size = self.writer.bytes_written();
-                    // in_progress row group: each column leaf has an at most 1MB uncompressed buffer and multi compressed pages
-                    // may result in small file for schema with many columns
-                    let in_progress = self.writer.in_progress_size();
-                    if file_size + in_progress >= target {
-                        self.flush()?;
+        while let Some(chunk) = self.input_data.pop_front() {
+            match chunk {
+                PendingInput::Raw(block) => {
+                    self.process_stream_block(block)?;
+                }
+                PendingInput::Batch(batch) => {
+                    self.process_block_batch(batch)?;
+                    if self.file_to_write.is_some() {
                         return Ok(());
                     }
                 }
             }
         }
-        if self.input.is_finished() && self.row_counts > 0 {
-            self.flush()?;
+
+        if self.input.is_finished() && self.targe_file_size.is_none() && self.row_counts > 0 {
+            self.flush_stream_writer()?;
         }
         Ok(())
     }
@@ -288,14 +336,15 @@ impl Processor for ParquetFileWriter {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         assert!(self.file_to_write.is_some());
+        let (data, summary, partition) = mem::take(&mut self.file_to_write).unwrap();
         let path = unload_path(
             &self.info,
             &self.query_id,
             self.group_id,
             self.batch_id,
             None,
+            partition.as_deref(),
         );
-        let (data, summary) = mem::take(&mut self.file_to_write).unwrap();
         self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;
