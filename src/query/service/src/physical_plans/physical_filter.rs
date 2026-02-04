@@ -161,26 +161,22 @@ impl PhysicalPlanBuilder {
             projections,
             input,
             predicates: {
+                let metadata = self.metadata.read();
+
                 filter
                     .predicates
                     .iter()
                     .map(|scalar| {
-                        // Try the standard approach first: type check with input_schema
-                        let expr_result = scalar
-                            .type_check(input_schema.as_ref())
-                            .and_then(|expr| {
-                                expr.project_column_ref(|index| {
-                                    input_schema.index_of(&index.to_string())
-                                })
-                            });
+                        // Check if this scalar expression references any internal columns
+                        let has_internal_columns = scalar.used_columns().iter().any(|col_index| {
+                            matches!(
+                                metadata.column(*col_index),
+                                databend_common_sql::ColumnEntry::InternalColumn(_)
+                            )
+                        });
 
-                        // If standard approach works, use it
-                        let expr = if let Ok(expr) = expr_result {
-                            expr
-                        } else {
-                            // Fallback for internal columns: use metadata for type checking
-                            // This handles cases where internal columns are used in filters
-                            let metadata = self.metadata.read();
+                        let expr = if has_internal_columns {
+                            // Special handling for internal columns: use metadata for type checking
                             scalar.type_check(&*metadata)?.project_column_ref(|index| {
                                 // First try: find by metadata index string
                                 if let Ok(schema_index) = input_schema.index_of(&index.to_string()) {
@@ -213,6 +209,13 @@ impl PhysicalPlanBuilder {
                                     column_name
                                 )))
                             })?
+                        } else {
+                            // Standard approach for regular columns
+                            scalar
+                                .type_check(input_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string())
+                                })?
                         };
 
                         let expr = cast_expr_to_non_null_boolean(expr)?;
