@@ -57,6 +57,7 @@ use crate::optimizer::optimizers::rule::RulePushDownLimitUnion;
 use crate::optimizer::optimizers::rule::RulePushDownLimitWindow;
 use crate::optimizer::optimizers::rule::RulePushDownPrewhere;
 use crate::optimizer::optimizers::rule::RulePushDownRankLimitAggregate;
+use crate::optimizer::optimizers::rule::RulePushDownSemiAntiJoin;
 use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
@@ -78,6 +79,7 @@ impl RuleFactory {
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
+            RuleID::PushDownSemiAntiJoin => Ok(Box::new(RulePushDownSemiAntiJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
