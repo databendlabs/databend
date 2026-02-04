@@ -3,7 +3,7 @@
 1
 2
 1
-4
+1
 4
 >>>> remove @s1;
 >>>> select count() from @s1 where a >= 0 and b <= 1000;
