@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
@@ -21,12 +19,11 @@ use databend_common_expression::local_block_meta_serde;
 #[derive(Debug)]
 pub struct BlockBatch {
     pub blocks: Vec<DataBlock>,
-    pub partition: Option<Arc<str>>,
 }
 
 impl BlockBatch {
-    pub fn create_block(blocks: Vec<DataBlock>, partition: Option<Arc<str>>) -> DataBlock {
-        DataBlock::empty_with_meta(Box::new(BlockBatch { blocks, partition }))
+    pub fn create_block(blocks: Vec<DataBlock>) -> DataBlock {
+        DataBlock::empty_with_meta(Box::new(BlockBatch { blocks }))
     }
 }
 

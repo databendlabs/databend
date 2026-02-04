@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::mem;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -42,6 +43,37 @@ impl PartitionBuffer {
             size: 0,
             partition,
         }
+    }
+
+    fn drain_ready_batches(&mut self, threshold: usize) -> Vec<DataBlock> {
+        let mut batches = Vec::new();
+        while self.size > threshold {
+            let mut accumulated = 0usize;
+            let mut split_idx = None;
+            for (idx, buf) in self.buffers.iter().enumerate() {
+                accumulated += buf.buffer.len();
+                if accumulated > threshold {
+                    split_idx = Some(idx);
+                    break;
+                }
+            }
+            let Some(idx) = split_idx else {
+                break;
+            };
+            let rest = self.buffers.split_off(idx + 1);
+            let prefix = mem::replace(&mut self.buffers, rest);
+            let flushed_size = prefix.iter().map(|b| b.buffer.len()).sum::<usize>();
+            self.size = self.buffers.iter().map(|b| b.buffer.len()).sum::<usize>();
+            batches.push(FileOutputBuffers::create_block(
+                prefix,
+                self.partition.clone(),
+            ));
+            // guard against unexpected size drift
+            if flushed_size == 0 {
+                break;
+            }
+        }
+        batches
     }
 }
 
@@ -141,7 +173,8 @@ impl Processor for LimitFileSizeProcessor {
                 self.output_data = Some(data);
                 return Ok(Event::Sync);
             }
-            return Ok(Event::NeedData);
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         self.input.set_need_data();
@@ -155,8 +188,6 @@ impl Processor for LimitFileSizeProcessor {
         let block_meta = block.get_owned_meta().unwrap();
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
         let partition = buffers.partition.clone();
-        let key = partition.clone();
-
         let bucket = self
             .partitions
             .entry(partition.clone())
@@ -170,8 +201,8 @@ impl Processor for LimitFileSizeProcessor {
         bucket.buffers.extend(buffers.buffers);
 
         if bucket.size > self.threshold {
-            let bucket = self.partitions.remove(&key).unwrap();
-            self.enqueue_flush(bucket);
+            let batches = bucket.drain_ready_batches(self.threshold);
+            self.pending.extend(batches);
         }
         Ok(())
     }

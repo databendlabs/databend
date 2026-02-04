@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::mem;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -31,16 +32,41 @@ use crate::append::partition::partition_from_block;
 struct PartitionBucket {
     blocks: Vec<DataBlock>,
     size: usize,
-    partition: Option<Arc<str>>,
 }
 
 impl PartitionBucket {
-    fn new(partition: Option<Arc<str>>) -> Self {
+    fn new() -> Self {
         Self {
             blocks: Vec::new(),
             size: 0,
-            partition,
         }
+    }
+
+    fn drain_ready_batches(&mut self, threshold: usize) -> Vec<DataBlock> {
+        let mut batches = Vec::new();
+        while self.size > threshold && !self.blocks.is_empty() {
+            let mut accumulated = 0usize;
+            let mut split_idx = None;
+            for (idx, block) in self.blocks.iter().enumerate() {
+                accumulated += block.memory_size();
+                if accumulated > threshold {
+                    split_idx = Some(idx);
+                    break;
+                }
+            }
+            let Some(idx) = split_idx else {
+                break;
+            };
+            let remain = self.blocks.split_off(idx + 1);
+            let emitted = mem::replace(&mut self.blocks, remain);
+            let emitted_size = emitted.iter().map(|b| b.memory_size()).sum::<usize>();
+            self.size = self.blocks.iter().map(|b| b.memory_size()).sum::<usize>();
+            batches.push(BlockBatch::create_block(emitted));
+            if emitted_size == 0 {
+                break;
+            }
+        }
+        batches
     }
 }
 
@@ -80,7 +106,7 @@ impl LimitFileSizeProcessor {
             return;
         }
         self.pending_batches
-            .push_back(BlockBatch::create_block(bucket.blocks, bucket.partition));
+            .push_back(BlockBatch::create_block(bucket.blocks));
     }
 
     fn flush_all_buckets(&mut self) {
@@ -140,7 +166,8 @@ impl Processor for LimitFileSizeProcessor {
                 self.output_data = Some(batch);
                 return Ok(Event::Sync);
             }
-            return Ok(Event::NeedData);
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         self.input.set_need_data();
@@ -152,16 +179,15 @@ impl Processor for LimitFileSizeProcessor {
             return Ok(());
         };
         let partition = partition_from_block(&block);
-        let key = partition.clone();
         let bucket = self
             .partitions
             .entry(partition.clone())
-            .or_insert_with(|| PartitionBucket::new(partition.clone()));
+            .or_insert_with(PartitionBucket::new);
         bucket.size += block.memory_size();
         bucket.blocks.push(block);
         if bucket.size > self.threshold {
-            let bucket = self.partitions.remove(&key).unwrap();
-            self.queue_flush_bucket(bucket);
+            let batches = bucket.drain_ready_batches(self.threshold);
+            self.pending_batches.extend(batches);
         }
         Ok(())
     }

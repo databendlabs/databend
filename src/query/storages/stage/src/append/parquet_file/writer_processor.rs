@@ -45,12 +45,8 @@ use parquet::schema::types::ColumnPath;
 use super::block_batch::BlockBatch;
 use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
+use crate::append::partition::partition_from_block;
 use crate::append::path::unload_path;
-
-enum PendingInput {
-    Raw(DataBlock),
-    Batch(BlockBatch),
-}
 
 pub struct ParquetFileWriter {
     input: Arc<InputPort>,
@@ -62,7 +58,7 @@ pub struct ParquetFileWriter {
     compression: Compression,
     create_by: String,
 
-    input_data: VecDeque<PendingInput>,
+    input_data: VecDeque<DataBlock>,
 
     input_bytes: usize,
     row_counts: usize,
@@ -80,6 +76,7 @@ pub struct ParquetFileWriter {
     batch_id: usize,
 
     targe_file_size: Option<usize>,
+    current_partition: Option<Option<Arc<str>>>,
 }
 
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
@@ -175,6 +172,7 @@ impl ParquetFileWriter {
             batch_id: 0,
             targe_file_size,
             row_counts: 0,
+            current_partition: None,
         })))
     }
     pub fn reinit_writer(&mut self) -> Result<()> {
@@ -200,52 +198,12 @@ impl ParquetFileWriter {
                 input_bytes: self.input_bytes,
                 output_bytes,
             },
-            None,
+            self.current_partition.clone().flatten(),
         ));
         self.reinit_writer()?;
         self.row_counts = 0;
         self.input_bytes = 0;
-        Ok(())
-    }
-
-    fn process_stream_block(&mut self, block: DataBlock) -> Result<()> {
-        self.input_bytes += block.memory_size();
-        self.row_counts += block.num_rows();
-        let batch = block.to_record_batch(&self.schema)?;
-        self.writer.write(&batch)?;
-        Ok(())
-    }
-
-    fn process_block_batch(&mut self, batch: BlockBatch) -> Result<()> {
-        if batch.blocks.is_empty() {
-            return Ok(());
-        }
-        let mut partition_writer = create_writer(
-            self.arrow_schema.clone(),
-            self.targe_file_size,
-            self.compression,
-            self.create_by.clone(),
-        )?;
-        let mut input_bytes = 0;
-        let mut row_counts = 0;
-        for block in batch.blocks {
-            input_bytes += block.memory_size();
-            row_counts += block.num_rows();
-            let record_batch = block.to_record_batch(&self.schema)?;
-            partition_writer.write(&record_batch)?;
-        }
-        partition_writer.finish().ok();
-        let buf = mem::take(partition_writer.inner_mut());
-        let output_bytes = buf.len();
-        self.file_to_write = Some((
-            buf,
-            DataSummary {
-                row_counts,
-                input_bytes,
-                output_bytes,
-            },
-            batch.partition.clone(),
-        ));
+        self.current_partition = None;
         Ok(())
     }
 }
@@ -295,11 +253,15 @@ impl Processor for ParquetFileWriter {
         } else if self.input.has_data() {
             let block = self.input.pull_data().unwrap()?;
             if self.targe_file_size.is_none() {
-                self.input_data.push_back(PendingInput::Raw(block));
-            } else {
+                self.input_data.push_back(block);
+            } else if block.get_meta().is_some() {
                 let block_meta = block.get_owned_meta().unwrap();
                 let block_batch = BlockBatch::downcast_from(block_meta).unwrap();
-                self.input_data.push_back(PendingInput::Batch(block_batch));
+                for b in block_batch.blocks {
+                    self.input_data.push_back(b);
+                }
+            } else {
+                self.input_data.push_back(block);
             }
 
             self.input.set_not_need_data();
@@ -311,21 +273,33 @@ impl Processor for ParquetFileWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        while let Some(chunk) = self.input_data.pop_front() {
-            match chunk {
-                PendingInput::Raw(block) => {
-                    self.process_stream_block(block)?;
+        while let Some(block) = self.input_data.pop_front() {
+            let partition = partition_from_block(&block);
+            if self.current_partition.as_ref() != Some(&partition) {
+                if self.row_counts > 0 {
+                    self.flush_stream_writer()?;
                 }
-                PendingInput::Batch(batch) => {
-                    self.process_block_batch(batch)?;
-                    if self.file_to_write.is_some() {
+                self.current_partition = Some(partition.clone());
+            }
+
+            self.input_bytes += block.memory_size();
+            self.row_counts += block.num_rows();
+            let batch = block.to_record_batch(&self.schema)?;
+            self.writer.write(&batch)?;
+
+            if let Some(target) = self.targe_file_size {
+                if self.row_counts > 0 {
+                    let file_size = self.writer.bytes_written();
+                    let in_progress = self.writer.in_progress_size();
+                    if file_size + in_progress >= target {
+                        self.flush_stream_writer()?;
                         return Ok(());
                     }
                 }
             }
         }
 
-        if self.input.is_finished() && self.targe_file_size.is_none() && self.row_counts > 0 {
+        if self.input.is_finished() && self.row_counts > 0 {
             self.flush_stream_writer()?;
         }
         Ok(())
