@@ -199,11 +199,31 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         }
 
         fn make_column_from_field(field: &DataField) -> Result<Column> {
-            convert_field_type(field).map(|column_type| Column {
-                table: "".to_string(),
-                column: field.name().to_string(),
-                coltype: column_type,
-                colflags: ColumnFlags::empty(),
+            convert_field_type(field).map(|column_type| {
+                let mut colflags = ColumnFlags::empty();
+
+                if !field.is_nullable() {
+                    colflags |= ColumnFlags::NOT_NULL_FLAG;
+                }
+
+                if matches!(
+                    field.data_type().remove_nullable(),
+                    DataType::Number(
+                        NumberDataType::UInt8
+                            | NumberDataType::UInt16
+                            | NumberDataType::UInt32
+                            | NumberDataType::UInt64
+                    )
+                ) {
+                    colflags |= ColumnFlags::UNSIGNED_FLAG;
+                }
+                Column {
+                    table: "".to_string(),
+                    column: field.name().to_string(),
+                    collen: column_length(field),
+                    coltype: column_type,
+                    colflags,
+                }
             })
         }
 
