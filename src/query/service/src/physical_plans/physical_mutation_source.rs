@@ -327,7 +327,10 @@ pub fn resolve_column_positions(
     metadata: &Metadata,
     column_indices: impl Iterator<Item = IndexType>,
     table_schema: &TableSchemaRef,
-) -> Result<(Vec<usize>, Vec<databend_common_catalog::plan::InternalColumn>)> {
+) -> Result<(
+    Vec<usize>,
+    Vec<databend_common_catalog::plan::InternalColumn>,
+)> {
     let mut read_column_positions = Vec::new();
     let mut internal_columns = Vec::new();
 
