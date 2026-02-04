@@ -220,7 +220,7 @@ impl ParquetFileWriter {
         if batch.blocks.is_empty() {
             return Ok(());
         }
-        let mut writer = create_writer(
+        let mut partition_writer = create_writer(
             self.arrow_schema.clone(),
             self.targe_file_size,
             self.compression,
@@ -232,12 +232,10 @@ impl ParquetFileWriter {
             input_bytes += block.memory_size();
             row_counts += block.num_rows();
             let record_batch = block.to_record_batch(&self.schema)?;
-            writer.write(&record_batch)?;
+            partition_writer.write(&record_batch)?;
         }
-        writer.finish().ok();
-        let buf = writer
-            .into_inner()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to finish parquet writer: {e}")))?;
+        partition_writer.finish().ok();
+        let buf = mem::take(partition_writer.inner_mut());
         let output_bytes = buf.len();
         self.file_to_write = Some((
             buf,

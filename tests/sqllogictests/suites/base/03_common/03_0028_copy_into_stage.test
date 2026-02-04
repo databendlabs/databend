@@ -172,6 +172,32 @@ FROM list_stage(location=>'@hello_partition_sanitize')
 1 1
 
 
+statement ok
+remove @hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+query TT
+SELECT
+    count_if(name LIKE '%_v1/%'),
+    count_if(name LIKE '%_v2/%'),
+    count_if(name LIKE '%NULL_/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+10 10 1
+
+
 statement error 2004
 COPY INTO @hello_partition_sanitize
     FROM (SELECT '../escape' AS part_key)

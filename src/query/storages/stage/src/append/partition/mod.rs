@@ -82,13 +82,17 @@ pub fn partition_from_block(block: &DataBlock) -> Option<Arc<str>> {
 #[derive(Clone)]
 pub struct PartitionByRuntime {
     expr: Expr,
+    expr_type: DataType,
     func_ctx: Arc<FunctionContext>,
 }
 
 impl PartitionByRuntime {
     pub fn try_create(remote_expr: RemoteExpr, func_ctx: FunctionContext) -> Result<Self> {
+        let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+        let expr_type = expr.data_type().clone();
         Ok(Self {
-            expr: remote_expr.as_expr(&BUILTIN_FUNCTIONS),
+            expr,
+            expr_type,
             func_ctx: Arc::new(func_ctx),
         })
     }
@@ -106,7 +110,7 @@ impl PartitionByRuntime {
             ))
         })?;
 
-        let column = value.into_full_column(&DataType::String, block.num_rows());
+        let column = value.into_full_column(&self.expr_type, block.num_rows());
         let (strings, validity) = extract_string_column(column)?;
 
         let mut groups: HashMap<Option<String>, Vec<u32>> = HashMap::new();
