@@ -1,0 +1,31 @@
+# Exercise external table path inside a transaction to hit
+# FuseTable::try_create -> Some(sp) branch.
+
+statement ok
+create or replace database test_txn_external_table;
+
+statement ok
+use test_txn_external_table;
+
+statement ok
+create or replace table ext_t(c int) 'fs:///tmp/http_handler_txn_external_table/';
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO ext_t VALUES (1);
+
+statement ok
+COMMIT;
+
+query I
+SELECT count() FROM ext_t;
+----
+1
+
+statement ok
+drop table ext_t;
+
+statement ok
+drop database test_txn_external_table;

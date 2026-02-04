@@ -490,6 +490,12 @@ impl Binder {
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
                 case_sensitive,
+                Some(
+                    plan.stage_table_info
+                        .copy_into_table_options
+                        .on_error
+                        .clone(),
+                ),
             )
             .await?;
 
