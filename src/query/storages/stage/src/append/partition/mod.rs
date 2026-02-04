@@ -230,29 +230,28 @@ impl Processor for TransformPartitionBy {
             return Ok(Event::Finished);
         }
 
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
         if let Some(block) = self.pending.pop_front() {
-            if self.output.can_push() {
-                self.output.push_data(Ok(block));
-                return Ok(Event::NeedConsume);
-            } else {
-                self.pending.push_front(block);
-                self.input.set_not_need_data();
-                return Ok(Event::NeedConsume);
-            }
+            self.output.push_data(Ok(block));
+            return Ok(Event::NeedConsume);
         }
 
         if self.input_data.is_some() {
             return Ok(Event::Sync);
         }
 
-        if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Sync);
-        }
-
         if self.input.is_finished() {
             self.output.finish();
             return Ok(Event::Finished);
+        }
+
+        if self.input.has_data() {
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
         }
 
         self.input.set_need_data();
