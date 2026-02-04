@@ -1,0 +1,192 @@
+## Test DELETE with internal columns
+## This tests the fix for issue where DELETE with internal column filters
+## would cause panic: "index out of bounds"
+
+statement ok
+DROP DATABASE IF EXISTS test_internal_cols
+
+statement ok
+CREATE DATABASE test_internal_cols
+
+statement ok
+USE test_internal_cols
+
+statement ok
+CREATE TABLE t1 (id INT, name VARCHAR)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+INSERT INTO t1 VALUES (3, 'charlie'), (4, 'david')
+
+statement ok
+INSERT INTO t1 VALUES (5, 'eve'), (6, 'frank')
+
+query I
+SELECT COUNT(*) FROM t1
+----
+6
+
+# Delete rows using internal column _block_name with a function
+# This tests that internal columns can be read and used in filters
+statement ok
+DELETE FROM t1 WHERE LENGTH(_block_name) > 0
+
+# Verify that rows were deleted
+query I
+SELECT COUNT(*) FROM t1
+----
+0
+
+# Test with _segment_name
+statement ok
+TRUNCATE TABLE t1
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+INSERT INTO t1 VALUES (3, 'charlie'), (4, 'david')
+
+query I
+SELECT COUNT(*) FROM t1
+----
+4
+
+# Delete using _segment_name with a function
+statement ok
+DELETE FROM t1 WHERE LENGTH(_segment_name) > 0
+
+# Verify rows were deleted
+query I
+SELECT COUNT(*) FROM t1
+----
+0
+
+# Test DELETE with combination of internal column and regular column
+statement ok
+TRUNCATE TABLE t1
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+INSERT INTO t1 VALUES (3, 'charlie')
+
+query I
+SELECT COUNT(*) FROM t1
+----
+3
+
+# Delete using combination of internal column and regular column
+statement ok
+DELETE FROM t1 WHERE id > 1 AND LENGTH(_block_name) > 0
+
+# Should have deleted rows with id > 1
+query I
+SELECT COUNT(*) FROM t1 WHERE id <= 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM t1 WHERE id > 1
+----
+0
+
+# Test UPDATE with internal column filter
+statement ok
+TRUNCATE TABLE t1
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+INSERT INTO t1 VALUES (3, 'charlie')
+
+# Update using _block_name with a function
+statement ok
+UPDATE t1 SET name = 'updated' WHERE LENGTH(_block_name) > 0
+
+# Verify update worked
+query I
+SELECT COUNT(*) FROM t1 WHERE name = 'updated'
+----
+3
+
+# Clean up
+statement ok
+DROP TABLE t1
+
+# Test DELETE with subquery on internal column
+statement ok
+CREATE TABLE t1 (id INT, name VARCHAR)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+# All rows should be in the same block initially
+# Delete rows where _block_name matches the subquery result
+statement ok
+DELETE FROM t1 WHERE _block_name = (SELECT _block_name FROM t1 LIMIT 1)
+
+# Verify all rows were deleted (they all have the same _block_name)
+query I
+SELECT COUNT(*) FROM t1
+----
+0
+
+# Test UPDATE with subquery on internal column
+statement ok
+TRUNCATE TABLE t1
+
+statement ok
+INSERT INTO t1 VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+statement ok
+UPDATE t1 SET name = 'updated' WHERE _block_name = (SELECT _block_name FROM t1 LIMIT 1)
+
+# Verify all rows were updated
+query I
+SELECT COUNT(*) FROM t1 WHERE name = 'updated'
+----
+3
+
+statement ok
+DROP TABLE t1
+
+# Test with more complex table structure
+statement ok
+CREATE TABLE t2 (a INT, b INT, c VARCHAR, d DOUBLE)
+
+statement ok
+INSERT INTO t2 VALUES (1, 10, 'x', 1.5), (2, 20, 'y', 2.5), (3, 30, 'z', 3.5)
+
+statement ok
+INSERT INTO t2 VALUES (4, 40, 'w', 4.5), (5, 50, 'v', 5.5)
+
+query I
+SELECT COUNT(*) FROM t2
+----
+5
+
+# Delete with internal column and complex filter
+statement ok
+DELETE FROM t2 WHERE a > 2 AND LENGTH(_block_name) > 0
+
+# Verify the deletion
+query I
+SELECT COUNT(*) FROM t2 WHERE a > 2
+----
+0
+
+query I
+SELECT COUNT(*) FROM t2 WHERE a <= 2
+----
+2
+
+statement ok
+DROP TABLE t2
+
+statement ok
+DROP DATABASE test_internal_cols

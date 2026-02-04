@@ -735,23 +735,43 @@ impl DataBlock {
     /// Resort the columns according to the schema.
     #[inline]
     pub fn resort(self, src_schema: &DataSchema, dest_schema: &DataSchema) -> Result<Self> {
+        let num_rows = self.num_rows;
         let columns = dest_schema
             .fields()
             .iter()
             .map(|dest_field| {
-                let src_offset = src_schema.index_of(dest_field.name()).map_err(|_| {
-                    let valid_fields: Vec<String> = src_schema
-                        .fields()
-                        .iter()
-                        .map(|f| f.name().to_string())
-                        .collect();
-                    ErrorCode::BadArguments(format!(
-                        "Unable to get field named \"{}\". Valid fields: {:?}",
-                        dest_field.name(),
-                        valid_fields
-                    ))
-                })?;
-                Ok(self.get_by_offset(src_offset).clone())
+                match src_schema.index_of(dest_field.name()) {
+                    Ok(src_offset) => {
+                        // Column exists in source, use it
+                        Ok(self.get_by_offset(src_offset).clone())
+                    }
+                    Err(_) => {
+                        // Column not found in source
+                        // Check if it's an internal column (starts with '_')
+                        if dest_field.name().starts_with('_') {
+                            // Internal columns are materialized later by TransformAddInternalColumns
+                            // Create a placeholder entry with the correct type and null values
+                            let scalar = Scalar::default_value(dest_field.data_type());
+                            Ok(BlockEntry::new_const_column(
+                                dest_field.data_type().clone(),
+                                scalar,
+                                num_rows,
+                            ))
+                        } else {
+                            // Regular column missing - this is an error
+                            let valid_fields: Vec<String> = src_schema
+                                .fields()
+                                .iter()
+                                .map(|f| f.name().to_string())
+                                .collect();
+                            Err(ErrorCode::BadArguments(format!(
+                                "Unable to get field named \"{}\". Valid fields: {:?}",
+                                dest_field.name(),
+                                valid_fields
+                            )))
+                        }
+                    }
+                }
             })
             .collect::<Result<Vec<_>>>()?;
 

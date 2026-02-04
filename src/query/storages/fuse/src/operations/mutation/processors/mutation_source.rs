@@ -205,10 +205,10 @@ impl Processor for MutationSource {
                         .try_downcast::<BooleanType>()
                         .unwrap();
 
-                    if data_block.num_columns() != base_cols_len {
-                        let projections: std::collections::BTreeSet<usize> =
-                            (0..base_cols_len).collect();
-                        data_block = data_block.project(&projections);
+                    // Remove internal columns after filter evaluation
+                    if data_block.num_columns() > base_cols_len {
+                        let projection = (0..base_cols_len).collect();
+                        data_block = data_block.project(&projection);
                     }
 
                     let affect_rows = match &predicates {
@@ -439,9 +439,15 @@ impl MutationSource {
         part: &FuseBlockPartInfo,
     ) -> Result<DataBlock> {
         let Some(block_meta_index) = part.block_meta_index.as_ref() else {
-            return Err(ErrorCode::Internal(
-                "block_meta_index is missing for internal columns".to_string(),
-            ));
+            let column_names: Vec<_> = self
+                .internal_columns
+                .iter()
+                .map(|c| c.column_name())
+                .collect();
+            return Err(ErrorCode::Internal(format!(
+                "block_meta_index is missing but internal columns {:?} were requested",
+                column_names
+            )));
         };
 
         let num_rows = data_block.num_rows();

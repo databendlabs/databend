@@ -28,7 +28,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -279,26 +278,18 @@ async fn mutation_source_partitions(
         (None, vec![])
     };
 
-    let mut read_column_positions = Vec::new();
-    if !filter_used_columns.is_empty() {
+    let read_column_positions = if !filter_used_columns.is_empty() {
         let metadata = mutation.metadata.read();
         let table_schema = fuse_table.schema();
-
-        // For each column used in the filter, find its index in the table schema
-        for column_index in &filter_used_columns {
-            if let ColumnEntry::BaseTableColumn(base) = metadata.column(*column_index) {
-                // Find the column's index in the table schema
-                if let Ok(_field) = table_schema.field_with_name(&base.column_name) {
-                    // Get the index of this field in the schema
-                    let schema_index = table_schema.index_of(&base.column_name).unwrap();
-                    read_column_positions.push(schema_index);
-                }
-            }
-        }
-
-        read_column_positions.sort_unstable();
-        read_column_positions.dedup();
-    }
+        let (positions, _internal_columns) = crate::physical_plans::resolve_column_positions(
+            &metadata,
+            filter_used_columns.into_iter(),
+            &table_schema,
+        )?;
+        positions
+    } else {
+        Vec::new()
+    };
 
     let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
         let cluster = ctx.get_cluster();
