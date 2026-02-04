@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -236,12 +237,19 @@ impl SelectivityVisitor<'_> {
 
         let stat = stat.as_ref();
         Ok(try {
-            let (min, max) = stat.domain.to_minmax();
-            let min = min.to_datum()?;
-            let max = max.to_datum()?;
+            let (min, max) = match &stat.domain {
+                Domain::Nullable(domain) => {
+                    debug_assert_eq!(!domain.has_null, stat.null_count == 0);
+                    domain.value.as_ref()?.to_minmax()
+                }
+                domain => {
+                    debug_assert_eq!(stat.null_count, 0);
+                    domain.to_minmax()
+                }
+            };
             ColumnStat {
-                min,
-                max,
+                min: min.to_datum()?,
+                max: max.to_datum()?,
                 ndv: stat.ndv,
                 null_count: stat.null_count,
                 histogram: stat.histogram.cloned(),
