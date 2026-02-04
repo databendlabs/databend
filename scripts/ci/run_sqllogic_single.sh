@@ -82,3 +82,5 @@ for i in $(seq 1 "${RUNS}"); do
     --enable_sandbox \
     --parallel "${PARALLEL}"
 done
+
+echo "1"
