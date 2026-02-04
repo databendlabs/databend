@@ -179,7 +179,8 @@ impl PhysicalPlanBuilder {
                             // Special handling for internal columns: use metadata for type checking
                             scalar.type_check(&*metadata)?.project_column_ref(|index| {
                                 // First try: find by metadata index string
-                                if let Ok(schema_index) = input_schema.index_of(&index.to_string()) {
+                                if let Ok(schema_index) = input_schema.index_of(&index.to_string())
+                                {
                                     return Ok(schema_index);
                                 }
 
