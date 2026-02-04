@@ -72,6 +72,10 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let mut set_tags = BTreeMap::new();
         let mut unset_tags = Vec::new();
+        let mut set_options = BTreeMap::new();
+        let mut unset_options = Vec::new();
+        let mut suspend = false;
+        let mut resume = false;
         match &stmt.action {
             AlterWorkerAction::SetTag { tags } => {
                 for tag in tags {
@@ -81,12 +85,28 @@ impl Binder {
             AlterWorkerAction::UnsetTag { tags } => {
                 unset_tags.extend(tags.iter().map(|tag| tag.to_string()));
             }
+            AlterWorkerAction::SetOptions { options } => {
+                set_options.extend(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
+            }
+            AlterWorkerAction::UnsetOptions { options } => {
+                unset_options.extend(options.iter().map(|opt| opt.to_string()));
+            }
+            AlterWorkerAction::Suspend => {
+                suspend = true;
+            }
+            AlterWorkerAction::Resume => {
+                resume = true;
+            }
         }
         Ok(Plan::AlterWorker(Box::new(AlterWorkerPlan {
             tenant,
             name: stmt.name.to_string(),
             set_tags,
             unset_tags,
+            set_options,
+            unset_options,
+            suspend,
+            resume,
         })))
     }
 }

@@ -339,7 +339,10 @@ def worker_case(ctx: SandboxContext):
         "WITH size='small', auto_suspend='300', auto_resume='true', "
         "max_cluster_count='3', min_cluster_count='1'"
     )
+    ctx.execute_query("ALTER WORKER read_env SET size='medium', auto_suspend='600'")
     ctx.execute_query("ALTER WORKER read_env SET TAG purpose='sandbox'")
+    ctx.execute_query("ALTER WORKER read_env SUSPEND")
+    ctx.execute_query("ALTER WORKER read_env RESUME")
     response = ctx.execute_query("SHOW WORKERS")
     rows = ctx.collect_query_data(response)
     matched = False
@@ -351,7 +354,7 @@ def worker_case(ctx: SandboxContext):
             options_raw = row[2]
             tags = json.loads(tags_raw) if tags_raw else {}
             options = json.loads(options_raw) if options_raw else {}
-            if tags.get("purpose") == "sandbox" and options.get("size") == "small":
+            if tags.get("purpose") == "sandbox" and options.get("size") == "medium":
                 matched = True
                 break
     if not matched:

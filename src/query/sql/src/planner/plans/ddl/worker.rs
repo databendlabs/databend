@@ -53,6 +53,10 @@ pub struct AlterWorkerPlan {
     pub name: String,
     pub set_tags: BTreeMap<String, String>,
     pub unset_tags: Vec<String>,
+    pub set_options: BTreeMap<String, String>,
+    pub unset_options: Vec<String>,
+    pub suspend: bool,
+    pub resume: bool,
 }
 
 impl AlterWorkerPlan {

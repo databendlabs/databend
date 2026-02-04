@@ -855,6 +855,19 @@ class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
             for key in request.unset_tags:
                 tags.pop(key, None)
             worker["tags"] = tags
+        if request.set_options:
+            worker.setdefault("options", {}).update(dict(request.set_options))
+        if request.unset_options:
+            options = worker.get("options") or {}
+            for key in request.unset_options:
+                options.pop(key, None)
+            worker["options"] = options
+        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Suspend")
+        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Resume")
+        if request.state_action == suspend_action:
+            worker.setdefault("options", {})["suspended"] = "true"
+        elif request.state_action == resume_action:
+            worker.setdefault("options", {})["suspended"] = "false"
         worker["updated_at"] = _now_iso()
         return resource_pb2.AlterWorkerResponse(worker=_worker_to_pb(worker))
 

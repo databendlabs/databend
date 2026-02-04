@@ -3519,6 +3519,70 @@ CreateWorker(
 
 
 ---------- Input ----------
+ALTER WORKER read_env SET size='medium', auto_suspend='600'
+---------- Output ---------
+ALTER WORKER read_env SET auto_suspend = '600',size = 'medium'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetOptions {
+            options: {
+                "auto_suspend": "600",
+                "size": "medium",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- Output ---------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetOptions {
+            options: [
+                Identifier {
+                    span: Some(
+                        28..32,
+                    ),
+                    name: "size",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        34..46,
+                    ),
+                    name: "auto_suspend",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'
 ---------- Output ---------
 ALTER WORKER read_env SET TAG purpose = 'sandbox', owner = 'ci'
@@ -3609,6 +3673,46 @@ SHOW WORKERS
 ---------- AST ------------
 ShowWorkers(
     ShowWorkersStmt,
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SUSPEND
+---------- Output ---------
+ALTER WORKER read_env SUSPEND
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Suspend,
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env RESUME
+---------- Output ---------
+ALTER WORKER read_env RESUME
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Resume,
+    },
 )
 
 

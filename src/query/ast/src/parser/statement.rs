@@ -686,6 +686,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             UNSET ~ TAG ~ #tag_unset_items
         },
         |(_, _, tags)| AlterWorkerAction::UnsetTag { tags },
+    ))
+    .or(map(
+        rule! {
+            SET ~ #warehouse_cluster_option
+        },
+        |(_, options)| AlterWorkerAction::SetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            UNSET ~ #tag_unset_items
+        },
+        |(_, options)| AlterWorkerAction::UnsetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            SUSPEND
+        },
+        |_| AlterWorkerAction::Suspend,
+    ))
+    .or(map(
+        rule! {
+            RESUME
+        },
+        |_| AlterWorkerAction::Resume,
     ));
 
     let alter_worker = map(
@@ -2999,7 +3023,7 @@ AS
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
             | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
-            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
             | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
@@ -3021,10 +3045,8 @@ AS
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ).parse(i),
-        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
-            ).parse(i),
-        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
-            ).parse(i),
+        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`").parse(i),
+        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
     );

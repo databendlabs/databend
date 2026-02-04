@@ -28,10 +28,18 @@ message CreateWorkerResponse {
 }
 
 message AlterWorkerRequest {
+  enum WorkerStateAction {
+    Unspecified = 0;
+    Suspend = 1;
+    Resume = 2;
+  }
   string tenant_id = 1;
   string name = 2;
   map<string, string> set_tags = 3;
   repeated string unset_tags = 4;
+  map<string, string> set_options = 5;
+  repeated string unset_options = 6;
+  WorkerStateAction state_action = 7;
 }
 
 message AlterWorkerResponse {

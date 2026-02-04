@@ -81,6 +81,10 @@ impl Display for DropWorkerStmt {
 pub enum AlterWorkerAction {
     SetTag { tags: Vec<TagSetItem> },
     UnsetTag { tags: Vec<Identifier> },
+    SetOptions { options: BTreeMap<String, String> },
+    UnsetOptions { options: Vec<Identifier> },
+    Suspend,
+    Resume,
 }
 
 impl Display for AlterWorkerAction {
@@ -94,6 +98,22 @@ impl Display for AlterWorkerAction {
                 write!(f, "UNSET TAG ")?;
                 write_comma_separated_list(f, tags)
             }
+            AlterWorkerAction::SetOptions { options } => {
+                write!(f, "SET ")?;
+                for (idx, (key, value)) in options.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "{} = '{}'", key, value)?;
+                }
+                Ok(())
+            }
+            AlterWorkerAction::UnsetOptions { options } => {
+                write!(f, "UNSET ")?;
+                write_comma_separated_list(f, options)
+            }
+            AlterWorkerAction::Suspend => write!(f, "SUSPEND"),
+            AlterWorkerAction::Resume => write!(f, "RESUME"),
         }
     }
 }

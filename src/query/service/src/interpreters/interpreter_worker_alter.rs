@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::AlterWorkerRequest;
+use databend_common_cloud_control::pb::alter_worker_request::WorkerStateAction;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,11 +41,21 @@ impl AlterWorkerInterpreter {
 
     fn build_request(&self) -> AlterWorkerRequest {
         let plan = self.plan.clone();
+        let state_action = if plan.suspend {
+            WorkerStateAction::Suspend
+        } else if plan.resume {
+            WorkerStateAction::Resume
+        } else {
+            WorkerStateAction::Unspecified
+        };
         AlterWorkerRequest {
             tenant_id: plan.tenant.tenant_name().to_string(),
             name: plan.name,
             set_tags: plan.set_tags,
             unset_tags: plan.unset_tags,
+            set_options: plan.set_options,
+            unset_options: plan.unset_options,
+            state_action: state_action as i32,
         }
     }
 }
