@@ -143,9 +143,11 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
         println!("      Status: {}", single_or_join);
         println!();
         let grpc_listen = conf.service.grpc.api_address().unwrap_or_else(|| "-".to_string());
+        let max_message = r.raft_grpc_max_message_size();
         println!("HTTP API listen at: {}", conf.admin.api_address);
         println!("gRPC API listen at: {} advertise: {}", grpc_listen, grpc_advertise);
-        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
+        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise);
+        println!("Raft API max message: {}MB", max_message / (1024 * 1024));
         println!();
     }
 

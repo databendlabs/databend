@@ -22,6 +22,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_runtime_api::SpawnApi;
@@ -668,6 +669,7 @@ fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle<TokioRunt
         None,
         Some(Duration::from_secs(10)),
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     Ok(client)

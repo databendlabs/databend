@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf;
 use databend_meta_runtime::DatabendRuntime;
@@ -75,6 +76,7 @@ pub async fn keys_layout_from_grpc(
         None,
         None,
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     let mut grpc_client = client.make_established_client().await?;

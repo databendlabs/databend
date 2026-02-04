@@ -40,7 +40,6 @@ use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
-use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
@@ -205,9 +204,16 @@ impl<SP: SpawnApi> MetaNode<SP> {
         let mut running_rx = meta_node.running_rx.clone();
 
         let raft_service_impl = RaftServiceImpl::create(meta_node.clone());
+
+        let max_msg_size = meta_node.raft_store.config.raft_grpc_max_message_size();
+        info!(
+            "RaftService gRPC message size limit: {}MB",
+            max_msg_size / (1024 * 1024)
+        );
+
         let raft_server = RaftServiceServer::new(raft_service_impl)
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+            .max_decoding_message_size(max_msg_size)
+            .max_encoding_message_size(max_msg_size);
 
         let ipv4_addr = host.parse::<Ipv4Addr>();
         let ip_port = match ipv4_addr {

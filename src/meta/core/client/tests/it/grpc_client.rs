@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MGetKVReq;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
@@ -72,7 +73,8 @@ async fn test_grpc_client_handshake_timeout() {
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
+        let (mut client, _once) =
+            MetaChannelManager::<TokioRuntime>::new_real_client_for_testing(c);
 
         let res = handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
@@ -89,7 +91,8 @@ async fn test_grpc_client_handshake_timeout() {
             .await
             .unwrap();
 
-        let (mut client, _once) = MetaChannelManager::<TokioRuntime>::new_real_client(c);
+        let (mut client, _once) =
+            MetaChannelManager::<TokioRuntime>::new_real_client_for_testing(c);
 
         let res = handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
@@ -160,6 +163,7 @@ fn new_client(
         timeout,
         None,
         None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     Ok(client)
