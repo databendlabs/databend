@@ -161,58 +161,60 @@ impl PhysicalPlanBuilder {
             projections,
             input,
             predicates: {
-                // Use metadata for type checking instead of input_schema
-                // This allows expressions to reference columns from outer query context
-                // even when input comes from subqueries with different metadata indices
-                let metadata = self.metadata.read();
-
                 filter
                     .predicates
                     .iter()
                     .map(|scalar| {
-                        // Type check using metadata to resolve column types
-                        let expr = scalar.type_check(&*metadata)?.project_column_ref(|index| {
-                            // First try: find by metadata index string (most common case)
-                            // This works when the schema was built with metadata indices as field names
-                            if let Ok(schema_index) = input_schema.index_of(&index.to_string()) {
-                                return Ok(schema_index);
-                            }
+                        // Try the standard approach first: type check with input_schema
+                        let expr_result = scalar
+                            .type_check(input_schema.as_ref())
+                            .and_then(|expr| {
+                                expr.project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string())
+                                })
+                            });
 
-                            // Second try: find by column name
-                            // This works for regular table scans where schema uses actual column names
-                            let column_entry = metadata.column(*index);
-                            let column_name = column_entry.name();
+                        // If standard approach works, use it
+                        let expr = if let Ok(expr) = expr_result {
+                            expr
+                        } else {
+                            // Fallback for internal columns: use metadata for type checking
+                            // This handles cases where internal columns are used in filters
+                            let metadata = self.metadata.read();
+                            scalar.type_check(&*metadata)?.project_column_ref(|index| {
+                                // First try: find by metadata index string
+                                if let Ok(schema_index) = input_schema.index_of(&index.to_string()) {
+                                    return Ok(schema_index);
+                                }
 
-                            if let Ok(schema_index) = input_schema.index_of(&column_name) {
-                                return Ok(schema_index);
-                            }
+                                // Second try: find by column name
+                                let column_entry = metadata.column(*index);
+                                let column_name = column_entry.name();
+                                if let Ok(schema_index) = input_schema.index_of(&column_name) {
+                                    return Ok(schema_index);
+                                }
 
-                            // Third try: for internal columns from subqueries
-                            // When a subquery returns an internal column, it gets a different metadata index
-                            // in the JOIN output. We need to find it by matching the data type.
-                            // Internal columns have unique types (String for _block_name, etc.)
-                            if matches!(
-                                column_entry,
-                                databend_common_sql::ColumnEntry::InternalColumn(_)
-                            ) {
-                                let expected_data_type = column_entry.data_type();
-
-                                // Look through all fields for one with matching type
-                                // Internal columns are unique by type in most cases
-                                for (i, field) in input_schema.fields().iter().enumerate() {
-                                    let field_data_type = field.data_type().clone();
-                                    if field_data_type == expected_data_type {
-                                        return Ok(i);
+                                // Third try: for internal columns from subqueries
+                                // Match by data type (internal columns have unique types)
+                                if matches!(
+                                    column_entry,
+                                    databend_common_sql::ColumnEntry::InternalColumn(_)
+                                ) {
+                                    let expected_data_type = column_entry.data_type();
+                                    for (i, field) in input_schema.fields().iter().enumerate() {
+                                        if field.data_type().clone() == expected_data_type {
+                                            return Ok(i);
+                                        }
                                     }
                                 }
-                            }
 
-                            // If still not found, return error
-                            Err(databend_common_exception::ErrorCode::BadArguments(format!(
-                                "Unable to map column {} to input schema",
-                                column_name
-                            )))
-                        })?;
+                                Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                                    "Unable to map column {} to input schema",
+                                    column_name
+                                )))
+                            })?
+                        };
+
                         let expr = cast_expr_to_non_null_boolean(expr)?;
                         let (expr, _) =
                             ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
