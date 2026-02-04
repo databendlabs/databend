@@ -484,7 +484,7 @@ jobs:
         env:
           HANDLERS: "mysql,http"
           PARALLEL: "16"
-          RUNS: "100"
+          RUNS: "500"
         run: |
           bash scripts/ci/run_sqllogic_single.sh
       - name: Upload failure

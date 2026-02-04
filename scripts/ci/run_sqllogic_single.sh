@@ -9,7 +9,7 @@ TEST_FILE="r_cte_union_all.test"
 HANDLERS="${HANDLERS:-mysql,http}"
 PARALLEL="${PARALLEL:-16}"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
-RUNS="${RUNS:-100}"
+RUNS="${RUNS:-500}"
 
 cd "${ROOT_DIR}"
 
