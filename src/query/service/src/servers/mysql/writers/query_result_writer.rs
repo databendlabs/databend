@@ -220,7 +220,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 Column {
                     table: "".to_string(),
                     column: field.name().to_string(),
-                    collen: column_length(field),
                     coltype: column_type,
                     colflags,
                 }
