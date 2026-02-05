@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use crate::is_internal_column;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnSet;
@@ -33,6 +32,7 @@ use crate::Scalar;
 use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
+use crate::is_internal_column;
 use crate::schema::DataSchema;
 use crate::types::AccessType;
 use crate::types::AnyType;

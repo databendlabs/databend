@@ -195,7 +195,10 @@ impl PhysicalPlanBuilder {
                                 // When internal columns pass through EvalScalar or other transformations,
                                 // they may appear in the schema with their canonical names rather than
                                 // their metadata index. Match by the internal column's canonical name.
-                                if let databend_common_sql::ColumnEntry::InternalColumn(internal_col) = column_entry {
+                                if let databend_common_sql::ColumnEntry::InternalColumn(
+                                    internal_col,
+                                ) = column_entry
+                                {
                                     let canonical_name = internal_col.internal_column.column_name();
                                     for (i, field) in input_schema.fields().iter().enumerate() {
                                         if field.name() == canonical_name {
