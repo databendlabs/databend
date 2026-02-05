@@ -544,7 +544,7 @@ impl Default for TsvFileFormatParams {
             headers: 0,
             field_delimiter: "\t".to_string(),
             record_delimiter: "\n".to_string(),
-            nan_display: "nan".to_string(),
+            nan_display: "NaN".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
         }

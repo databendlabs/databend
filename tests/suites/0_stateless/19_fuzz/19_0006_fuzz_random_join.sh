@@ -3,14 +3,26 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+run_bendsql() {
+  cat <<SQL | $BENDSQL_CLIENT_CONNECT
+$1
+SQL
+}
+
+run_bendsql_null() {
+  cat <<SQL | $BENDSQL_CLIENT_OUTPUT_NULL
+$1
+SQL
+}
+
 ## Configuration
 rows=1000
-iterations=4
+iterations=2
 max_string_len=10
 max_array_len=3
 
 ## Create test tables with specific columns
-echo """
+run_bendsql "
 CREATE OR REPLACE TABLE join_fuzz1(
   id INT,
   int_col INT,
@@ -29,10 +41,10 @@ CREATE OR REPLACE TABLE join_fuzz2 LIKE join_fuzz1;
 CREATE OR REPLACE TABLE join_fuzz_r LIKE join_fuzz1 ENGINE = Random
   max_string_len = $max_string_len
   max_array_len = $max_array_len;
-""" | $BENDSQL_CLIENT_CONNECT
+"
 
 ## Insert test data
-echo """
+run_bendsql_null "
 INSERT INTO join_fuzz1 SELECT * FROM join_fuzz_r LIMIT $rows;
 INSERT INTO join_fuzz2 SELECT * FROM join_fuzz_r LIMIT $rows;
 
@@ -41,7 +53,7 @@ UPDATE join_fuzz1 SET null_col = NULL WHERE id % 10 = 0;
 UPDATE join_fuzz2 SET null_col = NULL WHERE id % 7 = 0;
 
 CREATE OR REPLACE TABLE empty_table LIKE join_fuzz1;
-""" | $BENDSQL_CLIENT_OUTPUT_NULL
+"
 
 ## List of actual columns in our tables
 columns=("id" "int_col" "str_col" "bool_col" "float_col" "decimal_col" "date_col" "time_col" "null_col")

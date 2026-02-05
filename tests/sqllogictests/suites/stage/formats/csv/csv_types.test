@@ -19,7 +19,7 @@ copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter =
 ----
 csv/invalid_variant.csv 1 1 Invalid value 'invalidvariant' for column 1 (b Variant): expected ident, pos 3 1
 
-query IT
+query I?
 select * from iv
 ----
 2 {"k":"v"}
@@ -32,7 +32,7 @@ copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter =
 ----
 csv/invalid_variant.csv 2 0 NULL NULL
 
-query IT
+query I?
 select * from iv
 ----
 1 null
@@ -44,12 +44,12 @@ DROP TABLE if exists books;
 statement ok
 CREATE TABLE books ( title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL );
 
-query ?????
+query TIITI
 copy into books from @data/csv/books.csv file_format = (type = 'csv' null_display= 'NULL')
 ----
 csv/books.csv 3 0 NULL NULL
 
-query ?????
+query IIIII
 select count(), count_if(title is null), count_if(author is null), count_if(date is null), count_if(publish_time is null) from books
 ----
 3 0 0 1 0
@@ -60,13 +60,13 @@ drop table if exists complex
 statement ok
 create table complex(a tuple(tuple(string, variant), map(int, variant), array(tuple(map(string, int), int))), b int);
 
-query ?????
+query TIITI
 copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'tsv' field_delimiter='|');
 ----
 tsv/complex_types.tsv 1 0 NULL NULL
 
 
-query ??
+query ?I
 select * from complex
 ----
 (("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)]) 1
@@ -81,10 +81,10 @@ statement ok
 copy into @csv_types from complex;
 
 
-query ?
+query T
 select $1 from @csv_types
 ----
-(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)])
+ [["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]
 
 statement ok
 drop file format if exists csv_raw
@@ -93,10 +93,10 @@ statement ok
 create file format csv_raw type = 'csv' field_delimiter='#' quote= '`'
 
 
-query ?
+query T
 select $1 from @csv_types (file_format => 'csv_raw');
 ----
-"((""c	d"",{""a"":1}),{1:[""a"",0]},[({""x"":2},3)])",1
+"[[""c\td"",{""a"":1}],{1:[""a"",0]},[[{""x"":2},3]]]",1
 
 statement ok
 remove @csv_types
@@ -111,21 +111,21 @@ statement ok
 copy into @csv_types from complex file_format = (format_name= 'csv_special');
 
 
-query ?
+query T
 select $1 from @csv_types(file_format => 'csv_special');
 ----
-(("c        d",{"a":1}),{1:["a",0]},[({"x":2},3)])
+[["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]
 
 
-query ?
+query T
 select $1 from @csv_types(file_format => 'csv_raw');
 ----
-'(("c	   d",{"a":1}),{1:["a",0]},[({"x":2},3)])'|1
+'[["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]'|1
 
 statement ok
 CREATE OR REPLACE TABLE cast_ts_csv (t timestamp, tt tuple(a timestamp))
 
-query ?????
+query TIITI
 copy into cast_ts_csv from @data/csv/ts.csv file_format = (type = CSV) ON_ERROR=continue
 ----
 csv/ts.csv 8 0 NULL NULL

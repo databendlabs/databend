@@ -463,7 +463,22 @@ impl FieldJsonAstDecoder {
                 }
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
+            Value::Array(values) => {
+                if fields.len() != values.len() {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Incorrect json value, expect {} values, but get {} values",
+                        fields.len(),
+                        values.len()
+                    )));
+                }
+                for (field, val) in fields.iter_mut().zip(values.iter()) {
+                    self.read_field(field, val)?;
+                }
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes(
+                "Incorrect json value for tuple, must be object or array",
+            )),
         }
     }
 
