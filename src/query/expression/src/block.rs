@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
+use crate::is_internal_column;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnSet;
@@ -747,8 +748,8 @@ impl DataBlock {
                     }
                     Err(_) => {
                         // Column not found in source
-                        // Check if it's an internal column (starts with '_')
-                        if dest_field.name().starts_with('_') {
+                        // Check if it's an internal column
+                        if is_internal_column(dest_field.name()) {
                             // Internal columns are materialized later by TransformAddInternalColumns
                             // Create a placeholder entry with the correct type and null values
                             let scalar = Scalar::default_value(dest_field.data_type());
