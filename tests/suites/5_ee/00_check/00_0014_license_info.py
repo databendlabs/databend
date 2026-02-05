@@ -3,7 +3,7 @@
 import os
 import mysql.connector
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
@@ -49,11 +49,7 @@ if __name__ == "__main__":
         issue_at = license[0][3]
         expire_at = license[0][4]
         features = license[0][6]
-        now = datetime.now(timezone.utc)
-        if issue_at.tzinfo is None:
-            issue_at = issue_at.replace(tzinfo=timezone.utc)
-        if expire_at.tzinfo is None:
-            expire_at = expire_at.replace(tzinfo=timezone.utc)
+        now = datetime.now()
 
         if now < issue_at or now > expire_at:
             print(
