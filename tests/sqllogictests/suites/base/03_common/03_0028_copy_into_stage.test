@@ -108,6 +108,11 @@ COPY INTO @hello_partition
     PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
     FILE_FORMAT = (type = PARQUET)
 
+query I
+select count() from @hello_partition;
+----
+4
+
 query TTTT
 SELECT
     count_if(name LIKE 'date=2020-01-28/hour=18/%'),
@@ -139,7 +144,7 @@ COPY INTO @hello_partition_sanitize
     PARTITION BY (part_key)
     FILE_FORMAT = (type = PARQUET)
 
-query TT
+query II
 SELECT
     count_if(name LIKE 'foo/%'),
     count_if(name NOT LIKE '%/%')
@@ -163,7 +168,7 @@ COPY INTO @hello_partition_sanitize
     PARTITION BY (part_key)
     FILE_FORMAT = (type = CSV)
 
-query TT
+query II
 SELECT
     count_if(name LIKE 'foo/%'),
     count_if(name NOT LIKE '%/%')
@@ -188,7 +193,13 @@ COPY INTO @hello_partition_sanitize
     PARTITION BY (part_key)
     FILE_FORMAT = (type = PARQUET)
 
-query TT
+
+query I
+select count() from @hello_partition_sanitize;
+----
+30000
+
+query II
 SELECT
     count_if(name LIKE '%_v1/%'),
     count_if(name LIKE '%_v2/%'),
