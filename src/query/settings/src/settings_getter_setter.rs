@@ -926,6 +926,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
     }
 
+    pub fn get_enable_sort_spill_prefetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_prefetch")? == 1)
+    }
+
     pub fn get_format_null_as_str(&self) -> Result<bool> {
         Ok(self.try_get_u64("format_null_as_str")? == 1)
     }

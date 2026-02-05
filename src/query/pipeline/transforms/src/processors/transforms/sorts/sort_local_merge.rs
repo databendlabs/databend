@@ -86,6 +86,7 @@ pub struct TransformSort<A: SortAlgorithm, C, S: DataBlockSpill> {
     aborting: AtomicBool,
 
     max_block_size: usize,
+    enable_restore_prefetch: bool,
     memory_settings: MemorySettings,
 }
 
@@ -95,6 +96,7 @@ where
     C: RowConverter<A::Rows>,
     S: DataBlockSpill,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -105,6 +107,7 @@ where
         spiller: S,
         output_order_col: bool,
         order_col_generated: bool,
+        enable_restore_prefetch: bool,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
         assert!(max_block_size > 0);
@@ -138,6 +141,7 @@ where
             inner,
             max_block_size,
             aborting: AtomicBool::new(false),
+            enable_restore_prefetch,
             memory_settings,
         })
     }
@@ -196,6 +200,7 @@ where
             rows,
             ByteSize(self.memory_settings.spill_unit_size as _),
             self.max_block_size,
+            self.enable_restore_prefetch,
         )
     }
 

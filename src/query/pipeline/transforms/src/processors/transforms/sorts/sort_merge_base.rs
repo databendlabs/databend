@@ -30,6 +30,8 @@ pub struct SortSpillParams {
     pub batch_rows: usize,
     /// The number of spilled blocks in each merge of the spill processor.
     pub num_merge: usize,
+
+    pub prefetch: bool,
 }
 
 impl SortSpillParams {
@@ -42,6 +44,7 @@ impl SortSpillParams {
         rows: usize,
         spill_unit_size: ByteSize,
         max_block_rows: usize,
+        prefetch: bool,
     ) -> Self {
         // We use the first memory calculation to estimate the batch size and the number of merge.
         let block = usize::max(
@@ -57,6 +60,7 @@ impl SortSpillParams {
         SortSpillParams {
             batch_rows,
             num_merge,
+            prefetch,
         }
     }
 }

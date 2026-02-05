@@ -79,6 +79,7 @@ pub struct TransformSortBuilder<S: DataBlockSpill> {
     enable_loser_tree: bool,
     limit: Option<usize>,
     enable_fixed_rows: bool,
+    enable_restore_prefetch: bool,
 }
 
 impl<S: DataBlockSpill> TransformSortBuilder<S> {
@@ -99,6 +100,7 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
             limit: None,
             memory_settings: MemorySettings::builder().build(),
             enable_fixed_rows,
+            enable_restore_prefetch: false,
         }
     }
 
@@ -120,6 +122,11 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
 
     pub fn with_memory_settings(mut self, memory_settings: MemorySettings) -> Self {
         self.memory_settings = memory_settings;
+        self
+    }
+
+    pub fn with_enable_restore_prefetch(mut self, enabled: bool) -> Self {
+        self.enable_restore_prefetch = enabled;
         self
     }
 
@@ -325,6 +332,7 @@ impl<S: DataBlockSpill> Build<'_, S> {
             self.params.spiller.clone().unwrap(),
             self.params.output_order_col,
             self.params.order_col_generated,
+            self.params.enable_restore_prefetch,
             self.params.memory_settings.clone(),
         )?))
     }
@@ -348,6 +356,7 @@ impl<S: DataBlockSpill> Build<'_, S> {
             default_num_merge,
             sort_limit,
             self.params.order_col_generated,
+            self.params.enable_restore_prefetch,
             self.params.memory_settings.clone(),
         )?))
     }
