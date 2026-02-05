@@ -83,7 +83,6 @@ pub(super) struct LimitFileSizeProcessor {
     threshold: usize,
 
     input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
 
     partitions: HashMap<Option<Arc<str>>, PartitionBuffer>,
     pending: VecDeque<DataBlock>,
@@ -100,7 +99,6 @@ impl LimitFileSizeProcessor {
             output,
             threshold: max_file_size,
             input_data: None,
-            output_data: None,
             partitions: HashMap::new(),
             pending: VecDeque::new(),
         };
@@ -144,14 +142,9 @@ impl Processor for LimitFileSizeProcessor {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data) = self.output_data.take() {
+        if let Some(data) = self.pending.pop_front() {
             self.output.push_data(Ok(data));
             return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data) = self.pending.pop_front() {
-            self.output_data = Some(data);
-            return Ok(Event::Sync);
         }
 
         if self.input_data.is_some() {
@@ -170,8 +163,8 @@ impl Processor for LimitFileSizeProcessor {
             }
             self.flush_all();
             if let Some(data) = self.pending.pop_front() {
-                self.output_data = Some(data);
-                return Ok(Event::Sync);
+                self.output.push_data(Ok(data));
+                return Ok(Event::NeedConsume);
             }
             self.output.finish();
             return Ok(Event::Finished);
