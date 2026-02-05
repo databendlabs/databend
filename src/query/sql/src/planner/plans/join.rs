@@ -43,7 +43,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
-const DEFAULT_NON_EQUI_SELECTIVITY: f64 = 1.0 / 5.0;
+const DEFAULT_ANTI_JOIN_SELECTIVITY: f64 = 0.3;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
@@ -479,12 +479,6 @@ impl Join {
             &mut left_statistics,
             &mut right_statistics,
         )?;
-        let non_equi_sel = if self.non_equi_conditions.is_empty() {
-            1.0
-        } else {
-            DEFAULT_NON_EQUI_SELECTIVITY
-        };
-        let anti_match = inner_join_cardinality * non_equi_sel;
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::InnerAny | JoinType::Asof | JoinType::Cross => {
                 inner_join_cardinality
@@ -502,8 +496,8 @@ impl Join {
             }
             JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
             JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftAnti => (left_cardinality - anti_match.min(left_cardinality)).max(0.0),
-            JoinType::RightAnti => (right_cardinality - anti_match.min(right_cardinality)).max(0.0),
+            JoinType::LeftAnti => left_cardinality * DEFAULT_ANTI_JOIN_SELECTIVITY,
+            JoinType::RightAnti => right_cardinality * DEFAULT_ANTI_JOIN_SELECTIVITY,
             JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
             JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
         };
