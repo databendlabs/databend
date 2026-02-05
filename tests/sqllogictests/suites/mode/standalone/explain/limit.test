@@ -95,7 +95,7 @@ Limit
             ├── rank limit: 3
             └── Filter
                 ├── output columns: [t.number (#0)]
-                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(true, TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0))]
+                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), scalar_subquery_4 (#4), 0))]
                 ├── estimated rows: 0.20
                 └── HashJoin
                     ├── output columns: [t.number (#0), COUNT(*) (#4)]
