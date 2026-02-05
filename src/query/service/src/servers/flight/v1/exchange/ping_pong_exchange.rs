@@ -28,6 +28,7 @@ use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
 use parking_lot::Mutex;
+use tokio::task::JoinHandle;
 use tonic::Status;
 use tonic::Streaming;
 
@@ -58,6 +59,7 @@ pub struct PingPongExchangeInner {
 /// until a response is received.
 pub struct PingPongExchange {
     inner: Arc<PingPongExchangeInner>,
+    response_stream: Mutex<Option<Streaming<FlightData>>>,
 }
 
 impl Drop for PingPongExchange {
@@ -110,11 +112,13 @@ impl PingPongExchangeInner {
 
 impl PingPongExchange {
     /// Create a new ping-pong exchange connection.
+    ///
+    /// The exchange is created but the receiver is not started yet.
+    /// Call `start` to begin receiving responses.
     pub async fn connect(
         client: &mut FlightClient,
         query_id: &str,
         channel_id: &str,
-        callback: Arc<dyn PingPongCallback>,
     ) -> Result<Self, Status> {
         let (send_tx, send_rx) = async_channel::bounded(1);
 
@@ -127,17 +131,25 @@ impl PingPongExchange {
             shutdown: WatchNotify::new(),
         });
 
-        Self::spawn_receiver(inner.clone(), callback, response_stream);
-
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            response_stream: Mutex::new(Some(response_stream)),
+        })
     }
 
-    fn spawn_receiver(
-        inner: Arc<PingPongExchangeInner>,
-        callback: Arc<dyn PingPongCallback>,
-        mut stream: Streaming<FlightData>,
-    ) {
-        GlobalIORuntime::instance().spawn(async move {
+    /// Start the receiver with the given callback.
+    ///
+    /// This should be called before sending data. The callback will be invoked
+    /// for each response received from the remote end.
+    ///
+    /// Returns an error if the receiver has already been started.
+    pub fn start(&self, callback: Arc<dyn PingPongCallback>) -> Result<JoinHandle<()>, Status> {
+        let Some(mut stream) = self.response_stream.lock().take() else {
+            return Err(Status::already_exists("Receiver already started"));
+        };
+
+        let inner = self.inner.clone();
+        Ok(GlobalIORuntime::instance().spawn(async move {
             let mut shutdown_fut = pin!(inner.shutdown.notified());
 
             loop {
@@ -187,6 +199,6 @@ impl PingPongExchange {
                     }
                 }
             }
-        });
+        }))
     }
 }
