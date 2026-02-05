@@ -31,7 +31,6 @@ use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
@@ -44,20 +43,15 @@ const NULL_PARTITION_DIR: &str = "_NULL_";
 #[derive(Debug)]
 pub struct CopyPartitionMeta {
     partition: Arc<str>,
-    inner: Option<Box<dyn BlockMetaInfo>>,
 }
 
 impl CopyPartitionMeta {
-    pub fn new(partition: Arc<str>, inner: Option<Box<dyn BlockMetaInfo>>) -> Self {
-        Self { partition, inner }
+    pub fn new(partition: Arc<str>) -> Self {
+        Self { partition }
     }
 
     pub fn partition_arc(&self) -> Arc<str> {
         self.partition.clone()
-    }
-
-    pub fn inner_meta(&self) -> Option<&Box<dyn BlockMetaInfo>> {
-        self.inner.as_ref()
     }
 }
 
@@ -67,23 +61,14 @@ local_block_meta_serde!(CopyPartitionMeta);
 impl BlockMetaInfo for CopyPartitionMeta {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         CopyPartitionMeta::downcast_ref_from(info).is_some_and(|other| {
-            let same_partition = Arc::ptr_eq(&self.partition, &other.partition)
-                || self.partition.as_ref() == other.partition.as_ref();
-            if !same_partition {
-                return false;
-            }
-            match (&self.inner, &other.inner) {
-                (Some(lhs), Some(rhs)) => lhs.equals(rhs),
-                (None, None) => true,
-                _ => false,
-            }
+            Arc::ptr_eq(&self.partition, &other.partition)
+                || self.partition.as_ref() == other.partition.as_ref()
         })
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(Self {
             partition: self.partition.clone(),
-            inner: self.inner.as_ref().map(|meta| meta.clone_self()),
         })
     }
 }
@@ -145,9 +130,11 @@ impl PartitionByRuntime {
                 let partition_arc = key.as_ref().map(|k| Arc::<str>::from(k.as_str()));
                 let mut taken = block.clone().take(indices.as_slice())?;
                 if let Some(partition) = partition_arc.clone() {
-                    let inner = taken.take_meta();
-                    let meta = CopyPartitionMeta::new(partition, inner);
+                    let meta = CopyPartitionMeta::new(partition);
                     taken = taken.add_meta(Some(Box::new(meta)))?;
+                } else {
+                    // ensure we don't leak previous meta from source block
+                    let _ = taken.take_meta();
                 }
                 result.push(taken);
             }
@@ -291,21 +278,7 @@ impl Processor for TransformPartitionBy {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::Column;
-
     use super::*;
-
-    #[derive(Debug)]
-    struct DummyMeta;
-
-    local_block_meta_serde!(DummyMeta);
-
-    #[typetag::serde(name = "dummy_meta")]
-    impl BlockMetaInfo for DummyMeta {
-        fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-            Box::new(DummyMeta)
-        }
-    }
 
     #[test]
     fn test_sanitize_partition_path() {
@@ -317,44 +290,5 @@ mod tests {
         assert!(sanitize_partition_path("..").is_err());
         assert!(sanitize_partition_path("./a/../b").is_err());
         assert!(sanitize_partition_path("../../evil").is_err());
-    }
-
-    #[test]
-    fn test_split_block_preserves_existing_meta() {
-        let mut builder = StringColumnBuilder::with_capacity(2);
-        builder.put_str("p0");
-        builder.commit_row();
-        builder.put_str("p1");
-        builder.commit_row();
-
-        let column = builder.build();
-        let block = DataBlock::new_from_columns(vec![Column::String(column)]);
-        let block = block
-            .add_meta(Some(Box::new(DummyMeta)))
-            .expect("attach meta");
-
-        let remote_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: 0,
-            data_type: DataType::String,
-            display_name: "col0".to_string(),
-        };
-        let runtime = PartitionByRuntime::try_create(remote_expr, FunctionContext::default())
-            .expect("runtime");
-        let parts = runtime.split_block(block).expect("split");
-        assert_eq!(parts.len(), 2);
-
-        let mut partitions = Vec::new();
-        for part in parts {
-            let meta = part.get_meta().expect("partition meta");
-            let copy_meta = CopyPartitionMeta::downcast_ref_from(meta).expect("copy meta");
-            partitions.push(copy_meta.partition_arc().to_string());
-            assert!(
-                copy_meta.inner_meta().is_some(),
-                "inner meta should be preserved"
-            );
-        }
-        partitions.sort();
-        assert_eq!(partitions, vec!["p0".to_string(), "p1".to_string()]);
     }
 }
