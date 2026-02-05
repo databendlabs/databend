@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -27,6 +28,7 @@ use databend_common_exception::Result;
 use fastrace::Span;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
+use futures::Stream;
 use futures::StreamExt;
 use futures_util::future::Either;
 use serde::Deserialize;
@@ -201,6 +203,29 @@ impl FlightClient {
         match self.inner.do_get(request).await {
             Ok(res) => Ok(res.into_inner()),
             Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_exchange(
+        &mut self,
+        query_id: &str,
+        channel_id: &str,
+        request_rx: Receiver<FlightData>,
+    ) -> std::result::Result<Streaming<FlightData>, Status> {
+        let mut request: Request<Pin<Box<dyn Stream<Item = FlightData> + Send>>> =
+            Request::new(Box::pin(request_rx));
+
+        if let Ok(value) = query_id.parse() {
+            request.metadata_mut().insert("x-query-id", value);
+        }
+        if let Ok(value) = channel_id.parse() {
+            request.metadata_mut().insert("x-channel-id", value);
+        }
+
+        match self.inner.do_exchange(request).await {
+            Ok(response) => Ok(response.into_inner()),
+            Err(status) => Err(status),
         }
     }
 }

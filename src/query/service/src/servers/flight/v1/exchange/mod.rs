@@ -24,6 +24,7 @@ mod exchange_source_reader;
 mod exchange_transform;
 mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
+mod ping_pong_exchange;
 mod statistics_receiver;
 mod statistics_sender;
 
@@ -42,3 +43,7 @@ pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;
+pub use ping_pong_exchange::PingPongCallback;
+pub use ping_pong_exchange::PingPongExchange;
+pub use ping_pong_exchange::PingPongExchangeInner;
+pub use ping_pong_exchange::PingPongResponse;
