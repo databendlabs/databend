@@ -44,10 +44,19 @@ runs:
       shell: bash
       run: cargo install cargo-audit --locked --force --version 0.21.2
 
+    - name: Prepare advisory-db snapshot (pin before CVSS 4.0)
+      shell: bash
+      run: |
+        set -euxo pipefail
+        rm -rf target/advisory-db
+        git clone --no-checkout https://github.com/RustSec/advisory-db.git target/advisory-db
+        git -C target/advisory-db checkout "$(git -C target/advisory-db rev-list -n 1 --before="2024-01-01" HEAD)"
+        rm -rf target/advisory-db/.git
+
     - name: Audit dependencies
       shell: bash
       if: "!contains(github.event.head_commit.message, 'skip audit')"
-      run: cargo audit --db ./target/advisory-db
+      run: cargo audit --db ./target/advisory-db --no-fetch
 
     - name: Clippy
       shell: bash
