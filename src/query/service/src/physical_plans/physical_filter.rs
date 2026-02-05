@@ -161,22 +161,26 @@ impl PhysicalPlanBuilder {
             projections,
             input,
             predicates: {
-                let metadata = self.metadata.read();
-
                 filter
                     .predicates
                     .iter()
                     .map(|scalar| {
-                        // Check if this scalar expression references any internal columns
-                        let has_internal_columns = scalar.used_columns().iter().any(|col_index| {
-                            matches!(
-                                metadata.column(*col_index),
-                                databend_common_sql::ColumnEntry::InternalColumn(_)
-                            )
-                        });
+                        // Try the standard approach first: type check with input_schema
+                        let expr_result = scalar
+                            .type_check(input_schema.as_ref())
+                            .and_then(|expr| {
+                                expr.project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string())
+                                })
+                            });
 
-                        let expr = if has_internal_columns {
-                            // Special handling for internal columns: use metadata for type checking
+                        // If standard approach works, use it
+                        let expr = if let Ok(expr) = expr_result {
+                            expr
+                        } else {
+                            // Fallback for internal columns: use metadata for type checking
+                            // This handles cases where internal columns are used in filters
+                            let metadata = self.metadata.read();
                             scalar.type_check(&*metadata)?.project_column_ref(|index| {
                                 // First try: find by metadata index string
                                 if let Ok(schema_index) = input_schema.index_of(&index.to_string())
@@ -191,18 +195,34 @@ impl PhysicalPlanBuilder {
                                     return Ok(schema_index);
                                 }
 
-                                // Third try: for internal columns from subqueries
-                                // When internal columns pass through EvalScalar or other transformations,
-                                // they may appear in the schema with their canonical names rather than
-                                // their metadata index. Match by the internal column's canonical name.
+                                // Third try: for internal columns from decorrelated subqueries
+                                // When a subquery with internal columns is decorrelated into a JOIN,
+                                // the internal column gets a NEW metadata index in the subquery context.
+                                // The schema uses the subquery's metadata index (e.g., "6"), not the
+                                // outer metadata index (e.g., "2"). We need to find which metadata index
+                                // in the schema refers to the same internal column by matching canonical names.
                                 if let databend_common_sql::ColumnEntry::InternalColumn(
                                     internal_col,
                                 ) = column_entry
                                 {
                                     let canonical_name = internal_col.internal_column.column_name();
+
+                                    // Search through all field names in the input schema.
+                                    // Field names in decorrelated subqueries are metadata indices as strings.
                                     for (i, field) in input_schema.fields().iter().enumerate() {
-                                        if field.name() == canonical_name {
-                                            return Ok(i);
+                                        let field_name = field.name();
+
+                                        // Try to parse the field name as a metadata index
+                                        if let Ok(field_metadata_idx) = field_name.parse::<usize>() {
+                                            // Get the column entry for this metadata index
+                                            if let databend_common_sql::ColumnEntry::InternalColumn(field_internal_col)
+                                                = metadata.column(field_metadata_idx)
+                                            {
+                                                // Check if this internal column has the same canonical name
+                                                if field_internal_col.internal_column.column_name() == canonical_name {
+                                                    return Ok(i);
+                                                }
+                                            }
                                         }
                                     }
 
@@ -218,13 +238,6 @@ impl PhysicalPlanBuilder {
                                     column_name
                                 )))
                             })?
-                        } else {
-                            // Standard approach for regular columns
-                            scalar
-                                .type_check(input_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    input_schema.index_of(&index.to_string())
-                                })?
                         };
 
                         let expr = cast_expr_to_non_null_boolean(expr)?;
