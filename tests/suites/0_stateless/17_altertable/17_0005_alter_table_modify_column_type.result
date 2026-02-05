@@ -10,10 +10,10 @@ Error: APIError: QueryFailed: [1006]fail to auto cast column a (String) to colum
 invalid float literal while evaluating function `to_float32('a')` in expr `to_float32(a)`
 Error: APIError: QueryFailed: [1058]Cannot find column b
 Error: APIError: QueryFailed: [1006]null value in column `a` of table `c` violates not-null constraint
-0.0	1
+0	1
 Error: APIError: QueryFailed: [1006]invalid float literal while evaluating function `to_float32('a')` in expr `to_float32('a')`
 0.0	1
-0	1
+0.0	1
 1.2	2
 1	10
 1	10
