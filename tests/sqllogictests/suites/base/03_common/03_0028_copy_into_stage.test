@@ -113,7 +113,7 @@ select count() from @hello_partition;
 ----
 4
 
-query TTTT
+query IIII
 SELECT
     count_if(name LIKE 'date=2020-01-28/hour=18/%'),
     count_if(name LIKE 'date=2020-01-28/hour=22/%'),
@@ -180,6 +180,47 @@ FROM list_stage(location=>'@hello_partition_sanitize')
 statement ok
 remove @hello_partition_sanitize
 
+
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = CSV)
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = JSON)
+
+query III
+SELECT
+    count_if(name LIKE '%_v1/%'),
+    count_if(name LIKE '%_v2/%'),
+    count_if(name LIKE '%NULL_/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+20 20 2
+
+
+statement ok
+remove @hello_partition_sanitize
+
 statement ok
 COPY INTO @hello_partition_sanitize
     FROM (
@@ -199,7 +240,7 @@ select count() from @hello_partition_sanitize;
 ----
 30000
 
-query II
+query III
 SELECT
     count_if(name LIKE '%_v1/%'),
     count_if(name LIKE '%_v2/%'),

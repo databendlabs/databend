@@ -278,6 +278,8 @@ impl Processor for ParquetFileWriter {
             if self.current_partition.as_ref() != Some(&partition) {
                 if self.row_counts > 0 {
                     self.flush_stream_writer()?;
+                    self.input_data.push_front(block);
+                    return Ok(());
                 }
                 self.current_partition = Some(partition.clone());
             }
@@ -301,6 +303,7 @@ impl Processor for ParquetFileWriter {
 
         if self.input.is_finished() && self.row_counts > 0 {
             self.flush_stream_writer()?;
+            return Ok(());
         }
         Ok(())
     }
