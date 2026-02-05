@@ -205,6 +205,12 @@ impl PhysicalPlanBuilder {
                                             return Ok(i);
                                         }
                                     }
+
+                                    // Internal column not found in input schema yet.
+                                    // This is expected when internal columns will be added later by
+                                    // TransformAddInternalColumns. Return the metadata index as-is.
+                                    // The index will be correct after internal columns are materialized.
+                                    return Ok(*index);
                                 }
 
                                 Err(databend_common_exception::ErrorCode::BadArguments(format!(
