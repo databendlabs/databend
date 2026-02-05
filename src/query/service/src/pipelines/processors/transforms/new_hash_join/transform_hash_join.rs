@@ -216,6 +216,8 @@ impl Processor for TransformHashJoin {
             Stage::Build(_) => {
                 if let Some(builder) = self.runtime_filter_builder.take() {
                     let spill_happened = self.join.is_spill_happened();
+                    // Disable runtime filters once spilling occurs to avoid partial-build filters
+                    // being globalized across the cluster, which can prune valid probe rows.
                     let packet = builder.finish(spill_happened)?;
                     self.join.add_runtime_filter_packet(packet);
                 }

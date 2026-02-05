@@ -226,7 +226,7 @@ impl Join for HybridHashJoin {
     }
 
     fn is_spill_happened(&self) -> bool {
-        self.state.check_spilled() || matches!(self.mode, HybridJoinMode::Grace(_))
+        self.state.has_spilled_once()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
