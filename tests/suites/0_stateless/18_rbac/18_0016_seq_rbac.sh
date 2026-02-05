@@ -14,34 +14,36 @@ done
 
 echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
-echo "set global enable_experimental_sequence_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT
-echo "drop sequence if exists seq1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop sequence if exists seq2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop sequence if exists seq3;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '123' with default_role='role_a';" | $BENDSQL_CLIENT_CONNECT
-echo "create user b identified by '123' with default_role='role_b';" | $BENDSQL_CLIENT_CONNECT
-echo "create user c identified by '123' with default_role='role_c';" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role_a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role_b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role_c;" | $BENDSQL_CLIENT_CONNECT
-echo "create role if not exists role_a;" | $BENDSQL_CLIENT_CONNECT
-echo "create role if not exists role_b;" | $BENDSQL_CLIENT_CONNECT
-echo "create role if not exists role_c;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role_a to a;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role_b to b;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role_c to c;" | $BENDSQL_CLIENT_CONNECT
-echo "grant super on *.* to role role_a;" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert, create on *.* to role role_b" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert, create on *.* to role role_c" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists tmp_b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists tmp_b1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists tmp_b2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists tmp_b3;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+set global enable_experimental_sequence_privilege_check=0;
+drop sequence if exists seq1;
+drop sequence if exists seq2;
+drop sequence if exists seq3;
+drop role if exists role1;
+drop role if exists role2;
+drop user if exists a;
+drop user if exists b;
+drop user if exists c;
+create user a identified by '123' with default_role='role_a';
+create user b identified by '123' with default_role='role_b';
+create user c identified by '123' with default_role='role_c';
+drop role if exists role_a;
+drop role if exists role_b;
+drop role if exists role_c;
+create role if not exists role_a;
+create role if not exists role_b;
+create role if not exists role_c;
+grant role role_a to a;
+grant role role_b to b;
+grant role role_c to c;
+grant super on *.* to role role_a;
+grant select, insert, create on *.* to role role_b;
+grant select, insert, create on *.* to role role_c;
+drop table if exists tmp_b;
+drop table if exists tmp_b1;
+drop table if exists tmp_b2;
+drop table if exists tmp_b3;
+"
 
 echo "CREATE sequence seq1" | $USER_A_CONNECT
 echo "create sequence seq2" | $USER_A_CONNECT
@@ -72,14 +74,16 @@ echo "drop sequence if exists seq3;" | $USER_A_CONNECT
 
 echo "=== TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS SEQUENCES PRIVILEGES ==="
 
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role2;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create sequence, create on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop role if exists role1;
+drop role if exists role2;
+drop role if exists role3;
+create role role1;
+create role role2;
+create role role3;
+grant create sequence, create on *.* to role role1;
+grant role role1 to b;
+"
 echo "--- USER b failed to create conn seq1 because current role is public, can not create ---"
 echo "alter user b with default_role='public';" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE sequence seq1" | $USER_B_CONNECT
@@ -172,18 +176,16 @@ echo "show grants on sequence seq2;" | $USER_C_CONNECT
 echo "drop sequence if exists seq2;" | $USER_C_CONNECT
 echo "show grants for role role2;" | $USER_C_CONNECT
 
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop sequence if exists seq1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop sequence if exists seq2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop sequence if exists seq3;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop table if exists tmp_b;" | $BENDSQL_CLIENT_CONNECT
-
-echo "unset global enable_experimental_sequence_privilege_check;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists a;
+drop user if exists b;
+drop user if exists c;
+drop sequence if exists seq1;
+drop sequence if exists seq2;
+drop sequence if exists seq3;
+drop role if exists role1;
+drop role if exists role2;
+drop role if exists role3;
+drop table if exists tmp_b;
+unset global enable_experimental_sequence_privilege_check;
+"
