@@ -67,6 +67,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, C, S: DataBlockSpill> {
 
     aborting: AtomicBool,
 
+    enable_restore_prefetch: bool,
     memory_settings: MemorySettings,
 }
 
@@ -85,6 +86,7 @@ where
         default_num_merge: usize,
         sort_limit: bool,
         order_col_generated: bool,
+        enable_restore_prefetch: bool,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
         let row_converter = C::create(&sort_desc, base.schema.clone())?;
@@ -109,6 +111,7 @@ where
             memory_settings,
             max_block_size,
             default_num_merge,
+            enable_restore_prefetch,
         })
     }
 
@@ -129,6 +132,7 @@ where
             SortSpillParams {
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
+                prefetch: false,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -154,6 +158,7 @@ where
             SortSpillParams {
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
+                prefetch: false,
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -181,6 +186,7 @@ where
             rows,
             ByteSize(self.memory_settings.spill_unit_size as _),
             self.max_block_size,
+            self.enable_restore_prefetch,
         )
     }
 

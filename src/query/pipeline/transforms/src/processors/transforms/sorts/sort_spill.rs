@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
@@ -22,6 +23,8 @@ use std::mem;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 
+use databend_common_base::runtime::JoinHandle;
+use databend_common_base::runtime::spawn;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +39,7 @@ use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
 use super::SortSpillParams;
+use super::core::AsyncSortedStream;
 use super::core::Bounds;
 use super::core::Merger;
 use super::core::Rows;
@@ -376,6 +380,9 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
                 debug_assert!(!self.current.is_empty());
                 if self.current.len() == 1 {
                     let mut s = self.current.pop().unwrap();
+                    if self.params.prefetch {
+                        s.prefetch = 1;
+                    }
                     s.restore_first().await?;
                     let block = Some(s.take_next_bounded_block());
                     assert!(self.bound_index >= 0);
@@ -403,7 +410,12 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
                 self.sort_spill(base, self.params.batch_rows, num_merge)
                     .await?;
 
-                let streams = mem::take(&mut self.current);
+                let mut streams = mem::take(&mut self.current);
+                if self.params.prefetch {
+                    for stream in streams.iter_mut() {
+                        stream.prefetch = 1;
+                    }
+                }
                 let merger = Merger::<A, _>::new(streams, self.params.batch_rows, None);
                 self.output_merger.insert(merger)
             }
@@ -566,6 +578,8 @@ impl<S: DataBlockSpill> Base<S> {
             bound,
             sort_row_offset: self.sort_row_offset,
             spiller: self.spiller.clone(),
+            prefetch: 0,
+            fetch: HashMap::new(),
             _r: Default::default(),
         }
     }
@@ -728,6 +742,8 @@ struct BoundBlockStream<R: Rows, S> {
     bound: Option<Scalar>,
     sort_row_offset: usize,
     spiller: S,
+    prefetch: usize,
+    fetch: HashMap<Location, JoinHandle<Result<DataBlock>>>,
     _r: PhantomData<R>,
 }
 
@@ -737,12 +753,13 @@ impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
             .field("blocks", &self.blocks)
             .field("bound", &self.bound)
             .field("sort_row_offset", &self.sort_row_offset)
+            .field("prefetch", &self.prefetch)
             .finish()
     }
 }
 
 #[async_trait::async_trait]
-impl<R: Rows, S: DataBlockSpill> SortedStream for BoundBlockStream<R, S> {
+impl<R: Rows, S: DataBlockSpill> AsyncSortedStream for BoundBlockStream<R, S> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
@@ -760,7 +777,10 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
         let Some(block) = self.blocks.front() else {
             return false;
         };
+        self.should_include(block)
+    }
 
+    fn should_include(&self, block: &SpillableBlock) -> bool {
         match &self.bound {
             None => true,
             Some(bound) => block.domain::<R>().first() <= R::scalar_as_item(bound),
@@ -809,13 +829,46 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
 
 impl<R: Rows, S: DataBlockSpill> BoundBlockStream<R, S> {
     async fn restore_first(&mut self) -> Result<()> {
-        let block = self.blocks.front_mut().unwrap();
+        self.fetch_spilled_blocks();
+        self.join_front_block().await?;
+        Ok(())
+    }
+
+    fn fetch_spilled_blocks(&mut self) {
+        for block in self.blocks.iter().take(self.prefetch + 1) {
+            if block.data.is_some() || !self.should_include(block) {
+                continue;
+            }
+            let location = block.location.as_ref().unwrap();
+            if self.fetch.contains_key(location) {
+                continue;
+            }
+
+            let spiller = self.spiller.clone();
+            let loc = location.clone();
+            let handle = spawn(async move { spiller.restore(&loc).await });
+            self.fetch.insert(location.clone(), handle);
+        }
+    }
+
+    async fn join_front_block(&mut self) -> Result<()> {
+        let Some(block) = self.blocks.front_mut() else {
+            return Ok(());
+        };
         if block.data.is_some() {
             return Ok(());
         }
 
-        let location = block.location.as_ref().unwrap();
-        let data = self.spiller.restore(location).await?;
+        let location = block
+            .location
+            .as_ref()
+            .expect("spilled block lost its location before restore");
+        let data = self
+            .fetch
+            .remove(location)
+            .expect("fetch state not found for spilled block location")
+            .await
+            .map_err(|err| ErrorCode::Internal(format!("fetch task failed: {err}")))??;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
@@ -1023,6 +1076,8 @@ mod tests {
             bound,
             sort_row_offset,
             spiller: spiller.clone(),
+            prefetch: 0,
+            fetch: HashMap::new(),
             _r: Default::default(),
         };
 
@@ -1212,6 +1267,8 @@ mod tests {
             bound,
             sort_row_offset,
             spiller: spiller.clone(),
+            prefetch: 0,
+            fetch: HashMap::new(),
             _r: Default::default(),
         };
 

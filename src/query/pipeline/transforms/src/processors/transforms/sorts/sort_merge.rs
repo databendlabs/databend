@@ -42,7 +42,6 @@ use super::utils::has_order_field;
 ///
 /// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct TransformSortMerge<R: Rows> {
-    _schema: DataSchemaRef,
     enable_loser_tree: bool,
     limit: Option<usize>,
     block_size: usize,
@@ -58,14 +57,8 @@ pub struct TransformSortMerge<R: Rows> {
 }
 
 impl<R: Rows> TransformSortMerge<R> {
-    pub fn create(
-        schema: DataSchemaRef,
-        block_size: usize,
-        enable_loser_tree: bool,
-        limit: Option<usize>,
-    ) -> Self {
+    pub fn create(block_size: usize, enable_loser_tree: bool, limit: Option<usize>) -> Self {
         TransformSortMerge {
-            _schema: schema,
             enable_loser_tree,
             limit,
             block_size,
@@ -214,7 +207,7 @@ pub fn sort_merge(
         sort_desc.into(),
         have_order_col,
         false,
-        MergeSortCommonImpl::create(schema, block_size, enable_loser_tree, None),
+        MergeSortCommonImpl::create(block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

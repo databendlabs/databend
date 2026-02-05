@@ -55,6 +55,7 @@ pub struct SortPipelineBuilder {
     enable_loser_tree: bool,
     broadcast_id: Option<u32>,
     enable_fixed_rows: bool,
+    enable_sort_spill_prefetch: bool,
 }
 
 impl SortPipelineBuilder {
@@ -68,6 +69,7 @@ impl SortPipelineBuilder {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+        let enable_sort_spill_prefetch = settings.get_enable_sort_spill_prefetch()?;
         Ok(Self {
             ctx,
             output_schema,
@@ -78,6 +80,7 @@ impl SortPipelineBuilder {
             enable_loser_tree,
             broadcast_id,
             enable_fixed_rows,
+            enable_sort_spill_prefetch,
         })
     }
 
@@ -162,6 +165,7 @@ impl SortPipelineBuilder {
             .with_limit(self.limit)
             .with_order_column(order_col_generated, output_order_col)
             .with_memory_settings(memory_settings.clone())
+            .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
             .with_enable_loser_tree(enable_loser_tree);
 
             Ok(ProcessorPtr::create(builder.build(input, output)?))
@@ -250,6 +254,7 @@ impl SortPipelineBuilder {
         .with_limit(self.limit)
         .with_order_column(false, true)
         .with_memory_settings(memory_settings)
+        .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
         .with_enable_loser_tree(enable_loser_tree);
 
         let default_num_merge = settings.get_max_threads()?.max(2);
@@ -290,6 +295,7 @@ impl SortPipelineBuilder {
         )
         .with_limit(self.limit)
         .with_order_column(true, !self.remove_order_col_at_last)
+        .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
         .with_enable_loser_tree(self.enable_loser_tree);
 
         let inputs_port: Vec<_> = (0..pipeline.output_len())
