@@ -3077,6 +3077,10 @@ pub struct MetaConfig {
         default_value = "localhost"
     )]
     pub rpc_tls_meta_service_domain_name: String,
+
+    /// Maximum message size for gRPC communication (in bytes).
+    #[clap(long = "meta-grpc-max-message-size", value_name = "VALUE")]
+    pub grpc_max_message_size: Option<usize>,
 }
 
 impl Default for MetaConfig {
@@ -3121,6 +3125,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             unhealth_endpoint_evict_time: self.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
+            grpc_max_message_size: self.grpc_max_message_size,
         })
     }
 }
@@ -3137,6 +3142,7 @@ impl From<InnerMetaConfig> for MetaConfig {
             unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
+            grpc_max_message_size: inner.grpc_max_message_size,
 
             // Deprecated fields
             meta_embedded_dir: None,

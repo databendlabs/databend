@@ -33,7 +33,6 @@ use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::network::v2::RaftNetworkV2;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf as pb;
@@ -181,7 +180,12 @@ impl<SP: SpawnApi> Network<SP> {
             ))
             .await?;
 
-        let client = RaftClientApi::new(self.target, self.endpoint.clone(), channel);
+        let client = RaftClientApi::new(
+            self.target,
+            self.endpoint.clone(),
+            channel,
+            &self.sto.config,
+        );
 
         info!(
             "Raft NetworkConnection connected to: target={}: {}",
@@ -749,7 +753,7 @@ impl<SP: SpawnApi> RaftNetworkV2<TypeConfig> for Network<SP> {
             let payload_size = raft_req.data.len();
 
             // Check size before sending
-            if payload_size > GrpcConfig::advisory_encoding_size() {
+            if payload_size > self.sto.config.raft_grpc_advisory_message_size() {
                 let reason = format!("payload too large: {} bytes", payload_size);
                 match self.try_reduce_entries(entries_to_send, &reason) {
                     Some(n) => {

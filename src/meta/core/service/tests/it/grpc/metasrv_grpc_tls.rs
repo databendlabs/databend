@@ -14,6 +14,7 @@
 
 use std::time::Duration;
 
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_meta_runtime_api::TokioRuntime;
@@ -57,6 +58,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
         None,
         Some(Duration::from_secs(10)),
         Some(tls_conf),
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     // Use get_cluster_status to verify TLS connection works (this connects to server)
@@ -95,6 +97,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         None,
         Some(Duration::from_secs(10)),
         Some(tls_conf),
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )
     .unwrap();
 

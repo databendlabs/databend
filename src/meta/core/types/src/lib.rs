@@ -22,7 +22,6 @@ mod applied_state;
 mod change;
 mod cluster;
 mod endpoint;
-mod grpc_config;
 mod grpc_helper;
 mod log_entry;
 mod message;
@@ -73,7 +72,6 @@ pub use errors::meta_network_errors::MetaNetworkError;
 pub use errors::meta_network_errors::MetaNetworkResult;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
-pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use map_api::Expirable;
 pub mod match_seq {

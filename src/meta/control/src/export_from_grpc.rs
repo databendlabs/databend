@@ -19,6 +19,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
+use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::required;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
@@ -82,6 +83,7 @@ pub async fn export_from_grpc(
         None,
         None,
         required::export(),
+        DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 
     let mut grpc_client = client.make_established_client().await?;

@@ -166,6 +166,10 @@ pub struct RaftConfig {
 
     /// Max timeout(in milli seconds) when waiting a cluster leader.
     pub wait_leader_timeout: u64,
+
+    /// Maximum message size for Raft gRPC communication (in bytes).
+    /// Applies to both sending and receiving. Default: 32MB when None.
+    pub raft_grpc_max_message_size: Option<usize>,
 }
 
 pub fn get_default_raft_advertise_host() -> String {
@@ -212,6 +216,7 @@ impl Default for RaftConfig {
             id: 0,
             cluster_name: "foo_cluster".to_string(),
             wait_leader_timeout: 70000,
+            raft_grpc_max_message_size: None,
         }
     }
 }
@@ -320,5 +325,19 @@ impl RaftConfig {
             )));
         }
         Ok(())
+    }
+
+    /// Default Raft gRPC message size limit: 32MB.
+    const DEFAULT_RAFT_GRPC_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+
+    /// Returns the maximum message size for Raft gRPC communication.
+    pub fn raft_grpc_max_message_size(&self) -> usize {
+        self.raft_grpc_max_message_size
+            .unwrap_or(Self::DEFAULT_RAFT_GRPC_MESSAGE_SIZE)
+    }
+
+    /// Advisory Raft message size (90% of max) for proactive payload checking.
+    pub fn raft_grpc_advisory_message_size(&self) -> usize {
+        self.raft_grpc_max_message_size() * 9 / 10
     }
 }

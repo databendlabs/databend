@@ -133,6 +133,11 @@ pub struct Config {
     #[clap(long, default_value = "")]
     pub grpc_tls_server_key: String,
 
+    /// Maximum message size for MetaService gRPC communication (in bytes).
+    /// Default: 32MB (33554432).
+    #[clap(long)]
+    pub grpc_api_max_message_size: Option<usize>,
+
     #[clap(flatten)]
     pub raft_config: RaftConfig,
 }
@@ -218,6 +223,7 @@ impl TryFrom<Config> for MetaConfig {
                         cert: outer.grpc_tls_server_cert,
                         key: outer.grpc_tls_server_key,
                     },
+                    max_message_size: outer.grpc_api_max_message_size,
                 },
                 raft_config: outer.raft_config.into(),
             },
@@ -246,6 +252,7 @@ impl From<MetaConfig> for Config {
             grpc_api_advertise_host: inner.service.grpc.advertise_host,
             grpc_tls_server_cert: inner.service.grpc.tls.cert,
             grpc_tls_server_key: inner.service.grpc.tls.key,
+            grpc_api_max_message_size: inner.service.grpc.max_message_size,
             raft_config: inner.service.raft_config.into(),
         }
     }
@@ -444,6 +451,11 @@ pub struct RaftConfig {
     /// Max timeout(in milliseconds) when waiting a cluster leader.
     #[clap(long, default_value = "180000")]
     pub wait_leader_timeout: u64,
+
+    /// Maximum message size for Raft gRPC communication (in bytes).
+    /// Default: 32MB (33554432).
+    #[clap(long)]
+    pub raft_grpc_max_message_size: Option<usize>,
 }
 
 // TODO(rotbl): should not be used.
@@ -487,6 +499,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             id: x.id,
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
+            raft_grpc_max_message_size: x.raft_grpc_max_message_size,
         }
     }
 }
@@ -524,6 +537,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             id: inner.id,
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
+            raft_grpc_max_message_size: inner.raft_grpc_max_message_size,
         }
     }
 }
