@@ -13,7 +13,6 @@ INSERT INTO t1 (id, v) VALUES(1, [1.0, 2.0, 3.0]);
 statement ok
 INSERT INTO t1 (id, v) VALUES(1, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),(2, [2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8]);
 
-onlyif mysql
 query IT
 select * from t1
 ----
