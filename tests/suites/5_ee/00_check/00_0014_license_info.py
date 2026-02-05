@@ -50,6 +50,10 @@ if __name__ == "__main__":
         expire_at = license[0][4]
         features = license[0][6]
         now = datetime.now(timezone.utc)
+        if issue_at.tzinfo is None:
+            issue_at = issue_at.replace(tzinfo=timezone.utc)
+        if expire_at.tzinfo is None:
+            expire_at = expire_at.replace(tzinfo=timezone.utc)
 
         if now < issue_at or now > expire_at:
             print(

@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::tokio::sync::mpsc;
+use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -181,6 +182,11 @@ impl LockManager {
                 key_end: None,
                 filter_type: FilterType::Delete.into(),
             };
+            if meta_api.is_local() {
+                // Embedded meta store does not support watch yet, fall back to polling.
+                sleep(Duration::from_millis(200)).await;
+                continue;
+            }
             let mut watch_stream = meta_api.watch(req).await?;
             // Add a timeout period for watch.
             match timeout(duration, async move {
