@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod data_exchange;
+mod exchange_channel;
 mod exchange_injector;
 mod exchange_manager;
 mod exchange_params;
@@ -23,6 +24,7 @@ mod exchange_sorting;
 mod exchange_source;
 mod exchange_source_reader;
 mod exchange_transform;
+mod exchange_transform_broadcast;
 mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
 mod ping_pong_exchange;
@@ -35,13 +37,20 @@ pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;
 pub use data_exchange::NodeToNodeExchange;
+pub use exchange_channel::BroadcastChannel;
+pub use exchange_channel::ExchangeChannel;
+pub use exchange_channel::RemoteChannel;
 pub use exchange_injector::DefaultExchangeInjector;
 pub use exchange_injector::ExchangeInjector;
 pub use exchange_manager::DataExchangeManager;
 pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
+pub use exchange_sink_buffer::ExchangeBufferConfig;
+pub use exchange_sink_buffer::ExchangeSinkBuffer;
+pub use exchange_sink_buffer::WakeTarget;
 pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_scatter::ScatterTransform;
+pub use exchange_transform_broadcast::BroadcastTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;
 pub use ping_pong_exchange::PingPongCallback;
