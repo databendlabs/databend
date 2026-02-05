@@ -1260,7 +1260,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_sort_spill_prefetch", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable asynchronous restore prefetch for spilled sort blocks",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
