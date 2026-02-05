@@ -76,8 +76,13 @@ impl FuseTable {
             false,
         )?;
 
-        let mut schema = block_reader.schema().as_ref().clone();
-        if query_internal_columns {
+        // Keep base schema for actual block data (without internal columns yet)
+        let base_schema = block_reader.schema().as_ref().clone();
+
+        // Create an extended schema for filter expression column resolution
+        // Internal columns will be added to blocks later, but we need their indices now
+        let filter_schema = if query_internal_columns {
+            let mut schema = base_schema.clone();
             for internal_column in &internal_columns {
                 schema.add_internal_field(
                     internal_column.column_name(),
@@ -85,10 +90,14 @@ impl FuseTable {
                     internal_column.column_id(),
                 );
             }
-        }
+            schema
+        } else {
+            base_schema.clone()
+        };
+
         let filter_expr = Arc::new(filter.map(|v| {
             v.as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name))
+                .project_column_ref(|name| filter_schema.index_of(name))
                 .unwrap()
         }));
 
