@@ -15,6 +15,7 @@
 pub mod cluster;
 pub mod config;
 pub mod instance_status;
+pub mod procedures;
 pub mod processes;
 pub mod query_dump;
 pub mod settings;
