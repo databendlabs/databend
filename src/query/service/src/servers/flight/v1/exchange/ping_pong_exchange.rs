@@ -42,7 +42,7 @@ pub struct PingPongResponse {
 
 /// Callback trait for handling ping-pong responses.
 pub trait PingPongCallback: Send + Sync + 'static {
-    fn on_response(&self, exchange: &PingPongExchangeInner, response: PingPongResponse);
+    fn on_response(&self, response: PingPongResponse);
 }
 
 pub struct PingPongExchangeInner {
@@ -88,6 +88,10 @@ impl PingPongExchangeInner {
             return Ok(Some(data));
         }
 
+        self.force_send(data)
+    }
+
+    pub(crate) fn force_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
         *self.send_time.lock() = Some(Instant::now());
         match self.send_tx.try_send(data) {
             Ok(_) => Ok(None),
@@ -104,9 +108,8 @@ impl PingPongExchangeInner {
         }
     }
 
-    /// Check if the exchange is ready to send.
-    pub fn can_send(&self) -> bool {
-        !self.in_flight.load(Ordering::SeqCst)
+    pub fn ready_send(&self) {
+        self.in_flight.store(false, Ordering::SeqCst);
     }
 }
 
@@ -164,7 +167,7 @@ impl PingPongExchange {
                             .take()
                             .map(|t| t.elapsed())
                             .unwrap_or_default();
-                        callback.on_response(&inner, PingPongResponse {
+                        callback.on_response(PingPongResponse {
                             data: Err(Status::ok("Stream ended")),
                             rtt,
                         });
@@ -179,7 +182,7 @@ impl PingPongExchange {
                             .map(|t| t.elapsed())
                             .unwrap_or_default();
                         inner.in_flight.store(false, Ordering::SeqCst);
-                        callback.on_response(&inner, PingPongResponse {
+                        callback.on_response(PingPongResponse {
                             data: Ok(data),
                             rtt,
                         });
@@ -191,7 +194,7 @@ impl PingPongExchange {
                             .take()
                             .map(|t| t.elapsed())
                             .unwrap_or_default();
-                        callback.on_response(&inner, PingPongResponse {
+                        callback.on_response(PingPongResponse {
                             data: Err(status),
                             rtt,
                         });

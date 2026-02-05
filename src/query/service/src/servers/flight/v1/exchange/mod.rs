@@ -17,6 +17,7 @@ mod exchange_injector;
 mod exchange_manager;
 mod exchange_params;
 mod exchange_sink;
+mod exchange_sink_buffer;
 mod exchange_sink_writer;
 mod exchange_sorting;
 mod exchange_source;
