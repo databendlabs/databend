@@ -39,11 +39,7 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
-use databend_common_io::constants::TRUE_BYTES_LOWER;
-use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
@@ -82,8 +78,6 @@ impl SeparatedTextDecoder {
     pub fn create_csv(params: &CsvFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
                 settings: settings.clone(),
                 binary_format: params.binary_format,
@@ -96,8 +90,6 @@ impl SeparatedTextDecoder {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 settings: settings.clone(),
                 binary_format: Default::default(),
             },
@@ -165,15 +157,14 @@ impl SeparatedTextDecoder {
     }
 
     fn read_bool(&self, column: &mut MutableBitmap, data: &[u8]) -> Result<()> {
-        if data == self.common_settings.false_bytes {
+        if data == b"0" || data == b"false" {
             column.push(false);
-        } else if data == self.common_settings.true_bytes {
+        } else if data == b"1" || data == b"true" {
             column.push(true);
         } else {
             let err_msg = format!(
-                "Incorrect boolean value, expect {} or {}",
-                self.common_settings.true_bytes.to_str().unwrap(),
-                self.common_settings.false_bytes.to_str().unwrap()
+                "Incorrect boolean value({}), expect one of 0/1/true/false",
+                String::from_utf8_lossy(data)
             );
             return Err(ErrorCode::BadBytes(err_msg));
         }
