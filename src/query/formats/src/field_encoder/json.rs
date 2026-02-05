@@ -200,7 +200,7 @@ impl FieldEncoderJSON {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
-        // write tuple as JSON Object
+        // write tuple as JSON Array
         out_buf.push(b'[');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
