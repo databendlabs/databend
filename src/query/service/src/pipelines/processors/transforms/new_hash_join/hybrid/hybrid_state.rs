@@ -68,7 +68,7 @@ impl HybridHashJoinState {
     }
 
     pub fn check_spilled(&self) -> bool {
-        self.spilled.load(Ordering::Relaxed)
+        self.spilled.load(Ordering::Acquire)
     }
 
     pub fn set_spilled(&self) -> bool {
