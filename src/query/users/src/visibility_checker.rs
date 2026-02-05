@@ -38,6 +38,7 @@ pub enum Object {
     Warehouse,
     Connection,
     Sequence,
+    Procedure,
     All,
 }
 

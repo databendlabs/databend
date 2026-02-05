@@ -430,6 +430,12 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                             .list_warehouse_ownerships()
                             .await?
                     }
+                    Object::Procedure => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_procedure_ownerships()
+                            .await?
+                    }
                 };
                 let mut ownership_infos = vec![];
                 for ownership in ownerships {
