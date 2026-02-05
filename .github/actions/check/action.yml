@@ -42,7 +42,7 @@ runs:
 
     - name: Install newer cargo-audit
       shell: bash
-      run: cargo install cargo-audit --locked --force
+      run: cargo install cargo-audit --locked --force --version 0.21.2
 
     - name: Audit dependencies
       shell: bash
