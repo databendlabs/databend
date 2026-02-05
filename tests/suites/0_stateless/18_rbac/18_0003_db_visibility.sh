@@ -8,25 +8,27 @@ export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql -A --user=owner --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 
-echo "drop role if exists role1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists u2" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists u3" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists db1" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists db2" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists db_u3" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists db_root" | $BENDSQL_CLIENT_CONNECT
-echo "create database db_root" | $BENDSQL_CLIENT_CONNECT
-echo "create table db_root.t1(id int)" | $BENDSQL_CLIENT_CONNECT
-echo "insert into db_root.t1 values(4)" | $BENDSQL_CLIENT_CONNECT
-echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role2;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create database on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create database on *.* to role role2;" | $BENDSQL_CLIENT_CONNECT
-echo "create user u1 identified by '123' with DEFAULT_ROLE='role1';" | $BENDSQL_CLIENT_CONNECT
-echo "create user u2 identified by '123' with DEFAULT_ROLE='role1';" | $BENDSQL_CLIENT_CONNECT
-echo "create user u3 identified by '123' with DEFAULT_ROLE='role2';" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop role if exists role1;
+drop role if exists role2;
+drop user if exists u1;
+drop user if exists u2;
+drop user if exists u3;
+drop database if exists db1;
+drop database if exists db2;
+drop database if exists db_u3;
+drop database if exists db_root;
+create database db_root;
+create table db_root.t1(id int);
+insert into db_root.t1 values(4);
+create role role1;
+create role role2;
+grant create database on *.* to role role1;
+grant create database on *.* to role role2;
+create user u1 identified by '123' with DEFAULT_ROLE='role1';
+create user u2 identified by '123' with DEFAULT_ROLE='role1';
+create user u3 identified by '123' with DEFAULT_ROLE='role2';
+"
 
 echo "=== test u1 with role1 ==="
 echo "grant role role1 to u1;" | $BENDSQL_CLIENT_CONNECT
@@ -94,23 +96,27 @@ echo "select * from db_u3.t3" | $BENDSQL_CLIENT_CONNECT
 echo "select * from db_root.t1" | $BENDSQL_CLIENT_CONNECT
 
 echo "=== test system.tables ==="
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '123' with default_role='a'" | $BENDSQL_CLIENT_CONNECT
-echo "create role a" | $BENDSQL_CLIENT_CONNECT
-echo "create database a" | $BENDSQL_CLIENT_CONNECT
-echo "grant ownership on a.* to role a" | $BENDSQL_CLIENT_CONNECT
-echo "grant role a to a" | $BENDSQL_CLIENT_CONNECT
-echo "create table a.b(id int)" | $BENDSQL_CLIENT_CONNECT
-echo "create role b" | $BENDSQL_CLIENT_CONNECT
-echo "grant ownership on a.b to role b" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists a;
+drop user if exists b;
+drop role if exists b;
+drop role if exists a;
+drop database if exists a;
+create user a identified by '123' with default_role='a';
+create role a;
+create database a;
+grant ownership on a.* to role a;
+grant role a to a;
+create table a.b(id int);
+create role b;
+grant ownership on a.b to role b;
+"
 export TEST_A_CONNECT="bendsql -A --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 echo "select name, owner from system.tables where database = 'a'and name = 'b'" | $TEST_A_CONNECT
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists a;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists a;
+drop user if exists b;
+drop role if exists b;
+drop role if exists a;
+drop database if exists a;
+"

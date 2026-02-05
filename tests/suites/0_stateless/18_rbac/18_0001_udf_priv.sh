@@ -7,23 +7,22 @@ echo "=== test UDF priv"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql -A --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
-echo "DROP FUNCTION IF EXISTS f2;" |  $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.t;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.t2;" | $BENDSQL_CLIENT_CONNECT
-
-echo "CREATE FUNCTION f1 AS (p) -> (p)" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE FUNCTION f2 AS (p) -> (p)" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table default.t(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table default.t2(i UInt8 not null);" | $BENDSQL_CLIENT_CONNECT
-
-## create user
-echo "create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-echo "grant insert, delete, update, select on default.t to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "grant select on default.t to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "grant super on *.* to 'test-user';" |  $BENDSQL_CLIENT_CONNECT
-echo "SYSTEM FLUSH PRIVILEGES" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists 'test-user';
+DROP FUNCTION IF EXISTS f1;
+DROP FUNCTION IF EXISTS f2;
+drop table if exists default.t;
+drop table if exists default.t2;
+CREATE FUNCTION f1 AS (p) -> (p);
+CREATE FUNCTION f2 AS (p) -> (p);
+create or replace table default.t(i UInt8 not null);
+create or replace table default.t2(i UInt8 not null);
+create user 'test-user' IDENTIFIED BY '$TEST_USER_PASSWORD';
+grant insert, delete, update, select on default.t to 'test-user';
+grant select on default.t to 'test-user';
+grant super on *.* to 'test-user';
+SYSTEM FLUSH PRIVILEGES;
+"
 
 # error test need privielge f1
 echo "=== Only Has Privilege on f2 ==="
@@ -121,21 +120,23 @@ echo "select case when i > 100 then 200 else f2(f1(100)) end as c1 from t;" | $T
 echo "select case when i > 100 then f2(f1(200)) else 100 end as c1 from t;" | $TEST_USER_CONNECT
 echo "delete from t;" | $TEST_USER_CONNECT
 
-#udf server test
-echo "drop function if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop function if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE FUNCTION a (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE FUNCTION b (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';" | $BENDSQL_CLIENT_CONNECT
-
-echo "grant usage on udf a to 'test-user'" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop function if exists a;
+drop function if exists b;
+CREATE FUNCTION a (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';
+CREATE FUNCTION b (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815';
+grant usage on udf a to 'test-user';
+"
 echo "select a(1,1,1,1)" | $TEST_USER_CONNECT
 echo "select b(1,1,1,1)" | $TEST_USER_CONNECT
 
 
-echo "drop user if exists 'test-user'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP FUNCTION IF EXISTS f1;" |  $BENDSQL_CLIENT_CONNECT
-echo "DROP FUNCTION IF EXISTS f2;" |  $BENDSQL_CLIENT_CONNECT
-echo "drop function if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop function if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.t;" | $BENDSQL_CLIENT_CONNECT
-echo "drop table if exists default.t2;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists 'test-user';
+DROP FUNCTION IF EXISTS f1;
+DROP FUNCTION IF EXISTS f2;
+drop function if exists a;
+drop function if exists b;
+drop table if exists default.t;
+drop table if exists default.t2;
+"

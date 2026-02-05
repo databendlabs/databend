@@ -93,11 +93,17 @@ impl AsyncSystemTable for ProceduresTable {
             .await
             .map_err(meta_service_error)?;
 
-        let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
-        let procedures = all_procedures
-            .into_iter()
-            .filter(|p| visibility_checker.check_procedure_visibility(&*p.ident.procedure_id()))
-            .collect::<Vec<_>>();
+        let enable_experimental_rbac_check =
+            ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let procedures = if enable_experimental_rbac_check {
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
+            all_procedures
+                .into_iter()
+                .filter(|p| visibility_checker.check_procedure_visibility(&p.ident.procedure_id()))
+                .collect::<Vec<_>>()
+        } else {
+            all_procedures
+        };
 
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());
