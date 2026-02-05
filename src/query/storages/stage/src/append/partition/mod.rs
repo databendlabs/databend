@@ -59,7 +59,6 @@ impl CopyPartitionMeta {
     pub fn inner_meta(&self) -> Option<&Box<dyn BlockMetaInfo>> {
         self.inner.as_ref()
     }
-
 }
 
 local_block_meta_serde!(CopyPartitionMeta);
@@ -68,9 +67,8 @@ local_block_meta_serde!(CopyPartitionMeta);
 impl BlockMetaInfo for CopyPartitionMeta {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         CopyPartitionMeta::downcast_ref_from(info).is_some_and(|other| {
-            let same_partition =
-                Arc::ptr_eq(&self.partition, &other.partition)
-                    || self.partition.as_ref() == other.partition.as_ref();
+            let same_partition = Arc::ptr_eq(&self.partition, &other.partition)
+                || self.partition.as_ref() == other.partition.as_ref();
             if !same_partition {
                 return false;
             }
