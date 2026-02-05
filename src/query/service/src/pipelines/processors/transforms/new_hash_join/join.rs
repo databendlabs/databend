@@ -37,6 +37,11 @@ pub trait Join: Send + Sync + 'static {
         Ok(JoinRuntimeFilterPacket::default())
     }
 
+    /// Whether spill has happened for this join.
+    fn is_spill_happened(&self) -> bool {
+        false
+    }
+
     /// Probe with a single block and return a streaming iterator over results.
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>>;
 
