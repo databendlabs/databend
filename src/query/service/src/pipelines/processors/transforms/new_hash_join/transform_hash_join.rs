@@ -215,7 +215,8 @@ impl Processor for TransformHashJoin {
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
                 if let Some(builder) = self.runtime_filter_builder.take() {
-                    let packet = builder.finish(false)?;
+                    let spill_happened = self.join.is_spill_happened();
+                    let packet = builder.finish(spill_happened)?;
                     self.join.add_runtime_filter_packet(packet);
                 }
 
