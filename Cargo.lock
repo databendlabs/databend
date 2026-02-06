@@ -4747,6 +4747,7 @@ dependencies = [
  "backoff",
  "bytes",
  "chrono",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-column",

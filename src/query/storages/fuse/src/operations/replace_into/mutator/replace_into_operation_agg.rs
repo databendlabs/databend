@@ -658,6 +658,7 @@ impl AggregationContext {
                     block_meta_ptr.row_count as usize,
                     &block_meta_ptr.compression,
                     &block_meta_ptr.col_metas,
+                    Some(&block_meta_ptr.col_stats),
                     column_chunks,
                     &storage_format,
                 )

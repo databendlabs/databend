@@ -38,6 +38,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::future;
@@ -62,6 +63,7 @@ pub struct RowsFetchMetadataImpl {
     pub nums_rows: usize,
     pub compression: Compression,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
 }
 
 impl RowsFetchMetadata for RowsFetchMetadataImpl {
@@ -309,6 +311,7 @@ impl ParquetRowsFetcher {
                 compression: fuse_part.compression,
                 location: fuse_part.location.clone(),
                 columns_meta: fuse_part.columns_meta.clone(),
+                columns_stat: fuse_part.columns_stat.clone(),
             });
         }
 
@@ -328,6 +331,7 @@ impl ParquetRowsFetcher {
             &metadata.compression,
             &metadata.location,
             None,
+            metadata.columns_stat.as_ref(),
         )
     }
 }
