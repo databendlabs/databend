@@ -18,8 +18,6 @@ use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
-use arrow_schema::Schema as ArrowSchema;
-use databend_common_base::runtime::block_on;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
@@ -40,10 +38,12 @@ use databend_common_expression::Value;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::number::NumberDataType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::parquet::infer_schema_with_extension;
-use databend_common_storage::read_metadata_async;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
@@ -57,7 +57,6 @@ mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
-pub use deserialize::column_chunks_to_record_batch_with_schema;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
@@ -135,21 +134,45 @@ impl BlockReader {
         ) {
             Ok(record_batch) => record_batch,
             Err(err) => {
-                if let Some((fallback_schema, fallback_projected_schema, record_batch)) =
-                    try_read_record_batch_with_file_schema(
-                        self,
+                let mut last_err = err;
+                let mut record_batch = None;
+                if let Some(fallback_schema) =
+                    build_compatible_read_schema(read_original_schema.as_ref())
+                {
+                    let fallback_projected_schema = if fallback_schema.as_ref()
+                        == self.original_schema.as_ref()
+                    {
+                        self.projected_schema.clone()
+                    } else {
+                        match &self.projection {
+                            Projection::Columns(indices) => {
+                                TableSchemaRef::new(fallback_schema.project(indices))
+                            }
+                            Projection::InnerColumns(path_indices) => {
+                                TableSchemaRef::new(fallback_schema.inner_project(path_indices))
+                            }
+                        }
+                    };
+                    match column_chunks_to_record_batch(
+                        &fallback_schema,
                         num_rows,
                         &column_chunks,
                         compression,
-                        block_path,
                         parquet_selection,
-                    )?
-                {
-                    read_original_schema = fallback_schema;
-                    read_projected_schema = fallback_projected_schema;
-                    record_batch
-                } else {
-                    return Err(err);
+                    ) {
+                        Ok(batch) => {
+                            read_original_schema = fallback_schema;
+                            read_projected_schema = fallback_projected_schema;
+                            record_batch = Some(batch);
+                        }
+                        Err(err) => {
+                            last_err = err;
+                        }
+                    }
+                }
+                match record_batch {
+                    Some(batch) => batch,
+                    None => return Err(last_err),
                 }
             }
         };
@@ -307,25 +330,6 @@ fn build_read_schema(
     ))
 }
 
-fn build_read_schema_from_file_schema(
-    schema: &TableSchema,
-    file_schema: &TableSchema,
-) -> TableSchemaRef {
-    let mut fields = Vec::with_capacity(schema.fields.len());
-    for (index, field) in schema.fields.iter().enumerate() {
-        let mut new_field = field.clone();
-        if let Some(file_field) = file_schema.fields.get(index) {
-            new_field.data_type = file_field.data_type.clone();
-        }
-        fields.push(new_field);
-    }
-    TableSchemaRef::new(TableSchema::new_from_column_ids(
-        fields,
-        schema.metadata.clone(),
-        schema.next_column_id,
-    ))
-}
-
 fn adjust_type_by_stats(
     data_type: &TableDataType,
     leaf_ids: &[ColumnId],
@@ -395,47 +399,103 @@ fn adjust_type_by_stats(
     }
 }
 
-fn try_read_record_batch_with_file_schema(
-    reader: &BlockReader,
-    num_rows: usize,
-    column_chunks: &HashMap<ColumnId, DataItem>,
-    compression: &Compression,
-    block_path: &str,
-    selection: Option<parquet::arrow::arrow_reader::RowSelection>,
-) -> databend_common_exception::Result<Option<(TableSchemaRef, TableSchemaRef, RecordBatch)>> {
-    let metadata = match block_on(read_metadata_async(block_path, &reader.operator, None)) {
-        Ok(metadata) => metadata,
-        Err(_) => return Ok(None),
-    };
-    let arrow_schema: ArrowSchema = infer_schema_with_extension(metadata.file_metadata())?;
-    let file_schema = TableSchema::try_from(&arrow_schema)?;
-    let read_original_schema =
-        build_read_schema_from_file_schema(reader.original_schema.as_ref(), &file_schema);
-    let read_projected_schema = if read_original_schema.as_ref() == reader.original_schema.as_ref()
-    {
-        reader.projected_schema.clone()
-    } else {
-        match &reader.projection {
-            Projection::Columns(indices) => TableSchemaRef::new(read_original_schema.project(indices)),
-            Projection::InnerColumns(path_indices) => {
-                TableSchemaRef::new(read_original_schema.inner_project(path_indices))
+fn build_compatible_read_schema(schema: &TableSchema) -> Option<TableSchemaRef> {
+    let mut changed = false;
+    let fields = schema
+        .fields
+        .iter()
+        .map(|field| {
+            let (data_type, updated) = compatible_read_type(&field.data_type);
+            if updated {
+                changed = true;
+            }
+            let mut new_field = field.clone();
+            new_field.data_type = data_type;
+            new_field
+        })
+        .collect::<Vec<TableField>>();
+    if !changed {
+        return None;
+    }
+    Some(TableSchemaRef::new(TableSchema::new_from_column_ids(
+        fields,
+        schema.metadata.clone(),
+        schema.next_column_id,
+    )))
+}
+
+fn compatible_read_type(data_type: &TableDataType) -> (TableDataType, bool) {
+    match data_type {
+        TableDataType::Nullable(inner) => {
+            let (inner_type, changed) = compatible_read_type(inner);
+            (TableDataType::Nullable(Box::new(inner_type)), changed)
+        }
+        TableDataType::Array(inner) => {
+            let (inner_type, changed) = compatible_read_type(inner);
+            (TableDataType::Array(Box::new(inner_type)), changed)
+        }
+        TableDataType::Map(inner) => {
+            let (inner_type, changed) = compatible_read_type(inner);
+            (TableDataType::Map(Box::new(inner_type)), changed)
+        }
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            let mut changed = false;
+            let new_fields = fields_type
+                .iter()
+                .map(|inner| {
+                    let (inner_type, inner_changed) = compatible_read_type(inner);
+                    if inner_changed {
+                        changed = true;
+                    }
+                    inner_type
+                })
+                .collect();
+            (
+                TableDataType::Tuple {
+                    fields_name: fields_name.clone(),
+                    fields_type: new_fields,
+                },
+                changed,
+            )
+        }
+        TableDataType::Number(num) => match num {
+            NumberDataType::Int64 => (TableDataType::Number(NumberDataType::Int32), true),
+            NumberDataType::UInt64 => (TableDataType::Number(NumberDataType::UInt32), true),
+            NumberDataType::Float64 => (TableDataType::Number(NumberDataType::Float32), true),
+            _ => (data_type.clone(), false),
+        },
+        TableDataType::Decimal(decimal) => match compatible_decimal_read_type(decimal) {
+            Some(decimal) => (TableDataType::Decimal(decimal), true),
+            None => (data_type.clone(), false),
+        },
+        _ => (data_type.clone(), false),
+    }
+}
+
+fn compatible_decimal_read_type(decimal: &DecimalDataType) -> Option<DecimalDataType> {
+    let size = decimal.size();
+    let scale = size.scale();
+    let precision = size.precision();
+    match decimal {
+        DecimalDataType::Decimal128(_) => {
+            let max_precision = <i64 as Decimal>::MAX_PRECISION;
+            if scale > max_precision {
+                None
+            } else {
+                // Parquet decimal may be encoded with a wider logical type.
+                // Decimal64 can safely represent up to i64::MAX_PRECISION digits.
+                let target_precision = precision.min(max_precision).max(scale);
+                Some(DecimalDataType::Decimal64(DecimalSize::new_unchecked(
+                    target_precision,
+                    scale,
+                )))
             }
         }
-    };
-    let record_batch = column_chunks_to_record_batch_with_schema(
-        &read_original_schema,
-        &arrow_schema,
-        metadata.file_metadata().schema_descr(),
-        num_rows,
-        column_chunks,
-        compression,
-        selection,
-    )?;
-    Ok(Some((
-        read_original_schema,
-        read_projected_schema,
-        record_batch,
-    )))
+        _ => None,
+    }
 }
 
 fn cast_data_block(
