@@ -37,7 +37,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
 use databend_common_management::RoleApi;
-use databend_common_management::UserApi;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
@@ -298,7 +297,7 @@ async fn show_role_grantees(ctx: Arc<dyn TableContext>, name: &str) -> Result<Op
             None
         }
     };
-    let users = user_api.user_api(&tenant).get_users().await?;
+    let users = user_api.get_users(&tenant).await?;
     let user_grantees = users.into_iter().filter_map(|user| {
         f(
             user.grants.roles(),

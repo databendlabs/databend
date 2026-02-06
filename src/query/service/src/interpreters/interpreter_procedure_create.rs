@@ -58,24 +58,24 @@ impl Interpreter for CreateProcedureInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_procedure_execute");
 
         let tenant = self.plan.tenant.clone();
-
         let create_procedure_req: CreateProcedureReq = self.plan.clone().into();
         let overriding = self.plan.create_option.is_overriding();
 
-        match UserApiProvider::instance()
+        let result = UserApiProvider::instance()
             .procedure_api(&tenant)
             .create_procedure(create_procedure_req, overriding)
-            .await?
-        {
-            Ok(replay) => {
-                // grant the ownership of the procedure to the current role.
+            .await?;
+
+        match result {
+            Ok(reply) => {
+                // Grant the ownership of the procedure to the current role.
                 let current_role = self.ctx.get_current_role();
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 if let Some(current_role) = current_role {
                     role_api
                         .grant_ownership(
                             &OwnershipObject::Procedure {
-                                procedure_id: replay.procedure_id,
+                                procedure_id: reply.procedure_id,
                             },
                             &current_role.name,
                         )
@@ -84,16 +84,18 @@ impl Interpreter for CreateProcedureInterpreter {
                 }
                 Ok(PipelineBuildResult::create())
             }
-            Err(_) => {
-                if self.plan.create_option != CreateOption::CreateIfNotExists {
-                    Err(ErrorCode::ProcedureAlreadyExists(format!(
-                        "Procedure {} already exists",
-                        self.plan.name.procedure_name()
-                    )))
-                } else {
-                    Ok(PipelineBuildResult::create())
+            Err(_exist_error) => match self.plan.create_option {
+                CreateOption::Create => Err(ErrorCode::ProcedureAlreadyExists(format!(
+                    "Procedure '{}' already exists",
+                    self.plan.name.procedure_name()
+                ))),
+                CreateOption::CreateIfNotExists => Ok(PipelineBuildResult::create()),
+                CreateOption::CreateOrReplace => {
+                    unreachable!(
+                        "create_procedure: CreateOrReplace should never conflict with existent"
+                    );
                 }
-            }
+            },
         }
     }
 }

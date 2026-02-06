@@ -60,7 +60,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info, &CreateOption::Create)
+            .create_user(&tenant, user_info, &CreateOption::Create)
             .await?;
     }
 
@@ -68,7 +68,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         let res = user_mgr
-            .add_user(&tenant, user_info, &CreateOption::Create)
+            .create_user(&tenant, user_info, &CreateOption::Create)
             .await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS);
@@ -78,7 +78,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
     {
         let user_info = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
+            .create_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
             .await?;
     }
 
@@ -127,7 +127,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::Create)
+            .create_user(&tenant, user_info.clone(), &CreateOption::Create)
             .await?;
         let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
@@ -157,7 +157,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::Create)
+            .create_user(&tenant, user_info.clone(), &CreateOption::Create)
             .await?;
         user_mgr
             .grant_privileges_to_user(
@@ -197,7 +197,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
         };
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr
-            .add_user(&tenant, user_info.clone(), &CreateOption::Create)
+            .create_user(&tenant, user_info.clone(), &CreateOption::Create)
             .await?;
 
         let old_user = user_mgr

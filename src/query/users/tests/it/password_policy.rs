@@ -377,7 +377,7 @@ async fn test_password_policy() -> anyhow::Result<()> {
 
     // add user
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
+        .create_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
         .await?;
 
     // drop password policy

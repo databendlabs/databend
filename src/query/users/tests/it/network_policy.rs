@@ -75,7 +75,7 @@ async fn test_user_network_policy() -> anyhow::Result<()> {
     option = option.with_network_policy(Some(policy_name.clone()));
     user_info.update_auth_option(None, Some(option));
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::Create)
+        .create_user(&tenant, user_info, &CreateOption::Create)
         .await?;
 
     let user = UserIdentity::new(username, hostname);

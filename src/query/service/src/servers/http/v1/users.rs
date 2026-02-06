@@ -122,7 +122,7 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     }
     let tenant = ctx.session.get_current_tenant();
     user_api
-        .add_user(&tenant, user_info, &CreateOption::CreateOrReplace)
+        .create_user(&tenant, user_info, &CreateOption::CreateOrReplace)
         .await?;
     Ok(())
 }

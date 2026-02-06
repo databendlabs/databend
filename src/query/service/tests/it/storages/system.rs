@@ -460,7 +460,7 @@ async fn test_users_table() -> anyhow::Result<()> {
     let auth_data = AuthInfo::None;
     let user_info = UserInfo::new("test", "%", auth_data);
     UserApiProvider::instance()
-        .add_user(&tenant, user_info, &CreateOption::Create)
+        .create_user(&tenant, user_info, &CreateOption::Create)
         .await?;
     let auth_data = AuthInfo::new(
         AuthType::Sha256Password,
@@ -471,7 +471,7 @@ async fn test_users_table() -> anyhow::Result<()> {
     let mut user_info = UserInfo::new("test1", "%", auth_data?);
     user_info.option.set_default_role(Some("role1".to_string()));
     UserApiProvider::instance()
-        .add_user(&tenant, user_info, &CreateOption::Create)
+        .create_user(&tenant, user_info, &CreateOption::Create)
         .await?;
 
     let table = UsersTable::create(1);
