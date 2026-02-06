@@ -1,0 +1,189 @@
+statement ok
+USE default
+
+statement ok
+set hide_options_in_show_create_table=1
+
+# no rewrite: int32 -> int64
+statement ok
+drop table if exists alter_no_rewrite_t_int
+
+statement ok
+create table alter_no_rewrite_t_int(a int null)
+
+statement ok
+insert into alter_no_rewrite_t_int values (1), (2), (3)
+
+statement ok
+drop table if exists alter_no_rewrite_loc_int
+
+statement ok
+create table alter_no_rewrite_loc_int(block_location string)
+
+statement ok
+insert into alter_no_rewrite_loc_int select block_location from fuse_block('default','alter_no_rewrite_t_int')
+
+statement ok
+alter table alter_no_rewrite_t_int modify column a bigint null
+
+query IIII
+select
+  (select count(*) from fuse_block('default','alter_no_rewrite_t_int')) as after_cnt,
+  (select count(*) from alter_no_rewrite_loc_int) as before_cnt,
+  (select count(*) from (
+    select block_location from alter_no_rewrite_loc_int
+    except
+    select block_location from fuse_block('default','alter_no_rewrite_t_int')
+  )) as missing_from_after,
+  (select count(*) from (
+    select block_location from fuse_block('default','alter_no_rewrite_t_int')
+    except
+    select block_location from alter_no_rewrite_loc_int
+  )) as new_in_after
+----
+1 1 0 0
+
+query I
+select a from alter_no_rewrite_t_int order by a
+----
+1
+2
+3
+
+query T
+select data_type from system.columns where database = 'default' and table = 'alter_no_rewrite_t_int' and name = 'a'
+----
+BIGINT
+
+# no rewrite: decimal precision widen (scale unchanged)
+statement ok
+drop table if exists alter_no_rewrite_t_dec
+
+statement ok
+create table alter_no_rewrite_t_dec(a decimal(10, 2) null)
+
+statement ok
+insert into alter_no_rewrite_t_dec values (1.23), (4.56)
+
+statement ok
+drop table if exists alter_no_rewrite_loc_dec
+
+statement ok
+create table alter_no_rewrite_loc_dec(block_location string)
+
+statement ok
+insert into alter_no_rewrite_loc_dec select block_location from fuse_block('default','alter_no_rewrite_t_dec')
+
+statement ok
+alter table alter_no_rewrite_t_dec modify column a decimal(20, 2) null
+
+query IIII
+select
+  (select count(*) from fuse_block('default','alter_no_rewrite_t_dec')) as after_cnt,
+  (select count(*) from alter_no_rewrite_loc_dec) as before_cnt,
+  (select count(*) from (
+    select block_location from alter_no_rewrite_loc_dec
+    except
+    select block_location from fuse_block('default','alter_no_rewrite_t_dec')
+  )) as missing_from_after,
+  (select count(*) from (
+    select block_location from fuse_block('default','alter_no_rewrite_t_dec')
+    except
+    select block_location from alter_no_rewrite_loc_dec
+  )) as new_in_after
+----
+1 1 0 0
+
+query T
+select data_type from system.columns where database = 'default' and table = 'alter_no_rewrite_t_dec' and name = 'a'
+----
+DECIMAL(20, 2)
+
+# range pruning after widening
+statement ok
+drop table if exists alter_no_rewrite_range
+
+statement ok
+create table alter_no_rewrite_range(a int)
+
+statement ok
+insert into alter_no_rewrite_range select number from numbers(1000)
+
+statement ok
+insert into alter_no_rewrite_range select number + 1000 from numbers(1000)
+
+statement ok
+insert into alter_no_rewrite_range select number + 2000 from numbers(1000)
+
+statement ok
+alter table alter_no_rewrite_range modify column a bigint
+
+query T
+explain select 1 from alter_no_rewrite_range where a = 42
+----
+EvalScalar
+├── output columns: [1 (#1)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(alter_no_rewrite_range.a (#0) = 42)]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.default.alter_no_rewrite_range
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 1000
+        ├── read size: 1.88 KiB
+        ├── partitions total: 3
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_true(alter_no_rewrite_range.a (#0) = 42)], limit: NONE]
+        └── estimated rows: 3000.00
+
+# bloom pruning after widening
+statement ok
+drop table if exists alter_no_rewrite_bloom
+
+statement ok
+create table alter_no_rewrite_bloom(a int, b int)
+
+statement ok
+alter table alter_no_rewrite_bloom set options(bloom_index_columns = 'a')
+
+statement ok
+insert into alter_no_rewrite_bloom values (1, 1), (5, 6), (10, 10)
+
+statement ok
+insert into alter_no_rewrite_bloom values (1, 1), (7, 8), (10, 10)
+
+statement ok
+alter table alter_no_rewrite_bloom modify column a bigint
+
+query T
+explain select 1 from alter_no_rewrite_bloom where a = 5
+----
+EvalScalar
+├── output columns: [1 (#2)]
+├── expressions: [1]
+├── estimated rows: 1.50
+└── Filter
+    ├── output columns: []
+    ├── filters: [is_true(alter_no_rewrite_bloom.a (#0) = 5)]
+    ├── estimated rows: 1.50
+    └── TableScan
+        ├── table: default.default.alter_no_rewrite_bloom
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [is_true(alter_no_rewrite_bloom.a (#0) = 5)], limit: NONE]
+        └── estimated rows: 6.00
+
+query I
+select 1 from alter_no_rewrite_bloom where a = 5
+----
+1
