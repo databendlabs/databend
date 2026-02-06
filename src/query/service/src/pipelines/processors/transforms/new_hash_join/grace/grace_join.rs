@@ -180,6 +180,10 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
             },
         }
     }
+
+    fn is_spill_happened(&self) -> bool {
+        true
+    }
 }
 
 impl<T: GraceMemoryJoin> GraceHashJoin<T> {
