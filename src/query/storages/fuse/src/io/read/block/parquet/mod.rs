@@ -105,6 +105,8 @@ impl BlockReader {
             return self.build_default_values_block(result_rows);
         }
 
+        // Read schema may differ from table schema when old blocks have legacy types.
+        // Column stats let us infer a safer schema without touching parquet metadata.
         let mut read_original_schema = match column_stats {
             Some(stats) => build_read_schema(self.original_schema.as_ref(), stats),
             None => self.original_schema.clone(),
@@ -125,6 +127,8 @@ impl BlockReader {
 
         let has_selection = selection.is_some();
         let parquet_selection = selection.map(|s| s.selection.clone());
+        // Table schema may be widened (e.g. i32 -> i64); fallback narrows read types
+        // to match the old parquet encoding for legacy blocks.
         let fallback_schema = build_compatible_read_schema(read_original_schema.as_ref());
         let fallback_projected_schema = fallback_schema.as_ref().map(|schema| {
             if schema.as_ref() == self.original_schema.as_ref() {
@@ -138,11 +142,14 @@ impl BlockReader {
                 }
             }
         });
+        // Prefer reading with the compatible schema when stats suggest legacy type
+        // (or stats are missing), to avoid a late failure after decoding many columns.
         let prefer_fallback = fallback_schema.is_some()
             && should_prefer_compatible_schema(self.original_schema.as_ref(), column_stats);
 
         let mut last_err = None;
         let mut record_batch = None;
+        // Try read once with a given schema; on success, switch the read schema used for casting.
         let mut try_read = |schema: &TableSchemaRef, projected: &TableSchemaRef| {
             match column_chunks_to_record_batch(
                 schema,
@@ -408,6 +415,7 @@ fn adjust_type_by_stats(
 }
 
 fn build_compatible_read_schema(schema: &TableSchema) -> Option<TableSchemaRef> {
+    // Build a schema that can read legacy parquet encodings for widened types.
     let mut changed = false;
     let fields = schema
         .fields
@@ -436,6 +444,8 @@ fn should_prefer_compatible_schema(
     schema: &TableSchema,
     column_stats: Option<&HashMap<ColumnId, ColumnStatistics>>,
 ) -> bool {
+    // Heuristic: if any field can be narrowed and stats are missing/NULL,
+    // decode with compatible schema first to avoid expensive failure late.
     let has_compatible = schema
         .fields
         .iter()
@@ -464,6 +474,7 @@ fn should_prefer_compatible_schema(
 }
 
 fn compatible_read_type(data_type: &TableDataType) -> (TableDataType, bool) {
+    // Map widened types to a parquet-compatible read type; caller decides if used.
     match data_type {
         TableDataType::Nullable(inner) => {
             let (inner_type, changed) = compatible_read_type(inner);
