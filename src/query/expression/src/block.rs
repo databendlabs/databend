@@ -32,7 +32,6 @@ use crate::Scalar;
 use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
-use crate::is_internal_column;
 use crate::schema::DataSchema;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -747,30 +746,17 @@ impl DataBlock {
                         Ok(self.get_by_offset(src_offset).clone())
                     }
                     Err(_) => {
-                        // Column not found in source
-                        // Check if it's an internal column
-                        if is_internal_column(dest_field.name()) {
-                            // Internal columns are materialized later by TransformAddInternalColumns
-                            // Create a placeholder entry with the correct type and null values
-                            let scalar = Scalar::default_value(dest_field.data_type());
-                            Ok(BlockEntry::new_const_column(
-                                dest_field.data_type().clone(),
-                                scalar,
-                                num_rows,
-                            ))
-                        } else {
-                            // Regular column missing - this is an error
-                            let valid_fields: Vec<String> = src_schema
-                                .fields()
-                                .iter()
-                                .map(|f| f.name().to_string())
-                                .collect();
-                            Err(ErrorCode::BadArguments(format!(
-                                "Unable to get field named \"{}\". Valid fields: {:?}",
-                                dest_field.name(),
-                                valid_fields
-                            )))
-                        }
+                        // Column not found in source - this is an error
+                        let valid_fields: Vec<String> = src_schema
+                            .fields()
+                            .iter()
+                            .map(|f| f.name().to_string())
+                            .collect();
+                        Err(ErrorCode::BadArguments(format!(
+                            "Unable to get field named \"{}\". Valid fields: {:?}",
+                            dest_field.name(),
+                            valid_fields
+                        )))
                     }
                 }
             })
