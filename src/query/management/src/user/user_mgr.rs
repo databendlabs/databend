@@ -72,8 +72,7 @@ impl UserApi for UserMgr {
         &self,
         user_info: UserInfo,
         overriding: bool,
-    ) -> Result<Result<SeqV<UserInfo>, ExistError<UserIdentResource, UserIdentity>>, MetaError>
-    {
+    ) -> Result<Result<(), ExistError<UserIdentResource, UserIdentity>>, MetaError> {
         let ident = TenantUserIdent::new_user_host(
             self.tenant.clone(),
             &user_info.name,
@@ -86,34 +85,21 @@ impl UserApi for UserMgr {
             MatchSeq::Exact(0)
         };
 
-        let req = UpsertPB::insert(ident.clone(), user_info.clone()).with(seq);
+        let req = UpsertPB::insert(ident.clone(), user_info).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if !overriding && res.prev.is_some() {
             return Ok(Err(ident.exist_error(func_name!())));
         }
 
-        match res.result {
-            Some(seqv) => Ok(Ok(SeqV::new(seqv.seq, user_info))),
-            None => Ok(Err(ident.exist_error(func_name!()))),
-        }
+        Ok(Ok(()))
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_user(
-        &self,
-        user: &UserIdentity,
-    ) -> Result<Result<SeqV<UserInfo>, UnknownError<UserIdentResource, UserIdentity>>, MetaError>
-    {
+    async fn get_user(&self, user: &UserIdentity) -> Result<Option<SeqV<UserInfo>>, MetaError> {
         let ident = self.user_ident(user);
-
-        let res = self.kv_api.get_pb(&ident).await?;
-        let Some(seq_value) = res else {
-            return Ok(Err(ident.unknown_error(func_name!())));
-        };
-
-        Ok(Ok(seq_value))
+        self.kv_api.get_pb(&ident).await
     }
 
     #[async_backtrace::framed]
@@ -121,16 +107,13 @@ impl UserApi for UserMgr {
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>, MetaError> {
         let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
         let dir_name = DirName::new(ident);
-        let mut strm = self
-            .kv_api
-            .list_pb(ListOptions::unlimited(&dir_name))
-            .await?;
 
-        let mut results = Vec::new();
-        while let Some(item) = strm.try_next().await? {
-            results.push(item.seqv);
-        }
-        Ok(results)
+        self.kv_api
+            .list_pb(ListOptions::unlimited(&dir_name))
+            .await?
+            .map_ok(|item| item.seqv)
+            .try_collect()
+            .await
     }
 
     #[async_backtrace::framed]
@@ -157,7 +140,7 @@ impl UserApi for UserMgr {
     {
         let ident = self.user_ident(user);
 
-        let Ok(seqv) = self.get_user(user).await? else {
+        let Some(seqv) = self.get_user(user).await? else {
             return Ok(Err(ident.unknown_error(func_name!())));
         };
 

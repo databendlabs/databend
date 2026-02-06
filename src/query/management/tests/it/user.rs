@@ -99,7 +99,7 @@ mod get {
 
         // Get user should succeed
         let res = user_mgr.get_user(&user_info.identity()).await?;
-        assert!(res.is_ok());
+        assert!(res.is_some());
 
         let retrieved_user = res.unwrap();
         assert_eq!(retrieved_user.data.name, test_user_name);
@@ -120,8 +120,8 @@ mod get {
             .get_user(&UserIdentity::new(test_user_name, test_hostname))
             .await?;
 
-        // Inner result should be Err(UnknownError)
-        assert!(res.is_err());
+        // Should be None for non-existent user
+        assert!(res.is_none());
 
         Ok(())
     }
@@ -192,7 +192,7 @@ mod drop {
 
         // Verify user exists
         let res = user_mgr.get_user(&user_info.identity()).await?;
-        assert!(res.is_ok());
+        assert!(res.is_some());
 
         // Drop user
         let res = user_mgr.drop_user(&user_info.identity()).await?;
@@ -200,7 +200,7 @@ mod drop {
 
         // Verify user no longer exists
         let res = user_mgr.get_user(&user_info.identity()).await?;
-        assert!(res.is_err());
+        assert!(res.is_none());
 
         Ok(())
     }
