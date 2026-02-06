@@ -66,6 +66,8 @@ use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SwapTableReply;
@@ -79,8 +81,6 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -923,18 +923,22 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn truncate_table(
+    async fn remove_table_copied_file_info(
         &self,
-        req: TruncateTableReq,
-    ) -> Result<TruncateTableReply, KVAppError> {
+        req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply, KVAppError> {
         // NOTE: this method read and remove in multiple transactions.
         // It is not atomic, but it is safe because it deletes only the files that matches the seq.
 
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = TableId {
-            table_id: req.table_id,
-        };
+        let table_id = req.ref_id.table_id;
+        let branch_id = req.ref_id.branch_id;
+        // Use branch_id as the unique identifier when operating on a branch.
+        // A branch is treated as an isolated logical table with its own metadata lineage.
+        // If branch_id is absent, fall back to table_id for the main table.
+        let unique_id = branch_id.unwrap_or(table_id);
+        let tid = TableId { table_id };
 
         let chunk_size = req.batch_size.unwrap_or(DEFAULT_MGET_SIZE as u64);
 
@@ -943,25 +947,28 @@ where
         // If table seq is not changed before and after listing, we can be sure the list of copied
         // files is consistent to this version of the table.
 
-        let mut seq_1 = self.get_seq(&table_id).await?;
+        let mut seq_1 = self.get_seq(&tid).await?;
 
         let mut trials = txn_backoff(None, func_name!());
         let copied_files = loop {
             trials.next().unwrap()?.await;
 
             let copied_file_ident = TableCopiedFileNameIdent {
-                table_id: table_id.table_id,
+                id: unique_id,
                 file: "dummy".to_string(),
             };
             let dir_name = DirName::new(copied_file_ident);
             let copied_files = self.list_pb_vec(ListOptions::unlimited(&dir_name)).await?;
 
-            let seq_2 = self.get_seq(&table_id).await?;
+            let seq_2 = self.get_seq(&tid).await?;
 
             if seq_1 == seq_2 {
                 debug!(
-                    "list all copied file of table {}: {} files",
-                    table_id.table_id,
+                    "list all copied files of table {}{}: {} files",
+                    table_id,
+                    branch_id
+                        .map(|id| format!(" with branch {}", id))
+                        .unwrap_or_default(),
                     copied_files.len()
                 );
                 break copied_files;
@@ -989,7 +996,7 @@ where
             let (_succ, _responses) = send_txn(self, txn).await?;
         }
 
-        Ok(TruncateTableReply {})
+        Ok(RemoveTableCopiedFileReply {})
     }
 
     // make table meta visible by:
@@ -1288,23 +1295,20 @@ where
         // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
         // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
 
-        let insert_if_not_exists_table_ids = copied_files
-            .iter()
-            .filter(|(_, req)| req.insert_if_not_exists)
-            .map(|(table_id, _)| *table_id)
-            .collect::<Vec<_>>();
+        let mut insert_if_not_exists_ref_ids = Vec::with_capacity(copied_files.len());
+        for (ident, req) in copied_files {
+            let tbid = TableId {
+                table_id: ident.table_id,
+            };
+            txn.condition
+                .push(txn_cond_eq_seq(&tbid, tbl_seqs[&tbid.table_id]));
 
-        for (table_id, req) in copied_files {
-            let tbid = TableId { table_id };
-
-            let table_meta_seq = tbl_seqs[&tbid.table_id];
-            txn.condition.push(txn_cond_eq_seq(&tbid, table_meta_seq));
-
-            for (file_name, file_info) in req.file_info {
-                let key = TableCopiedFileNameIdent {
-                    table_id: tbid.table_id,
-                    file: file_name,
-                };
+            let id = ident.effective_id();
+            if req.insert_if_not_exists {
+                insert_if_not_exists_ref_ids.push(ident.clone());
+            }
+            for (file, file_info) in req.file_info {
+                let key = TableCopiedFileNameIdent { id, file };
 
                 if req.insert_if_not_exists {
                     txn.condition.push(txn_cond_eq_seq(&key, 0));
@@ -1405,11 +1409,11 @@ where
         }
 
         if mismatched_tbs.is_empty() {
-            if !insert_if_not_exists_table_ids.is_empty() {
+            if !insert_if_not_exists_ref_ids.is_empty() {
                 // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
                 Err(KVAppError::AppError(AppError::from(
                     DuplicatedUpsertFiles::new(
-                        insert_if_not_exists_table_ids,
+                        insert_if_not_exists_ref_ids,
                         "update_multi_table_meta",
                     ),
                 )))
@@ -1767,7 +1771,7 @@ where
     ) -> Result<GetTableCopiedFileReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
+        let table_id = req.ref_id.table_id;
         let tbid = TableId { table_id };
 
         let seq_meta = self.get_pb(&tbid).await?;
@@ -1787,10 +1791,10 @@ where
         let mut file_infos = BTreeMap::new();
 
         let mut keys = Vec::with_capacity(req.files.len());
-
+        let id = req.ref_id.effective_id();
         for file in req.files.iter() {
             let ident = TableCopiedFileNameIdent {
-                table_id,
+                id,
                 file: file.clone(),
             };
             keys.push(ident.to_string_key());
@@ -1817,10 +1821,10 @@ where
 
     async fn list_table_copied_file_info(
         &self,
-        table_id: u64,
+        id: u64,
     ) -> Result<ListTableCopiedFileReply, MetaError> {
         let key = TableCopiedFileNameIdent {
-            table_id,
+            id,
             file: "".to_string(),
         };
 

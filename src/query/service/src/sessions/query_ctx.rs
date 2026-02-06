@@ -103,6 +103,7 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
@@ -850,7 +851,7 @@ impl TableContext for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
             DataSourceInfo::TableSource(extend_info) => self.build_table_by_table_info(
-                &extend_info.table_info,
+                &extend_info.inner,
                 &extend_info.branch_info,
                 plan.tbl_args.clone(),
             ),
@@ -1469,6 +1470,21 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
+        self.get_table_with_branch(catalog, database, table, None)
+            .await
+    }
+
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
@@ -1485,16 +1501,12 @@ impl TableContext for QueryContext {
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, None, batch_size)
+        self.get_table_from_shared(catalog, database, table, branch, batch_size)
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
     #[async_backtrace::framed]
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
@@ -1544,6 +1556,7 @@ impl TableContext for QueryContext {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         files: &[StageFileInfo],
         path_prefix: Option<String>,
         max_files: Option<usize>,
@@ -1556,13 +1569,16 @@ impl TableContext for QueryContext {
         let collect_duplicated_files = self
             .get_settings()
             .get_enable_purge_duplicated_files_in_copy()?;
-
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
+
+        let table = self
+            .get_table_with_branch(catalog_name, database_name, table_name, branch_name)
             .await?;
-        let table_id = table.get_id();
+        let ref_id = TableRefId {
+            table_id: table.get_id(),
+            branch_id: table.get_branch_info().map(|b| b.branch_id()),
+        };
 
         let mut result_size: usize = 0;
         let max_files = max_files.unwrap_or(usize::MAX);
@@ -1583,7 +1599,7 @@ impl TableContext for QueryContext {
                 })
                 .collect::<Vec<_>>();
             let req = GetTableCopiedFileReq {
-                table_id,
+                ref_id: ref_id.clone(),
                 files: files.clone(),
             };
             let start_request = Instant::now();

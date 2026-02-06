@@ -607,7 +607,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table_with_batch(
+                .resolve_data_source(
                     catalog_name,
                     database_name,
                     table_name,

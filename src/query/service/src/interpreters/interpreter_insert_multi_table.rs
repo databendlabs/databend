@@ -108,6 +108,7 @@ impl Interpreter for InsertMultiTableInterpreter {
                     CATALOG_DEFAULT.to_string(),
                     db.to_string(),
                     tbl.to_string(),
+                    None,
                     MutationKind::Insert,
                     LockTableOption::LockNoRetry,
                 );

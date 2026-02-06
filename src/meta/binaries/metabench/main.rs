@@ -341,7 +341,7 @@ async fn benchmark_table_copy_file(
 
     for file_index in 0..param.file_cnt {
         let copied_file_ident = TableCopiedFileNameIdent {
-            table_id: prefix * 1_000_000 + client_num * 1_000 + i,
+            id: prefix * 1_000_000 + client_num * 1_000 + i,
             file: format!("{}-{}-{}-{}", prefix, client_num, i, file_index),
         };
         let copied_file_value = TableCopiedFileInfo {

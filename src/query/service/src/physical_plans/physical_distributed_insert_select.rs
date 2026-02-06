@@ -111,7 +111,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
         }
 
         let table = builder.ctx.build_table_by_table_info(
-            &self.table_info.table_info,
+            &self.table_info.inner,
             &self.table_info.branch_info,
             None,
         )?;

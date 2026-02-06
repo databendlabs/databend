@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SwapTableReq;
@@ -36,7 +37,6 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -303,7 +303,7 @@ impl TempTblMgr {
         Ok(UpsertTableOptionReply {})
     }
 
-    pub fn truncate_table(&mut self, id: u64) -> Result<TruncateTableReply> {
+    pub fn remove_table_copied_file_info(&mut self, id: u64) -> Result<RemoveTableCopiedFileReply> {
         let table = self.id_to_table.get_mut(&id);
         let Some(table) = table else {
             return Err(ErrorCode::UnknownTable(format!(
@@ -312,17 +312,17 @@ impl TempTblMgr {
             )));
         };
         table.copied_files.clear();
-        Ok(TruncateTableReply {})
+        Ok(RemoveTableCopiedFileReply {})
     }
 
     pub fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
-        let Some(table) = self.id_to_table.get(&req.table_id) else {
+        let Some(table) = self.id_to_table.get(&req.ref_id.table_id) else {
             return Err(ErrorCode::UnknownTable(format!(
                 "Temporary table id {} not found",
-                req.table_id
+                req.ref_id.table_id
             )));
         };
         let mut file_info = BTreeMap::new();

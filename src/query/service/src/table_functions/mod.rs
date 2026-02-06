@@ -35,7 +35,7 @@ mod tag_references;
 mod temporary_tables_table;
 mod udf_table;
 
-pub use copy_history::CopyHistoryTable;
+pub use copy_history::CopyHistoryFunc;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
 pub use numbers::generate_numbers_parts;

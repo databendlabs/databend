@@ -121,12 +121,11 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
@@ -160,13 +159,6 @@ impl Binder {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
-                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
-                        // Planned to be implemented in the next PR.
-                        if branch_name.is_some() {
-                            return Err(ErrorCode::Unimplemented(
-                                "Insert into branch from stage is not supported yet",
-                            ));
-                        }
                         return self
                             .bind_copy_from_attachment(
                                 bind_context,
@@ -174,6 +166,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
+                                branch_name,
                                 schema,
                                 &values_str,
                                 CopyIntoTableMode::Insert {
@@ -239,13 +232,6 @@ impl Binder {
                         }))
                     }
                     loc => {
-                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
-                        // Planned to be implemented in the next PR.
-                        if branch_name.is_some() {
-                            return Err(ErrorCode::Unimplemented(
-                                "Insert into branch from stage is not supported yet",
-                            ));
-                        }
                         let (mut stage_info, path) =
                             resolve_stage_location(self.ctx.as_ref(), loc).await?;
                         stage_info.file_format_params = file_format_params;
@@ -266,6 +252,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
+                                branch_name,
                                 schema,
                                 value,
                                 stage_info,

@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -204,17 +205,53 @@ async fn remove_copied_files_for_dropped_table(
         txn.condition
             .push(txn_cond_eq_seq(table_id, seq_table_meta.seq));
 
-        let copied_file_ident = TableCopiedFileNameIdent {
-            table_id: table_id.table_id,
-            file: "dummy".to_string(),
-        };
+        // Copied-file keys are stored under the "effective" table ref id:
+        // - main branch uses `table_id`
+        // - derived branch uses `SnapshotRef.id`
+        //
+        // NOTE:
+        // Only `SnapshotRefType::Branch` is included here.
+        // TAG references are read-only and never produce copied-file keys,
+        // so there is no need to collect or GC copied files for TAGs.
+        //
+        // When a table is dropped, remove copied-file entries for the main branch
+        // and all derived *branches* that are still present in `TableMeta.refs`.
+        //
+        // If a branch/tag was dropped earlier and its copied-file cleanup did not complete,
+        // its ref id may no longer exist in `refs`, thus the dropped-table GC cannot discover
+        // those orphan copied-file keys by id.
+        // This is acceptable because copied-file keys are written with TTL in the write path,
+        // so any orphan keys will eventually expire even if they are not explicitly deleted here.
+        let mut copied_file_dir_ids = HashSet::new();
+        copied_file_dir_ids.insert(table_id.table_id);
+        copied_file_dir_ids.extend(
+            seq_table_meta
+                .data
+                .refs
+                .values()
+                .filter(|r| matches!(r.typ, SnapshotRefType::Branch))
+                .map(|r| r.id),
+        );
+        let mut copied_files = Vec::with_capacity(batch_size);
+        for dir_id in copied_file_dir_ids {
+            if copied_files.len() >= batch_size {
+                break;
+            }
 
-        let dir_name = DirName::new(copied_file_ident);
+            let n = batch_size - copied_files.len();
+            let copied_file_ident = TableCopiedFileNameIdent {
+                id: dir_id,
+                file: "dummy".to_string(),
+            };
+            let dir_name = DirName::new(copied_file_ident);
 
-        let key_stream = kv_api
-            .list_pb_keys(ListOptions::unlimited(&dir_name))
-            .await?;
-        let copied_files = key_stream.take(batch_size).try_collect::<Vec<_>>().await?;
+            let mut key_stream = kv_api
+                .list_pb_keys(ListOptions::limited(&dir_name, n as u64))
+                .await?;
+            while let Some(key) = key_stream.try_next().await? {
+                copied_files.push(key);
+            }
+        }
 
         if copied_files.is_empty() {
             return Ok(num_removed_copied_files);

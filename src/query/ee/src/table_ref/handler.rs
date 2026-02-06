@@ -20,8 +20,11 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::SnapshotRef;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateTableRefPlan;
@@ -227,6 +230,33 @@ impl TableRefHandler for RealTableRefHandler {
 
         // clear the ref snapshot.
         clearup_ref_dir(fuse_table, table_ref.id).await;
+        if matches!(table_ref.typ, SnapshotRefType::Branch) {
+            // Remove the copied files from metaserver.
+            // Best-effort cleanup: copied-file kv pairs have TTL, but failures should be visible to
+            // operators for debugging.
+            //
+            // TAG references are read-only and never produce copied-file keys,
+            // so there is no need to collect or GC copied files for TAGs.
+            if let Err(err) = catalog
+                .remove_table_copied_file_info(table_info, RemoveTableCopiedFileReq {
+                    ref_id: TableRefId {
+                        table_id: table_info.ident.table_id,
+                        branch_id: Some(table_ref.id),
+                    },
+                    batch_size: None,
+                })
+                .await
+            {
+                log::warn!(
+                    "Failed to cleanup copied files for dropped {} '{}' on table '{}.{}': {}",
+                    plan.ref_type,
+                    plan.ref_name,
+                    plan.database,
+                    plan.table,
+                    err
+                );
+            }
+        }
         Ok(())
     }
 }

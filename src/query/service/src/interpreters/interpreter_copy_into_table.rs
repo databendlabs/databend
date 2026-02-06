@@ -20,6 +20,7 @@ use arrow_schema::Field;
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::ExtendedTableInfo;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -38,6 +39,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::Pipeline;
@@ -121,6 +123,7 @@ impl CopyIntoTableInterpreter {
     pub async fn build_physical_plan(
         &self,
         mut table_info: TableInfo,
+        mut branch_info: Option<BranchInfo>,
         plan: &CopyIntoTablePlan,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<(
@@ -182,7 +185,11 @@ impl CopyIntoTableInterpreter {
         let mut required_values_schema = plan.required_values_schema.clone();
         let mut required_source_schema = plan.required_source_schema.clone();
         if let Some(schema) = &new_schema {
-            table_info.meta.schema = schema.clone();
+            if let Some(branch) = branch_info.as_mut() {
+                branch.schema = schema.clone();
+            } else {
+                table_info.meta.schema = schema.clone();
+            }
             let data_schema: DataSchema = schema.into();
             required_source_schema = Arc::new(data_schema);
             required_values_schema = required_source_schema.clone();
@@ -193,7 +200,10 @@ impl CopyIntoTableInterpreter {
             values_consts: plan.values_consts.clone(),
             required_source_schema,
             stage_table_info: plan.stage_table_info.clone(),
-            table_info,
+            table_info: ExtendedTableInfo {
+                inner: table_info,
+                branch_info,
+            },
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
             project_columns,
@@ -380,10 +390,11 @@ impl CopyIntoTableInterpreter {
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let mut to_table = ctx
-            .get_table(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch_name.as_deref(),
             )
             .await?;
 
@@ -392,19 +403,25 @@ impl CopyIntoTableInterpreter {
         // Commit.
         {
             let mut table_info = to_table.get_table_info().clone();
+            let mut branch_info = to_table.get_branch_info().cloned();
             if let Some(new_schema) = new_schema {
                 let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
                 let base_snapshot = fuse_table.read_table_snapshot().await?;
                 prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
 
-                table_info.meta.fill_field_comments();
-                while table_info.meta.field_comments.len() < new_schema.fields.len() {
-                    table_info.meta.field_comments.push("".to_string());
+                if let Some(branch) = branch_info.as_mut() {
+                    branch.schema = new_schema;
+                } else {
+                    table_info.meta.fill_field_comments();
+                    while table_info.meta.field_comments.len() < new_schema.fields.len() {
+                        table_info.meta.field_comments.push("".to_string());
+                    }
+                    table_info.meta.schema = new_schema;
                 }
-                table_info.meta.schema = new_schema;
+
                 to_table = FuseTable::create_and_refresh_table_info(
                     table_info,
-                    None,
+                    branch_info,
                     ctx.get_settings().get_s3_storage_class()?,
                 )?;
             }
@@ -513,10 +530,11 @@ impl Interpreter for CopyIntoTableInterpreter {
         let plan = &self.plan;
         let to_table = self
             .ctx
-            .get_table(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch_name.as_deref(),
             )
             .await?;
 
@@ -537,6 +555,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         let (physical_plan, update_stream_meta, new_schema) = self
             .build_physical_plan(
                 to_table.get_table_info().clone(),
+                to_table.get_branch_info().cloned(),
                 &self.plan,
                 table_meta_timestamps,
             )
@@ -578,6 +597,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
+                self.plan.branch_name.clone(),
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );

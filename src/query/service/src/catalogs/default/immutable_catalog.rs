@@ -74,6 +74,8 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -87,8 +89,6 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
@@ -447,13 +447,13 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn truncate_table(
+    async fn remove_table_copied_file_info(
         &self,
         _table_info: &TableInfo,
-        req: TruncateTableReq,
-    ) -> Result<TruncateTableReply> {
+        req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "truncate_table not allowed for system database {:?}",
+            "remove_table_copied_file_info not allowed for system database {:?}",
             req
         )))
     }

@@ -106,6 +106,8 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReply;
+use databend_common_meta_app::schema::RemoveTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -119,8 +121,6 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TruncateTableReply;
-use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -726,11 +726,21 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn get_table_with_branch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
     fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         todo!()
     }
 
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         _catalog: &str,
         _database: &str,
@@ -746,6 +756,7 @@ impl TableContext for CtxDelegation {
         _catalog_name: &str,
         _database_name: &str,
         _table_name: &str,
+        _branch_name: Option<&str>,
         _files: &[StageFileInfo],
         _path_prefix: Option<String>,
         _max_files: Option<usize>,
@@ -1134,11 +1145,11 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn truncate_table(
+    async fn remove_table_copied_file_info(
         &self,
         _table_info: &TableInfo,
-        _req: TruncateTableReq,
-    ) -> Result<TruncateTableReply> {
+        _req: RemoveTableCopiedFileReq,
+    ) -> Result<RemoveTableCopiedFileReply> {
         todo!()
     }
 

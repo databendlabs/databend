@@ -114,12 +114,11 @@ impl SimpleArgFunc for ClusteringInformation {
         let (table_name, branch_name) = parse_table_name(args.table_name.as_str())?;
         let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &current_catalog,
                 args.database_name.as_str(),
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;

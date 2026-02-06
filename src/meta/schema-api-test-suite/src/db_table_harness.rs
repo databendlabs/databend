@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::TableRefId;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -273,9 +274,13 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             lvt_check: None,
         };
 
+        let ref_id = TableRefId {
+            table_id: self.table_id,
+            branch_id: None,
+        };
         let req = UpdateMultiTableMetaReq {
             update_table_metas: vec![(req, Default::default())],
-            copied_files: vec![(self.table_id, copied_file_req)],
+            copied_files: vec![(ref_id, copied_file_req)],
             ..Default::default()
         };
 
