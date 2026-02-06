@@ -24,21 +24,17 @@ use databend_common_meta_types::SeqV;
 #[async_trait::async_trait]
 pub trait UserApi: Sync + Send {
     /// Create a user.
-    /// Returns `Ok(Ok(SeqV))` on success.
+    /// Returns `Ok(Ok(()))` on success.
     /// Returns `Ok(Err(ExistError))` if the user already exists and `overriding` is false.
     async fn create_user(
         &self,
         user_info: UserInfo,
         overriding: bool,
-    ) -> Result<Result<SeqV<UserInfo>, ExistError<UserIdentResource, UserIdentity>>, MetaError>;
+    ) -> Result<Result<(), ExistError<UserIdentResource, UserIdentity>>, MetaError>;
 
     /// Get a user by identity.
-    /// Returns `Ok(Ok(SeqV))` if the user exists.
-    /// Returns `Ok(Err(UnknownError))` if the user does not exist.
-    async fn get_user(
-        &self,
-        user: &UserIdentity,
-    ) -> Result<Result<SeqV<UserInfo>, UnknownError<UserIdentResource, UserIdentity>>, MetaError>;
+    /// Returns `Some(SeqV)` if the user exists, `None` otherwise.
+    async fn get_user(&self, user: &UserIdentity) -> Result<Option<SeqV<UserInfo>>, MetaError>;
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>, MetaError>;
 

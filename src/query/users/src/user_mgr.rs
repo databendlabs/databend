@@ -67,7 +67,9 @@ impl UserApiProvider {
             .get_user(&user)
             .await
             .map_err(meta_service_error)?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .ok_or_else(|| {
+                ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+            })
     }
 
     // Get one user and check client ip if has network policy.
@@ -188,7 +190,7 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        let overriding = matches!(create_option, CreateOption::CreateOrReplace);
+        let overriding = create_option.is_overriding();
         let res = client
             .create_user(user_info.clone(), overriding)
             .await
@@ -236,14 +238,13 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.grant_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while set user privileges)"))?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .map_err(|e| meta_service_error(e).add_message_back("(while set user privileges)"))??)
     }
 
     #[async_backtrace::framed]
@@ -267,14 +268,15 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.revoke_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while revoke user privileges)"))?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while revoke user privileges)")
+            })??)
     }
 
     #[async_backtrace::framed]
@@ -291,14 +293,13 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.grant_role(grant_role)
             })
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while grant role to user)"))?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .map_err(|e| meta_service_error(e).add_message_back("(while grant role to user)"))??)
     }
 
     #[async_backtrace::framed]
@@ -315,14 +316,15 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.revoke_role(&revoke_role)
             })
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while revoke role from user)"))?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while revoke role from user)")
+            })??)
     }
 
     // Drop a user by name and hostname.
@@ -378,16 +380,10 @@ impl UserApiProvider {
         }
 
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .upsert_user_info(user_info, seq)
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))?
-            .map_err(|_| {
-                ErrorCode::UnknownUser(format!(
-                    "User {} does not exist.",
-                    user_info.identity().display()
-                ))
-            })
+            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))??)
     }
 
     // Update an user's default role
@@ -405,11 +401,10 @@ impl UserApiProvider {
         user_info.update_user_time();
 
         let client = self.user_api(tenant);
-        client
+        Ok(client
             .upsert_user_info(&user_info, seq)
             .await
-            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))?
-            .map_err(|_| ErrorCode::UnknownUser(format!("User {} does not exist.", user.display())))
+            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))??)
     }
 
     #[async_backtrace::framed]
@@ -427,7 +422,7 @@ impl UserApiProvider {
         }
 
         let client = self.user_api(&tenant);
-        let update_user = client
+        client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 if authed {
                     ui.clear_login_fail_history()
@@ -435,19 +430,14 @@ impl UserApiProvider {
                     ui.update_login_fail_history()
                 }
             })
-            .await;
-
-        match update_user {
-            Ok(Ok(_)) => Ok(()),
-            Ok(Err(unknown)) => Err(ErrorCode::UnknownUser(format!(
-                "User {} does not exist.",
-                unknown.name().display()
-            ))
-            .add_message_back("(while update user login result).")),
-            Err(e) => {
-                Err(meta_service_error(e).add_message_back("(while update user login result)."))
-            }
-        }
+            .await
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while update user login result).")
+            })?
+            .map_err(|e| {
+                ErrorCode::from(e).add_message_back("(while update user login result).")
+            })?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -461,22 +451,17 @@ impl UserApiProvider {
             return Ok(());
         }
         let client = self.user_api(tenant);
-        let update_user = client
+        client
             .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_lockout_time(lockout_time);
             })
-            .await;
-
-        match update_user {
-            Ok(Ok(_)) => Ok(()),
-            Ok(Err(unknown)) => Err(ErrorCode::UnknownUser(format!(
-                "User {} does not exist.",
-                unknown.name().display()
-            ))
-            .add_message_back("(while update user lockout time).")),
-            Err(e) => {
-                Err(meta_service_error(e).add_message_back("(while update user lockout time)."))
-            }
-        }
+            .await
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while update user lockout time).")
+            })?
+            .map_err(|e| {
+                ErrorCode::from(e).add_message_back("(while update user lockout time).")
+            })?;
+        Ok(())
     }
 }
