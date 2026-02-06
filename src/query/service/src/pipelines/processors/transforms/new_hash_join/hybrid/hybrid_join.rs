@@ -123,16 +123,7 @@ impl HybridHashJoin {
                 memory_join.add_block(None)?;
             }
 
-            let first_spill = self.state.set_spilled();
-            if first_spill {
-                log::info!(
-                    "HybridHashJoin spill detected, switching to Grace mode: join_type={:?}, level={}, max_level={}, finished_build={}",
-                    self.join_type,
-                    self.state.level,
-                    self.state.max_level,
-                    finished
-                );
-            }
+            self.state.set_spilled();
             self.add_transition_work()?;
 
             self.mode = HybridJoinMode::Grace(Box::new(self.create_grace_join()?));
