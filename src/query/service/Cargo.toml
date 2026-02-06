@@ -177,6 +177,7 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 [dev-dependencies]
+anyhow = { workspace = true }
 arrow-cast = { workspace = true }
 criterion = { workspace = true }
 goldenfile = "1.4"
