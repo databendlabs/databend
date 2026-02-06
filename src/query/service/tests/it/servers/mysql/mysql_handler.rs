@@ -256,3 +256,33 @@ async fn test_unsigned_integer_column_flags() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_null_column_flags() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let tcp_keepalive_timeout_secs = 120;
+    let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
+
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
+    let runnable_server = handler.start(listening).await?;
+    let mut connection = create_connection(runnable_server.port(), false).await?;
+
+    let mut result = connection.query_iter("SELECT NULL").await?;
+    let columns = result.columns_ref();
+
+    assert_eq!(columns.len(), 1);
+    let col = &columns[0];
+    assert_eq!(col.column_type(), ColumnType::MYSQL_TYPE_NULL);
+    assert!(
+        !col.flags().contains(ColumnFlags::NOT_NULL_FLAG),
+        "Expected NOT_NULL_FLAG to be unset for NULL column, got flags: {:?}",
+        col.flags()
+    );
+
+    let row: Option<Row> = result.next().await?;
+    let value: (Option<u8>,) = mysql_async::from_row(row.unwrap());
+    assert_eq!(value, (None,));
+
+    Ok(())
+}
