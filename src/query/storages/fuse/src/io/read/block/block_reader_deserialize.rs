@@ -24,6 +24,7 @@ use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 
@@ -59,6 +60,7 @@ impl BlockReader {
             part.nums_rows,
             &part.compression,
             &part.columns_meta,
+            part.columns_stat.as_ref(),
             chunks,
             storage_format,
         )
@@ -70,6 +72,7 @@ impl BlockReader {
         num_rows: usize,
         compression: &Compression,
         column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_stats: Option<&HashMap<ColumnId, ColumnStatistics>>,
         column_chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
@@ -80,6 +83,7 @@ impl BlockReader {
                 column_chunks,
                 compression,
                 block_path,
+                column_stats,
             ),
             FuseStorageFormat::Native => {
                 self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
@@ -121,6 +125,7 @@ impl BlockReader {
                 column_chunks,
                 &meta.compression,
                 &meta.location,
+                None,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location,

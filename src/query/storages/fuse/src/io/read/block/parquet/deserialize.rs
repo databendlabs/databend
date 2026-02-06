@@ -24,6 +24,7 @@ use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
+use parquet::schema::types::SchemaDescriptor;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
@@ -37,7 +38,24 @@ pub fn column_chunks_to_record_batch(
 ) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+    column_chunks_to_record_batch_with_schema(
+        original_schema,
+        &arrow_schema,
+        &parquet_schema,
+        num_rows,
+        column_chunks,
+        compression,
+    )
+}
 
+pub fn column_chunks_to_record_batch_with_schema(
+    original_schema: &TableSchema,
+    arrow_schema: &Schema,
+    parquet_schema: &SchemaDescriptor,
+    num_rows: usize,
+    column_chunks: &HashMap<ColumnId, DataItem>,
+    compression: &Compression,
+) -> databend_common_exception::Result<RecordBatch> {
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()
         .iter()
@@ -47,7 +65,7 @@ pub fn column_chunks_to_record_batch(
     let mut projection_mask = Vec::with_capacity(column_chunks.len());
     let mut builder = RowGroupImplBuilder::new(
         num_rows,
-        &parquet_schema,
+        parquet_schema,
         ParquetCompression::from(*compression),
     );
     for (column_id, data_item) in column_chunks.iter() {
@@ -62,8 +80,8 @@ pub fn column_chunks_to_record_batch(
     }
     let row_group = Box::new(builder.build());
     let field_levels = parquet_to_arrow_field_levels(
-        &parquet_schema,
-        ProjectionMask::leaves(&parquet_schema, projection_mask),
+        parquet_schema,
+        ProjectionMask::leaves(parquet_schema, projection_mask),
         Some(arrow_schema.fields()),
     )?;
     let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(

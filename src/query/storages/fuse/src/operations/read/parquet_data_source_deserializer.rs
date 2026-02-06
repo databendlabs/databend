@@ -284,6 +284,7 @@ impl Processor for DeserializeDataTransform {
                         columns_chunks,
                         &part.compression,
                         &part.location,
+                        part.columns_stat.as_ref(),
                     )?;
 
                     let origin_num_rows = data_block.num_rows();
