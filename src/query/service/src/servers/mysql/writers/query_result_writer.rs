@@ -86,6 +86,71 @@ fn write_field<W: AsyncWrite + Unpin>(
     Ok(())
 }
 
+fn convert_field_type(field: &DataField) -> Result<ColumnType> {
+    match field.data_type().remove_nullable() {
+        DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
+        DataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::EmptyMap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
+        DataType::Binary => Ok(ColumnType::MYSQL_TYPE_BLOB),
+        DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Number(num_ty) => match num_ty {
+            NumberDataType::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),
+            NumberDataType::Int16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
+            NumberDataType::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
+            NumberDataType::Int64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
+            NumberDataType::UInt8 => Ok(ColumnType::MYSQL_TYPE_TINY),
+            NumberDataType::UInt16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
+            NumberDataType::UInt32 => Ok(ColumnType::MYSQL_TYPE_LONG),
+            NumberDataType::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
+            NumberDataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
+            NumberDataType::Float64 => Ok(ColumnType::MYSQL_TYPE_DOUBLE),
+        },
+        DataType::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
+        DataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+        DataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Bitmap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+        DataType::Geometry => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
+        DataType::Geography => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
+        DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
+        _ => Err(ErrorCode::Unimplemented(format!(
+            "Unsupported column type:{:?}",
+            field.data_type()
+        ))),
+    }
+}
+
+fn make_column_from_field(field: &DataField) -> Result<Column> {
+    convert_field_type(field).map(|column_type| {
+        let mut colflags = ColumnFlags::empty();
+
+        if !field.is_nullable_or_null() {
+            colflags |= ColumnFlags::NOT_NULL_FLAG;
+        }
+
+        if matches!(
+            field.data_type().remove_nullable(),
+            DataType::Number(
+                NumberDataType::UInt8
+                    | NumberDataType::UInt16
+                    | NumberDataType::UInt32
+                    | NumberDataType::UInt64
+            )
+        ) {
+            colflags |= ColumnFlags::UNSIGNED_FLAG;
+        }
+        Column {
+            table: "".to_string(),
+            column: field.name().to_string(),
+            coltype: column_type,
+            colflags,
+        }
+    })
+}
+
 impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     pub fn create(
         inner: QueryResultWriter<'a, W>,
@@ -159,71 +224,6 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 })
                 .await?;
             return Ok(());
-        }
-
-        fn convert_field_type(field: &DataField) -> Result<ColumnType> {
-            match field.data_type().remove_nullable() {
-                DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
-                DataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::EmptyMap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                DataType::Binary => Ok(ColumnType::MYSQL_TYPE_BLOB),
-                DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Number(num_ty) => match num_ty {
-                    NumberDataType::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),
-                    NumberDataType::Int16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                    NumberDataType::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                    NumberDataType::Int64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
-                    NumberDataType::UInt8 => Ok(ColumnType::MYSQL_TYPE_TINY),
-                    NumberDataType::UInt16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                    NumberDataType::UInt32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                    NumberDataType::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
-                    NumberDataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
-                    NumberDataType::Float64 => Ok(ColumnType::MYSQL_TYPE_DOUBLE),
-                },
-                DataType::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
-                DataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
-                DataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Bitmap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Geometry => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
-                DataType::Geography => Ok(ColumnType::MYSQL_TYPE_GEOMETRY),
-                DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
-                _ => Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported column type:{:?}",
-                    field.data_type()
-                ))),
-            }
-        }
-
-        fn make_column_from_field(field: &DataField) -> Result<Column> {
-            convert_field_type(field).map(|column_type| {
-                let mut colflags = ColumnFlags::empty();
-
-                if !field.is_nullable() {
-                    colflags |= ColumnFlags::NOT_NULL_FLAG;
-                }
-
-                if matches!(
-                    field.data_type().remove_nullable(),
-                    DataType::Number(
-                        NumberDataType::UInt8
-                            | NumberDataType::UInt16
-                            | NumberDataType::UInt32
-                            | NumberDataType::UInt64
-                    )
-                ) {
-                    colflags |= ColumnFlags::UNSIGNED_FLAG;
-                }
-                Column {
-                    table: "".to_string(),
-                    column: field.name().to_string(),
-                    coltype: column_type,
-                    colflags,
-                }
-            })
         }
 
         fn convert_schema(schema: &DataSchemaRef) -> Result<Vec<Column>> {
@@ -358,5 +358,37 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_column_flags_for_null() {
+        let field = DataField::new("c", DataType::Null);
+        let column = make_column_from_field(&field).unwrap();
+
+        assert_eq!(column.coltype, ColumnType::MYSQL_TYPE_NULL);
+        assert!(!column.colflags.contains(ColumnFlags::NOT_NULL_FLAG));
+    }
+
+    #[test]
+    fn test_make_column_flags_for_unsigned() {
+        let field = DataField::new("u", DataType::Number(NumberDataType::UInt32));
+        let column = make_column_from_field(&field).unwrap();
+
+        assert!(column.colflags.contains(ColumnFlags::NOT_NULL_FLAG));
+        assert!(column.colflags.contains(ColumnFlags::UNSIGNED_FLAG));
+    }
+
+    #[test]
+    fn test_make_column_flags_for_nullable() {
+        let field = DataField::new_nullable("n", DataType::Number(NumberDataType::Int32));
+        let column = make_column_from_field(&field).unwrap();
+
+        assert!(!column.colflags.contains(ColumnFlags::NOT_NULL_FLAG));
+        assert!(!column.colflags.contains(ColumnFlags::UNSIGNED_FLAG));
     }
 }
