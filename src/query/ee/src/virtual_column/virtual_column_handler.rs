@@ -22,23 +22,34 @@ use databend_common_sql::plans::RefreshSelection;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::VirtualColumnHandler;
 use databend_enterprise_virtual_column::VirtualColumnHandlerWrapper;
+use databend_enterprise_virtual_column::VirtualColumnRefreshResult;
 
-use crate::storages::fuse::do_refresh_virtual_column;
+use crate::storages::fuse::operations::virtual_columns::commit_refresh_virtual_column;
+use crate::storages::fuse::operations::virtual_columns::prepare_refresh_virtual_column;
 
 pub struct RealVirtualColumnHandler {}
 
 #[async_trait::async_trait]
 impl VirtualColumnHandler for RealVirtualColumnHandler {
-    async fn do_refresh_virtual_column(
+    async fn prepare_refresh_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+        limit: Option<u64>,
+        overwrite: bool,
+        selection: Option<RefreshSelection>,
+    ) -> Result<Vec<VirtualColumnRefreshResult>> {
+        prepare_refresh_virtual_column(ctx, fuse_table, limit, overwrite, selection).await
+    }
+
+    async fn commit_refresh_virtual_column(
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
-        limit: Option<u64>,
-        overwrite: bool,
-        selection: Option<RefreshSelection>,
-    ) -> Result<()> {
-        do_refresh_virtual_column(ctx, fuse_table, pipeline, limit, overwrite, selection).await
+        results: Vec<VirtualColumnRefreshResult>,
+    ) -> Result<u64> {
+        commit_refresh_virtual_column(ctx, fuse_table, pipeline, results).await
     }
 }
 
