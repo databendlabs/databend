@@ -87,7 +87,7 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
             return PipelineBuildResult::from_blocks(vec![result_block]);
         }
 
-        // Lock the tablex and submit the BlockMeta with the virtual column,
+        // Lock the table and submit the BlockMeta with the virtual column,
         // this takes a very short time and has a very low probability of failure.
         let lock_guard = self
             .ctx
@@ -107,7 +107,6 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
                 fuse_table,
                 &mut commit_res.main_pipeline,
                 results,
-                self.plan.overwrite,
             )
             .await?;
 

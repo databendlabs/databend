@@ -64,7 +64,6 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         fuse_table,
         &mut build_res.main_pipeline,
         results,
-        false,
     )
     .await?;
 

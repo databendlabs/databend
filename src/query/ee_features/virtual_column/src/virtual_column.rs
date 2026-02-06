@@ -47,7 +47,6 @@ pub trait VirtualColumnHandler: Sync + Send {
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
         results: Vec<VirtualColumnRefreshResult>,
-        overwrite: bool,
     ) -> Result<u64>;
 }
 
@@ -80,10 +79,9 @@ impl VirtualColumnHandlerWrapper {
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
         results: Vec<VirtualColumnRefreshResult>,
-        overwrite: bool,
     ) -> Result<u64> {
         self.handler
-            .commit_refresh_virtual_column(ctx, fuse_table, pipeline, results, overwrite)
+            .commit_refresh_virtual_column(ctx, fuse_table, pipeline, results)
             .await
     }
 }

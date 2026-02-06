@@ -177,8 +177,6 @@ pub async fn prepare_refresh_virtual_column(
                     &virtual_block_meta.virtual_location.0,
                 ) {
                     has_legacy_virtual = true;
-                    let legacy_location = &virtual_block_meta.virtual_location.0;
-                    let _ = operator.delete(legacy_location).await;
                 }
             }
 
@@ -263,7 +261,6 @@ pub async fn commit_refresh_virtual_column(
     fuse_table: &FuseTable,
     pipeline: &mut Pipeline,
     results: Vec<VirtualColumnRefreshResult>,
-    overwrite: bool,
 ) -> Result<u64> {
     let start = Instant::now();
     if results.is_empty() {
@@ -301,9 +298,6 @@ pub async fn commit_refresh_virtual_column(
             })
             .await?;
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
-            if !overwrite && block_meta.virtual_block_meta.is_some() {
-                continue;
-            }
             let block_location = &block_meta.location.0;
             let Some(result) = results_by_block.get(block_location) else {
                 continue;

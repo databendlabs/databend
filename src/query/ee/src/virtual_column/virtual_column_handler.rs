@@ -48,9 +48,8 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
         results: Vec<VirtualColumnRefreshResult>,
-        overwrite: bool,
     ) -> Result<u64> {
-        commit_refresh_virtual_column(ctx, fuse_table, pipeline, results, overwrite).await
+        commit_refresh_virtual_column(ctx, fuse_table, pipeline, results).await
     }
 }
 
