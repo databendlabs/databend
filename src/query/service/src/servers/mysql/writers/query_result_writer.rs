@@ -250,7 +250,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             convert_field_type(field).map(|column_type| {
                 let mut colflags = ColumnFlags::empty();
 
-                if !field.is_nullable() {
+                if !field.is_nullable_or_null() {
                     colflags |= ColumnFlags::NOT_NULL_FLAG;
                 }
 
