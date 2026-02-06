@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::NonEmptyItem;
-use databend_common_meta_types::Change;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::NonEmptyItem;
+use databend_meta_types::Change;
+use databend_meta_types::Operation;
+use databend_meta_types::SeqV;
+use databend_meta_types::protobuf::StreamItem;
 
 use crate::kv_pb_api::errors::NoneValue;
 use crate::kv_pb_api::errors::PbApiReadError;

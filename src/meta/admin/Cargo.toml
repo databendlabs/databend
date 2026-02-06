@@ -14,11 +14,11 @@ memory-profiling = ["databend-common-http/memory-profiling"]
 [dependencies]
 databend-base = { workspace = true }
 databend-common-http = { workspace = true }
-databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-runtime-api = { workspace = true }
-databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-raft-store = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
+databend-meta-sled-store = { workspace = true }
+databend-meta-types = { workspace = true }
 
 anyerror = { workspace = true }
 async-trait = { workspace = true }
@@ -31,10 +31,10 @@ serde_urlencoded = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-meta-runtime-api = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-runtime = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
 databend-meta-test-harness = { workspace = true }
 env_logger = { workspace = true }
 fastrace = { workspace = true }

@@ -37,7 +37,7 @@ impl RowAccessPolicyIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::row_access_policy::RowAccessPolicyNameIdentRaw;
     use crate::row_access_policy::row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdent;
@@ -61,7 +61,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::row_access_policy::RowAccessPolicyId;
     use crate::row_access_policy::RowAccessPolicyIdToNameIdent;

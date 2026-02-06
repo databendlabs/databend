@@ -25,9 +25,9 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::RpcClientConf;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -41,7 +41,7 @@ async fn test_user_manager() -> anyhow::Result<()> {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(BUILD_INFO.semver());
+    let conf = RpcClientConf::empty();
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

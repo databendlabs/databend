@@ -21,7 +21,7 @@ pub type TaskIdentRaw = TIdent<Resource>;
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::task::Task;
     use crate::principal::task_ident::TaskIdent;

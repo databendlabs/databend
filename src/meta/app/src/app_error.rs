@@ -17,7 +17,7 @@ use std::fmt::Display;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;

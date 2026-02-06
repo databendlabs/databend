@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::TxnOpResponse;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::protobuf::RaftReply;
+use databend_meta_types::InvalidReply;
+use databend_meta_types::MetaAPIError;
+use databend_meta_types::TxnOpResponse;
+use databend_meta_types::TxnReply;
+use databend_meta_types::protobuf::RaftReply;
 use serde::de::DeserializeOwned;
 
 pub fn reply_to_api_result<T>(msg: RaftReply) -> Result<T, MetaAPIError>
@@ -45,9 +45,9 @@ mod tests {
         i: i32,
     }
 
-    use databend_common_meta_types::MetaAPIError;
-    use databend_common_meta_types::MetaNetworkError;
-    use databend_common_meta_types::protobuf::RaftReply;
+    use databend_meta_types::MetaAPIError;
+    use databend_meta_types::MetaNetworkError;
+    use databend_meta_types::protobuf::RaftReply;
 
     use crate::reply::reply_to_api_result;
 

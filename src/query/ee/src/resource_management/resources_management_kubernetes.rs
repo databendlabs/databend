@@ -19,8 +19,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseInfo;
-use databend_common_meta_types::NodeInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::NodeInfo;
 
 pub struct KubernetesResourcesManagement {}
 

@@ -25,7 +25,7 @@ impl MarkedDeletedIndexId {
 }
 
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use super::MarkedDeletedIndexId;
 

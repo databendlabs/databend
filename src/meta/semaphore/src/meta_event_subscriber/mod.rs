@@ -17,7 +17,7 @@ mod subscriber;
 
 use std::fmt;
 
-use databend_common_meta_types::SeqV;
+use databend_meta_types::SeqV;
 use display_more::DisplayOptionExt;
 pub(crate) use processor::Processor;
 pub(crate) use subscriber::MetaEventSubscriber;

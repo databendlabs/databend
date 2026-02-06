@@ -77,7 +77,7 @@ impl TenantOwnershipObjectIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::OwnershipInfo;
     use crate::principal::TenantOwnershipObjectIdent;
@@ -105,8 +105,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::KeyWithTenant;
     use crate::principal::OwnershipObject;
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_ownership_seq_list_key() {
-        use databend_common_meta_kvapi::kvapi::Key;
+        use databend_meta_kvapi::kvapi::Key;
         let obj = OwnershipObject::Sequence {
             name: "seq1".to_string(),
         };
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_ownership_procedure_list_key() {
-        use databend_common_meta_kvapi::kvapi::Key;
+        use databend_meta_kvapi::kvapi::Key;
         let obj = OwnershipObject::Procedure { procedure_id: 1 };
 
         let ident = TenantOwnershipObjectIdent::new(Tenant::new_literal("tenant1"), obj);

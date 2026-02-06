@@ -49,14 +49,14 @@ use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::ListOptions;
 
 use crate::meta_service_error;
 

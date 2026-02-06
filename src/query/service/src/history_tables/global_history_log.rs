@@ -33,7 +33,6 @@ use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_client::MetaGrpcClient;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_storage::init_operator;
@@ -41,6 +40,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
 use databend_common_tracing::get_all_history_table_names;
 use databend_common_tracing::init_history_tables;
+use databend_meta_client::MetaGrpcClient;
 use futures_util::TryStreamExt;
 use futures_util::future::join_all;
 use log::debug;
@@ -92,9 +92,8 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        let meta_client =
-            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.semver()))
-                .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
+            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(

@@ -14,9 +14,9 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-types = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 maplit = { workspace = true }

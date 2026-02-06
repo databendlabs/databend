@@ -195,9 +195,9 @@ mod kvapi_key_impl {
     use std::fmt::Debug;
 
     use databend_base::non_empty::NonEmptyString;
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyCodec;
-    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::KeyCodec;
+    use databend_meta_kvapi::kvapi::KeyError;
 
     use crate::KeyWithTenant;
     use crate::tenant::Tenant;
@@ -260,8 +260,8 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::tenant::Tenant;
     use crate::tenant_key::ident::TIdent;

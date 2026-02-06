@@ -25,7 +25,7 @@ pub use kvapi_impl::IndexIdResource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::IndexMeta;
     use crate::schema::index_id_ident::IndexIdIdent;
@@ -51,7 +51,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::IndexId;
     use super::IndexIdIdent;

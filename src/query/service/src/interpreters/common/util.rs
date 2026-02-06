@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_users::UserApiProvider;
+use databend_meta_kvapi::kvapi::KvApiExt;
 
 use crate::meta_service_error;
 

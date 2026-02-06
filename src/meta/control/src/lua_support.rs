@@ -17,18 +17,17 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::UpsertKV;
 use mlua::Lua;
 use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::UserDataMethods;
 use mlua::Value;
-use semver::Version;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
@@ -169,7 +168,7 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> {
+pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
@@ -180,7 +179,6 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
         .create_function(move |_lua, address: String| {
             let client = MetaGrpcClient::try_create(
                 vec![address],
-                version.clone(),
                 "root",
                 "xxx",
                 Some(Duration::from_secs(2)),
@@ -267,7 +265,6 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
 
 pub fn new_grpc_client(
     addresses: Vec<String>,
-    version: Version,
 ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
@@ -275,7 +272,6 @@ pub fn new_grpc_client(
     );
     MetaGrpcClient::try_create(
         addresses,
-        version,
         "root",
         "xxx",
         Some(Duration::from_secs(2)),
@@ -289,10 +285,10 @@ pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str) -> anyhow::Result<()> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, version)?;
+    setup_lua_environment(&lua)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -306,11 +302,10 @@ pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()
 
 pub async fn run_lua_script_with_result(
     script: &str,
-    version: Version,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, version)?;
+    setup_lua_environment(&lua)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();

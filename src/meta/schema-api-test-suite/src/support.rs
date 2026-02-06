@@ -18,10 +18,10 @@ use std::sync::Arc;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::Key;
+use databend_meta_types::MetaError;
+use databend_meta_types::UpsertKV;
 
 macro_rules! assert_meta_eq_without_updated {
     ($a: expr, $b: expr, $msg: expr) => {

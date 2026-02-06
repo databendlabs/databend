@@ -38,8 +38,8 @@ use databend_common_meta_app::data_mask::data_mask_name_ident::Resource;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait DatamaskHandler: Sync + Send {

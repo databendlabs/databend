@@ -21,7 +21,6 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
 use databend_common_storages_system::BacktraceTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
@@ -81,6 +80,7 @@ use databend_common_version::DATABEND_CREDITS_LICENSES;
 use databend_common_version::DATABEND_CREDITS_NAMES;
 use databend_common_version::DATABEND_CREDITS_VERSIONS;
 use databend_common_version::DATABEND_OPT_LEVEL;
+use databend_meta_types::SeqV;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
