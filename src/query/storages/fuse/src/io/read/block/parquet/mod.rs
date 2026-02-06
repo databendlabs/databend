@@ -125,56 +125,64 @@ impl BlockReader {
 
         let has_selection = selection.is_some();
         let parquet_selection = selection.map(|s| s.selection.clone());
-        let record_batch = match column_chunks_to_record_batch(
-            &read_original_schema,
-            num_rows,
-            &column_chunks,
-            compression,
-            parquet_selection.clone(),
-        ) {
-            Ok(record_batch) => record_batch,
-            Err(err) => {
-                let mut last_err = err;
-                let mut record_batch = None;
-                if let Some(fallback_schema) =
-                    build_compatible_read_schema(read_original_schema.as_ref())
-                {
-                    let fallback_projected_schema = if fallback_schema.as_ref()
-                        == self.original_schema.as_ref()
-                    {
-                        self.projected_schema.clone()
-                    } else {
-                        match &self.projection {
-                            Projection::Columns(indices) => {
-                                TableSchemaRef::new(fallback_schema.project(indices))
-                            }
-                            Projection::InnerColumns(path_indices) => {
-                                TableSchemaRef::new(fallback_schema.inner_project(path_indices))
-                            }
-                        }
-                    };
-                    match column_chunks_to_record_batch(
-                        &fallback_schema,
-                        num_rows,
-                        &column_chunks,
-                        compression,
-                        parquet_selection,
-                    ) {
-                        Ok(batch) => {
-                            read_original_schema = fallback_schema;
-                            read_projected_schema = fallback_projected_schema;
-                            record_batch = Some(batch);
-                        }
-                        Err(err) => {
-                            last_err = err;
-                        }
+        let fallback_schema = build_compatible_read_schema(read_original_schema.as_ref());
+        let fallback_projected_schema = fallback_schema.as_ref().map(|schema| {
+            if schema.as_ref() == self.original_schema.as_ref() {
+                self.projected_schema.clone()
+            } else {
+                match &self.projection {
+                    Projection::Columns(indices) => TableSchemaRef::new(schema.project(indices)),
+                    Projection::InnerColumns(path_indices) => {
+                        TableSchemaRef::new(schema.inner_project(path_indices))
                     }
                 }
-                match record_batch {
-                    Some(batch) => batch,
-                    None => return Err(last_err),
+            }
+        });
+        let prefer_fallback = fallback_schema.is_some()
+            && should_prefer_compatible_schema(self.original_schema.as_ref(), column_stats);
+
+        let mut last_err = None;
+        let mut record_batch = None;
+        let mut try_read = |schema: &TableSchemaRef, projected: &TableSchemaRef| {
+            match column_chunks_to_record_batch(
+                schema,
+                num_rows,
+                &column_chunks,
+                compression,
+                parquet_selection.clone(),
+            ) {
+                Ok(batch) => {
+                    read_original_schema = schema.clone();
+                    read_projected_schema = projected.clone();
+                    record_batch = Some(batch);
+                }
+                Err(err) => {
+                    last_err = Some(err);
                 }
             }
+        };
+
+        if prefer_fallback {
+            if let (Some(schema), Some(projected)) = (&fallback_schema, &fallback_projected_schema)
+            {
+                try_read(schema, projected);
+            }
+            if record_batch.is_none() {
+                try_read(&read_original_schema, &read_projected_schema);
+            }
+        } else {
+            try_read(&read_original_schema, &read_projected_schema);
+            if record_batch.is_none() {
+                if let (Some(schema), Some(projected)) =
+                    (&fallback_schema, &fallback_projected_schema)
+                {
+                    try_read(schema, projected);
+                }
+            }
+        }
+
+        let Some(record_batch) = record_batch else {
+            return Err(last_err.unwrap());
         };
 
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
@@ -422,6 +430,37 @@ fn build_compatible_read_schema(schema: &TableSchema) -> Option<TableSchemaRef> 
         schema.metadata.clone(),
         schema.next_column_id,
     )))
+}
+
+fn should_prefer_compatible_schema(
+    schema: &TableSchema,
+    column_stats: Option<&HashMap<ColumnId, ColumnStatistics>>,
+) -> bool {
+    let has_compatible = schema
+        .fields
+        .iter()
+        .any(|field| compatible_read_type(&field.data_type).1);
+    if !has_compatible {
+        return false;
+    }
+
+    let Some(stats) = column_stats else {
+        return true;
+    };
+
+    for field in &schema.fields {
+        if !compatible_read_type(&field.data_type).1 {
+            continue;
+        }
+        for column_id in field.leaf_column_ids() {
+            match stats.get(&column_id) {
+                None => return true,
+                Some(stat) if stat.min().is_null() && stat.max().is_null() => return true,
+                _ => {}
+            }
+        }
+    }
+    false
 }
 
 fn compatible_read_type(data_type: &TableDataType) -> (TableDataType, bool) {
