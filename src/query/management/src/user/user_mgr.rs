@@ -14,29 +14,32 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
+use databend_common_meta_api::deserialize_struct;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::TenantUserIdent;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::principal::tenant_user_ident::Resource as UserIdentResource;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
+use fastrace::func_name;
+use futures::TryStreamExt;
 
-use crate::errors::meta_service_error;
-use crate::serde::deserialize_struct;
-use crate::serde::serialize_struct;
 use crate::user::user_api::UserApi;
 
 pub struct UserMgr {
@@ -52,13 +55,10 @@ impl UserMgr {
         }
     }
 
-    /// Create a string key to store a user@host into meta-service.
-    fn user_key(&self, username: &str, hostname: &str) -> String {
-        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), username, hostname);
-        ident.to_string_key()
+    fn user_ident(&self, user: &UserIdentity) -> TenantUserIdent {
+        TenantUserIdent::new_user_host(self.tenant.clone(), &user.username, &user.hostname)
     }
 
-    /// Create a prefix `<PREFIX>/<tenant>/` for listing
     fn user_prefix(&self) -> String {
         let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
         ident.tenant_prefix()
@@ -69,143 +69,154 @@ impl UserMgr {
 impl UserApi for UserMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_user(
+    async fn create_user(
         &self,
         user_info: UserInfo,
-        create_option: &CreateOption,
-    ) -> databend_common_exception::Result<()> {
-        let key = self.user_key(&user_info.name, &user_info.hostname);
-        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+        overriding: bool,
+    ) -> Result<Result<SeqV<UserInfo>, ExistError<UserIdentResource, UserIdentity>>, MetaError>
+    {
+        let ident = TenantUserIdent::new_user_host(
+            self.tenant.clone(),
+            &user_info.name,
+            &user_info.hostname,
+        );
 
-        let kv_api = &self.kv_api;
-        let seq = MatchSeq::from(*create_option);
-        let res = kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await
-            .map_err(meta_service_error)?;
+        let seq = if overriding {
+            MatchSeq::GE(0)
+        } else {
+            MatchSeq::Exact(0)
+        };
 
-        if let CreateOption::Create = create_option {
-            if res.prev.is_some() {
-                return Err(ErrorCode::UserAlreadyExists(format!(
-                    "User {} already exists.",
-                    user_info.identity().display()
-                )));
-            }
+        let req = UpsertPB::insert(ident.clone(), user_info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
+
+        if !overriding && res.prev.is_some() {
+            return Ok(Err(ident.exist_error(func_name!())));
         }
 
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
-        let key = self.user_key(&user.username, &user.hostname);
-
-        let res = self.kv_api.get_kv(&key).await.map_err(meta_service_error)?;
-        let seq_value = res.ok_or_else(|| {
-            ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
-        })?;
-
-        match seq.match_seq(&seq_value) {
-            Ok(_) => Ok(SeqV::new(
-                seq_value.seq,
-                deserialize_struct(&seq_value.data, ErrorCode::IllegalUserInfoFormat, || "")?,
-            )),
-            Err(_) => Err(ErrorCode::UnknownUser(format!(
-                "User {} does not exist.",
-                user.display()
-            ))),
+        match res.result {
+            Some(seqv) => Ok(Ok(SeqV::new(seqv.seq, user_info))),
+            None => Ok(Err(ident.exist_error(func_name!()))),
         }
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
-        let values = self.get_raw_users().await?;
-        let mut r = vec![];
-        for (_key, val) in values {
-            let u = deserialize_struct(&val.data, ErrorCode::IllegalUserInfoFormat, || "")?;
-            r.push(SeqV::new(val.seq, u));
-        }
+    async fn get_user(
+        &self,
+        user: &UserIdentity,
+    ) -> Result<Result<SeqV<UserInfo>, UnknownError<UserIdentResource, UserIdentity>>, MetaError>
+    {
+        let ident = self.user_ident(user);
 
-        Ok(r)
+        let res = self.kv_api.get_pb(&ident).await?;
+        let Some(seq_value) = res else {
+            return Ok(Err(ident.unknown_error(func_name!())));
+        };
+
+        Ok(Ok(seq_value))
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_raw_users(&self) -> Result<ListKVReply> {
-        let user_prefix = self.user_prefix();
-        Ok(self
+    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>, MetaError> {
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
+        let dir_name = DirName::new(ident);
+        let mut strm = self
             .kv_api
+            .list_pb(ListOptions::unlimited(&dir_name))
+            .await?;
+
+        let mut results = Vec::new();
+        while let Some(item) = strm.try_next().await? {
+            results.push(item.seqv);
+        }
+        Ok(results)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn get_raw_users(&self) -> Result<ListKVReply, MetaError> {
+        let user_prefix = self.user_prefix();
+        self.kv_api
             .list_kv_collect(ListOptions::unlimited(user_prefix.as_str()))
             .await
-            .map_err(meta_service_error)?)
     }
 
+    /// Update a user in place.
+    ///
+    /// This method internally calls `get_user` to fetch the current user state,
+    /// applies the update function, then writes back with optimistic concurrency control.
     #[async_backtrace::framed]
     async fn update_user_with<F>(
         &self,
-        user: UserIdentity,
-        seq: MatchSeq,
+        user: &UserIdentity,
         f: F,
-    ) -> Result<Option<u64>>
+    ) -> Result<Result<u64, UnknownError<UserIdentResource, UserIdentity>>, MetaError>
     where
         F: FnOnce(&mut UserInfo) + Send,
     {
-        let SeqV {
-            seq,
-            data: mut user_info,
-            ..
-        } = self.get_user(user, seq).await?;
+        let ident = self.user_ident(user);
 
+        let Ok(seqv) = self.get_user(user).await? else {
+            return Ok(Err(ident.unknown_error(func_name!())));
+        };
+
+        let seq = seqv.seq;
+        let mut user_info = seqv.data;
         f(&mut user_info);
 
-        let seq = self
-            .upsert_user_info(&user_info, MatchSeq::Exact(seq))
-            .await?;
-        Ok(Some(seq))
+        let req = UpsertPB::update(ident.clone(), user_info).with(MatchSeq::Exact(seq));
+        let res = self.kv_api.upsert_pb(&req).await?;
+
+        match res.result {
+            Some(SeqV { seq, .. }) => Ok(Ok(seq)),
+            None => Ok(Err(ident.unknown_error(func_name!()))),
+        }
     }
 
     #[async_backtrace::framed]
     async fn upsert_user_info(
         &self,
-        user_info: &UserInfo,
-        seq: MatchSeq,
-    ) -> databend_common_exception::Result<u64> {
-        let key = self.user_key(&user_info.name, &user_info.hostname);
+        user: &UserInfo,
+        seq: u64,
+    ) -> Result<Result<u64, UnknownError<UserIdentResource, UserIdentity>>, MetaError> {
+        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), &user.name, &user.hostname);
 
-        let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await
-            .map_err(meta_service_error)?;
+        let req = UpsertPB::update(ident.clone(), user.clone()).with(MatchSeq::Exact(seq));
+        let res = self.kv_api.upsert_pb(&req).await?;
 
         match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "User '{}' update failed: User does not exist or invalid request.",
-                user_info.name
-            ))),
+            Some(SeqV { seq, .. }) => Ok(Ok(seq)),
+            None => Ok(Err(ident.unknown_error(func_name!()))),
         }
     }
 
     #[async_backtrace::framed]
-    async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {
-        let key = self.user_key(&user.username, &user.hostname);
+    async fn drop_user(
+        &self,
+        user: &UserIdentity,
+    ) -> Result<Result<SeqV<UserInfo>, UnknownError<UserIdentResource, UserIdentity>>, MetaError>
+    {
+        let ident = self.user_ident(user);
+        let key = ident.to_string_key();
+
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
-            .await
-            .map_err(meta_service_error)?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownUser(format!(
-                "Cannot delete user {}. User does not exist or invalid operation.",
-                user.display()
-            )))
+            .upsert_kv(UpsertKV::new(
+                &key,
+                MatchSeq::GE(1),
+                Operation::Delete,
+                None,
+            ))
+            .await?;
+
+        match res.prev {
+            Some(seqv) => {
+                let user_info: UserInfo = deserialize_struct(&seqv.data)?;
+                Ok(Ok(SeqV::new(seqv.seq, user_info)))
+            }
+            None => Ok(Err(ident.unknown_error(func_name!()))),
         }
     }
 }
