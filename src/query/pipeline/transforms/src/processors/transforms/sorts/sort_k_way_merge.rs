@@ -133,7 +133,6 @@ impl Builder<'_> {
                     input,
                     self.stream_size,
                     output,
-                    self.schema.clone(),
                     self.block_size,
                     self.remove_order_col,
                 ),
@@ -307,7 +306,6 @@ where A: SortAlgorithm
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     stream_size: usize,
-    _schema: DataSchemaRef,
     batch_rows: usize,
     remove_order_col: bool,
 
@@ -324,7 +322,6 @@ where A: SortAlgorithm
         input: Arc<InputPort>,
         stream_size: usize,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
         batch_rows: usize,
         remove_order_col: bool,
     ) -> Self {
@@ -333,7 +330,6 @@ where A: SortAlgorithm
             output,
             output_data: VecDeque::new(),
             stream_size,
-            _schema: schema,
             batch_rows,
             remove_order_col,
             buffer: Vec::new(),
