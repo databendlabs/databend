@@ -130,7 +130,7 @@ impl BlockReader {
         let has_selection = selection.is_some();
         let parquet_selection = selection.map(|s| s.selection.clone());
         // Table schema may be widened (e.g. i32 -> i64); fallback narrows read types
-        // to match the old parquet encoding for legacy blocks.
+        // back to the legacy parquet encoding for old blocks.
         let fallback_schema = build_compatible_read_schema(read_original_schema.as_ref());
         let fallback_projected_schema = fallback_schema.as_ref().map(|schema| {
             if schema.as_ref() == self.original_schema.as_ref() {
@@ -144,11 +144,6 @@ impl BlockReader {
                 }
             }
         });
-        // Prefer reading with the compatible schema when stats suggest legacy type
-        // (or stats are missing), to avoid a late failure after decoding many columns.
-        let prefer_fallback = fallback_schema.is_some()
-            && should_prefer_compatible_schema(self.original_schema.as_ref(), column_stats);
-
         let mut last_err: Option<ErrorCode> = None;
         let mut record_batch: Option<(TableSchemaRef, TableSchemaRef, RecordBatch)> = None;
         // Try read once with a given schema; on success, remember the schemas for casting.
@@ -173,32 +168,16 @@ impl BlockReader {
                 }
             };
 
-        if prefer_fallback {
+        try_read(
+            &read_original_schema,
+            &read_projected_schema,
+            &mut record_batch,
+            &mut last_err,
+        );
+        if record_batch.is_none() {
             if let (Some(schema), Some(projected)) = (&fallback_schema, &fallback_projected_schema)
             {
                 try_read(schema, projected, &mut record_batch, &mut last_err);
-            }
-            if record_batch.is_none() {
-                try_read(
-                    &read_original_schema,
-                    &read_projected_schema,
-                    &mut record_batch,
-                    &mut last_err,
-                );
-            }
-        } else {
-            try_read(
-                &read_original_schema,
-                &read_projected_schema,
-                &mut record_batch,
-                &mut last_err,
-            );
-            if record_batch.is_none() {
-                if let (Some(schema), Some(projected)) =
-                    (&fallback_schema, &fallback_projected_schema)
-                {
-                    try_read(schema, projected, &mut record_batch, &mut last_err);
-                }
             }
         }
 
@@ -474,39 +453,6 @@ fn build_compatible_read_schema(schema: &TableSchema) -> Option<TableSchemaRef> 
         schema.metadata.clone(),
         schema.next_column_id,
     )))
-}
-
-fn should_prefer_compatible_schema(
-    schema: &TableSchema,
-    column_stats: Option<&HashMap<ColumnId, ColumnStatistics>>,
-) -> bool {
-    // Heuristic: if any field can be narrowed and stats are missing/NULL,
-    // decode with compatible schema first to avoid expensive failure late.
-    let has_compatible = schema
-        .fields
-        .iter()
-        .any(|field| compatible_read_type(&field.data_type).1);
-    if !has_compatible {
-        return false;
-    }
-
-    let Some(stats) = column_stats else {
-        return true;
-    };
-
-    for field in &schema.fields {
-        if !compatible_read_type(&field.data_type).1 {
-            continue;
-        }
-        for column_id in field.leaf_column_ids() {
-            match stats.get(&column_id) {
-                None => return true,
-                Some(stat) if stat.min().is_null() && stat.max().is_null() => return true,
-                _ => {}
-            }
-        }
-    }
-    false
 }
 
 fn compatible_read_type(data_type: &TableDataType) -> (TableDataType, bool) {

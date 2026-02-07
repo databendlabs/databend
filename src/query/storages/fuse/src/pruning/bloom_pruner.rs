@@ -24,6 +24,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -33,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::BloomIndexResult;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
@@ -80,10 +82,10 @@ pub struct BloomPrunerCreator {
     /// pre calculated digest for constant Scalar for like conditions
     like_scalar_map: HashMap<Scalar, Vec<u64>>,
 
-    /// scalars bound to bloom fields (index into bloom_fields, scalar, data_type)
-    bloom_scalars: Vec<(usize, Scalar, DataType)>,
-    /// scalars bound to ngram fields (index into ngram_fields, scalar)
-    ngram_scalars: Vec<(usize, Scalar)>,
+    /// scalars bound to bloom fields (field, scalar, data_type)
+    bloom_scalars: Vec<(TableField, Scalar, DataType)>,
+    /// scalars bound to ngram fields (field, scalar)
+    ngram_scalars: Vec<(TableField, Scalar)>,
 
     /// Ngram args aligned with BloomColumn using Ngram
     ngram_args: Vec<NgramArgs>,
@@ -116,23 +118,33 @@ impl BloomPrunerCreator {
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
         let ngram_column_fields: Vec<TableField> =
             ngram_args.iter().map(|arg| arg.field().clone()).collect();
-        let result =
-            BloomIndex::filter_index_field(expr, bloom_column_fields, ngram_column_fields)?;
+        let result = BloomIndex::filter_index_field(
+            expr,
+            bloom_column_fields.clone(),
+            ngram_column_fields.clone(),
+        )?;
 
         if result.bloom_fields.is_empty() && result.ngram_fields.is_empty() {
             return Ok(None);
         }
 
+        let BloomIndexResult {
+            bloom_fields,
+            ngram_fields,
+            bloom_scalars,
+            ngram_scalars,
+        } = result;
+
         // convert to filter column names
         let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
-        for (_, scalar, ty) in result.bloom_scalars.iter() {
+        for (_, scalar, ty) in bloom_scalars.iter() {
             if let Entry::Vacant(e) = eq_scalar_map.entry(scalar.clone()) {
                 let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty)?;
                 e.insert(digest);
             }
         }
         let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-        for (i, scalar) in result.ngram_scalars.iter() {
+        for (i, scalar) in ngram_scalars.iter() {
             let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
                 Value::Scalar(scalar.clone()),
                 ngram_args[*i].gram_size(),
@@ -145,10 +157,22 @@ impl BloomPrunerCreator {
                 e.insert(digests);
             }
         }
-        let bloom_fields = result.bloom_fields;
-        let ngram_fields = result.ngram_fields;
-        let bloom_scalars = result.bloom_scalars;
-        let ngram_scalars = result.ngram_scalars;
+        let bloom_scalars = bloom_scalars
+            .iter()
+            .filter_map(|(idx, scalar, ty)| {
+                bloom_column_fields
+                    .get(*idx)
+                    .map(|field| (field.clone(), scalar.clone(), ty.clone()))
+            })
+            .collect::<Vec<_>>();
+        let ngram_scalars = ngram_scalars
+            .iter()
+            .filter_map(|(idx, scalar)| {
+                ngram_column_fields
+                    .get(*idx)
+                    .map(|field| (field.clone(), scalar.clone()))
+            })
+            .collect::<Vec<_>>();
 
         let mut index_fields = bloom_fields.clone();
         index_fields.extend(ngram_fields.clone());
@@ -205,7 +229,8 @@ impl BloomPrunerCreator {
             if !column_ids_of_indexed_block.contains(&field.column_id()) {
                 continue;
             }
-            let Some(stat) = column_stats.get(&field.column_id()) else {
+            let stats_column_id = map_value_leaf_id(field).unwrap_or_else(|| field.column_id());
+            let Some(stat) = column_stats.get(&stats_column_id) else {
                 return Ok(true);
             };
             let stat_type = if !stat.max().is_null() {
@@ -228,7 +253,8 @@ impl BloomPrunerCreator {
                 break;
             };
             let schema_type: DataType = field.data_type().into();
-            if stat_type.remove_nullable() != schema_type.remove_nullable() {
+            let expected_type = map_value_data_type(field).unwrap_or(schema_type);
+            if stat_type.remove_nullable() != expected_type.remove_nullable() {
                 use_fast_path = false;
                 break;
             }
@@ -237,8 +263,7 @@ impl BloomPrunerCreator {
         let mut local_eq_scalar_map = HashMap::<Scalar, u64>::new();
         let mut local_like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
         if !use_fast_path {
-            for (idx, scalar, _ty) in self.bloom_scalars.iter() {
-                let field = &self.bloom_fields[*idx];
+            for (field, scalar, _ty) in self.bloom_scalars.iter() {
                 if !column_ids_of_indexed_block.contains(&field.column_id()) {
                     continue;
                 }
@@ -260,8 +285,7 @@ impl BloomPrunerCreator {
                 }
             }
 
-            for (idx, scalar) in self.ngram_scalars.iter() {
-                let field = &self.ngram_fields[*idx];
+            for (field, scalar) in self.ngram_scalars.iter() {
                 if !column_ids_of_indexed_block.contains(&field.column_id()) {
                     continue;
                 }
@@ -279,9 +303,13 @@ impl BloomPrunerCreator {
                 if casted.is_null() {
                     return Ok(true);
                 }
+                let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field)
+                else {
+                    return Ok(true);
+                };
                 let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
                     Value::Scalar(casted),
-                    self.ngram_args[*idx].gram_size(),
+                    ngram_arg.gram_size(),
                     BloomIndex::ngram_hash,
                 )
                 .next() else {
@@ -415,6 +443,36 @@ impl BloomPrunerCreator {
             Ok(None)
         }
     }
+}
+
+fn map_value_leaf_id(field: &TableField) -> Option<ColumnId> {
+    let data_type = field.data_type().remove_nullable();
+    let TableDataType::Map(inner) = data_type else {
+        return None;
+    };
+    let TableDataType::Tuple { fields_type, .. } = inner.as_ref() else {
+        return None;
+    };
+    if fields_type.len() < 2 {
+        return None;
+    }
+    let key_leaf_count = fields_type[0].num_leaf_columns();
+    let leaf_ids = field.leaf_column_ids();
+    leaf_ids.get(key_leaf_count).copied()
+}
+
+fn map_value_data_type(field: &TableField) -> Option<DataType> {
+    let data_type = field.data_type().remove_nullable();
+    let TableDataType::Map(inner) = data_type else {
+        return None;
+    };
+    let TableDataType::Tuple { fields_type, .. } = inner.as_ref() else {
+        return None;
+    };
+    if fields_type.len() < 2 {
+        return None;
+    }
+    Some(DataType::from(&fields_type[1]))
 }
 
 #[async_trait::async_trait]
