@@ -1,0 +1,154 @@
+## Test Mod shuffle statistics in cluster mode
+## This test verifies that statistics are correctly reported when using Mod shuffle
+## (as opposed to BlockMod shuffle which is tested in explain_analyze.test)
+##
+## Mod shuffle is used when segment_count >= nodes * threshold
+## With 3 nodes and default threshold=5, we need >= 15 segments
+## With Mod shuffle, each node sees different partitions, so totals should sum
+
+statement ok
+drop table if exists mod_shuffle_test;
+
+statement ok
+create table mod_shuffle_test (
+    id int,
+    value string
+) block_per_segment=1;
+
+## Insert 20 rows to create 20 segments (since block_per_segment=1)
+statement ok
+insert into mod_shuffle_test values (1, 'a');
+
+statement ok
+insert into mod_shuffle_test values (2, 'b');
+
+statement ok
+insert into mod_shuffle_test values (3, 'c');
+
+statement ok
+insert into mod_shuffle_test values (4, 'd');
+
+statement ok
+insert into mod_shuffle_test values (5, 'e');
+
+statement ok
+insert into mod_shuffle_test values (6, 'f');
+
+statement ok
+insert into mod_shuffle_test values (7, 'g');
+
+statement ok
+insert into mod_shuffle_test values (8, 'h');
+
+statement ok
+insert into mod_shuffle_test values (9, 'i');
+
+statement ok
+insert into mod_shuffle_test values (10, 'j');
+
+statement ok
+insert into mod_shuffle_test values (11, 'k');
+
+statement ok
+insert into mod_shuffle_test values (12, 'l');
+
+statement ok
+insert into mod_shuffle_test values (13, 'm');
+
+statement ok
+insert into mod_shuffle_test values (14, 'n');
+
+statement ok
+insert into mod_shuffle_test values (15, 'o');
+
+statement ok
+insert into mod_shuffle_test values (16, 'p');
+
+statement ok
+insert into mod_shuffle_test values (17, 'q');
+
+statement ok
+insert into mod_shuffle_test values (18, 'r');
+
+statement ok
+insert into mod_shuffle_test values (19, 's');
+
+statement ok
+insert into mod_shuffle_test values (20, 't');
+
+## Verify we have 20 segments (exceeds threshold of 15 for 3 nodes)
+query T
+EXPLAIN SELECT * FROM mod_shuffle_test;
+----
+Exchange
+├── output columns: [mod_shuffle_test.id (#0), mod_shuffle_test.value (#1)]
+├── exchange type: Merge
+└── TableScan
+    ├── table: default.default.mod_shuffle_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), value (#1)]
+    ├── read rows: 20
+    ├── read size: <slt:ignore>
+    ├── partitions total: 20
+    ├── partitions scanned: 20
+    ├── pruning stats: [segments: <range pruning: 20 to 20 cost: <slt:ignore>>, blocks: <range pruning: 20 to 20 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 20.00
+
+## Test EXPLAIN ANALYZE with Mod shuffle
+## With 3 nodes and Mod shuffle, each node processes different partitions
+## The coordinator should report the total correctly (sum of all nodes)
+query T
+EXPLAIN ANALYZE SELECT * FROM mod_shuffle_test;
+----
+Exchange
+├── output columns: [mod_shuffle_test.id (#0), mod_shuffle_test.value (#1)]
+├── exchange type: Merge
+└── TableScan
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 20
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.mod_shuffle_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), value (#1)]
+    ├── read rows: 20
+    ├── read size: <slt:ignore>
+    ├── partitions total: 20
+    ├── partitions scanned: 20
+    ├── pruning stats: [segments: <range pruning: 20 to 20 cost: <slt:ignore>>, blocks: <range pruning: 20 to 20 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 20.00
+
+## Test with filter to verify pruning works correctly
+query T
+EXPLAIN ANALYZE SELECT * FROM mod_shuffle_test WHERE id < 10;
+----
+Exchange
+├── output columns: [mod_shuffle_test.id (#0), mod_shuffle_test.value (#1)]
+├── exchange type: Merge
+└── TableScan
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 9
+    ├── output bytes: 243.00 B
+    ├── bytes scanned: 243.00 B
+    ├── read from remote: 513.00 B
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.mod_shuffle_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), value (#1)]
+    ├── read rows: 9
+    ├── read size: < 1 KiB
+    ├── partitions total: 20
+    ├── partitions scanned: 9
+    ├── pruning stats: [segments: <range pruning: 20 to 9 cost: 1 ms>, blocks: <range pruning: 9 to 9 cost: 1 ms>]
+    ├── push downs: [filters: [is_true(mod_shuffle_test.id (#0) < 10)], limit: NONE]
+    └── estimated rows: 9.00
+
+statement ok
+drop table mod_shuffle_test;
