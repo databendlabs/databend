@@ -23,7 +23,7 @@ use std::sync::LazyLock;
 use semver::Version;
 
 /// Minimum meta-service binary version that this query binary requires.
-pub static MIN_METASRV_VER_FOR_QUERY: LazyLock<Version> = LazyLock::new(|| Version::new(1, 2, 873));
+pub static MIN_METASRV_VER_FOR_QUERY: LazyLock<Version> = LazyLock::new(|| Version::new(1, 2, 770));
 
 /// Minimum query binary version that this meta-service binary requires.
-pub static MIN_QUERY_VER_FOR_METASRV: LazyLock<Version> = LazyLock::new(|| Version::new(1, 2, 873));
+pub static MIN_QUERY_VER_FOR_METASRV: LazyLock<Version> = LazyLock::new(|| Version::new(1, 2, 676));
