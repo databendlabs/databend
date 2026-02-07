@@ -4,7 +4,7 @@ USE default
 statement ok
 set hide_options_in_show_create_table=1
 
-# no rewrite: int32 -> int64
+# no rewrite: int32 -> int64 (block locations unchanged + data readable)
 statement ok
 drop table if exists alter_no_rewrite_t_int
 
@@ -26,6 +26,7 @@ insert into alter_no_rewrite_loc_int select block_location from fuse_block('defa
 statement ok
 alter table alter_no_rewrite_t_int modify column a bigint null
 
+# verify no rewrite: block locations unchanged after widening
 query IIII
 select
   (select count(*) from fuse_block('default','alter_no_rewrite_t_int')) as after_cnt,
@@ -55,7 +56,7 @@ select data_type from system.columns where database = 'default' and table = 'alt
 ----
 BIGINT
 
-# no rewrite: decimal precision widen (scale unchanged)
+# no rewrite: decimal precision widen (scale unchanged, values preserved)
 statement ok
 drop table if exists alter_no_rewrite_t_dec
 
@@ -77,6 +78,7 @@ insert into alter_no_rewrite_loc_dec select block_location from fuse_block('defa
 statement ok
 alter table alter_no_rewrite_t_dec modify column a decimal(20, 2) null
 
+# verify no rewrite: block locations unchanged after widening
 query IIII
 select
   (select count(*) from fuse_block('default','alter_no_rewrite_t_dec')) as after_cnt,
@@ -94,12 +96,18 @@ select
 ----
 1 1 0 0
 
+query R
+select a from alter_no_rewrite_t_dec order by a
+----
+1.23
+4.56
+
 query T
 select data_type from system.columns where database = 'default' and table = 'alter_no_rewrite_t_dec' and name = 'a'
 ----
 DECIMAL(20, 2)
 
-# rename column should keep dfs leaf order (no rewrite) and allow widening
+# rename column keeps dfs leaf order (no rewrite) and allows widening
 statement ok
 drop table if exists alter_no_rewrite_rename
 
@@ -124,6 +132,7 @@ alter table alter_no_rewrite_rename rename column b to x
 statement ok
 alter table alter_no_rewrite_rename modify column x bigint
 
+# verify no rewrite: block locations unchanged after rename + widening
 query IIII
 select
   (select count(*) from fuse_block('default','alter_no_rewrite_rename')) as after_cnt,
@@ -152,7 +161,7 @@ select data_type from system.columns where database = 'default' and table = 'alt
 ----
 BIGINT
 
-# drop column should not break leaf mapping for remaining columns
+# drop column keeps remaining leaf mapping (no rewrite for widening)
 statement ok
 drop table if exists alter_no_rewrite_drop
 
@@ -177,6 +186,7 @@ alter table alter_no_rewrite_drop drop column b
 statement ok
 alter table alter_no_rewrite_drop modify column c bigint
 
+# verify no rewrite: block locations unchanged after drop + widening
 query IIII
 select
   (select count(*) from fuse_block('default','alter_no_rewrite_drop')) as after_cnt,
@@ -227,6 +237,7 @@ insert into alter_rewrite_loc_dec_scale select block_location from fuse_block('d
 statement ok
 alter table alter_rewrite_dec_scale modify column a decimal(10, 3)
 
+# verify rewrite: block locations change after scale adjustment
 query IIII
 select
   (select count(*) from fuse_block('default','alter_rewrite_dec_scale')) as after_cnt,
@@ -244,7 +255,23 @@ select
 ----
 1 1 1 1
 
-# range pruning after widening
+query I
+select count(*) from alter_rewrite_dec_scale
+----
+2
+
+query T
+select data_type from system.columns where database = 'default' and table = 'alter_rewrite_dec_scale' and name = 'a'
+----
+DECIMAL(10, 3)
+
+query R
+select cast(a as decimal(10, 2)) from alter_rewrite_dec_scale order by a
+----
+1.23
+4.56
+
+# range pruning after widening (plan shows pruned partitions)
 statement ok
 drop table if exists alter_no_rewrite_range
 
@@ -282,7 +309,13 @@ EvalScalar
     ├── push downs: [filters: [is_true(alter_no_rewrite_range.a (#0) = 42)], limit: NONE]
     └── estimated rows: 1.00
 
-# bloom pruning after widening
+# runtime read after widening (should return matching row)
+query I
+select count(*) from alter_no_rewrite_range where a = 42
+----
+1
+
+# bloom pruning after widening (plan shows bloom pruning + runtime read)
 statement ok
 drop table if exists alter_no_rewrite_bloom
 
