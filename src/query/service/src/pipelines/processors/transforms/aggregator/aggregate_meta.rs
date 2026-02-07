@@ -53,12 +53,15 @@ impl SerializedPayload {
         aggrs: Vec<Arc<dyn AggregateFunction>>,
         num_states: usize,
         radix_bits: u64,
+        enable_experiment_hash_index: bool,
         arena: Arc<Bump>,
         need_init_entry: bool,
     ) -> Result<AggregateHashTable> {
         let rows_num = self.data_block.num_rows();
         let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
-        let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
+        let config = HashTableConfig::default()
+            .with_initial_radix_bits(radix_bits)
+            .with_experiment_hash_index(enable_experiment_hash_index);
         let mut state = ProbeState::default();
         let group_len = group_types.len();
         let mut hashtable = AggregateHashTable::new_directly(
@@ -94,6 +97,7 @@ impl SerializedPayload {
         aggrs: Vec<Arc<dyn AggregateFunction>>,
         num_states: usize,
         radix_bits: u64,
+        enable_experiment_hash_index: bool,
         arena: Arc<Bump>,
     ) -> Result<PartitionedPayload> {
         let hashtable = self.convert_to_aggregate_table(
@@ -101,6 +105,7 @@ impl SerializedPayload {
             aggrs,
             num_states,
             radix_bits,
+            enable_experiment_hash_index,
             arena,
             false,
         )?;
