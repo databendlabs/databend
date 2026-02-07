@@ -3220,8 +3220,8 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 #[serde(default)]
 pub struct CacheConfig {
     /// The data in meta-service using key `TenantOwnershipObjectIdent`
-    #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
-    #[serde(default = "bool_false")]
+    #[clap(long = "cache-enable-meta-service-ownership", default_value = "true")]
+    #[serde(default = "bool_true")]
     pub meta_service_ownership_cache: bool,
 
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
