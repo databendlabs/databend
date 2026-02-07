@@ -42,6 +42,7 @@ struct JoinRuntimeFilterPacketBuilder<'a> {
     bloom_threshold: usize,
     min_max_threshold: usize,
     selectivity_threshold: u64,
+    probe_ratio_threshold: f64,
 }
 
 impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
@@ -53,6 +54,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         bloom_threshold: usize,
         min_max_threshold: usize,
         selectivity_threshold: u64,
+        probe_ratio_threshold: f64,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
@@ -62,6 +64,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             bloom_threshold,
             min_max_threshold,
             selectivity_threshold,
+            probe_ratio_threshold,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
@@ -69,6 +72,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             desc,
             self.build_key_column.len(),
             self.selectivity_threshold,
+            self.probe_ratio_threshold,
         ) {
             return Ok(RuntimeFilterPacket {
                 id: desc.id,
@@ -206,8 +210,34 @@ pub(super) fn should_enable_runtime_filter(
     desc: &RuntimeFilterDesc,
     build_num_rows: usize,
     selectivity_threshold: u64,
+    probe_ratio_threshold: f64,
 ) -> bool {
     if build_num_rows == 0 {
+        return false;
+    }
+
+    let mut max_probe_ratio = 0.0;
+    for rows in desc.probe_table_rows.iter().flatten() {
+        if *rows == 0 {
+            continue;
+        }
+        let ratio = *rows as f64 / build_num_rows as f64;
+        if ratio > max_probe_ratio {
+            max_probe_ratio = ratio;
+        }
+        if ratio > probe_ratio_threshold {
+            break;
+        }
+    }
+    if max_probe_ratio <= probe_ratio_threshold {
+        log::info!(
+            "RUNTIME-FILTER: Disable runtime filter {} - insufficient probe/build ratio: {:.2} <= {:.2} (build_rows={}, probe_table_rows={:?})",
+            desc.id,
+            max_probe_ratio,
+            probe_ratio_threshold,
+            build_num_rows,
+            desc.probe_table_rows
+        );
         return false;
     }
 
@@ -253,6 +283,7 @@ pub fn build_runtime_filter_packet(
     bloom_threshold: usize,
     min_max_threshold: usize,
     selectivity_threshold: u64,
+    probe_ratio_threshold: f64,
     is_spill_happened: bool,
 ) -> Result<JoinRuntimeFilterPacket> {
     if is_spill_happened {
@@ -279,6 +310,7 @@ pub fn build_runtime_filter_packet(
                 bloom_threshold,
                 min_max_threshold,
                 selectivity_threshold,
+                probe_ratio_threshold,
             )?
             .build(rf)?,
         );

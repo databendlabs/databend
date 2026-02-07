@@ -54,6 +54,7 @@ use tokio::sync::Barrier;
 use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;
 use super::runtime_filter::JoinRuntimeFilterPacket;
+use super::runtime_filter::RuntimeFilterBuildLimit;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::UniqueFixedKeyHashJoinHashTable;
@@ -106,6 +107,7 @@ pub struct HashJoinBuildState {
     pub(crate) broadcast_id: Option<u32>,
     pub(crate) is_runtime_filter_added: AtomicBool,
     runtime_filter_packets: Mutex<Vec<JoinRuntimeFilterPacket>>,
+    runtime_filter_build_limit: Mutex<Option<Arc<RuntimeFilterBuildLimit>>>,
 }
 
 impl HashJoinBuildState {
@@ -157,6 +159,7 @@ impl HashJoinBuildState {
             broadcast_id,
             is_runtime_filter_added: AtomicBool::new(false),
             runtime_filter_packets: Mutex::new(Vec::new()),
+            runtime_filter_build_limit: Mutex::new(None),
         }))
     }
 
@@ -863,6 +866,24 @@ impl HashJoinBuildState {
 
     pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {
         &self.hash_join_state.hash_join_desc.runtime_filter.filters
+    }
+
+    pub fn runtime_filter_build_limit(
+        &self,
+        selectivity_threshold: u64,
+        probe_ratio_threshold: f64,
+    ) -> Arc<RuntimeFilterBuildLimit> {
+        let mut guard = self.runtime_filter_build_limit.lock();
+        if let Some(limit) = guard.as_ref() {
+            return limit.clone();
+        }
+        let limit = Arc::new(RuntimeFilterBuildLimit::from_descs(
+            self.runtime_filter_desc(),
+            selectivity_threshold,
+            probe_ratio_threshold,
+        ));
+        *guard = Some(limit.clone());
+        limit
     }
 
     pub fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
