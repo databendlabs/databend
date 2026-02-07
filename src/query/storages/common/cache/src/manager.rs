@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -21,6 +22,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
+use databend_common_config::DiskCacheRatioInnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
@@ -65,6 +67,87 @@ static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 // a better approach.
 // Eventually, we should refactor the compute node configurations instead, to make those options more sensible.
 const TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD: usize = 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum DiskCacheKind {
+    ColumnData,
+    BloomIndexFilter,
+    BloomIndexMeta,
+    InvertedIndexFilter,
+    InvertedIndexMeta,
+    VectorIndexFilter,
+    VectorIndexMeta,
+}
+
+impl DiskCacheKind {
+    const ALL: [DiskCacheKind; 7] = [
+        DiskCacheKind::ColumnData,
+        DiskCacheKind::BloomIndexFilter,
+        DiskCacheKind::BloomIndexMeta,
+        DiskCacheKind::InvertedIndexFilter,
+        DiskCacheKind::InvertedIndexMeta,
+        DiskCacheKind::VectorIndexFilter,
+        DiskCacheKind::VectorIndexMeta,
+    ];
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            DiskCacheKind::ColumnData => "column_data",
+            DiskCacheKind::BloomIndexFilter => "bloom_index_filter",
+            DiskCacheKind::BloomIndexMeta => "bloom_index_meta",
+            DiskCacheKind::InvertedIndexFilter => "inverted_index_filter",
+            DiskCacheKind::InvertedIndexMeta => "inverted_index_meta",
+            DiskCacheKind::VectorIndexFilter => "vector_index_filter",
+            DiskCacheKind::VectorIndexMeta => "vector_index_meta",
+        }
+    }
+}
+
+impl fmt::Display for DiskCacheKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AllocationSource {
+    Override,
+    Ratio,
+}
+
+impl AllocationSource {
+    fn as_str(&self) -> &'static str {
+        match self {
+            AllocationSource::Override => "override",
+            AllocationSource::Ratio => "ratio",
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+struct DiskCacheSizes {
+    column_data: usize,
+    bloom_index_filter: usize,
+    bloom_index_meta: usize,
+    inverted_index_filter: usize,
+    inverted_index_meta: usize,
+    vector_index_filter: usize,
+    vector_index_meta: usize,
+}
+
+impl DiskCacheSizes {
+    fn set(&mut self, kind: DiskCacheKind, bytes: usize) {
+        match kind {
+            DiskCacheKind::ColumnData => self.column_data = bytes,
+            DiskCacheKind::BloomIndexFilter => self.bloom_index_filter = bytes,
+            DiskCacheKind::BloomIndexMeta => self.bloom_index_meta = bytes,
+            DiskCacheKind::InvertedIndexFilter => self.inverted_index_filter = bytes,
+            DiskCacheKind::InvertedIndexMeta => self.inverted_index_meta = bytes,
+            DiskCacheKind::VectorIndexFilter => self.vector_index_filter = bytes,
+            DiskCacheKind::VectorIndexMeta => self.vector_index_meta = bytes,
+        }
+    }
+}
 
 #[derive(Default)]
 struct CacheSlot<T> {
@@ -160,6 +243,7 @@ impl CacheManager {
         let tenant_id = tenant_id.into();
         let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
         let allows_on_disk_cache = AtomicBool::new(ee_mode);
+        let disk_cache_sizes = derive_disk_cache_sizes(config)?;
 
         let on_disk_cache_queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
             config.table_data_cache_population_queue_size
@@ -198,7 +282,7 @@ impl CacheManager {
                         Unit::Bytes,
                         &table_data_on_disk_cache_path,
                         on_disk_cache_queue_size,
-                        config.disk_cache_config.max_bytes as usize,
+                        disk_cache_sizes.column_data,
                         config.data_cache_key_reload_policy.clone(),
                         on_disk_cache_sync_data,
                         ee_mode,
@@ -276,7 +360,7 @@ impl CacheManager {
                     Unit::Bytes,
                     &bloom_filter_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_table_bloom_index_data_size as usize,
+                    disk_cache_sizes.bloom_index_filter,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -294,7 +378,7 @@ impl CacheManager {
                     Unit::Count,
                     &bloom_filter_meta_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_table_bloom_index_meta_size as usize,
+                    disk_cache_sizes.bloom_index_meta,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -312,7 +396,7 @@ impl CacheManager {
                     Unit::Count,
                     &inverted_index_meta_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_inverted_index_meta_size as usize,
+                    disk_cache_sizes.inverted_index_meta,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -338,7 +422,7 @@ impl CacheManager {
                     Unit::Bytes,
                     &inverted_index_file_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_inverted_index_data_size as usize,
+                    disk_cache_sizes.inverted_index_filter,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -356,7 +440,7 @@ impl CacheManager {
                     Unit::Count,
                     &vector_index_meta_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_vector_index_meta_size as usize,
+                    disk_cache_sizes.vector_index_meta,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -382,7 +466,7 @@ impl CacheManager {
                     Unit::Bytes,
                     &vector_index_file_on_disk_cache_path,
                     on_disk_cache_queue_size,
-                    config.disk_cache_vector_index_data_size as usize,
+                    disk_cache_sizes.vector_index_filter,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
                     ee_mode,
@@ -883,6 +967,106 @@ impl CacheManager {
             on_disk_cache,
         )))
     }
+}
+
+fn derive_disk_cache_sizes(config: &CacheConfig) -> Result<DiskCacheSizes> {
+    let total_bytes = config.disk_cache_config.max_bytes as usize;
+    let ratios: &DiskCacheRatioInnerConfig = &config.disk_cache_config.ratios;
+    let mut sizes = DiskCacheSizes::default();
+    let mut log_entries: Vec<(DiskCacheKind, usize, AllocationSource)> = Vec::new();
+    let mut ratio_entries: Vec<(DiskCacheKind, f64)> = Vec::new();
+    let mut ratio_sum = 0.0;
+
+    for kind in DiskCacheKind::ALL {
+        let override_bytes = disk_cache_override_bytes(kind, config);
+        if override_bytes > 0 {
+            let bytes = override_bytes as usize;
+            sizes.set(kind, bytes);
+            log_entries.push((kind, bytes, AllocationSource::Override));
+        } else {
+            let ratio = disk_cache_ratio_value(kind, ratios);
+            if ratio < 0.0 {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Disk cache ratio for {} must be non-negative, got {}",
+                    kind, ratio
+                )));
+            }
+            if ratio > 0.0 {
+                ratio_sum += ratio;
+            }
+            ratio_entries.push((kind, ratio));
+        }
+    }
+
+    if ratio_sum == 0.0 {
+        if let Some(entry) = ratio_entries
+            .iter_mut()
+            .find(|(kind, _)| *kind == DiskCacheKind::ColumnData)
+        {
+            entry.1 = 1.0;
+            ratio_sum = 1.0;
+        }
+    }
+
+    for (kind, ratio) in ratio_entries {
+        let bytes = if ratio_sum == 0.0 || ratio <= 0.0 {
+            0
+        } else {
+            ((ratio / ratio_sum) * total_bytes as f64).round() as usize
+        };
+        sizes.set(kind, bytes);
+        log_entries.push((kind, bytes, AllocationSource::Ratio));
+    }
+
+    log_disk_cache_allocations(total_bytes, ratio_sum, &log_entries);
+    Ok(sizes)
+}
+
+fn disk_cache_override_bytes(kind: DiskCacheKind, config: &CacheConfig) -> u64 {
+    match kind {
+        DiskCacheKind::ColumnData => 0,
+        DiskCacheKind::BloomIndexFilter => config.disk_cache_table_bloom_index_data_size,
+        DiskCacheKind::BloomIndexMeta => config.disk_cache_table_bloom_index_meta_size,
+        DiskCacheKind::InvertedIndexFilter => config.disk_cache_inverted_index_data_size,
+        DiskCacheKind::InvertedIndexMeta => config.disk_cache_inverted_index_meta_size,
+        DiskCacheKind::VectorIndexFilter => config.disk_cache_vector_index_data_size,
+        DiskCacheKind::VectorIndexMeta => config.disk_cache_vector_index_meta_size,
+    }
+}
+
+fn disk_cache_ratio_value(kind: DiskCacheKind, ratios: &DiskCacheRatioInnerConfig) -> f64 {
+    match kind {
+        DiskCacheKind::ColumnData => ratios.column_data,
+        DiskCacheKind::BloomIndexFilter => ratios.bloom_index_filter,
+        DiskCacheKind::BloomIndexMeta => ratios.bloom_index_meta,
+        DiskCacheKind::InvertedIndexFilter => ratios.inverted_index_filter,
+        DiskCacheKind::InvertedIndexMeta => ratios.inverted_index_meta,
+        DiskCacheKind::VectorIndexFilter => ratios.vector_index_filter,
+        DiskCacheKind::VectorIndexMeta => ratios.vector_index_meta,
+    }
+}
+
+fn log_disk_cache_allocations(
+    total_bytes: usize,
+    weight_sum: f64,
+    entries: &[(DiskCacheKind, usize, AllocationSource)],
+) {
+    let mut parts = Vec::with_capacity(DiskCacheKind::ALL.len());
+    for kind in DiskCacheKind::ALL {
+        let (bytes, source) = entries
+            .iter()
+            .rev()
+            .find(|(k, _, _)| *k == kind)
+            .map(|(_, bytes, source)| (*bytes, source.as_str()))
+            .unwrap_or((0, AllocationSource::Ratio.as_str()));
+        parts.push(format!("{}={}({})", kind, bytes, source));
+    }
+    info!(
+        "[CacheManager] Disk cache allocation plan (global {}, weight_sum {:.2}): {}",
+        total_bytes,
+        weight_sum,
+        parts.join(", ")
+    );
 }
 
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
@@ -1416,5 +1600,51 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_ratio_distribution() -> Result<()> {
+        let mut cache_config = CacheConfig::default();
+        cache_config.disk_cache_config.max_bytes = 1000;
+        cache_config.disk_cache_config.ratios.bloom_index_filter = 1.0;
+
+        let sizes = derive_disk_cache_sizes(&cache_config)?;
+        assert_eq!(sizes.column_data, 500);
+        assert_eq!(sizes.bloom_index_filter, 500);
+        assert_eq!(sizes.vector_index_filter, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_ratio_fallback() -> Result<()> {
+        let mut cache_config = CacheConfig::default();
+        cache_config.disk_cache_config.max_bytes = 2048;
+        cache_config.disk_cache_config.ratios.column_data = 0.0;
+
+        let sizes = derive_disk_cache_sizes(&cache_config)?;
+        assert_eq!(sizes.column_data, 2048);
+        Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_ratio_override_precedence() -> Result<()> {
+        let mut cache_config = CacheConfig::default();
+        cache_config.disk_cache_config.max_bytes = 1000;
+        cache_config.disk_cache_table_bloom_index_data_size = 600;
+        cache_config.disk_cache_config.ratios.bloom_index_filter = 1.0;
+
+        let sizes = derive_disk_cache_sizes(&cache_config)?;
+        assert_eq!(sizes.bloom_index_filter, 600);
+        assert_eq!(sizes.column_data, 1000);
+        Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_ratio_negative_should_fail() {
+        let mut cache_config = CacheConfig::default();
+        cache_config.disk_cache_config.ratios.column_data = -0.1;
+
+        let err = derive_disk_cache_sizes(&cache_config).unwrap_err();
+        assert!(err.message().contains("Disk cache ratio"));
     }
 }
