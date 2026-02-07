@@ -14,7 +14,7 @@
 
 //! Define behaviors of a `kvapi::Key` that contains a tenant.
 
-use databend_common_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi;
 
 use crate::tenant::Tenant;
 

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_kvapi::kvapi::KeyBuilder;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
-use databend_common_meta_kvapi::kvapi::KeyError;
-use databend_common_meta_kvapi::kvapi::KeyParser;
+use databend_meta_kvapi::kvapi::KeyBuilder;
+use databend_meta_kvapi::kvapi::KeyCodec;
+use databend_meta_kvapi::kvapi::KeyError;
+use databend_meta_kvapi::kvapi::KeyParser;
 
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
@@ -52,7 +52,7 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::data_mask::MaskPolicyTableId;
     use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
@@ -76,7 +76,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyIdTableId;
     use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;

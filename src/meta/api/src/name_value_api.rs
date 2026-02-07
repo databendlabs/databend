@@ -19,12 +19,12 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_kvapi::kvapi::KVApi;
+use databend_meta_kvapi::kvapi::KeyCodec;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
+use databend_meta_types::With;
 use fastrace::func_name;
 use log::debug;
 

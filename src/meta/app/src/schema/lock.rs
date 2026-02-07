@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::DirName;
 
 use crate::schema::TableLockIdent;
 use crate::tenant::Tenant;

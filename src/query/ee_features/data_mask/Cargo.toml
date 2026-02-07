@@ -13,7 +13,7 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
+databend-meta-types = { workspace = true }
 
 [build-dependencies]
 

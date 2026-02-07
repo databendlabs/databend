@@ -30,11 +30,11 @@ use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
-use databend_common_meta_client::RpcClientConf;
-use databend_common_meta_client::RpcClientTlsConfig;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::RpcClientConf;
+use databend_meta_client::RpcClientTlsConfig;
 
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
@@ -458,7 +458,12 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self, version: semver::Version) -> RpcClientConf {
+    pub fn grpc_max_message_size(&self) -> usize {
+        self.grpc_max_message_size
+            .unwrap_or(DEFAULT_GRPC_MESSAGE_SIZE)
+    }
+
+    pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
         let embedded_dir = if self.embedded_dir.is_empty() {
             None
         } else {
@@ -466,7 +471,6 @@ impl MetaConfig {
         };
         RpcClientConf {
             embedded_dir,
-            version,
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),
@@ -483,9 +487,7 @@ impl MetaConfig {
                 None
             },
             unhealthy_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
-            grpc_max_message_size: self
-                .grpc_max_message_size
-                .unwrap_or(DEFAULT_GRPC_MESSAGE_SIZE),
+            grpc_max_message_size: self.grpc_max_message_size(),
         }
     }
 }

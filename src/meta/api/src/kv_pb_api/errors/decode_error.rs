@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::Incompatible;
+use databend_meta_types::InvalidReply;
+use databend_meta_types::MetaError;
 
 /// An error occurred when decoding protobuf encoded value.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

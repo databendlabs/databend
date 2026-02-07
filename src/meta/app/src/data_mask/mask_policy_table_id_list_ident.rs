@@ -22,7 +22,7 @@ pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::data_mask::MaskPolicyTableIdListIdent;
     use crate::data_mask::MaskpolicyTableIdList;
@@ -46,7 +46,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::data_mask::mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
     use crate::tenant::Tenant;

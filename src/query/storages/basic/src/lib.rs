@@ -50,7 +50,7 @@ pub use view::view_table;
 
 /// Convert a meta service error to an ErrorCode.
 pub(crate) fn meta_service_error(
-    e: databend_common_meta_types::MetaError,
+    e: databend_meta_types::MetaError,
 ) -> databend_common_exception::ErrorCode {
     databend_common_exception::ErrorCode::MetaServiceError(e.to_string())
 }

@@ -37,7 +37,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::MarkedDeletedTableIndexIdIdent;
     use crate::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;

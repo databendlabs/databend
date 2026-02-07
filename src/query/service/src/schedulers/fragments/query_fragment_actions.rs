@@ -23,7 +23,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_meta_types::NodeInfo;
+use databend_meta_types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::ExchangeSink;

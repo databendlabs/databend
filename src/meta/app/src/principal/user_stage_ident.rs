@@ -35,7 +35,7 @@ impl StageIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use super::StageIdent;
     use crate::principal::StageInfo;
@@ -59,7 +59,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::principal::user_stage_ident::StageIdent;
     use crate::tenant::Tenant;

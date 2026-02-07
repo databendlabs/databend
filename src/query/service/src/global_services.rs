@@ -39,7 +39,6 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
-use databend_common_version::BUILD_INFO;
 use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
@@ -149,7 +148,7 @@ impl GlobalServices {
                 udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
-                config.meta.to_meta_grpc_client_conf(version.semver()),
+                config.meta.to_meta_grpc_client_conf(),
                 &config.cache,
                 builtin,
                 &config.query.tenant_id,
@@ -205,8 +204,7 @@ impl GlobalServices {
     }
 
     async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
-        let meta_api_provider =
-            MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()));
+        let meta_api_provider = MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf());
         let meta_store = match meta_api_provider
             .create_meta_store::<DatabendRuntime>()
             .await

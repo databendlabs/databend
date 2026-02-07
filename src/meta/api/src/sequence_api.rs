@@ -21,8 +21,8 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 

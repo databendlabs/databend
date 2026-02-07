@@ -19,9 +19,9 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::UnsetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
+use databend_meta_types::MatchSeq;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;

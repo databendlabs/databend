@@ -28,7 +28,7 @@ async fn test_metasrv_kv_api() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    databend_common_meta_kvapi_test_suite::TestSuite {}
+    databend_meta_kvapi_test_suite::TestSuite {}
         .test_all(builder)
         .await
 }

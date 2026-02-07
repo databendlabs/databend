@@ -25,7 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_http::stack::debug_dump_stack;
-use databend_common_meta_types::anyerror::AnyError;
+use databend_meta_types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::Endpoint;

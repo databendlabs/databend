@@ -15,7 +15,7 @@
 use std::fmt::Display;
 
 use databend_common_exception::ErrorCode;
-use databend_common_meta_types::MetaError;
+use databend_meta_types::MetaError;
 
 use crate::errors::TenantError;
 

@@ -19,7 +19,7 @@ use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_types::MetaId;
+use databend_meta_types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::plans::Plan;

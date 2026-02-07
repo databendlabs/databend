@@ -28,10 +28,6 @@ use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
 use databend_common_config::StorageConfig;
-use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
-use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
-use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_types::MetaStartupError;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -52,7 +48,11 @@ use databend_meta::configs::AdminConfig;
 use databend_meta::configs::GrpcConfig;
 use databend_meta::configs::MetaServiceConfig;
 use databend_meta::configs::TlsConfig;
-use databend_meta::version::MIN_METACLI_SEMVER;
+use databend_meta_raft_store::config::RaftConfig as InnerRaftConfig;
+use databend_meta_raft_store::config::get_default_raft_advertise_host;
+use databend_meta_raft_store::ondisk::DATA_VERSION;
+use databend_meta_types::MetaStartupError;
+use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_file;
@@ -73,7 +73,7 @@ static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
 
     format!(
         "{}\nmin-compatible-client-version: {}\ndata-version: {:?}",
-        first_line, MIN_METACLI_SEMVER, DATA_VERSION
+        first_line, *MIN_QUERY_VER_FOR_METASRV, DATA_VERSION
     )
 });
 

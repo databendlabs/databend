@@ -23,12 +23,12 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateTableRefPlan;
 use databend_common_sql::plans::DropTableRefPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
+use databend_meta_types::MatchSeq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 pub struct RealTableRefHandler {}
