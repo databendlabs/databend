@@ -28,8 +28,10 @@ use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalTraceReporter;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::TraceCollector;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -860,6 +862,8 @@ impl QueryCoordinator {
         // Do something when query finished.
     }
 
+    // Execute query in background
+    #[fastrace::trace]
     pub fn execute_pipeline(&mut self) -> Result<()> {
         let info = self.info.as_mut().expect("Query info is None");
 
@@ -867,6 +871,26 @@ impl QueryCoordinator {
             Some(QueryPerf::start(99)?)
         } else {
             None
+        };
+
+        // Only set up trace collector if trace_flag is true AND EXPLAIN TRACE hasn't already
+        // set up a reporter. This prevents overwriting the reporter on the coordinator node
+        // when EXPLAIN TRACE is running.
+        let trace_flag = info.query_ctx.get_trace_flag();
+        let explain_trace_reporter_set = info.query_ctx.get_explain_trace_reporter_set();
+        let (trace_collector, trace_collector_id) = if trace_flag && !explain_trace_reporter_set {
+            // Get filter options from context (propagated from coordinator)
+            let filter_options = info.query_ctx.get_trace_filter_options();
+            let collector = Arc::new(std::sync::Mutex::new(TraceCollector::with_filter(
+                filter_options,
+            )));
+            // Register the collector with GlobalTraceReporter instead of replacing the reporter
+            // This preserves the original tracing configuration (OTLP, StructLog, etc.)
+            let collector_id =
+                GlobalTraceReporter::instance().register_collector(collector.clone());
+            (Some(collector), Some(collector_id))
+        } else {
+            (None, None)
         };
 
         if !info.started.swap(true, Ordering::SeqCst) {
@@ -960,17 +984,31 @@ impl QueryCoordinator {
             request_server_exchange,
             executor.get_inner(),
             perf_guard,
+            trace_collector,
+            trace_collector_id,
             finished_profiling_rx,
         );
 
+        // Try to get span context from:
+        // 1. Current local parent (for coordinator node)
+        // 2. Trace parent propagated from coordinator (for remote nodes)
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root("Distributed-Executor", parent)
+        } else if let Some(trace_parent) = query_ctx.get_trace_parent() {
+            if let Some(parent) = SpanContext::decode_w3c_traceparent(&trace_parent) {
+                Span::root("Distributed-Executor", parent)
+            } else {
+                Span::noop()
+            }
         } else {
             Span::noop()
         };
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let error = executor.execute().err();
+            // Drop the span before shutdown to ensure it's collected before send_trace
+            drop(_g);
+            drop(span);
             statistics_sender.shutdown(error.clone());
             query_ctx
                 .get_exchange_manager()

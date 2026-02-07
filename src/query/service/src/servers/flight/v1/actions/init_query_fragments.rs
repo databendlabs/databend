@@ -14,6 +14,7 @@
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -25,6 +26,19 @@ pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
 pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
+
+    // Set trace flag from coordinator node
+    if fragments.trace_flag {
+        ctx.set_trace_flag(true);
+    }
+
+    // Set trace parent from coordinator node for distributed tracing
+    if let Some(trace_parent) = &fragments.trace_parent {
+        ctx.set_trace_parent(Some(trace_parent.clone()));
+    }
+
+    // Set trace filter options from coordinator node
+    ctx.set_trace_filter_options(fragments.trace_filter_options.clone());
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
