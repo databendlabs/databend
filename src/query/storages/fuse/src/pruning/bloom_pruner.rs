@@ -41,6 +41,7 @@ use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -230,13 +231,20 @@ impl BloomPrunerCreator {
                 continue;
             }
             let stats_column_id = map_value_leaf_id(field).unwrap_or_else(|| field.column_id());
+            let digest_type = bloom_digest_type(field);
             let Some(stat) = column_stats.get(&stats_column_id) else {
+                if !supported_stat_type(&bloom_source_type(field)) {
+                    stats_type_by_id.insert(field.column_id(), digest_type);
+                    continue;
+                }
                 return Ok(true);
             };
             let stat_type = if !stat.max().is_null() {
                 stat.max().as_ref().infer_data_type()
             } else if !stat.min().is_null() {
                 stat.min().as_ref().infer_data_type()
+            } else if !supported_stat_type(&bloom_source_type(field)) {
+                digest_type
             } else {
                 return Ok(true);
             };
@@ -252,8 +260,7 @@ impl BloomPrunerCreator {
                 use_fast_path = false;
                 break;
             };
-            let schema_type: DataType = field.data_type().into();
-            let expected_type = map_value_data_type(field).unwrap_or(schema_type);
+            let expected_type = bloom_digest_type(field);
             if stat_type.remove_nullable() != expected_type.remove_nullable() {
                 use_fast_path = false;
                 break;
@@ -473,6 +480,21 @@ fn map_value_data_type(field: &TableField) -> Option<DataType> {
         return None;
     }
     Some(DataType::from(&fields_type[1]))
+}
+
+fn bloom_source_type(field: &TableField) -> DataType {
+    if let Some(map_value) = map_value_data_type(field) {
+        return map_value;
+    }
+    DataType::from(field.data_type())
+}
+
+fn bloom_digest_type(field: &TableField) -> DataType {
+    let source_type = bloom_source_type(field);
+    if source_type.remove_nullable() == DataType::Variant {
+        return DataType::String;
+    }
+    source_type
 }
 
 #[async_trait::async_trait]
