@@ -63,6 +63,7 @@ use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
 use crate::io::InvertedIndexWriter;
+use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
@@ -261,6 +262,7 @@ pub struct StreamBlockBuilder {
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     vector_index_builder: Option<VectorIndexBuilder>,
+    spatial_index_builder: Option<SpatialIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
 
     cluster_stats_state: ClusterStatisticsState,
@@ -323,6 +325,11 @@ impl StreamBlockBuilder {
             properties.source_schema.clone(),
             true,
         );
+        let spatial_index_builder = SpatialIndexBuilder::try_create(
+            &properties.table_indexes,
+            properties.source_schema.clone(),
+            true,
+        );
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map);
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
@@ -336,6 +343,7 @@ impl StreamBlockBuilder {
             bloom_index_builder,
             virtual_column_builder,
             vector_index_builder,
+            spatial_index_builder,
             block_stats_builder,
             row_count: 0,
             block_size: 0,
@@ -376,6 +384,9 @@ impl StreamBlockBuilder {
         }
         if let Some(ref mut vector_index_builder) = self.vector_index_builder {
             vector_index_builder.add_block(&block)?;
+        }
+        if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
+            spatial_index_builder.add_block(&block)?;
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size();
@@ -459,6 +470,21 @@ impl StreamBlockBuilder {
         let vector_index_size = vector_index_state.as_ref().map(|v| v.size);
         let vector_index_location = vector_index_state.as_ref().map(|v| v.location.clone());
 
+        let spatial_index_state = if let Some(ref mut spatial_index_builder) =
+            self.spatial_index_builder
+        {
+            let spatial_index_location = self
+                .properties
+                .meta_locations
+                .block_spatial_index_location();
+            let spatial_index_state = spatial_index_builder.finalize(&spatial_index_location)?;
+            Some(spatial_index_state)
+        } else {
+            None
+        };
+        let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
+        let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
+
         let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
         let block_raw_data = mem::take(self.block_writer.inner_mut());
 
@@ -490,6 +516,8 @@ impl StreamBlockBuilder {
             inverted_index_size,
             vector_index_size,
             vector_index_location,
+            spatial_index_size,
+            spatial_index_location,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: bloom_index_state
                 .as_ref()
@@ -504,6 +532,7 @@ impl StreamBlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
+            spatial_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
         };
         Ok(serialized)

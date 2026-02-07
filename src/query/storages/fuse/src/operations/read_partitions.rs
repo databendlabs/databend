@@ -39,6 +39,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -669,6 +670,8 @@ impl FuseTable {
     ) -> Result<FusePruner> {
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -700,6 +703,7 @@ impl FuseTable {
                     &push_downs,
                     self.bloom_index_cols(),
                     ngram_args,
+                    spatial_index_columns,
                     bloom_index_builder,
                 )?
             } else {
@@ -714,6 +718,7 @@ impl FuseTable {
                     cluster_keys,
                     self.bloom_index_cols(),
                     ngram_args,
+                    spatial_index_columns,
                     bloom_index_builder,
                 )?
             };
@@ -755,6 +760,21 @@ impl FuseTable {
             }
         }
         Ok(ngram_index_args)
+    }
+
+    pub fn create_spatial_index_columns(
+        indexes: &BTreeMap<String, TableIndex>,
+    ) -> HashSet<ColumnId> {
+        let mut column_ids = HashSet::new();
+        for index in indexes.values() {
+            if !matches!(index.index_type, TableIndexType::Spatial) {
+                continue;
+            }
+            for column_id in &index.column_ids {
+                column_ids.insert(*column_id);
+            }
+        }
+        column_ids
     }
 
     pub fn check_prune_cache(

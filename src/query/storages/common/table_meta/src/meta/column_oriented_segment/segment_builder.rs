@@ -363,6 +363,7 @@ impl ColumnOrientedSegmentBuilder {
             ngram_index_size: None,
             inverted_index_size: None,
             vector_index_size: None,
+            spatial_index_size: None,
             virtual_column_size: None,
             col_stats,
             virtual_col_stats: None,

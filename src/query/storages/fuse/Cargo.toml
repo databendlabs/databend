@@ -54,6 +54,9 @@ enum_dispatch = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
+geo = { workspace = true }
+geo-index = { workspace = true }
+geozero = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }

@@ -20,6 +20,8 @@ use databend_common_exception::ErrorCode;
 pub use databend_storages_common_index::BloomIndexMeta;
 pub use databend_storages_common_index::InvertedIndexFile;
 pub use databend_storages_common_index::InvertedIndexMeta;
+pub use databend_storages_common_index::SpatialIndexFile;
+pub use databend_storages_common_index::SpatialIndexMeta;
 pub use databend_storages_common_index::VectorIndexFile;
 pub use databend_storages_common_index::VectorIndexMeta;
 pub use databend_storages_common_index::VirtualColumnFileMeta;

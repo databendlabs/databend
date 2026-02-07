@@ -296,6 +296,8 @@ impl FuseTable {
         let bloom_index_cols = self.bloom_index_cols();
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?;
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
 
         info!(
             "[FUSE-CHANGE-TRACKING] prune snapshot block start, at node {}",
@@ -311,6 +313,7 @@ impl FuseTable {
             cluster_keys,
             bloom_index_cols,
             ngram_args,
+            spatial_index_columns,
             None,
         )?;
 

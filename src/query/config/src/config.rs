@@ -3415,6 +3415,46 @@ pub struct CacheConfig {
     )]
     pub vector_index_filter_memory_ratio: u64,
 
+    /// Max number of cached spatial index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-spatial-index-meta-count",
+        value_name = "VALUE",
+        default_value = "30000"
+    )]
+    pub spatial_index_meta_count: u64,
+
+    /// Max bytes of cached spatial index metadata on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-spatial-index-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_spatial_index_meta_size: u64,
+
+    /// Max bytes of cached spatial index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-spatial-index-filter-size",
+        value_name = "VALUE",
+        default_value = "64424509440"
+    )]
+    pub spatial_index_filter_size: u64,
+
+    /// Max bytes of cached spatial index filters on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-spatial-index-data-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_spatial_index_data_size: u64,
+
+    /// Max percentage of in memory spatial index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-spatial-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub spatial_index_filter_memory_ratio: u64,
+
     /// Max number of cached virtual column meta objects. Set it to 0 to disable it.
     #[clap(
         long = "cache-virtual-column-meta-count",
@@ -3781,6 +3821,11 @@ mod cache_config_converters {
                 vector_index_filter_size: value.vector_index_filter_size,
                 disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
+                spatial_index_meta_count: value.spatial_index_meta_count,
+                disk_cache_spatial_index_meta_size: value.disk_cache_spatial_index_meta_size,
+                spatial_index_filter_size: value.spatial_index_filter_size,
+                disk_cache_spatial_index_data_size: value.disk_cache_spatial_index_data_size,
+                spatial_index_filter_memory_ratio: value.spatial_index_filter_memory_ratio,
                 virtual_column_meta_count: value.virtual_column_meta_count,
                 disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
@@ -3827,6 +3872,11 @@ mod cache_config_converters {
                 vector_index_filter_size: value.vector_index_filter_size,
                 disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
+                spatial_index_meta_count: value.spatial_index_meta_count,
+                disk_cache_spatial_index_meta_size: value.disk_cache_spatial_index_meta_size,
+                spatial_index_filter_size: value.spatial_index_filter_size,
+                disk_cache_spatial_index_data_size: value.disk_cache_spatial_index_data_size,
+                spatial_index_filter_memory_ratio: value.spatial_index_filter_memory_ratio,
                 virtual_column_meta_count: value.virtual_column_meta_count,
                 disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,

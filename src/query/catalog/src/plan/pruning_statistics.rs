@@ -45,6 +45,12 @@ pub struct PruningStatistics {
     /// Block vector index pruning cost in microseconds.
     pub blocks_vector_index_pruning_cost: u64,
 
+    /// Block spatial index filter pruning stats.
+    pub blocks_spatial_index_pruning_before: usize,
+    pub blocks_spatial_index_pruning_after: usize,
+    /// Block spatial index pruning cost in microseconds.
+    pub blocks_spatial_index_pruning_cost: u64,
+
     /// Block topn pruning stats.
     pub blocks_topn_pruning_before: usize,
     pub blocks_topn_pruning_after: usize,
@@ -69,6 +75,9 @@ impl PruningStatistics {
         self.blocks_vector_index_pruning_before += other.blocks_vector_index_pruning_before;
         self.blocks_vector_index_pruning_after += other.blocks_vector_index_pruning_after;
         self.blocks_vector_index_pruning_cost += other.blocks_vector_index_pruning_cost;
+        self.blocks_spatial_index_pruning_before += other.blocks_spatial_index_pruning_before;
+        self.blocks_spatial_index_pruning_after += other.blocks_spatial_index_pruning_after;
+        self.blocks_spatial_index_pruning_cost += other.blocks_spatial_index_pruning_cost;
         self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
         self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
         self.blocks_topn_pruning_cost += other.blocks_topn_pruning_cost;
