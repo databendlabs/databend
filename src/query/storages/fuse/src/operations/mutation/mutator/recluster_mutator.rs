@@ -28,11 +28,14 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_exception::span::Span as QuerySpan;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::compare_scalars;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -733,6 +736,10 @@ impl ReclusterMutator {
         let mut interval_depths = HashMap::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
         let mut unfinished_intervals = BTreeMap::new();
+        let points_map = self.cast_points_map(points_map);
+        if points_map.is_empty() {
+            return Ok(IndexSet::new());
+        }
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let indices = compare_scalars(keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {
@@ -855,6 +862,57 @@ impl ReclusterMutator {
 
         selected_idx.truncate(max_len);
         Ok(selected_idx)
+    }
+
+    fn cast_points_map(
+        &self,
+        points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
+    ) -> HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> {
+        let mut casted: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> =
+            HashMap::with_capacity(points_map.len());
+        for (point, mut ranges) in points_map {
+            match self.cast_cluster_point(&point) {
+                Some(casted_point) => {
+                    let entry = casted.entry(casted_point).or_default();
+                    entry.0.append(&mut ranges.0);
+                    entry.1.append(&mut ranges.1);
+                }
+                None => {
+                    let types = point
+                        .iter()
+                        .map(|v| v.as_ref().infer_data_type())
+                        .collect::<Vec<_>>();
+                    warn!(
+                        "recluster: drop cluster stats point due to type mismatch, expected {:?}, got {:?}",
+                        self.cluster_key_types, types
+                    );
+                }
+            }
+        }
+        casted
+    }
+
+    fn cast_cluster_point(&self, point: &[Scalar]) -> Option<Vec<Scalar>> {
+        if point.len() != self.cluster_key_types.len() {
+            return None;
+        }
+        let mut casted = Vec::with_capacity(point.len());
+        for (value, data_type) in point.iter().zip(self.cluster_key_types.iter()) {
+            if value.is_null() {
+                casted.push(Scalar::Null);
+                continue;
+            }
+            match cast_scalar(
+                QuerySpan::None,
+                value.clone(),
+                data_type,
+                &BUILTIN_FUNCTIONS,
+            ) {
+                Ok(v) => casted.push(v),
+                Err(_) => return None,
+            }
+        }
+        Some(casted)
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.

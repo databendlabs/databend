@@ -147,50 +147,64 @@ impl BlockReader {
         let prefer_fallback = fallback_schema.is_some()
             && should_prefer_compatible_schema(self.original_schema.as_ref(), column_stats);
 
-        let mut last_err = None;
-        let mut record_batch = None;
-        // Try read once with a given schema; on success, switch the read schema used for casting.
-        let mut try_read = |schema: &TableSchemaRef, projected: &TableSchemaRef| {
-            match column_chunks_to_record_batch(
-                schema,
-                num_rows,
-                &column_chunks,
-                compression,
-                parquet_selection.clone(),
-            ) {
-                Ok(batch) => {
-                    read_original_schema = schema.clone();
-                    read_projected_schema = projected.clone();
-                    record_batch = Some(batch);
+        let mut last_err: Option<ErrorCode> = None;
+        let mut record_batch: Option<(TableSchemaRef, TableSchemaRef, RecordBatch)> = None;
+        // Try read once with a given schema; on success, remember the schemas for casting.
+        let try_read =
+            |schema: &TableSchemaRef,
+             projected: &TableSchemaRef,
+             record_batch: &mut Option<(TableSchemaRef, TableSchemaRef, RecordBatch)>,
+             last_err: &mut Option<ErrorCode>| {
+                match column_chunks_to_record_batch(
+                    schema,
+                    num_rows,
+                    &column_chunks,
+                    compression,
+                    parquet_selection.clone(),
+                ) {
+                    Ok(batch) => {
+                        *record_batch = Some((schema.clone(), projected.clone(), batch));
+                    }
+                    Err(err) => {
+                        *last_err = Some(err);
+                    }
                 }
-                Err(err) => {
-                    last_err = Some(err);
-                }
-            }
-        };
+            };
 
         if prefer_fallback {
             if let (Some(schema), Some(projected)) = (&fallback_schema, &fallback_projected_schema)
             {
-                try_read(schema, projected);
+                try_read(schema, projected, &mut record_batch, &mut last_err);
             }
             if record_batch.is_none() {
-                try_read(&read_original_schema, &read_projected_schema);
+                try_read(
+                    &read_original_schema,
+                    &read_projected_schema,
+                    &mut record_batch,
+                    &mut last_err,
+                );
             }
         } else {
-            try_read(&read_original_schema, &read_projected_schema);
+            try_read(
+                &read_original_schema,
+                &read_projected_schema,
+                &mut record_batch,
+                &mut last_err,
+            );
             if record_batch.is_none() {
                 if let (Some(schema), Some(projected)) =
                     (&fallback_schema, &fallback_projected_schema)
                 {
-                    try_read(schema, projected);
+                    try_read(schema, projected, &mut record_batch, &mut last_err);
                 }
             }
         }
 
-        let Some(record_batch) = record_batch else {
+        let Some((schema, projected, record_batch)) = record_batch else {
             return Err(last_err.unwrap());
         };
+        read_original_schema = schema;
+        read_projected_schema = projected;
 
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &read_original_schema);

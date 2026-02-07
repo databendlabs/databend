@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_exception::span::Span;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -27,6 +28,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
@@ -35,7 +37,9 @@ use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::eval_aggr;
+use log::warn;
 
 use super::AbstractSegment;
 use super::schema::segment_schema;
@@ -91,6 +95,7 @@ impl ColumnOrientedSegmentBuilder {
 }
 
 struct ColStatBuilder {
+    data_type: DataType,
     min: ColumnBuilder,
     max: ColumnBuilder,
     null_count: Vec<u64>,
@@ -102,11 +107,34 @@ impl ColStatBuilder {
     fn new(data_type: &TableDataType, block_per_segment: usize) -> Self {
         let data_type: DataType = data_type.into();
         Self {
+            data_type: data_type.clone(),
             min: ColumnBuilder::with_capacity(&data_type, block_per_segment),
             max: ColumnBuilder::with_capacity(&data_type, block_per_segment),
             null_count: Vec::with_capacity(block_per_segment),
             in_memory_size: Vec::with_capacity(block_per_segment),
             distinct_of_values: Vec::with_capacity(block_per_segment),
+        }
+    }
+}
+
+fn cast_stat_scalar(
+    column_id: ColumnId,
+    value: &Scalar,
+    data_type: &DataType,
+    block_loc: &str,
+    label: &str,
+) -> Scalar {
+    if value.is_null() {
+        return Scalar::Null;
+    }
+    match cast_scalar(Span::None, value.clone(), data_type, &BUILTIN_FUNCTIONS) {
+        Ok(cast) => cast,
+        Err(err) => {
+            warn!(
+                "failed to cast {} stat for column id {} in block {} to {}: {}, dropping stat",
+                label, column_id, block_loc, data_type, err
+            );
+            Scalar::Null
         }
     }
 }
@@ -124,6 +152,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
     }
 
     fn add_block(&mut self, block_meta: BlockMeta) -> Result<()> {
+        let block_loc = block_meta.location.0.clone();
         self.row_count.push(block_meta.row_count);
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);
@@ -142,8 +171,10 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             .push(block_meta.create_on.map(|t| t.timestamp()));
         for (col_id, col_stat) in self.column_stats.iter_mut() {
             let stat = &block_meta.col_stats[col_id];
-            col_stat.min.push(stat.min.as_ref());
-            col_stat.max.push(stat.max.as_ref());
+            let min = cast_stat_scalar(*col_id, &stat.min, &col_stat.data_type, &block_loc, "min");
+            let max = cast_stat_scalar(*col_id, &stat.max, &col_stat.data_type, &block_loc, "max");
+            col_stat.min.push(min.as_ref());
+            col_stat.max.push(max.as_ref());
             col_stat.null_count.push(stat.null_count);
             col_stat.in_memory_size.push(stat.in_memory_size);
             col_stat.distinct_of_values.push(stat.distinct_of_values);

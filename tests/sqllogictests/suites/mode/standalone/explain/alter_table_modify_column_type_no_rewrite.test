@@ -99,6 +99,151 @@ select data_type from system.columns where database = 'default' and table = 'alt
 ----
 DECIMAL(20, 2)
 
+# rename column should keep dfs leaf order (no rewrite) and allow widening
+statement ok
+drop table if exists alter_no_rewrite_rename
+
+statement ok
+create table alter_no_rewrite_rename(a int, b int)
+
+statement ok
+insert into alter_no_rewrite_rename values (1, 10), (2, 20)
+
+statement ok
+drop table if exists alter_no_rewrite_loc_rename
+
+statement ok
+create table alter_no_rewrite_loc_rename(block_location string)
+
+statement ok
+insert into alter_no_rewrite_loc_rename select block_location from fuse_block('default','alter_no_rewrite_rename')
+
+statement ok
+alter table alter_no_rewrite_rename rename column b to x
+
+statement ok
+alter table alter_no_rewrite_rename modify column x bigint
+
+query IIII
+select
+  (select count(*) from fuse_block('default','alter_no_rewrite_rename')) as after_cnt,
+  (select count(*) from alter_no_rewrite_loc_rename) as before_cnt,
+  (select count(*) from (
+    select block_location from alter_no_rewrite_loc_rename
+    except
+    select block_location from fuse_block('default','alter_no_rewrite_rename')
+  )) as missing_from_after,
+  (select count(*) from (
+    select block_location from fuse_block('default','alter_no_rewrite_rename')
+    except
+    select block_location from alter_no_rewrite_loc_rename
+  )) as new_in_after
+----
+1 1 0 0
+
+query II
+select a, x from alter_no_rewrite_rename order by a
+----
+1 10
+2 20
+
+query T
+select data_type from system.columns where database = 'default' and table = 'alter_no_rewrite_rename' and name = 'x'
+----
+BIGINT
+
+# drop column should not break leaf mapping for remaining columns
+statement ok
+drop table if exists alter_no_rewrite_drop
+
+statement ok
+create table alter_no_rewrite_drop(a int, b int, c int)
+
+statement ok
+insert into alter_no_rewrite_drop values (1, 10, 100), (2, 20, 200)
+
+statement ok
+drop table if exists alter_no_rewrite_loc_drop
+
+statement ok
+create table alter_no_rewrite_loc_drop(block_location string)
+
+statement ok
+insert into alter_no_rewrite_loc_drop select block_location from fuse_block('default','alter_no_rewrite_drop')
+
+statement ok
+alter table alter_no_rewrite_drop drop column b
+
+statement ok
+alter table alter_no_rewrite_drop modify column c bigint
+
+query IIII
+select
+  (select count(*) from fuse_block('default','alter_no_rewrite_drop')) as after_cnt,
+  (select count(*) from alter_no_rewrite_loc_drop) as before_cnt,
+  (select count(*) from (
+    select block_location from alter_no_rewrite_loc_drop
+    except
+    select block_location from fuse_block('default','alter_no_rewrite_drop')
+  )) as missing_from_after,
+  (select count(*) from (
+    select block_location from fuse_block('default','alter_no_rewrite_drop')
+    except
+    select block_location from alter_no_rewrite_loc_drop
+  )) as new_in_after
+----
+1 1 0 0
+
+query II
+select a, c from alter_no_rewrite_drop order by a
+----
+1 100
+2 200
+
+query T
+select data_type from system.columns where database = 'default' and table = 'alter_no_rewrite_drop' and name = 'c'
+----
+BIGINT
+
+# decimal scale change should trigger rewrite (incompatible change)
+statement ok
+drop table if exists alter_rewrite_dec_scale
+
+statement ok
+create table alter_rewrite_dec_scale(a decimal(10, 2))
+
+statement ok
+insert into alter_rewrite_dec_scale values (1.23), (4.56)
+
+statement ok
+drop table if exists alter_rewrite_loc_dec_scale
+
+statement ok
+create table alter_rewrite_loc_dec_scale(block_location string)
+
+statement ok
+insert into alter_rewrite_loc_dec_scale select block_location from fuse_block('default','alter_rewrite_dec_scale')
+
+statement ok
+alter table alter_rewrite_dec_scale modify column a decimal(10, 3)
+
+query IIII
+select
+  (select count(*) from fuse_block('default','alter_rewrite_dec_scale')) as after_cnt,
+  (select count(*) from alter_rewrite_loc_dec_scale) as before_cnt,
+  (select count(*) from (
+    select block_location from alter_rewrite_loc_dec_scale
+    except
+    select block_location from fuse_block('default','alter_rewrite_dec_scale')
+  )) as missing_from_after,
+  (select count(*) from (
+    select block_location from fuse_block('default','alter_rewrite_dec_scale')
+    except
+    select block_location from alter_rewrite_loc_dec_scale
+  )) as new_in_after
+----
+1 1 1 1
+
 # range pruning after widening
 statement ok
 drop table if exists alter_no_rewrite_range
@@ -125,21 +270,17 @@ EvalScalar
 ├── output columns: [1 (#1)]
 ├── expressions: [1]
 ├── estimated rows: 1.00
-└── Filter
+└── TableScan
+    ├── table: default.default.alter_no_rewrite_range
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(alter_no_rewrite_range.a (#0) = 42)]
-    ├── estimated rows: 1.00
-    └── TableScan
-        ├── table: default.default.alter_no_rewrite_range
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 1000
-        ├── read size: 1.88 KiB
-        ├── partitions total: 3
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(alter_no_rewrite_range.a (#0) = 42)], limit: NONE]
-        └── estimated rows: 3000.00
+    ├── read rows: 1000
+    ├── read size: 1.88 KiB
+    ├── partitions total: 3
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(alter_no_rewrite_range.a (#0) = 42)], limit: NONE]
+    └── estimated rows: 1.00
 
 # bloom pruning after widening
 statement ok
@@ -167,23 +308,40 @@ EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
 ├── estimated rows: 1.50
-└── Filter
+└── TableScan
+    ├── table: default.default.alter_no_rewrite_bloom
+    ├── scan id: 0
     ├── output columns: []
-    ├── filters: [is_true(alter_no_rewrite_bloom.a (#0) = 5)]
-    ├── estimated rows: 1.50
-    └── TableScan
-        ├── table: default.default.alter_no_rewrite_bloom
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 2
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_true(alter_no_rewrite_bloom.a (#0) = 5)], limit: NONE]
-        └── estimated rows: 6.00
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(alter_no_rewrite_bloom.a (#0) = 5)], limit: NONE]
+    └── estimated rows: 1.50
 
 query I
 select 1 from alter_no_rewrite_bloom where a = 5
 ----
 1
+
+# recluster after widening should succeed even when merging mixed-type stats
+statement ok
+drop table if exists alter_no_rewrite_recluster
+
+statement ok
+create table alter_no_rewrite_recluster(a int, b int) cluster by (a) row_per_block = 2
+
+statement ok
+insert into alter_no_rewrite_recluster values (1, 10), (2, 20), (3, 30), (4, 40)
+
+statement ok
+alter table alter_no_rewrite_recluster modify column a bigint
+
+statement ok
+alter table alter_no_rewrite_recluster recluster final
+
+query I
+select count(*) from alter_no_rewrite_recluster
+----
+4

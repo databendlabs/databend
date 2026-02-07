@@ -388,7 +388,13 @@ impl ModifyTableColumnInterpreter {
             for (field, _) in field_and_comments {
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_parquet_no_rewrite = format_as_parquet
-                    && is_parquet_no_rewrite_compatible(&old_field.data_type, &field.data_type);
+                    && is_parquet_no_rewrite_compatible(&old_field.data_type, &field.data_type)
+                    // Only allow no-rewrite widening when stats can safely infer old types.
+                    && (is_string_to_binary(&old_field.data_type, &field.data_type)
+                        || is_range_index_supported_for_no_rewrite(
+                            &old_field.data_type,
+                            &field.data_type,
+                        ));
                 // If two conditions are met, we don't need rebuild the table,
                 // as rebuild table can be a time-consuming job.
                 // 1. alter column with compatible data type in parquet or data type not changed.
@@ -951,15 +957,20 @@ fn is_parquet_no_rewrite_compatible(old_ty: &TableDataType, new_ty: &TableDataTy
         }
         (
             TableDataType::Tuple {
+                fields_name: old_names,
                 fields_type: old_tys,
                 ..
             },
             TableDataType::Tuple {
+                fields_name: new_names,
                 fields_type: new_tys,
                 ..
             },
         ) => {
-            old_tys.len() == new_tys.len()
+            // Tuple field order is part of the on-disk schema. Reordering or renaming fields
+            // changes leaf paths, so require exact field name order to avoid unsafe no-rewrite.
+            old_names == new_names
+                && old_tys.len() == new_tys.len()
                 && old_tys
                     .iter()
                     .zip(new_tys)
@@ -970,6 +981,22 @@ fn is_parquet_no_rewrite_compatible(old_ty: &TableDataType, new_ty: &TableDataTy
                 || is_lossless_numeric_widening(old_ty, new_ty)
                 || is_decimal_precision_widening(old_ty, new_ty)
         }
+    }
+}
+
+fn is_range_index_supported_for_no_rewrite(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    is_range_index_supported_table_type(old_ty) && is_range_index_supported_table_type(new_ty)
+}
+
+fn is_range_index_supported_table_type(data_type: &TableDataType) -> bool {
+    match data_type {
+        TableDataType::Nullable(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Map(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Array(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Tuple { fields_type, .. } => {
+            fields_type.iter().all(is_range_index_supported_table_type)
+        }
+        _ => RangeIndex::supported_table_type(data_type),
     }
 }
 
