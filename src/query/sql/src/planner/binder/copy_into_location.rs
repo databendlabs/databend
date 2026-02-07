@@ -20,6 +20,7 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_stage::CopyIntoLocationInfo;
@@ -28,7 +29,10 @@ use opendal::ErrorKind;
 use crate::BindContext;
 use crate::binder::Binder;
 use crate::binder::copy_into_table::resolve_file_location;
+use crate::binder::scalar::ScalarBinder;
+use crate::binder::wrap_cast;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::PartitionByDesc;
 use crate::plans::Plan;
 
 impl Binder {
@@ -52,6 +56,23 @@ impl Binder {
             return Err(ErrorCode::InvalidArgument(
                 "include_query_id=false can only be set when use_raw_path=true",
             ));
+        }
+        if stmt.partition_by.is_some() {
+            if stmt.options.single {
+                return Err(ErrorCode::InvalidArgument(
+                    "PARTITION BY cannot be used together with SINGLE=TRUE",
+                ));
+            }
+            if stmt.options.overwrite {
+                return Err(ErrorCode::InvalidArgument(
+                    "PARTITION BY cannot be used together with OVERWRITE=TRUE",
+                ));
+            }
+            if !stmt.options.include_query_id {
+                return Err(ErrorCode::InvalidArgument(
+                    "PARTITION BY requires INCLUDE_QUERY_ID=TRUE",
+                ));
+            }
         }
 
         let query = match &stmt.src {
@@ -121,7 +142,14 @@ impl Binder {
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
 
-        if stmt.options.use_raw_path {
+        let mut copy_options = stmt.options.clone();
+        if stmt.partition_by.is_some() {
+            copy_options.single = false;
+            copy_options.overwrite = false;
+            copy_options.include_query_id = true;
+        }
+
+        if copy_options.use_raw_path {
             if path.ends_with("/") {
                 return Err(ErrorCode::BadArguments(
                     "when use_raw_path is set to true, url path can not end with '/'",
@@ -129,7 +157,7 @@ impl Binder {
             }
 
             let op = init_stage_operator(&stage_info)?;
-            if !stmt.options.overwrite {
+            if !copy_options.overwrite {
                 match op.stat(&path).await {
                     Ok(_) => return Err(ErrorCode::BadArguments("file already exists")),
                     Err(e) => {
@@ -153,15 +181,73 @@ impl Binder {
             };
         }
 
+        let partition_by = if let Some(expr) = &stmt.partition_by {
+            self.bind_partition_by(expr, &query)?
+        } else {
+            None
+        };
+
         let info = CopyIntoLocationInfo {
             stage: Box::new(stage_info),
             path,
-            options: stmt.options.clone(),
+            options: copy_options,
             is_ordered,
+            partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
-        Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+        Ok(Plan::CopyIntoLocation(Box::new(CopyIntoLocationPlan {
             from: Box::new(query),
             info,
+            partition_by,
+        })))
+    }
+
+    fn bind_partition_by(
+        &mut self,
+        expr: &databend_common_ast::ast::Expr,
+        query: &Plan,
+    ) -> Result<Option<PartitionByDesc>> {
+        let Plan::Query { bind_context, .. } = query else {
+            return Ok(None);
+        };
+        let mut partition_bind_context = bind_context.as_ref().clone();
+        let mut scalar_binder = ScalarBinder::new(
+            &mut partition_bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
+        let (scalar, _) = scalar_binder.bind(expr)?;
+        let scalar = wrap_cast(&scalar, &DataType::String.wrap_nullable());
+        let nullable = scalar.data_type()?.is_nullable();
+        let column_positions = partition_bind_context
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(pos, binding)| (binding.index, pos))
+            .collect::<Vec<_>>();
+        let remote_expr = scalar
+            .as_expr()?
+            .project_column_ref(|col| {
+                column_positions
+                    .iter()
+                    .find(|(index, _)| index == &col.index)
+                    .map(|(_, pos)| *pos)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Partition expression references column {} \
+                             that is not present in COPY source output",
+                            col.column_name
+                        ))
+                    })
+            })?
+            .as_remote_expr();
+
+        Ok(Some(PartitionByDesc {
+            display: expr.to_string(),
+            expr: scalar,
+            remote_expr,
+            nullable,
         }))
     }
 }

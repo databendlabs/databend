@@ -18277,6 +18277,126 @@ CopyIntoTable(
 
 
 ---------- Input ----------
+COPY INTO @my_stage/partitioned
+    FROM mytable
+    PARTITION BY (concat('p=', to_varchar(id)))
+    FILE_FORMAT = (type = PARQUET);
+---------- Output ---------
+COPY INTO '@my_stage/partitioned' FROM mytable PARTITION BY (concat('p=', to_varchar(id))) FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+---------- AST ------------
+CopyIntoLocation(
+    CopyIntoLocationStmt {
+        with: None,
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    41..48,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            with_options: None,
+        },
+        dst: Stage(
+            "my_stage/partitioned",
+        ),
+        partition_by: Some(
+            FunctionCall {
+                span: Some(
+                    67..95,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            67..73,
+                        ),
+                        name: "concat",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    args: [
+                        Literal {
+                            span: Some(
+                                74..78,
+                            ),
+                            value: String(
+                                "p=",
+                            ),
+                        },
+                        FunctionCall {
+                            span: Some(
+                                80..94,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        80..90,
+                                    ),
+                                    name: "to_varchar",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            91..93,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        91..93,
+                                                    ),
+                                                    name: "id",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                    ],
+                    params: [],
+                    order_by: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        ),
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "PARQUET",
+                ),
+            },
+        },
+        options: CopyIntoLocationOptions {
+            single: false,
+            max_file_size: 0,
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
@@ -18503,6 +18623,7 @@ CopyIntoLocation(
                 },
             },
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {
                 "field_delimiter": String(
@@ -18557,6 +18678,7 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage/my data",
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {},
         },
@@ -18604,6 +18726,7 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage",
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {
                 "field_delimiter": String(

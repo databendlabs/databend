@@ -23,6 +23,7 @@ use databend_common_pipeline_transforms::processors::Transform;
 
 use super::buffers::FileOutputBuffer;
 use super::buffers::FileOutputBuffers;
+use crate::append::partition::partition_from_block;
 
 pub(super) struct SerializeProcessor {
     ctx: Arc<dyn TableContext>,
@@ -39,6 +40,7 @@ impl Transform for SerializeProcessor {
     const NAME: &'static str = "SerializeProcessor";
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
+        let partition = partition_from_block(&block);
         let mut buffers = vec![];
         let step = 1024;
         let num_rows = block.num_rows();
@@ -55,6 +57,6 @@ impl Transform for SerializeProcessor {
             bytes,
         };
         self.ctx.get_write_progress().incr(&progress_values);
-        Ok(FileOutputBuffers::create_block(buffers))
+        Ok(FileOutputBuffers::create_block(buffers, partition))
     }
 }

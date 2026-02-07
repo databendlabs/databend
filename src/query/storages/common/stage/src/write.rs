@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::CopyIntoLocationOptions;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::principal::StageInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -21,4 +22,6 @@ pub struct CopyIntoLocationInfo {
     pub path: String,
     pub options: CopyIntoLocationOptions,
     pub is_ordered: bool,
+    #[serde(default)]
+    pub partition_by: Option<RemoteExpr>,
 }

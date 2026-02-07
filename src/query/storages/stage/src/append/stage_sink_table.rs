@@ -31,6 +31,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::StageTable;
 use crate::append::output::SumSummaryTransform;
 use crate::append::parquet_file::append_data_to_parquet_files;
+use crate::append::partition::PartitionByRuntime;
+use crate::append::partition::TransformPartitionBy;
 use crate::append::row_based_file::append_data_to_row_based_files;
 
 pub struct StageSinkTable {
@@ -66,6 +68,7 @@ impl StageSinkTable {
         }))
     }
 
+    // partition --> limit size (partition merge blocks) --> writer flush
     pub fn do_append_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -75,6 +78,14 @@ impl StageSinkTable {
         let stage_info = &self.info.stage;
 
         let fmt = self.info.stage.file_format_params.clone();
+        if let Some(expr) = &self.info.partition_by {
+            let func_ctx = ctx.get_function_context()?;
+            let runtime = Arc::new(PartitionByRuntime::try_create(expr.clone(), func_ctx)?);
+            pipeline.add_transform(|input, output| {
+                TransformPartitionBy::try_create(input, output, runtime.clone())
+            })?;
+        }
+
         let mem_limit = settings.get_max_memory_usage()? as usize;
         let mut max_threads = settings.get_max_threads()? as usize;
         if self.info.is_ordered {

@@ -9,10 +9,15 @@ db=${1:-"tpch_test"}
 force=${2:-"1"}
 
 if [ "$force" == "0" ]; then
-    res=`echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT`
-    if [ "$res" != "0" -a "$res" != "" ]; then
-        echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
-        exit 0
+    table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'nation'" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
+    table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
+    if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
+        res=$(echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
+        res=$(echo "$res" | tr -d '\r\n[:space:]')
+        if [ -n "$res" ] && [ "$res" -gt 0 ]; then
+            echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
+            exit 0
+        fi
     fi
 fi
 

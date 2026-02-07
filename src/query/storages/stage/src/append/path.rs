@@ -21,6 +21,7 @@ pub fn unload_path(
     group_id: usize,
     batch_id: usize,
     compression: Option<CompressAlgorithm>,
+    partition: Option<&str>,
 ) -> String {
     let format_name =
         format!("{:?}", info.stage.file_format_params.get_type()).to_ascii_lowercase();
@@ -31,30 +32,43 @@ pub fn unload_path(
 
     let path = &info.path;
     if info.options.use_raw_path {
-        path.to_string()
+        return path.to_string();
+    }
+
+    let query_id = if info.options.include_query_id {
+        format!("{query_id}_")
     } else {
-        let query_id = if info.options.include_query_id {
-            format!("{query_id}_")
-        } else {
-            "".to_string()
-        };
-        if path.ends_with("data_") {
-            format!(
-                "{}{}{:0>4}_{:0>8}.{}{}",
-                path, query_id, group_id, batch_id, format_name, suffix
-            )
-        } else {
-            let (path, sep) = if path == "/" {
-                ("", "")
-            } else if path.ends_with('/') {
-                (path.as_str(), "")
-            } else {
-                (path.as_str(), "/")
-            };
-            format!(
-                "{}{}data_{}{:0>4}_{:0>8}.{}{}",
-                path, sep, query_id, group_id, batch_id, format_name, suffix
-            )
+        "".to_string()
+    };
+    if path.ends_with("data_") {
+        return format!(
+            "{}{}{:0>4}_{:0>8}.{}{}",
+            path, query_id, group_id, batch_id, format_name, suffix
+        );
+    }
+    let (path, sep) = if path == "/" {
+        ("", "")
+    } else if path.ends_with('/') {
+        (path.as_str(), "")
+    } else {
+        (path.as_str(), "/")
+    };
+    let mut full_path = String::with_capacity(
+        path.len() + sep.len() + partition.map(|p| p.len() + 1).unwrap_or(0) + query_id.len() + 32,
+    );
+    full_path.push_str(path);
+    full_path.push_str(sep);
+    if let Some(partition) = partition {
+        full_path.push_str(partition);
+        if !partition.ends_with('/') {
+            full_path.push('/');
         }
     }
+    full_path.push_str("data_");
+    full_path.push_str(&query_id);
+    full_path.push_str(&format!(
+        "{:0>4}_{:0>8}.{}{}",
+        group_id, batch_id, format_name, suffix
+    ));
+    full_path
 }
