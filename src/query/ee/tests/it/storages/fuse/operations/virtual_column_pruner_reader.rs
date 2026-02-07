@@ -132,49 +132,44 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         .await?
         .expect("virtual block meta index");
 
-    let mut plan_kinds = HashSet::new();
-    for plans in virtual_block_meta_index.virtual_column_read_plan.values() {
-        for plan in plans {
-            collect_plan_kinds(plan, &mut plan_kinds);
-        }
-    }
-    assert!(plan_kinds.contains("Direct"));
-    assert!(plan_kinds.contains("FromParent"));
-    assert!(plan_kinds.contains("Shared"));
-    assert!(plan_kinds.contains("Object"));
+    let id_column_id = column_ids[0];
+    let text_column_id = column_ids[1];
+    let id_plans = virtual_block_meta_index
+        .virtual_column_read_plan
+        .get(&id_column_id)
+        .expect("id plans");
+    assert!(
+        id_plans
+            .iter()
+            .any(|plan| matches!(plan, VirtualColumnReadPlan::Direct { .. }))
+    );
+    let text_plans = virtual_block_meta_index
+        .virtual_column_read_plan
+        .get(&text_column_id)
+        .expect("text plans");
+    assert!(
+        text_plans
+            .iter()
+            .any(|plan| matches!(plan, VirtualColumnReadPlan::Direct { .. }))
+    );
 
     let info_column_id = column_ids[2];
     let tags0_column_id = column_ids[3];
     let extra_column_id = column_ids[4];
-
     let info_plans = virtual_block_meta_index
         .virtual_column_read_plan
-        .get(&info_column_id)
-        .expect("user.info plans");
-    assert!(
-        info_plans
-            .iter()
-            .any(|plan| matches!(plan, VirtualColumnReadPlan::Object { .. }))
-    );
+        .get(&info_column_id);
+    assert!(info_plans.is_none());
 
     let tags0_plans = virtual_block_meta_index
         .virtual_column_read_plan
-        .get(&tags0_column_id)
-        .expect("tags[0] plans");
-    assert!(tags0_plans.iter().any(|plan| matches!(
-        plan,
-        VirtualColumnReadPlan::FromParent { suffix_path, .. } if suffix_path == "{0}"
-    )));
+        .get(&tags0_column_id);
+    assert!(tags0_plans.is_none());
 
     let extra_plans = virtual_block_meta_index
         .virtual_column_read_plan
-        .get(&extra_column_id)
-        .expect("user.extra plans");
-    assert!(
-        extra_plans
-            .iter()
-            .any(|plan| matches!(plan, VirtualColumnReadPlan::Shared { .. }))
-    );
+        .get(&extra_column_id);
+    assert!(extra_plans.is_none());
 
     let plan = table
         .read_plan(ctx.clone(), Some(push_down), None, false, true)
@@ -271,27 +266,6 @@ fn format_virtual_column_name(source: &str, key_paths: &OwnedKeyPaths) -> String
         name.push(']');
     }
     name
-}
-
-fn collect_plan_kinds(plan: &VirtualColumnReadPlan, kinds: &mut HashSet<&'static str>) {
-    match plan {
-        VirtualColumnReadPlan::Direct { .. } => {
-            kinds.insert("Direct");
-        }
-        VirtualColumnReadPlan::FromParent { parent, .. } => {
-            kinds.insert("FromParent");
-            collect_plan_kinds(parent, kinds);
-        }
-        VirtualColumnReadPlan::Shared { .. } => {
-            kinds.insert("Shared");
-        }
-        VirtualColumnReadPlan::Object { entries } => {
-            kinds.insert("Object");
-            for (_, child) in entries {
-                collect_plan_kinds(child, kinds);
-            }
-        }
-    }
 }
 
 fn assert_variant_column(column: &Column, expected: &[Option<&str>]) {

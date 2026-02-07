@@ -24,6 +24,7 @@ use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
@@ -31,12 +32,19 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
+use databend_common_expression::VariantDataType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_inline_columns;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_inline_value_all_null_columns;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -52,7 +60,10 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::format::FileMetaData;
@@ -64,32 +75,84 @@ use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
 use crate::io::InvertedIndexWriter;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VariantShreddedColumn;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
+use crate::io::arrow_schema_with_parquet_variant;
+use crate::io::arrow_schema_with_parquet_variant_and_shredding;
+use crate::io::build_parquet_variant_record_batch_with_arrow_schema;
+use crate::io::build_parquet_variant_record_batch_with_inline_shredding;
 use crate::io::create_inverted_index_builders;
+use crate::io::parquet_variant_leaf_column_ids;
+use crate::io::parquet_variant_leaf_column_ids_with_shredding;
+use crate::io::variant_data_type_to_arrow;
 use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
+use crate::io::write::virtual_column_builder::InlineVirtualColumn;
+use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
+use crate::operations::column_parquet_metas_with_leaf_ids;
+
+fn inline_virtual_table_type(data_type: &VariantDataType) -> Option<TableDataType> {
+    match data_type {
+        VariantDataType::Boolean => Some(TableDataType::Nullable(Box::new(TableDataType::Boolean))),
+        VariantDataType::UInt64 => Some(TableDataType::Nullable(Box::new(TableDataType::Number(
+            NumberDataType::UInt64,
+        )))),
+        VariantDataType::Int64 => Some(TableDataType::Nullable(Box::new(TableDataType::Number(
+            NumberDataType::Int64,
+        )))),
+        VariantDataType::Float64 => Some(TableDataType::Nullable(Box::new(TableDataType::Number(
+            NumberDataType::Float64,
+        )))),
+        VariantDataType::String => Some(TableDataType::Nullable(Box::new(TableDataType::String))),
+        _ => None,
+    }
+}
+
+fn build_inline_virtual_schema(columns: &[InlineVirtualColumn]) -> Result<TableSchemaRef> {
+    let mut fields = Vec::with_capacity(columns.len());
+    for (idx, column) in columns.iter().enumerate() {
+        let column_id = VIRTUAL_COLUMN_ID_START + idx as u32;
+        let table_type = inline_virtual_table_type(&column.data_type).ok_or_else(|| {
+            ErrorCode::Internal("unsupported virtual column type for inline shredding".to_string())
+        })?;
+        fields.push(TableField::new_from_column_id(
+            &column.key_name,
+            table_type,
+            column_id,
+        ));
+    }
+    Ok(TableSchemaRefExt::create(fields))
+}
 
 pub struct UninitializedArrowWriter {
     write_settings: WriteSettings,
     arrow_schema: Arc<Schema>,
     table_schema: TableSchemaRef,
+    use_variant_struct: bool,
+    leaf_column_ids: Vec<ColumnId>,
+    shredded_columns: Option<Vec<VariantShreddedColumn>>,
 }
 impl UninitializedArrowWriter {
     fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ArrowWriter<Vec<u8>>> {
         let write_settings = &self.write_settings;
         let num_rows = cols_ndv_info.num_rows;
 
+        let ndv_info = if self.use_variant_struct {
+            None::<ColumnsNdvInfo>
+        } else {
+            Some(cols_ndv_info)
+        };
         let writer_properties = build_parquet_writer_properties(
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
-            Some(cols_ndv_info),
+            ndv_info,
             None,
             num_rows,
             self.table_schema.as_ref(),
@@ -103,6 +166,10 @@ impl UninitializedArrowWriter {
 
 pub struct InitializedArrowWriter {
     inner: ArrowWriter<Vec<u8>>,
+    arrow_schema: Arc<Schema>,
+    use_variant_struct: bool,
+    leaf_column_ids: Vec<ColumnId>,
+    shredded_columns: Option<Vec<VariantShreddedColumn>>,
 }
 pub enum ArrowParquetWriter {
     Uninitialized(UninitializedArrowWriter),
@@ -110,11 +177,29 @@ pub enum ArrowParquetWriter {
 }
 impl ArrowParquetWriter {
     fn new_uninitialized(write_settings: WriteSettings, table_schema: TableSchemaRef) -> Self {
-        let arrow_schema = Arc::new(table_schema.as_ref().into());
+        let has_variant = table_schema
+            .fields()
+            .iter()
+            .any(|field| field.data_type().remove_nullable() == TableDataType::Variant);
+        let use_variant_struct =
+            write_settings.variant_encoding == VariantEncoding::ParquetVariant && has_variant;
+        let arrow_schema = if use_variant_struct {
+            Arc::new(arrow_schema_with_parquet_variant(table_schema.as_ref()))
+        } else {
+            Arc::new(table_schema.as_ref().into())
+        };
+        let leaf_column_ids = if use_variant_struct {
+            parquet_variant_leaf_column_ids(table_schema.as_ref())
+        } else {
+            table_schema.to_leaf_column_ids()
+        };
         ArrowParquetWriter::Uninitialized(UninitializedArrowWriter {
             write_settings,
             arrow_schema,
             table_schema,
+            use_variant_struct,
+            leaf_column_ids,
+            shredded_columns: None,
         })
     }
     fn write(&mut self, batch: &RecordBatch) -> Result<()> {
@@ -146,6 +231,61 @@ impl ArrowParquetWriter {
             Initialized(writer) => writer.inner.in_progress_size(),
         }
     }
+
+    fn use_variant_struct(&self) -> bool {
+        match self {
+            ArrowParquetWriter::Uninitialized(inner) => inner.use_variant_struct,
+            ArrowParquetWriter::Initialized(inner) => inner.use_variant_struct,
+        }
+    }
+
+    fn arrow_schema(&self) -> &Arc<Schema> {
+        match self {
+            ArrowParquetWriter::Uninitialized(inner) => &inner.arrow_schema,
+            ArrowParquetWriter::Initialized(inner) => &inner.arrow_schema,
+        }
+    }
+
+    fn shredded_columns(&self) -> Option<&[VariantShreddedColumn]> {
+        match self {
+            ArrowParquetWriter::Uninitialized(inner) => inner.shredded_columns.as_deref(),
+            ArrowParquetWriter::Initialized(inner) => inner.shredded_columns.as_deref(),
+        }
+    }
+
+    fn set_shredded_columns(
+        &mut self,
+        table_schema: &TableSchema,
+        shredded_columns: Vec<VariantShreddedColumn>,
+    ) -> Result<()> {
+        let ArrowParquetWriter::Uninitialized(inner) = self else {
+            return Err(ErrorCode::Internal(
+                "cannot set shredded columns after writer initialization".to_string(),
+            ));
+        };
+        if !inner.use_variant_struct {
+            return Err(ErrorCode::Internal(
+                "shredded columns require parquet variant encoding".to_string(),
+            ));
+        }
+        inner.shredded_columns = Some(shredded_columns);
+        inner.arrow_schema = Arc::new(arrow_schema_with_parquet_variant_and_shredding(
+            table_schema,
+            inner.shredded_columns.as_deref(),
+        ));
+        inner.leaf_column_ids = parquet_variant_leaf_column_ids_with_shredding(
+            table_schema,
+            inner.shredded_columns.as_deref(),
+        );
+        Ok(())
+    }
+
+    fn leaf_column_ids(&self) -> &[ColumnId] {
+        match self {
+            ArrowParquetWriter::Uninitialized(inner) => inner.leaf_column_ids.as_slice(),
+            ArrowParquetWriter::Initialized(inner) => inner.leaf_column_ids.as_slice(),
+        }
+    }
 }
 
 pub struct ColumnsNdvInfo {
@@ -173,7 +313,12 @@ pub enum BlockWriterImpl {
 pub trait BlockWriter {
     fn start(&mut self, cols_ndv: ColumnsNdvInfo) -> Result<()>;
 
-    fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()>;
+    fn write(
+        &mut self,
+        block: DataBlock,
+        schema: &TableSchema,
+        inline_virtual_block: Option<&DataBlock>,
+    ) -> Result<Option<HashSet<ColumnId>>>;
 
     fn finish(&mut self, schema: &TableSchemaRef) -> Result<HashMap<ColumnId, ColumnMeta>>;
 
@@ -193,18 +338,59 @@ impl BlockWriter for BlockWriterImpl {
                 };
 
                 let inner = uninitialized.init(cols_ndv_info)?;
-                *arrow_writer = ArrowParquetWriter::Initialized(InitializedArrowWriter { inner });
+                *arrow_writer = ArrowParquetWriter::Initialized(InitializedArrowWriter {
+                    inner,
+                    arrow_schema: uninitialized.arrow_schema.clone(),
+                    use_variant_struct: uninitialized.use_variant_struct,
+                    leaf_column_ids: uninitialized.leaf_column_ids.clone(),
+                    shredded_columns: uninitialized.shredded_columns.clone(),
+                });
                 Ok(())
             }
             BlockWriterImpl::Native(native_writer) => Ok(native_writer.start()?),
         }
     }
 
-    fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()> {
+    fn write(
+        &mut self,
+        block: DataBlock,
+        schema: &TableSchema,
+        inline_virtual_block: Option<&DataBlock>,
+    ) -> Result<Option<HashSet<ColumnId>>> {
         match self {
             BlockWriterImpl::Parquet(writer) => {
-                let batch = block.to_record_batch(schema)?;
-                writer.write(&batch)?
+                let (batch, batch_value_all_null_sources) = if writer.use_variant_struct() {
+                    if let Some(shredded_columns) = writer.shredded_columns() {
+                        let inline_block = inline_virtual_block.ok_or_else(|| {
+                            ErrorCode::Internal(
+                                "inline virtual block is required for variant shredding"
+                                    .to_string(),
+                            )
+                        })?;
+                        let (record_batch, value_all_null_sources) =
+                            build_parquet_variant_record_batch_with_inline_shredding(
+                                schema,
+                                writer.arrow_schema(),
+                                block,
+                                shredded_columns,
+                                inline_block,
+                            )?;
+                        (record_batch, Some(value_all_null_sources))
+                    } else {
+                        (
+                            build_parquet_variant_record_batch_with_arrow_schema(
+                                schema,
+                                writer.arrow_schema(),
+                                block,
+                            )?,
+                            None,
+                        )
+                    }
+                } else {
+                    (block.to_record_batch(schema)?, None)
+                };
+                writer.write(&batch)?;
+                Ok(batch_value_all_null_sources)
             }
             BlockWriterImpl::Native(writer) => {
                 let block = block.consume_convert_to_full();
@@ -214,16 +400,21 @@ impl BlockWriter for BlockWriterImpl {
                     .map(|x| x.into_column().unwrap())
                     .collect();
                 writer.write(&batch)?;
+                Ok(None)
             }
         }
-        Ok(())
     }
 
     fn finish(&mut self, schema: &TableSchemaRef) -> Result<HashMap<ColumnId, ColumnMeta>> {
         match self {
             BlockWriterImpl::Parquet(writer) => {
+                let leaf_column_ids = writer.leaf_column_ids().to_vec();
                 let file_meta = writer.finish()?;
-                column_parquet_metas(&file_meta, schema)
+                if writer.use_variant_struct() {
+                    column_parquet_metas_with_leaf_ids(&file_meta, &leaf_column_ids)
+                } else {
+                    column_parquet_metas(&file_meta, schema)
+                }
             }
             BlockWriterImpl::Native(writer) => {
                 writer.finish()?;
@@ -254,12 +445,32 @@ impl BlockWriter for BlockWriterImpl {
     }
 }
 
+impl BlockWriterImpl {
+    fn set_shredded_columns(
+        &mut self,
+        table_schema: &TableSchema,
+        shredded_columns: Vec<VariantShreddedColumn>,
+    ) -> Result<()> {
+        match self {
+            BlockWriterImpl::Parquet(writer) => {
+                writer.set_shredded_columns(table_schema, shredded_columns)
+            }
+            BlockWriterImpl::Native(_) => Ok(()),
+        }
+    }
+}
+
 pub struct StreamBlockBuilder {
     properties: Arc<StreamBlockProperties>,
     block_writer: BlockWriterImpl,
     inverted_index_writers: Vec<InvertedIndexWriter>,
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
+    inline_virtual_columns: Option<Vec<InlineVirtualColumn>>,
+    inline_virtual_schema: Option<TableSchemaRef>,
+    inline_virtual_stats_state: Option<ColumnStatisticsState>,
+    inline_shredded_columns: Option<Vec<VariantShreddedColumn>>,
+    inline_value_all_null_sources: Option<HashSet<ColumnId>>,
     vector_index_builder: Option<VectorIndexBuilder>,
     block_stats_builder: BlockStatsBuilder,
 
@@ -335,6 +546,11 @@ impl StreamBlockBuilder {
             inverted_index_writers,
             bloom_index_builder,
             virtual_column_builder,
+            inline_virtual_columns: None,
+            inline_virtual_schema: None,
+            inline_virtual_stats_state: None,
+            inline_shredded_columns: None,
+            inline_value_all_null_sources: None,
             vector_index_builder,
             block_stats_builder,
             row_count: 0,
@@ -362,6 +578,12 @@ impl StreamBlockBuilder {
         }
 
         let had_existing_rows = self.row_count > 0;
+        let enable_inline = self.properties.write_settings.variant_encoding
+            == VariantEncoding::ParquetVariant
+            && matches!(
+                self.properties.write_settings.storage_format,
+                FuseStorageFormat::Parquet
+            );
 
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
@@ -381,6 +603,49 @@ impl StreamBlockBuilder {
         self.block_size += block.estimate_block_size();
 
         if !had_existing_rows {
+            if enable_inline && self.inline_shredded_columns.is_none() {
+                if let Some(ref virtual_column_builder) = self.virtual_column_builder {
+                    let mut builder = virtual_column_builder.clone();
+                    if let Some(inline) = builder.build_inline_virtual_columns()? {
+                        let mut shredded_columns = Vec::with_capacity(inline.columns.len());
+                        for (idx, column) in inline.columns.iter().enumerate() {
+                            let data_type = variant_data_type_to_arrow(&column.data_type)
+                                .ok_or_else(|| {
+                                    ErrorCode::Internal(
+                                        "unsupported virtual column type for inline shredding"
+                                            .to_string(),
+                                    )
+                                })?;
+                            let column_id = VIRTUAL_COLUMN_ID_START + idx as u32;
+                            shredded_columns.push(VariantShreddedColumn {
+                                source_column_id: column.source_column_id,
+                                column_id,
+                                key_paths: column.key_paths.clone(),
+                                data_type,
+                            });
+                        }
+                        if !shredded_columns.is_empty() {
+                            let inline_schema =
+                                build_inline_virtual_schema(inline.columns.as_slice())?;
+                            let stats_columns = inline_schema
+                                .fields()
+                                .iter()
+                                .map(|field| (field.column_id(), DataType::from(field.data_type())))
+                                .collect::<Vec<_>>();
+                            self.inline_virtual_columns = Some(inline.columns.clone());
+                            self.inline_virtual_schema = Some(inline_schema);
+                            self.inline_virtual_stats_state =
+                                Some(ColumnStatisticsState::new(&stats_columns, &[]));
+                            self.inline_shredded_columns = Some(shredded_columns.clone());
+                            self.block_writer.set_shredded_columns(
+                                self.properties.source_schema.as_ref(),
+                                shredded_columns,
+                            )?;
+                            self.virtual_column_builder = None;
+                        }
+                    }
+                }
+            }
             // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
             // block's NDV stats to heuristically configure the parquet writer.
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
@@ -389,8 +654,47 @@ impl StreamBlockBuilder {
                 .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
         }
 
-        self.block_writer
-            .write(block, &self.properties.source_schema)?;
+        let inline_virtual_block = if let Some(ref columns) = self.inline_virtual_columns {
+            Some(
+                VirtualColumnBuilder::build_inline_virtual_block_for_columns(
+                    &block,
+                    &self.properties.source_schema,
+                    columns,
+                )?,
+            )
+        } else {
+            None
+        };
+
+        if let (Some(schema), Some(stats_state), Some(inline_block)) = (
+            self.inline_virtual_schema.as_ref(),
+            self.inline_virtual_stats_state.as_mut(),
+            inline_virtual_block.as_ref(),
+        ) {
+            stats_state.add_block(schema, inline_block)?;
+        }
+
+        let value_all_null_sources = self.block_writer.write(
+            block,
+            &self.properties.source_schema,
+            inline_virtual_block.as_ref(),
+        )?;
+        if let Some(value_all_null_sources) = value_all_null_sources {
+            if let Some(shredded_columns) = self.inline_shredded_columns.as_ref() {
+                metrics_inc_variant_shredding_inline_columns(shredded_columns.len() as u64);
+                metrics_inc_variant_shredding_inline_value_all_null_columns(
+                    value_all_null_sources.len() as u64,
+                );
+            }
+            self.inline_value_all_null_sources =
+                Some(match self.inline_value_all_null_sources.take() {
+                    None => value_all_null_sources,
+                    Some(mut existing) => {
+                        existing.retain(|column_id| value_all_null_sources.contains(column_id));
+                        existing
+                    }
+                });
+        }
         Ok(())
     }
 
@@ -439,14 +743,6 @@ impl StreamBlockBuilder {
                 InvertedIndexState::try_create(data, inverted_index_location)?;
             inverted_index_states.push(inverted_index_state);
         }
-        let virtual_column_state =
-            if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
-                let virtual_column_state = virtual_column_builder
-                    .finalize(&self.properties.write_settings, &block_location)?;
-                Some(virtual_column_state)
-            } else {
-                None
-            };
         let vector_index_state =
             if let Some(ref mut vector_index_builder) = self.vector_index_builder {
                 let vector_index_location =
@@ -461,6 +757,38 @@ impl StreamBlockBuilder {
 
         let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
         let block_raw_data = mem::take(self.block_writer.inner_mut());
+
+        let virtual_column_state = if let Some(ref columns) = self.inline_virtual_columns {
+            let columns_statistics = self
+                .inline_virtual_stats_state
+                .take()
+                .map(|stats| stats.finalize(HashMap::new()))
+                .transpose()?
+                .unwrap_or_else(StatisticsOfColumns::new);
+            let draft_virtual_column_metas =
+                VirtualColumnBuilder::column_metas_to_virtual_column_metas(
+                    &col_metas,
+                    columns.clone(),
+                    columns_statistics,
+                    VIRTUAL_COLUMN_ID_START,
+                    self.inline_value_all_null_sources.as_ref(),
+                )?;
+            let draft_virtual_block_meta = DraftVirtualBlockMeta {
+                virtual_column_metas: draft_virtual_column_metas,
+                virtual_column_size: 0,
+                virtual_location: block_location.clone(),
+            };
+            Some(VirtualColumnState {
+                data: vec![],
+                draft_virtual_block_meta,
+            })
+        } else if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
+            let virtual_column_state = virtual_column_builder
+                .finalize(&self.properties.write_settings, &block_location)?;
+            Some(virtual_column_state)
+        } else {
+            None
+        };
 
         let file_size = block_raw_data.len();
         let inverted_index_size = inverted_index_states
@@ -487,6 +815,7 @@ impl StreamBlockBuilder {
                 .map(|v| v.size)
                 .unwrap_or_default(),
             compression: self.properties.write_settings.table_compression.into(),
+            variant_encoding: self.properties.write_settings.variant_encoding,
             inverted_index_size,
             vector_index_size,
             vector_index_location,
@@ -557,7 +886,7 @@ impl StreamBlockProperties {
             ..schema.as_ref().clone()
         });
 
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_variant(ctx.as_ref());
 
         let bloom_columns_map = table
             .bloom_index_cols

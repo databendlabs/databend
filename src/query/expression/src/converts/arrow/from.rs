@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
+use arrow_array::cast::AsArray;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use databend_common_column::binary::BinaryColumn;
+use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_column::binview::StringColumn;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
@@ -28,6 +32,9 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_unshred_milliseconds;
+use jsonb::Number as JsonbNumber;
+use jsonb::Value as JsonbValue;
 
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -183,15 +190,19 @@ impl TryFrom<&Field> for TableField {
                     }
                 }
                 ArrowDataType::Struct(fields) => {
-                    let fields_name: Vec<String> =
-                        fields.iter().map(|f| f.name().clone()).collect();
-                    let fields_type: Vec<TableDataType> = fields
-                        .iter()
-                        .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
-                        .collect::<Result<Vec<_>>>()?;
-                    TableDataType::Tuple {
-                        fields_name,
-                        fields_type,
+                    if is_parquet_variant_struct(arrow_f) {
+                        TableDataType::Variant
+                    } else {
+                        let fields_name: Vec<String> =
+                            fields.iter().map(|f| f.name().clone()).collect();
+                        let fields_type: Vec<TableDataType> = fields
+                            .iter()
+                            .map(|f| TableField::try_from(f.as_ref()).map(|f| f.data_type))
+                            .collect::<Result<Vec<_>>>()?;
+                        TableDataType::Tuple {
+                            fields_name,
+                            fields_type,
+                        }
                     }
                 }
                 ArrowDataType::Dictionary(_, b) => {
@@ -212,6 +223,36 @@ impl TryFrom<&Field> for TableField {
         }
         Ok(TableField::new(arrow_f.name(), data_type))
     }
+}
+
+fn is_parquet_variant_struct(field: &Field) -> bool {
+    let ArrowDataType::Struct(fields) = field.data_type() else {
+        return false;
+    };
+    let mut has_metadata = false;
+    let mut has_value = false;
+    for child in fields {
+        match child.name().as_str() {
+            "metadata" => {
+                has_metadata = matches!(
+                    child.data_type(),
+                    ArrowDataType::Binary
+                        | ArrowDataType::LargeBinary
+                        | ArrowDataType::FixedSizeBinary(_)
+                );
+            }
+            "value" => {
+                has_value = matches!(
+                    child.data_type(),
+                    ArrowDataType::Binary
+                        | ArrowDataType::LargeBinary
+                        | ArrowDataType::FixedSizeBinary(_)
+                );
+            }
+            _ => {}
+        }
+    }
+    has_metadata && has_value
 }
 
 impl TryFrom<&Schema> for DataSchema {
@@ -403,7 +444,7 @@ impl Column {
             DataType::Opaque(size) => Column::Opaque(try_to_opaque_column(array, *size)?),
 
             DataType::Bitmap => Column::Bitmap(try_to_binary_column(array)?),
-            DataType::Variant => Column::Variant(try_to_binary_column(array)?),
+            DataType::Variant => Column::Variant(try_to_variant_column(array)?),
             DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
             DataType::Geography => Column::Geography(GeographyColumn(try_to_binary_column(array)?)),
             DataType::Vector(ty) => {
@@ -466,6 +507,192 @@ fn try_to_binary_column(array: ArrayRef) -> Result<BinaryColumn> {
     Ok(BinaryColumn::new(values.into(), offsets.into()))
 }
 
+fn try_to_variant_column(array: ArrayRef) -> Result<BinaryColumn> {
+    if matches!(array.data_type(), ArrowDataType::Struct(_)) {
+        return try_to_variant_column_from_struct(array);
+    }
+    try_to_binary_column(array)
+}
+
+fn try_to_variant_column_from_struct(array: ArrayRef) -> Result<BinaryColumn> {
+    let start = std::time::Instant::now();
+    let struct_array = array
+        .as_any()
+        .downcast_ref::<arrow_array::StructArray>()
+        .ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Cannot downcast to StructArray from array: {:?}",
+                array
+            ))
+        })?;
+
+    let metadata_col = struct_array
+        .column_by_name("metadata")
+        .ok_or_else(|| {
+            ErrorCode::Internal("Variant struct array must contain a 'metadata' field".to_string())
+        })?
+        .clone();
+    let metadata_col = arrow_cast::cast(metadata_col.as_ref(), &ArrowDataType::LargeBinary)?;
+    let metadata_col = metadata_col
+        .as_any()
+        .downcast_ref::<arrow_array::LargeBinaryArray>()
+        .ok_or_else(|| {
+            ErrorCode::Internal("Variant struct 'metadata' field must be binary".to_string())
+        })?;
+
+    let value_col = struct_array.column_by_name("value").map(|col| {
+        let col = arrow_cast::cast(col.as_ref(), &ArrowDataType::LargeBinary)?;
+        col.as_any()
+            .downcast_ref::<arrow_array::LargeBinaryArray>()
+            .ok_or_else(|| {
+                ErrorCode::Internal("Variant struct 'value' field must be binary".to_string())
+            })
+            .cloned()
+    });
+    let value_col = match value_col {
+        Some(col) => Some(col?),
+        None => None,
+    };
+
+    let typed_value_col = struct_array.column_by_name("typed_value").cloned();
+
+    let mut builder = BinaryColumnBuilder::with_capacity(struct_array.len(), 0);
+    for row in 0..struct_array.len() {
+        if struct_array.is_null(row) || metadata_col.is_null(row) {
+            builder.put_slice(crate::types::variant::JSONB_NULL);
+            builder.commit_row();
+            continue;
+        }
+        let value = match &value_col {
+            Some(col) if !col.is_null(row) => Some(col.value(row)),
+            _ => None,
+        };
+        if value.is_none() {
+            if let Some(typed_value) = typed_value_col.as_ref() {
+                if let Some(jsonb) = typed_value_to_jsonb_bytes(typed_value, row)? {
+                    builder.put_slice(&jsonb);
+                    builder.commit_row();
+                    continue;
+                }
+            }
+        }
+        let metadata = metadata_col.value(row);
+        let value = value.unwrap_or(&[]);
+        let jsonb = crate::types::variant_parquet::parquet_variant_to_jsonb(metadata, value)?;
+        builder.put_slice(&jsonb);
+        builder.commit_row();
+    }
+    metrics_inc_variant_shredding_unshred_milliseconds(start.elapsed().as_millis() as u64);
+    Ok(builder.build())
+}
+
+fn typed_value_to_jsonb_bytes(typed_value: &ArrayRef, row: usize) -> Result<Option<Vec<u8>>> {
+    if typed_value.is_null(row) {
+        return Ok(None);
+    }
+    let value = typed_value_to_jsonb_value(typed_value, row)?;
+    let mut buf = Vec::new();
+    value.write_to_vec(&mut buf);
+    Ok(Some(buf))
+}
+
+fn typed_value_to_jsonb_value(typed_value: &ArrayRef, row: usize) -> Result<JsonbValue<'static>> {
+    match typed_value.data_type() {
+        ArrowDataType::Boolean => Ok(JsonbValue::Bool(typed_value.as_boolean().value(row))),
+        ArrowDataType::Int8 => Ok(JsonbValue::Number(JsonbNumber::Int64(
+            typed_value
+                .as_primitive::<arrow_array::types::Int8Type>()
+                .value(row) as i64,
+        ))),
+        ArrowDataType::Int16 => Ok(JsonbValue::Number(JsonbNumber::Int64(
+            typed_value
+                .as_primitive::<arrow_array::types::Int16Type>()
+                .value(row) as i64,
+        ))),
+        ArrowDataType::Int32 => Ok(JsonbValue::Number(JsonbNumber::Int64(
+            typed_value
+                .as_primitive::<arrow_array::types::Int32Type>()
+                .value(row) as i64,
+        ))),
+        ArrowDataType::Int64 => Ok(JsonbValue::Number(JsonbNumber::Int64(
+            typed_value
+                .as_primitive::<arrow_array::types::Int64Type>()
+                .value(row),
+        ))),
+        ArrowDataType::UInt8 => Ok(JsonbValue::Number(JsonbNumber::UInt64(
+            typed_value
+                .as_primitive::<arrow_array::types::UInt8Type>()
+                .value(row) as u64,
+        ))),
+        ArrowDataType::UInt16 => Ok(JsonbValue::Number(JsonbNumber::UInt64(
+            typed_value
+                .as_primitive::<arrow_array::types::UInt16Type>()
+                .value(row) as u64,
+        ))),
+        ArrowDataType::UInt32 => Ok(JsonbValue::Number(JsonbNumber::UInt64(
+            typed_value
+                .as_primitive::<arrow_array::types::UInt32Type>()
+                .value(row) as u64,
+        ))),
+        ArrowDataType::UInt64 => Ok(JsonbValue::Number(JsonbNumber::UInt64(
+            typed_value
+                .as_primitive::<arrow_array::types::UInt64Type>()
+                .value(row),
+        ))),
+        ArrowDataType::Float32 => Ok(JsonbValue::Number(JsonbNumber::Float64(
+            typed_value
+                .as_primitive::<arrow_array::types::Float32Type>()
+                .value(row) as f64,
+        ))),
+        ArrowDataType::Float64 => Ok(JsonbValue::Number(JsonbNumber::Float64(
+            typed_value
+                .as_primitive::<arrow_array::types::Float64Type>()
+                .value(row),
+        ))),
+        ArrowDataType::Utf8 => Ok(JsonbValue::String(Cow::Owned(
+            typed_value.as_string::<i32>().value(row).to_string(),
+        ))),
+        ArrowDataType::Utf8View => Ok(JsonbValue::String(Cow::Owned(
+            typed_value.as_string_view().value(row).to_string(),
+        ))),
+        ArrowDataType::LargeUtf8 => Ok(JsonbValue::String(Cow::Owned(
+            typed_value.as_string::<i64>().value(row).to_string(),
+        ))),
+        ArrowDataType::Struct(_) => typed_value_struct_to_jsonb_value(typed_value, row),
+        other => Err(ErrorCode::Unimplemented(format!(
+            "Unsupported typed_value type for variant decoding: {other:?}"
+        ))),
+    }
+}
+
+fn typed_value_struct_to_jsonb_value(
+    typed_value: &ArrayRef,
+    row: usize,
+) -> Result<JsonbValue<'static>> {
+    let struct_array = typed_value.as_struct();
+    let mut map = BTreeMap::new();
+    for (idx, field) in struct_array.fields().iter().enumerate() {
+        let field_array = struct_array.column(idx);
+        if field_array.is_null(row) {
+            continue;
+        }
+        let value_array = if let Some(field_struct) = field_array.as_struct_opt() {
+            field_struct
+                .column_by_name("typed_value")
+                .cloned()
+                .unwrap_or_else(|| field_array.clone())
+        } else {
+            field_array.clone()
+        };
+        if value_array.is_null(row) {
+            continue;
+        }
+        let value = typed_value_to_jsonb_value(&value_array, row)?;
+        map.insert(field.name().to_string(), value);
+    }
+    Ok(JsonbValue::Object(map))
+}
+
 // Convert from `ArrayData` into BinaryColumn ignores the validity
 fn try_to_string_column(array: ArrayRef) -> Result<StringColumn> {
     let array = if !matches!(array.data_type(), ArrowDataType::Utf8View) {
@@ -501,4 +728,248 @@ fn try_to_opaque_column(array: ArrayRef, size: usize) -> Result<OpaqueColumn> {
 
     let data = array.values().to_data();
     OpaqueColumn::try_from_arrow_data(data, size)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use arrow_array::Int64Array;
+    use arrow_array::LargeBinaryArray;
+    use arrow_array::StringArray;
+    use arrow_array::StructArray;
+    use arrow_buffer::NullBuffer;
+    use arrow_schema::Field;
+    use arrow_schema::Fields;
+
+    use super::*;
+    use crate::TableDataType;
+    use crate::types::DataType;
+    use crate::types::variant_parquet::jsonb_to_parquet_variant_parts;
+
+    #[test]
+    fn test_variant_struct_to_column() -> Result<()> {
+        let json_text = br#"{"a":1}"#;
+        let (metadata, value) = jsonb_to_parquet_variant_parts(json_text)?;
+
+        let metadata_array =
+            LargeBinaryArray::from(vec![Some(metadata.as_slice()), Some(metadata.as_slice())]);
+        let value_array = LargeBinaryArray::from(vec![Some(value.as_slice()), None]);
+
+        let fields = Fields::from(vec![
+            Field::new("metadata", ArrowDataType::LargeBinary, false),
+            Field::new("value", ArrowDataType::LargeBinary, true),
+        ]);
+        let nulls = NullBuffer::from(vec![true, false]);
+        let struct_array = StructArray::new(
+            fields,
+            vec![
+                Arc::new(metadata_array) as ArrayRef,
+                Arc::new(value_array) as ArrayRef,
+            ],
+            Some(nulls),
+        );
+
+        let column = Column::from_arrow_rs(Arc::new(struct_array), &DataType::Variant)?;
+        let Column::Variant(col) = column else {
+            return Err(ErrorCode::Internal(
+                "Expected variant column from struct conversion".to_string(),
+            ));
+        };
+
+        let value =
+            jsonb::from_slice(col.value(0)).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let expected =
+            jsonb::from_slice(json_text).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        assert_eq!(value, expected);
+        assert_eq!(col.value(1), crate::types::variant::JSONB_NULL);
+        Ok(())
+    }
+
+    #[test]
+    fn test_variant_struct_typed_value_to_column() -> Result<()> {
+        let json_text = br#"42"#;
+        let (metadata, _value) = jsonb_to_parquet_variant_parts(json_text)?;
+
+        let metadata_array = LargeBinaryArray::from(vec![Some(metadata.as_slice())]);
+        let value_array = LargeBinaryArray::from(vec![None]);
+        let typed_value_array = Int64Array::from(vec![Some(42)]);
+
+        let fields = Fields::from(vec![
+            Field::new("metadata", ArrowDataType::LargeBinary, false),
+            Field::new("value", ArrowDataType::LargeBinary, true),
+            Field::new("typed_value", ArrowDataType::Int64, true),
+        ]);
+        let struct_array = StructArray::new(
+            fields,
+            vec![
+                Arc::new(metadata_array) as ArrayRef,
+                Arc::new(value_array) as ArrayRef,
+                Arc::new(typed_value_array) as ArrayRef,
+            ],
+            None,
+        );
+
+        let column = Column::from_arrow_rs(Arc::new(struct_array), &DataType::Variant)?;
+        let Column::Variant(col) = column else {
+            return Err(ErrorCode::Internal(
+                "Expected variant column from struct conversion".to_string(),
+            ));
+        };
+
+        let value =
+            jsonb::from_slice(col.value(0)).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let expected =
+            jsonb::from_slice(json_text).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        assert_eq!(value, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_variant_struct_typed_value_object_to_column() -> Result<()> {
+        let json_text = br#"{"a":1,"b":"x"}"#;
+        let (metadata, _value) = jsonb_to_parquet_variant_parts(json_text)?;
+
+        let metadata_array = LargeBinaryArray::from(vec![Some(metadata.as_slice())]);
+        let value_array = LargeBinaryArray::from(vec![None]);
+
+        let a_values = Int64Array::from(vec![Some(1)]);
+        let a_struct = StructArray::new(
+            Fields::from(vec![Field::new("typed_value", ArrowDataType::Int64, true)]),
+            vec![Arc::new(a_values) as ArrayRef],
+            None,
+        );
+
+        let b_values = StringArray::from(vec![Some("x")]);
+        let b_struct = StructArray::new(
+            Fields::from(vec![Field::new("typed_value", ArrowDataType::Utf8, true)]),
+            vec![Arc::new(b_values) as ArrayRef],
+            None,
+        );
+
+        let typed_value = StructArray::new(
+            Fields::from(vec![
+                Field::new("a", a_struct.data_type().clone(), true),
+                Field::new("b", b_struct.data_type().clone(), true),
+            ]),
+            vec![
+                Arc::new(a_struct) as ArrayRef,
+                Arc::new(b_struct) as ArrayRef,
+            ],
+            None,
+        );
+
+        let struct_array = StructArray::new(
+            Fields::from(vec![
+                Field::new("metadata", ArrowDataType::LargeBinary, false),
+                Field::new("value", ArrowDataType::LargeBinary, true),
+                Field::new("typed_value", typed_value.data_type().clone(), true),
+            ]),
+            vec![
+                Arc::new(metadata_array) as ArrayRef,
+                Arc::new(value_array) as ArrayRef,
+                Arc::new(typed_value) as ArrayRef,
+            ],
+            None,
+        );
+
+        let column = Column::from_arrow_rs(Arc::new(struct_array), &DataType::Variant)?;
+        let Column::Variant(col) = column else {
+            return Err(ErrorCode::Internal(
+                "Expected variant column from struct conversion".to_string(),
+            ));
+        };
+
+        let value =
+            jsonb::from_slice(col.value(0)).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let expected =
+            jsonb::from_slice(json_text).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        assert_eq!(value, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_variant_struct_typed_value_object_without_wrapper() -> Result<()> {
+        let json_text = br#"{"a":1,"b":"x"}"#;
+        let (metadata, _value) = jsonb_to_parquet_variant_parts(json_text)?;
+
+        let metadata_array = LargeBinaryArray::from(vec![Some(metadata.as_slice())]);
+        let value_array = LargeBinaryArray::from(vec![None]);
+
+        let a_values = Int64Array::from(vec![Some(1)]);
+        let b_values = StringArray::from(vec![Some("x")]);
+        let typed_value = StructArray::new(
+            Fields::from(vec![
+                Field::new("a", ArrowDataType::Int64, true),
+                Field::new("b", ArrowDataType::Utf8, true),
+            ]),
+            vec![
+                Arc::new(a_values) as ArrayRef,
+                Arc::new(b_values) as ArrayRef,
+            ],
+            None,
+        );
+
+        let struct_array = StructArray::new(
+            Fields::from(vec![
+                Field::new("metadata", ArrowDataType::LargeBinary, false),
+                Field::new("value", ArrowDataType::LargeBinary, true),
+                Field::new("typed_value", typed_value.data_type().clone(), true),
+            ]),
+            vec![
+                Arc::new(metadata_array) as ArrayRef,
+                Arc::new(value_array) as ArrayRef,
+                Arc::new(typed_value) as ArrayRef,
+            ],
+            None,
+        );
+
+        let column = Column::from_arrow_rs(Arc::new(struct_array), &DataType::Variant)?;
+        let Column::Variant(col) = column else {
+            return Err(ErrorCode::Internal(
+                "Expected variant column from struct conversion".to_string(),
+            ));
+        };
+
+        let value =
+            jsonb::from_slice(col.value(0)).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let expected =
+            jsonb::from_slice(json_text).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        assert_eq!(value, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_variant_struct_field_without_extension() -> Result<()> {
+        let fields = Fields::from(vec![
+            Field::new("metadata", ArrowDataType::LargeBinary, false),
+            Field::new("value", ArrowDataType::LargeBinary, true),
+        ]);
+        let struct_field = Field::new("v", ArrowDataType::Struct(fields), true);
+        let table_field = TableField::try_from(&struct_field)?;
+        assert_eq!(
+            table_field.data_type(),
+            &TableDataType::Nullable(Box::new(TableDataType::Variant))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_struct_missing_value_field_is_not_variant() -> Result<()> {
+        let fields = Fields::from(vec![Field::new(
+            "metadata",
+            ArrowDataType::LargeBinary,
+            true,
+        )]);
+        let struct_field = Field::new("v", ArrowDataType::Struct(fields), true);
+        let table_field = TableField::try_from(&struct_field)?;
+        assert_eq!(
+            table_field.data_type(),
+            &TableDataType::Nullable(Box::new(TableDataType::Tuple {
+                fields_name: vec!["metadata".to_string()],
+                fields_type: vec![TableDataType::Nullable(Box::new(TableDataType::Binary))],
+            }))
+        );
+        Ok(())
+    }
 }

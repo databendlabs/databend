@@ -43,6 +43,7 @@ mod dummy {
     use databend_common_storages_fuse::FuseStorageFormat;
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::io::serialize_block;
+    use databend_storages_common_table_meta::meta::VariantEncoding;
     use databend_storages_common_table_meta::table::TableCompression;
     use divan::counter::BytesCount;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -148,6 +149,7 @@ mod dummy {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary,
+            variant_encoding: VariantEncoding::default(),
         };
         let schema = Arc::new(schema);
         let mut buffer = Vec::new();
