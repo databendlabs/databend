@@ -26,6 +26,7 @@ use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 
 use databend_common_base::base::WatchNotify;
+use databend_common_base::hints::assume;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
@@ -760,6 +761,10 @@ impl RunningGraph {
                 match plans_profile.entry(*plan_id) {
                     Entry::Occupied(mut v) => {
                         let plan_profile = v.get_mut();
+                        assume(
+                            plan_profile.statistics.len()
+                                == std::mem::variant_count::<ProfileStatisticsName>(),
+                        );
                         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
                             plan_profile.statistics[index] +=
                                 profile.statistics[index].fetch_min(0, Ordering::SeqCst);
@@ -768,6 +773,10 @@ impl RunningGraph {
                     Entry::Vacant(v) => {
                         let plan_profile = v.insert(PlanProfile::create(profile));
 
+                        assume(
+                            plan_profile.statistics.len()
+                                == std::mem::variant_count::<ProfileStatisticsName>(),
+                        );
                         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
                             plan_profile.statistics[index] +=
                                 profile.statistics[index].fetch_min(0, Ordering::SeqCst);
