@@ -52,3 +52,10 @@ stmt_fail() {
 comment() {
 	echo "#### $1"
 }
+
+# Execute SQL as root user, useful for setup/teardown blocks
+run_root_sql() {
+	cat <<SQL | $BENDSQL_CLIENT_CONNECT
+$1
+SQL
+}

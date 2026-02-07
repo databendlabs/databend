@@ -4,29 +4,28 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r2;" | $BENDSQL_CLIENT_CONNECT
-
-echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on system.one to role role3" | $BENDSQL_CLIENT_CONNECT
-echo "grant update on information_schema.* to role role3" | $BENDSQL_CLIENT_CONNECT
-
-echo "create database c_r1" | $BENDSQL_CLIENT_CONNECT
-echo "create table c_r1.t1(id int)" | $BENDSQL_CLIENT_CONNECT
-echo "create database c_r2" | $BENDSQL_CLIENT_CONNECT
-echo "create table c_r2.t2(id int)" | $BENDSQL_CLIENT_CONNECT
-echo "create database c_r;" | $BENDSQL_CLIENT_CONNECT
-echo "create table c_r.t(id int);" | $BENDSQL_CLIENT_CONNECT
-echo "grant ownership on c_r.* to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant ownership on c_r.t to role role3;" | $BENDSQL_CLIENT_CONNECT
-
-echo "grant select on c_r.t to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant insert on c_r1.* to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant update, delete on c_r1.t1 to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert on c_r2.* to role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant update, delete on c_r2.t2 to role role3;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop role if exists role3;
+drop database if exists c_r;
+drop database if exists c_r1;
+drop database if exists c_r2;
+create role role3;
+grant select on system.one to role role3;
+grant update on information_schema.* to role role3;
+create database c_r1;
+create table c_r1.t1(id int);
+create database c_r2;
+create table c_r2.t2(id int);
+create database c_r;
+create table c_r.t(id int);
+grant ownership on c_r.* to role role3;
+grant ownership on c_r.t to role role3;
+grant select on c_r.t to role role3;
+grant insert on c_r1.* to role role3;
+grant update, delete on c_r1.t1 to role role3;
+grant select, insert on c_r2.* to role role3;
+grant update, delete on c_r2.t2 to role role3;
+"
 
 echo "=== review init role3 grants ==="
 echo "show grants for role role3;" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
@@ -99,11 +98,12 @@ echo "show grants for role role3;" | $USER_U1_CONNECT | awk -F ' ' '{$3=""; prin
 echo "show grants for user 'role3@test';" | $USER_U1_CONNECT
 
 echo "=== clean up ==="
-echo "drop user if exists u1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop database if exists c_r2;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists u1;
+drop role if exists role1;
+drop role if exists role2;
+drop role if exists role3;
+drop database if exists c_r;
+drop database if exists c_r1;
+drop database if exists c_r2;
+"
