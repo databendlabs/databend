@@ -214,6 +214,12 @@ impl PhysicalPlanBuilder {
 
                                         // Try to parse the field name as a metadata index
                                         if let Ok(field_metadata_idx) = field_name.parse::<usize>() {
+                                            // Guard against out-of-bounds access: user columns with numeric names
+                                            // (e.g., "6") could parse as valid indices but exceed metadata bounds
+                                            if field_metadata_idx >= metadata.columns().len() {
+                                                continue;
+                                            }
+
                                             // Get the column entry for this metadata index
                                             if let databend_common_sql::ColumnEntry::InternalColumn(field_internal_col)
                                                 = metadata.column(field_metadata_idx)
