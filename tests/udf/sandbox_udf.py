@@ -332,6 +332,55 @@ $$
     ctx.check_result("SELECT read_pkg() AS result", [["zip-whl-egg"]])
 
 
+def worker_case(ctx: SandboxContext):
+    print("Creating worker")
+    ctx.execute_query(
+        "CREATE WORKER IF NOT EXISTS read_env "
+        "WITH size='small', auto_suspend='300', auto_resume='true', "
+        "max_cluster_count='3', min_cluster_count='1'"
+    )
+    ctx.execute_query("ALTER WORKER read_env SET size='medium', auto_suspend='600'")
+    ctx.execute_query("ALTER WORKER read_env SET TAG purpose='sandbox'")
+    ctx.execute_query("ALTER WORKER read_env SUSPEND")
+    ctx.execute_query("ALTER WORKER read_env RESUME")
+    response = ctx.execute_query("SHOW WORKERS")
+    rows = ctx.collect_query_data(response)
+    matched = False
+    for row in rows:
+        if not row:
+            continue
+        if row[0] == "read_env":
+            tags_raw = row[1]
+            options_raw = row[2]
+            tags = json.loads(tags_raw) if tags_raw else {}
+            options = json.loads(options_raw) if options_raw else {}
+            if tags.get("purpose") == "sandbox" and options.get("size") == "medium":
+                matched = True
+                break
+    if not matched:
+        raise RuntimeError("Worker tag verification failed for read_env")
+    ctx.execute_query("DROP WORKER IF EXISTS read_env")
+
+
+def env_case(ctx: SandboxContext):
+    print("Creating env reader UDF")
+    create_env_udf_sql = """CREATE OR REPLACE FUNCTION read_env()
+RETURNS STRING
+LANGUAGE PYTHON
+PACKAGES = ()
+HANDLER = 'read_env'
+AS $$
+import os
+
+def read_env() -> str:
+    return os.getenv("UDF_ENV_TEST", "")
+$$
+"""
+    ctx.execute_query(create_env_udf_sql)
+    print("Executing env reader UDF")
+    ctx.check_result("SELECT read_env() AS result", [["sandbox_env_ok"]])
+
+
 def read_stage(ctx: SandboxContext):
     print("Creating import reader UDF")
     create_reader_udf_sql = f"""CREATE OR REPLACE FUNCTION read_stage()
@@ -609,6 +658,8 @@ def main():
     metadata_imports(ctx)
     numpy_case(ctx)
     zip_whl_egg(ctx)
+    worker_case(ctx)
+    env_case(ctx)
     read_stage(ctx)
     read_archive(ctx)
     presign_errors(ctx)

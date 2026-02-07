@@ -35,6 +35,7 @@ use crate::ast::statements::role::AlterRoleStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
+use crate::ast::statements::worker::ShowWorkersStmt;
 use crate::ast::statements::workload::CreateWorkloadGroupStmt;
 use crate::ast::statements::workload::DropWorkloadGroupStmt;
 use crate::ast::statements::workload::RenameWorkloadGroupStmt;
@@ -152,6 +153,12 @@ pub enum Statement {
     RenameWarehouseCluster(RenameWarehouseClusterStmt),
     AssignWarehouseNodes(AssignWarehouseNodesStmt),
     UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
+
+    // Workers
+    ShowWorkers(ShowWorkersStmt),
+    CreateWorker(CreateWorkerStmt),
+    AlterWorker(AlterWorkerStmt),
+    DropWorker(DropWorkerStmt),
 
     // Workloads
     ShowWorkloadGroups(ShowWorkloadGroupsStmt),
@@ -545,6 +552,7 @@ impl Statement {
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
+            | Statement::ShowWorkers(..)
             | Statement::ShowOnlineNodes(..)
             | Statement::InspectWarehouse(..) => true,
 
@@ -628,6 +636,9 @@ impl Statement {
             | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
             | Statement::SuspendWarehouse(..)
+            | Statement::CreateWorker(..)
+            | Statement::AlterWorker(..)
+            | Statement::DropWorker(..)
             | Statement::ShowWorkloadGroups(..)
             | Statement::CreateWorkloadGroup(..)
             | Statement::DropWorkloadGroup(..)
@@ -1109,6 +1120,10 @@ impl Display for Statement {
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
             Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWorkers(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWorker(stmt) => write!(f, "{stmt}")?,
             Statement::ShowWorkloadGroups(stmt) => write!(f, "{stmt}")?,
             Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,
