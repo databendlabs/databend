@@ -37,6 +37,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -124,6 +125,7 @@ impl<'a> BlockWriter<'a> {
             None,
             None,
             Compression::Lz4Raw,
+            VariantEncoding::default(),
             Some(Utc::now()),
         );
         Ok((block_meta, meta, column_hlls))

@@ -63,6 +63,8 @@ pub struct VirtualBlockMetaIndex {
     pub ignored_source_column_ids: HashSet<ColumnId>,
     // Key is virtual column id, value is the read plan.
     pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+    #[serde(default)]
+    pub is_inline: bool,
 }
 
 /// Read plan for materializing a virtual column from parquet virtual data.

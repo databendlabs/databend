@@ -37,15 +37,22 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_read_typed_value_hits;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_read_typed_value_misses;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::Compression;
+use jsonb::keypath::OwnedKeyPath as JsonbOwnedKeyPath;
+use jsonb::keypath::OwnedKeyPaths as JsonbOwnedKeyPaths;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
+use crate::io::VariantShreddedColumn;
+use crate::io::parquet_variant::OwnedKeyPath;
+use crate::io::parquet_variant::OwnedKeyPaths;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
 
 pub struct VirtualBlockReadResult {
@@ -54,6 +61,8 @@ pub struct VirtualBlockReadResult {
     pub data: BlockReadResult,
     pub schema: TableSchemaRef,
     pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+    pub is_inline: bool,
+    pub shredded_columns: Option<Vec<VariantShreddedColumn>>,
     // Source columns that can be ignored without reading
     pub ignore_column_ids: Option<HashSet<ColumnId>>,
 }
@@ -65,6 +74,8 @@ impl VirtualBlockReadResult {
         data: BlockReadResult,
         schema: TableSchemaRef,
         virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+        is_inline: bool,
+        shredded_columns: Option<Vec<VariantShreddedColumn>>,
         ignore_column_ids: Option<HashSet<ColumnId>>,
     ) -> VirtualBlockReadResult {
         VirtualBlockReadResult {
@@ -73,6 +84,8 @@ impl VirtualBlockReadResult {
             data,
             schema,
             virtual_column_read_plan,
+            is_inline,
+            shredded_columns,
             ignore_column_ids,
         }
     }
@@ -91,36 +104,78 @@ impl VirtualColumnReader {
 
         let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
-        let mut shared_value_ids = HashSet::new();
-        let mut base_id_to_source = HashMap::new();
-        for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
-            shared_value_ids.insert(*base_id + 1);
-            base_id_to_source.insert(*base_id, *source_column_id);
-        }
-        for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
-            let (offset, len) = virtual_column_meta.offset_length();
-            ranges.push((*column_id, offset..(offset + len)));
-            if shared_value_ids.contains(column_id) {
-                continue;
+        let mut shredded_columns = None;
+
+        if virtual_block_meta.is_inline {
+            let mut columns =
+                Vec::with_capacity(self.virtual_column_info.virtual_column_fields.len());
+            for field in &self.virtual_column_info.virtual_column_fields {
+                let Some(meta) = virtual_block_meta
+                    .virtual_column_metas
+                    .get(&field.column_id)
+                else {
+                    continue;
+                };
+                let Some(key_paths) = to_parquet_key_paths(&field.key_paths) else {
+                    continue;
+                };
+                if key_paths.has_index() {
+                    continue;
+                }
+                let Some(data_type) = virtual_meta_to_arrow(meta.data_type()) else {
+                    continue;
+                };
+
+                let (offset, len) = meta.offset_length();
+                ranges.push((field.column_id, offset..(offset + len)));
+                let name = format!("{}", field.column_id);
+                schema.add_internal_field(&name, meta.data_type(), field.column_id);
+
+                columns.push(VariantShreddedColumn {
+                    source_column_id: field.source_column_id,
+                    column_id: field.column_id,
+                    key_paths,
+                    data_type,
+                });
             }
-            if let Some(source_column_id) = base_id_to_source.get(column_id) {
-                let name = format!("{}__shared__", source_column_id);
-                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
-                    fields_name: vec!["key".to_string(), "value".to_string()],
-                    fields_type: vec![
-                        TableDataType::Number(NumberDataType::UInt32),
-                        TableDataType::Variant,
-                    ],
-                }));
-                schema.add_internal_field(&name, data_type, *column_id);
-            } else {
-                let name = column_id.to_string();
-                let data_type = virtual_column_meta.data_type();
-                schema.add_internal_field(&name, data_type, *column_id);
+            if !columns.is_empty() {
+                shredded_columns = Some(columns);
+            }
+        } else {
+            let mut shared_value_ids = HashSet::new();
+            let mut base_id_to_source = HashMap::new();
+            for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
+                shared_value_ids.insert(*base_id + 1);
+                base_id_to_source.insert(*base_id, *source_column_id);
+            }
+            for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
+                let (offset, len) = virtual_column_meta.offset_length();
+                ranges.push((*column_id, offset..(offset + len)));
+                if shared_value_ids.contains(column_id) {
+                    continue;
+                }
+                if let Some(source_column_id) = base_id_to_source.get(column_id) {
+                    let name = format!("{}__shared__", source_column_id);
+                    let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+                        fields_name: vec!["key".to_string(), "value".to_string()],
+                        fields_type: vec![
+                            TableDataType::Number(NumberDataType::UInt32),
+                            TableDataType::Variant,
+                        ],
+                    }));
+                    schema.add_internal_field(&name, data_type, *column_id);
+                } else {
+                    let name = column_id.to_string();
+                    let data_type = virtual_column_meta.data_type();
+                    schema.add_internal_field(&name, data_type, *column_id);
+                }
             }
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
+        if ranges.is_empty() {
+            return None;
+        }
         let merge_io_result =
             MergeIOReader::merge_io_read(read_settings, self.dal.clone(), virtual_loc, &ranges)
                 .await
@@ -136,6 +191,8 @@ impl VirtualColumnReader {
             block_read_res,
             Arc::new(schema),
             virtual_block_meta.virtual_column_read_plan.clone(),
+            virtual_block_meta.is_inline,
+            shredded_columns,
             ignore_column_ids,
         ))
     }
@@ -150,20 +207,36 @@ impl VirtualColumnReader {
             .as_ref()
             .map(|virtual_data| virtual_data.schema.clone())
             .unwrap_or_default();
+        let is_inline = virtual_data.as_ref().map(|v| v.is_inline).unwrap_or(false);
         let virtual_column_read_plan = virtual_data
             .as_ref()
             .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
             .unwrap_or_default();
         let record_batch = virtual_data
+            .as_ref()
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
-                column_chunks_to_record_batch(
-                    &virtual_data.schema,
-                    virtual_data.num_rows,
-                    &columns_chunks,
-                    &virtual_data.compression,
-                    row_selection,
-                )
+                if virtual_data.is_inline {
+                    column_chunks_to_record_batch(
+                        self.source_schema.as_ref(),
+                        virtual_data.num_rows,
+                        &columns_chunks,
+                        &virtual_data.compression,
+                        row_selection,
+                        true,
+                        virtual_data.shredded_columns.as_deref(),
+                    )
+                } else {
+                    column_chunks_to_record_batch(
+                        &virtual_data.schema,
+                        virtual_data.num_rows,
+                        &columns_chunks,
+                        &virtual_data.compression,
+                        row_selection,
+                        false,
+                        None,
+                    )
+                }
             })
             .transpose()?;
 
@@ -171,113 +244,139 @@ impl VirtualColumnReader {
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
-            if let (Some(plans), Some(record_batch)) = (
-                virtual_column_read_plan.get(&virtual_column_field.column_id),
-                record_batch.as_ref(),
-            ) {
-                let target_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let cast_func_name = format!(
-                    "to_{}",
-                    target_type.remove_nullable().to_string().to_lowercase()
-                );
-                let mut args = Vec::new();
-                for plan in plans {
-                    let Some((value, data_type)) = eval_read_plan(
-                        plan,
-                        record_batch,
-                        &orig_schema,
-                        &func_ctx,
-                        data_block.num_rows(),
-                    )?
-                    else {
-                        continue;
-                    };
-                    let (value, data_type) = if data_type != target_type {
-                        eval_function(
-                            None,
-                            &cast_func_name,
-                            [(value, data_type)],
+            if !is_inline {
+                if let (Some(plans), Some(record_batch)) = (
+                    virtual_column_read_plan.get(&virtual_column_field.column_id),
+                    record_batch.as_ref(),
+                ) {
+                    let target_type: DataType = virtual_column_field.data_type.as_ref().into();
+                    let cast_func_name = format!(
+                        "to_{}",
+                        target_type.remove_nullable().to_string().to_lowercase()
+                    );
+                    let mut args = Vec::new();
+                    for plan in plans {
+                        let Some((value, data_type)) = eval_read_plan(
+                            plan,
+                            record_batch,
+                            &orig_schema,
                             &func_ctx,
                             data_block.num_rows(),
-                            &BUILTIN_FUNCTIONS,
                         )?
-                    } else {
-                        (value, data_type)
-                    };
-                    args.push((value, data_type));
-                }
-
-                if !args.is_empty() {
-                    let (value, data_type) = if args.len() == 1 {
-                        args.pop().unwrap()
-                    } else {
-                        let mut if_args = Vec::with_capacity(args.len() * 2 - 1);
-                        let last_index = args.len() - 1;
-                        for (idx, (value, data_type)) in args.into_iter().enumerate() {
-                            if idx == last_index {
-                                if_args.push((value, data_type));
-                                break;
-                            }
-                            let (cond, cond_type) = eval_function(
+                        else {
+                            continue;
+                        };
+                        let (value, data_type) = if data_type != target_type {
+                            eval_function(
                                 None,
-                                "is_not_null",
-                                [(value.clone(), data_type.clone())],
-                                &func_ctx,
-                                data_block.num_rows(),
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            let (nonnull_value, nonnull_type) = eval_function(
-                                None,
-                                "assume_not_null",
+                                &cast_func_name,
                                 [(value, data_type)],
                                 &func_ctx,
                                 data_block.num_rows(),
                                 &BUILTIN_FUNCTIONS,
-                            )?;
-                            if_args.push((cond, cond_type));
-                            if_args.push((nonnull_value, nonnull_type));
-                        }
-                        eval_function(
-                            None,
-                            "if",
-                            if_args,
-                            &func_ctx,
-                            data_block.num_rows(),
-                            &BUILTIN_FUNCTIONS,
-                        )?
-                    };
-                    data_block.add_value(value, data_type);
-                    continue;
+                            )?
+                        } else {
+                            (value, data_type)
+                        };
+                        args.push((value, data_type));
+                    }
+
+                    if !args.is_empty() {
+                        let (value, data_type) = if args.len() == 1 {
+                            args.pop().unwrap()
+                        } else {
+                            let mut if_args = Vec::with_capacity(args.len() * 2 - 1);
+                            let last_index = args.len() - 1;
+                            for (idx, (value, data_type)) in args.into_iter().enumerate() {
+                                if idx == last_index {
+                                    if_args.push((value, data_type));
+                                    break;
+                                }
+                                let (cond, cond_type) = eval_function(
+                                    None,
+                                    "is_not_null",
+                                    [(value.clone(), data_type.clone())],
+                                    &func_ctx,
+                                    data_block.num_rows(),
+                                    &BUILTIN_FUNCTIONS,
+                                )?;
+                                let (nonnull_value, nonnull_type) = eval_function(
+                                    None,
+                                    "assume_not_null",
+                                    [(value, data_type)],
+                                    &func_ctx,
+                                    data_block.num_rows(),
+                                    &BUILTIN_FUNCTIONS,
+                                )?;
+                                if_args.push((cond, cond_type));
+                                if_args.push((nonnull_value, nonnull_type));
+                            }
+                            eval_function(
+                                None,
+                                "if",
+                                if_args,
+                                &func_ctx,
+                                data_block.num_rows(),
+                                &BUILTIN_FUNCTIONS,
+                            )?
+                        };
+                        data_block.add_value(value, data_type);
+                        continue;
+                    }
                 }
             }
 
             let name = format!("{}", virtual_column_field.column_id);
-            if let Some(arrow_array) = record_batch
-                .as_ref()
-                .and_then(|r| r.column_by_name(&name).cloned())
-            {
-                let orig_field = orig_schema.field_with_name(&name).unwrap();
-                let orig_type: DataType = orig_field.data_type().into();
-                let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
-                let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                if orig_type != data_type {
-                    let cast_func_name = format!(
-                        "to_{}",
-                        data_type.remove_nullable().to_string().to_lowercase()
-                    );
-                    let (cast_value, cast_data_type) = eval_function(
-                        None,
-                        &cast_func_name,
-                        [(Value::Column(column), orig_type)],
-                        &func_ctx,
-                        data_block.num_rows(),
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-                    data_block.add_value(cast_value, cast_data_type);
-                } else {
-                    data_block.add_column(column);
-                };
-                continue;
+            if let Some(record_batch) = record_batch.as_ref() {
+                if is_inline {
+                    let mut should_track_hit = false;
+                    let inline_column = to_parquet_key_paths(&virtual_column_field.key_paths)
+                        .and_then(|key_paths| {
+                            if key_paths.has_index() {
+                                return None;
+                            }
+                            should_track_hit = true;
+                            extract_typed_value_array(
+                                record_batch,
+                                &virtual_column_field.source_name,
+                                &key_paths,
+                            )
+                        });
+                    if should_track_hit {
+                        if inline_column.is_some() {
+                            metrics_inc_variant_shredding_read_typed_value_hits(1);
+                        } else {
+                            metrics_inc_variant_shredding_read_typed_value_misses(1);
+                        }
+                    }
+
+                    if let Some(arrow_array) = inline_column {
+                        let Ok(orig_field) = orig_schema.field_with_name(&name) else {
+                            continue;
+                        };
+                        let orig_type: DataType = orig_field.data_type().into();
+                        let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
+                        let data_type: DataType = virtual_column_field.data_type.as_ref().into();
+                        if orig_type != data_type {
+                            let cast_func_name = format!(
+                                "to_{}",
+                                data_type.remove_nullable().to_string().to_lowercase()
+                            );
+                            let (cast_value, cast_data_type) = eval_function(
+                                None,
+                                &cast_func_name,
+                                [(Value::Column(column), orig_type)],
+                                &func_ctx,
+                                data_block.num_rows(),
+                                &BUILTIN_FUNCTIONS,
+                            )?;
+                            data_block.add_value(cast_value, cast_data_type);
+                        } else {
+                            data_block.add_column(column);
+                        };
+                        continue;
+                    }
+                }
             }
 
             let src_index = self
@@ -456,4 +555,58 @@ fn eval_read_plan(
             Ok(Some((value, value_type)))
         }
     }
+}
+
+fn virtual_meta_to_arrow(data_type: TableDataType) -> Option<arrow_schema::DataType> {
+    match data_type.remove_nullable() {
+        TableDataType::Boolean => Some(arrow_schema::DataType::Boolean),
+        TableDataType::Number(NumberDataType::UInt64) => Some(arrow_schema::DataType::UInt64),
+        TableDataType::Number(NumberDataType::Int64) => Some(arrow_schema::DataType::Int64),
+        TableDataType::Number(NumberDataType::Float64) => Some(arrow_schema::DataType::Float64),
+        TableDataType::String => Some(arrow_schema::DataType::Utf8View),
+        _ => None,
+    }
+}
+
+fn extract_typed_value_array(
+    record_batch: &arrow_array::RecordBatch,
+    source_name: &str,
+    key_paths: &OwnedKeyPaths,
+) -> Option<arrow_array::ArrayRef> {
+    let variant_array = record_batch.column_by_name(source_name)?;
+    let struct_array = variant_array
+        .as_any()
+        .downcast_ref::<arrow_array::StructArray>()?;
+    let mut typed_value = struct_array.column_by_name("typed_value")?.clone();
+
+    for path in &key_paths.paths {
+        let OwnedKeyPath::Name(name) = path else {
+            return None;
+        };
+        let typed_struct = typed_value
+            .as_any()
+            .downcast_ref::<arrow_array::StructArray>()?;
+        let field_array = typed_struct.column_by_name(name)?;
+        let shredded_struct = field_array
+            .as_any()
+            .downcast_ref::<arrow_array::StructArray>()?;
+        typed_value = shredded_struct.column_by_name("typed_value")?.clone();
+    }
+
+    Some(typed_value)
+}
+
+fn to_parquet_key_paths(key_paths: &JsonbOwnedKeyPaths) -> Option<OwnedKeyPaths> {
+    if key_paths.paths.is_empty() {
+        return None;
+    }
+    let mut paths = Vec::with_capacity(key_paths.paths.len());
+    for path in &key_paths.paths {
+        match path {
+            JsonbOwnedKeyPath::Index(idx) => paths.push(OwnedKeyPath::Index(*idx)),
+            JsonbOwnedKeyPath::Name(name) => paths.push(OwnedKeyPath::Name(name.clone())),
+            JsonbOwnedKeyPath::QuotedName(name) => paths.push(OwnedKeyPath::Name(name.clone())),
+        }
+    }
+    Some(OwnedKeyPaths { paths })
 }

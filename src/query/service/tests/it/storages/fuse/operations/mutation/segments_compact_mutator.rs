@@ -58,6 +58,7 @@ use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use futures_util::TryStreamExt;
@@ -782,6 +783,7 @@ impl CompactSegmentTestFixture {
                         None,
                         None,
                         Compression::Lz4Raw,
+                        VariantEncoding::default(),
                         Some(Utc::now()),
                     );
 

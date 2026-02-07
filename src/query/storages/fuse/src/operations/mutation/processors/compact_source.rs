@@ -95,6 +95,7 @@ impl PrefetchAsyncSource for CompactSource {
                                     &block.location.0,
                                     &block.col_metas,
                                     &None,
+                                    block.variant_encoding,
                                 )
                                 .await
                         })

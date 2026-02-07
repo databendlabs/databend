@@ -23,6 +23,7 @@ pub use v2::DraftVirtualColumnMeta;
 pub use v2::ExtendedBlockMeta;
 pub use v2::SegmentStatistics;
 pub use v2::Statistics;
+pub use v2::VariantEncoding;
 pub use v2::VirtualBlockMeta;
 pub use v2::VirtualColumnMeta;
 pub use v4::CompactSegmentInfo;

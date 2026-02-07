@@ -421,6 +421,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::VariantEncoding;
 
     use super::*;
 
@@ -690,6 +691,7 @@ mod tests {
             None,
             None,
             Compression::Lz4,
+            VariantEncoding::default(),
             None,
         );
 

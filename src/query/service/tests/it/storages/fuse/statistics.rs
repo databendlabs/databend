@@ -57,6 +57,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::decode_column_hll;
@@ -845,6 +846,7 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
             None,
             None,
             Compression::Lz4Raw,
+            VariantEncoding::default(),
             Some(Utc::now()),
         );
         blocks.push(block_meta);

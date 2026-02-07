@@ -53,6 +53,7 @@ use databend_common_storages_fuse::operations::ReadState;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use opendal::Buffer;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -306,6 +307,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         columns_meta: column_metas.clone(),
         columns_stat: None,
         compression,
+        variant_encoding: VariantEncoding::Jsonb,
         sort_min_max: None,
         block_meta_index: None,
     };

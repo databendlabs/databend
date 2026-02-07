@@ -174,6 +174,7 @@ impl CopyIntoTableInterpreter {
                     internal_column: None,
                     source: Box::new(data_source_plan),
                     meta: PhysicalPlanMeta::new("TableScan"),
+                    variant_shredding_inline: false,
                 })),
                 None,
             )

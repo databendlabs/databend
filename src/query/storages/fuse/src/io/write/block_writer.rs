@@ -21,14 +21,22 @@ use std::time::Instant;
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::variant_parquet::jsonb_to_parquet_variant_bytes;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
@@ -43,32 +51,50 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_mil
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_inline_columns;
+use databend_common_metrics::storage::metrics_inc_variant_shredding_inline_value_all_null_columns;
 use databend_common_native::write::NativeWriter;
+use databend_storages_common_blocks::MAX_BATCH_MEMORY_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_blocks::write_batch_with_page_limit;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
+use parquet::arrow::ArrowWriter;
 
 use crate::FuseStorageFormat;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VariantShreddedColumn;
+use crate::io::arrow_schema_with_parquet_variant_and_shredding;
 use crate::io::build_column_hlls;
+use crate::io::build_parquet_variant_record_batch;
+use crate::io::build_parquet_variant_record_batch_with_inline_shredding;
+use crate::io::parquet_variant_leaf_column_ids;
+use crate::io::parquet_variant_leaf_column_ids_with_shredding;
+use crate::io::variant_data_type_to_arrow;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
+use crate::io::write::virtual_column_builder::InlineVirtualColumns;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
+use crate::operations::column_parquet_metas_with_leaf_ids;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::gen_columns_statistics;
 
@@ -88,20 +114,155 @@ pub fn serialize_block_with_column_stats(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    let (col_metas, _) = serialize_block_with_inline_virtual_columns(
+        write_settings,
+        schema,
+        column_stats,
+        block,
+        None,
+        None,
+        buf,
+    )?;
+    Ok(col_metas)
+}
+
+fn serialize_block_with_inline_virtual_columns(
+    write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
+    column_stats: Option<&StatisticsOfColumns>,
+    block: DataBlock,
+    inline_virtual_columns: Option<InlineVirtualColumns>,
+    block_location: Option<&Location>,
+    buf: &mut Vec<u8>,
+) -> Result<(HashMap<ColumnId, ColumnMeta>, Option<VirtualColumnState>)> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = blocks_to_parquet_with_stats(
-                &schema,
-                vec![block],
-                buf,
-                write_settings.table_compression,
-                write_settings.enable_parquet_dictionary,
-                None,
-                column_stats,
-            )?;
-            let meta = column_parquet_metas(&result, &schema)?;
-            Ok(meta)
+            let has_variant = schema
+                .fields()
+                .iter()
+                .any(|field| field.data_type().remove_nullable() == TableDataType::Variant);
+
+            if write_settings.variant_encoding == VariantEncoding::ParquetVariant && has_variant {
+                if let Some(inline_virtual_columns) = inline_virtual_columns {
+                    let mut shredded_columns =
+                        Vec::with_capacity(inline_virtual_columns.columns.len());
+                    for (idx, column) in inline_virtual_columns.columns.iter().enumerate() {
+                        let data_type =
+                            variant_data_type_to_arrow(&column.data_type).ok_or_else(|| {
+                                databend_common_exception::ErrorCode::Internal(
+                                    "unsupported virtual column type for inline shredding"
+                                        .to_string(),
+                                )
+                            })?;
+                        let column_id = VIRTUAL_COLUMN_ID_START + idx as u32;
+                        shredded_columns.push(VariantShreddedColumn {
+                            source_column_id: column.source_column_id,
+                            column_id,
+                            key_paths: column.key_paths.clone(),
+                            data_type,
+                        });
+                    }
+
+                    let arrow_schema = Arc::new(arrow_schema_with_parquet_variant_and_shredding(
+                        schema.as_ref(),
+                        Some(&shredded_columns),
+                    ));
+                    let (record_batch, value_all_null_sources) =
+                        build_parquet_variant_record_batch_with_inline_shredding(
+                            schema.as_ref(),
+                            &arrow_schema,
+                            block,
+                            &shredded_columns,
+                            &inline_virtual_columns.block,
+                        )?;
+                    metrics_inc_variant_shredding_inline_columns(shredded_columns.len() as u64);
+                    metrics_inc_variant_shredding_inline_value_all_null_columns(
+                        value_all_null_sources.len() as u64,
+                    );
+
+                    let props = build_parquet_writer_properties(
+                        write_settings.table_compression,
+                        write_settings.enable_parquet_dictionary,
+                        None::<&StatisticsOfColumns>,
+                        None,
+                        record_batch.num_rows(),
+                        &schema,
+                    );
+                    let mut writer = ArrowWriter::try_new(buf, record_batch.schema(), Some(props))?;
+                    write_batch_with_page_limit(&mut writer, &record_batch, MAX_BATCH_MEMORY_SIZE)?;
+                    let file_meta = writer.close()?;
+
+                    let leaf_ids = parquet_variant_leaf_column_ids_with_shredding(
+                        schema.as_ref(),
+                        Some(&shredded_columns),
+                    );
+                    let all_metas = column_parquet_metas_with_leaf_ids(&file_meta, &leaf_ids)?;
+                    let base_leaf_ids = parquet_variant_leaf_column_ids(schema.as_ref());
+                    let mut col_metas = HashMap::with_capacity(base_leaf_ids.len());
+                    for column_id in &base_leaf_ids {
+                        if let Some(meta) = all_metas.get(column_id) {
+                            col_metas.insert(*column_id, meta.clone());
+                        }
+                    }
+
+                    let block_location = block_location.ok_or_else(|| {
+                        databend_common_exception::ErrorCode::Internal(
+                            "inline virtual columns require block location".to_string(),
+                        )
+                    })?;
+
+                    let draft_virtual_column_metas =
+                        VirtualColumnBuilder::column_metas_to_virtual_column_metas(
+                            &all_metas,
+                            inline_virtual_columns.columns,
+                            inline_virtual_columns.columns_statistics,
+                            VIRTUAL_COLUMN_ID_START,
+                            Some(&value_all_null_sources),
+                        )?;
+
+                    let draft_virtual_block_meta = DraftVirtualBlockMeta {
+                        virtual_column_metas: draft_virtual_column_metas,
+                        virtual_column_size: 0,
+                        virtual_location: block_location.clone(),
+                    };
+                    let virtual_column_state = VirtualColumnState {
+                        data: vec![],
+                        draft_virtual_block_meta,
+                    };
+
+                    return Ok((col_metas, Some(virtual_column_state)));
+                }
+
+                let record_batch = build_parquet_variant_record_batch(schema.as_ref(), block)?;
+                let props = build_parquet_writer_properties(
+                    write_settings.table_compression,
+                    write_settings.enable_parquet_dictionary,
+                    None::<&StatisticsOfColumns>,
+                    None,
+                    record_batch.num_rows(),
+                    &schema,
+                );
+                let mut writer = ArrowWriter::try_new(buf, record_batch.schema(), Some(props))?;
+                write_batch_with_page_limit(&mut writer, &record_batch, MAX_BATCH_MEMORY_SIZE)?;
+                let file_meta = writer.close()?;
+                let leaf_ids = parquet_variant_leaf_column_ids(schema.as_ref());
+                let meta = column_parquet_metas_with_leaf_ids(&file_meta, &leaf_ids)?;
+                Ok((meta, None))
+            } else {
+                let block = encode_variant_block_if_needed(write_settings, &schema, block)?;
+                let result = blocks_to_parquet_with_stats(
+                    &schema,
+                    vec![block],
+                    buf,
+                    write_settings.table_compression,
+                    write_settings.enable_parquet_dictionary,
+                    None,
+                    column_stats,
+                )?;
+                let meta = column_parquet_metas(&result, &schema)?;
+                Ok((meta, None))
+            }
         }
         FuseStorageFormat::Native => {
             let leaf_column_ids = schema.to_leaf_column_ids();
@@ -140,9 +301,108 @@ pub fn serialize_block_with_column_stats(
                 metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
             }
 
-            Ok(metas)
+            Ok((metas, None))
         }
     }
+}
+
+fn encode_variant_block_if_needed(
+    write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
+    block: DataBlock,
+) -> Result<DataBlock> {
+    if write_settings.variant_encoding != VariantEncoding::ParquetVariant {
+        return Ok(block);
+    }
+    if !schema
+        .fields()
+        .iter()
+        .any(|field| field.data_type().remove_nullable() == TableDataType::Variant)
+    {
+        return Ok(block);
+    }
+
+    let num_rows = block.num_rows();
+    let mut block = block;
+    let meta = block.take_meta();
+    let entries = block.take_columns();
+    let mut new_entries = Vec::with_capacity(entries.len());
+    for (entry, field) in entries.into_iter().zip(schema.fields().iter()) {
+        if field.data_type().remove_nullable() == TableDataType::Variant {
+            new_entries.push(encode_variant_entry(entry)?);
+        } else {
+            new_entries.push(entry);
+        }
+    }
+
+    Ok(DataBlock::new_with_meta(new_entries, num_rows, meta))
+}
+
+fn encode_variant_entry(entry: BlockEntry) -> Result<BlockEntry> {
+    match entry {
+        BlockEntry::Const(scalar, data_type, num_rows) => {
+            if scalar.is_null() {
+                return Ok(BlockEntry::Const(scalar, data_type, num_rows));
+            }
+            let Scalar::Variant(bytes) = scalar else {
+                return Ok(BlockEntry::Const(scalar, data_type, num_rows));
+            };
+            let encoded = jsonb_to_parquet_variant_bytes(&bytes)?;
+            Ok(BlockEntry::Const(
+                Scalar::Variant(encoded),
+                data_type,
+                num_rows,
+            ))
+        }
+        BlockEntry::Column(column) => {
+            let column = match column {
+                Column::Variant(col) => Column::Variant(encode_variant_column(col)?),
+                Column::Nullable(col) => {
+                    let (inner, validity) = col.destructure();
+                    let inner = match inner {
+                        Column::Variant(col) => {
+                            Column::Variant(encode_variant_column_with_validity(col, &validity)?)
+                        }
+                        other => other,
+                    };
+                    NullableColumn::new_column(inner, validity)
+                }
+                other => other,
+            };
+            Ok(BlockEntry::Column(column))
+        }
+    }
+}
+
+fn encode_variant_column(column: BinaryColumn) -> Result<BinaryColumn> {
+    let mut builder = BinaryColumnBuilder::with_capacity(column.len(), 0);
+    for value in column.iter() {
+        let encoded = jsonb_to_parquet_variant_bytes(value)?;
+        builder.put_slice(&encoded);
+        builder.commit_row();
+    }
+    Ok(builder.build())
+}
+
+fn encode_variant_column_with_validity(
+    column: BinaryColumn,
+    validity: &databend_common_expression::types::Bitmap,
+) -> Result<BinaryColumn> {
+    let mut builder = BinaryColumnBuilder::with_capacity(column.len(), 0);
+    for (idx, value) in column.iter().enumerate() {
+        if !validity.get(idx).unwrap_or(false) {
+            let encoded = jsonb_to_parquet_variant_bytes(
+                databend_common_expression::types::variant::JSONB_NULL,
+            )?;
+            builder.put_slice(&encoded);
+            builder.commit_row();
+            continue;
+        }
+        let encoded = jsonb_to_parquet_variant_bytes(value)?;
+        builder.put_slice(&encoded);
+        builder.commit_row();
+    }
+    Ok(builder.build())
 }
 
 /// Take ownership here to avoid extra copy.
@@ -240,16 +500,27 @@ impl BlockBuilder {
             None
         };
 
-        let virtual_column_state =
-            if let Some(ref virtual_column_builder) = self.virtual_column_builder {
-                let mut virtual_column_builder = virtual_column_builder.clone();
-                virtual_column_builder.add_block(&data_block)?;
-                let virtual_column_state =
-                    virtual_column_builder.finalize(&self.write_settings, &block_location)?;
-                Some(virtual_column_state)
+        let mut inline_virtual_columns = None;
+        let mut virtual_column_state = None;
+        if let Some(ref virtual_column_builder) = self.virtual_column_builder {
+            let mut virtual_column_builder = virtual_column_builder.clone();
+            virtual_column_builder.add_block(&data_block)?;
+
+            let use_inline = self.write_settings.variant_encoding
+                == VariantEncoding::ParquetVariant
+                && matches!(
+                    self.write_settings.storage_format,
+                    FuseStorageFormat::Parquet
+                );
+
+            if use_inline {
+                inline_virtual_columns = virtual_column_builder.build_inline_virtual_columns()?;
             } else {
-                None
-            };
+                let state =
+                    virtual_column_builder.finalize(&self.write_settings, &block_location)?;
+                virtual_column_state = Some(state);
+            }
+        }
 
         let row_count = data_block.num_rows() as u64;
         let col_stats = gen_columns_statistics(
@@ -260,13 +531,18 @@ impl BlockBuilder {
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_size = data_block.estimate_block_size() as u64;
-        let col_metas = serialize_block_with_column_stats(
+        let (col_metas, inline_virtual_state) = serialize_block_with_inline_virtual_columns(
             &self.write_settings,
             &self.source_schema,
             Some(&col_stats),
             data_block,
+            inline_virtual_columns,
+            Some(&block_location),
             &mut buffer,
         )?;
+        if inline_virtual_state.is_some() {
+            virtual_column_state = inline_virtual_state;
+        }
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
             let size = inverted_index_states.iter().map(|v| v.size).sum();
@@ -294,6 +570,7 @@ impl BlockBuilder {
             vector_index_size: vector_index_state.as_ref().map(|v| v.size),
             vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
             compression: self.write_settings.table_compression.into(),
+            variant_encoding: self.write_settings.variant_encoding,
             inverted_index_size,
             virtual_block_meta: None,
             create_on: Some(Utc::now()),

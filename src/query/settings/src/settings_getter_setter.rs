@@ -1109,6 +1109,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
 
+    pub fn set_enable_experimental_variant_shredding(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_experimental_variant_shredding", val)
+    }
+
+    pub fn get_enable_experimental_variant_shredding(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_variant_shredding")? == 1)
+    }
+
     pub fn get_enable_auto_materialize_cte(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_materialize_cte")? == 1)
     }
