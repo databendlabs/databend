@@ -20,6 +20,7 @@ use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::span::Span;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
@@ -35,6 +36,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
@@ -270,7 +272,27 @@ impl BlockReader {
                     }
                     value
                 }
-                None => Value::Scalar(self.default_vals[i].clone()),
+                None => {
+                    if read_projected_schema.as_ref() == self.projected_schema.as_ref() {
+                        Value::Scalar(self.default_vals[i].clone())
+                    } else {
+                        let scalar = cast_scalar(
+                            Span::None,
+                            self.default_vals[i].clone(),
+                            &read_data_type,
+                            &BUILTIN_FUNCTIONS,
+                        )
+                        .map_err(|err| {
+                            let msg = format!(
+                                "fail to cast default value for column {} to {}",
+                                field.name(),
+                                read_data_type
+                            );
+                            err.add_message(msg)
+                        })?;
+                        Value::Scalar(scalar)
+                    }
+                }
             };
             entries.push(BlockEntry::new(value, || (read_data_type, result_rows)));
         }
