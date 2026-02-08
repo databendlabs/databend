@@ -37,11 +37,10 @@ echo "alter table test_modify_column_type.d modify column b int not null default
 echo "SELECT a,b from test_modify_column_type.d"  | $BENDSQL_CLIENT_CONNECT
 echo "alter table test_modify_column_type.d add column c float not null default 1.01" | $BENDSQL_CLIENT_CONNECT
 echo "SELECT a,b,c from test_modify_column_type.d"  | $BENDSQL_CLIENT_CONNECT
-# default-only MODIFY is metadata-only (no data rewrite),
-# so old rows read with the latest default for added column `c`.
+# This ALTER only updates table metadata; it does not rewrite existing rows.
+# After changing c's default to 2.2, the old row also reads c as 2.2.
 echo "alter table test_modify_column_type.d modify column c float not null default 2.2"  | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_modify_column_type.d (a) values(10)"  | $BENDSQL_CLIENT_CONNECT
-# Use key-based checks instead of relying on row ordering.
 echo "SELECT a,b,c from test_modify_column_type.d where a = 1"  | $BENDSQL_CLIENT_CONNECT
 echo "SELECT a,b,c from test_modify_column_type.d where a = 10"  | $BENDSQL_CLIENT_CONNECT
 
