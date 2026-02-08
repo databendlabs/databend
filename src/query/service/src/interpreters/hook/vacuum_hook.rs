@@ -37,13 +37,12 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let settings = query_ctx.get_settings();
     let spill_prefix = query_ctx.query_tenant_spill_prefix();
     let vacuum_limit = settings.get_max_vacuum_temp_files_after_query()?;
-    let enable_new_experiment_join = settings.get_enable_experimental_new_join()?;
+
     // disable all s3 operator if vacuum limit = 0
     if vacuum_limit != 0
         && LicenseManagerSwitch::instance()
             .check_enterprise_enabled(query_ctx.get_license_key(), Vacuum)
             .is_ok()
-        && !enable_new_experiment_join
     {
         let handler = get_vacuum_handler();
 
