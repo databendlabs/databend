@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -26,6 +28,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::RuntimeFilterBuildLimit;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
@@ -169,6 +172,8 @@ pub struct RuntimeFilterLocalBuilder {
     builders: Vec<SingleFilterBuilder>,
     total_rows: usize,
     runtime_filters: Vec<RuntimeFilterDesc>,
+    build_limit: Arc<RuntimeFilterBuildLimit>,
+    disabled: bool,
 }
 
 impl RuntimeFilterLocalBuilder {
@@ -178,6 +183,7 @@ impl RuntimeFilterLocalBuilder {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
+        build_limit: Arc<RuntimeFilterBuildLimit>,
     ) -> Result<Option<Self>> {
         if descs.is_empty() {
             return Ok(None);
@@ -198,11 +204,23 @@ impl RuntimeFilterLocalBuilder {
             builders,
             total_rows: 0,
             runtime_filters: descs,
+            build_limit,
+            disabled: false,
         }))
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
+        if self.disabled || self.build_limit.is_disabled() {
+            self.disabled = true;
+            return Ok(());
+        }
+
         if block.is_empty() {
+            return Ok(());
+        }
+
+        if !self.build_limit.try_add_rows(block.num_rows()) {
+            self.disabled = true;
             return Ok(());
         }
 
@@ -220,11 +238,18 @@ impl RuntimeFilterLocalBuilder {
     }
 
     pub fn finish(self, spill_happened: bool) -> Result<JoinRuntimeFilterPacket> {
-        let total_rows = self.total_rows;
+        let RuntimeFilterLocalBuilder {
+            func_ctx,
+            builders,
+            total_rows,
+            runtime_filters,
+            build_limit,
+            disabled,
+        } = self;
 
-        if spill_happened {
+        if spill_happened || disabled || build_limit.is_disabled() {
             return Ok(JoinRuntimeFilterPacket::disable_all(
-                &self.runtime_filters,
+                &runtime_filters,
                 total_rows,
             ));
         }
@@ -236,14 +261,10 @@ impl RuntimeFilterLocalBuilder {
             });
         }
 
-        let packets: Vec<_> = self
-            .builders
-            .into_iter()
-            .map(|b| {
-                let id = b.id;
-                b.finish(&self.func_ctx).map(|p| (id, p))
-            })
-            .collect::<Result<_>>()?;
+        let mut packets = Vec::with_capacity(builders.len());
+        for (builder, desc) in builders.into_iter().zip(runtime_filters.into_iter()) {
+            packets.push((desc.id, builder.finish(&func_ctx)?));
+        }
 
         Ok(JoinRuntimeFilterPacket {
             packets: Some(packets.into_iter().collect()),

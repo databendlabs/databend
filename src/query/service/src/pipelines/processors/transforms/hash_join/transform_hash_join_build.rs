@@ -131,12 +131,18 @@ impl TransformHashJoinBuild {
         let runtime_filter_builder = {
             let descs = build_state.runtime_filter_desc().to_vec();
             let settings = build_state.ctx.get_settings();
+            let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
+            let probe_ratio_threshold =
+                settings.get_join_runtime_filter_probe_ratio_threshold()? as f64;
+            let build_limit = build_state
+                .runtime_filter_build_limit(selectivity_threshold, probe_ratio_threshold);
             RuntimeFilterLocalBuilder::try_create(
                 &build_state.func_ctx,
                 descs,
                 settings.get_inlist_runtime_filter_threshold()? as usize,
                 settings.get_bloom_runtime_filter_threshold()? as usize,
                 settings.get_min_max_runtime_filter_threshold()? as usize,
+                build_limit,
             )?
         };
 

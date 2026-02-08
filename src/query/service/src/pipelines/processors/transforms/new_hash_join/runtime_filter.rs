@@ -22,6 +22,7 @@ use databend_common_expression::FunctionContext;
 
 use crate::physical_plans::HashJoin;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::RuntimeFilterBuildLimit;
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::build_runtime_filter_infos;
 use crate::pipelines::processors::transforms::get_global_runtime_filter_packet;
@@ -35,6 +36,8 @@ pub struct RuntimeFiltersDesc {
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
     pub selectivity_threshold: u64,
+    pub probe_ratio_threshold: f64,
+    pub build_limit: Arc<RuntimeFilterBuildLimit>,
 
     broadcast_id: Option<u32>,
     pub filters_desc: Vec<RuntimeFilterDesc>,
@@ -48,6 +51,8 @@ impl RuntimeFiltersDesc {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
         let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
+        let probe_ratio_threshold =
+            settings.get_join_runtime_filter_probe_ratio_threshold()? as f64;
         let func_ctx = ctx.get_function_context()?;
 
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
@@ -67,6 +72,12 @@ impl RuntimeFiltersDesc {
             filters_desc.push(filter_desc);
         }
 
+        let build_limit = Arc::new(RuntimeFilterBuildLimit::from_descs(
+            &filters_desc,
+            selectivity_threshold,
+            probe_ratio_threshold,
+        ));
+
         Ok(Arc::new(RuntimeFiltersDesc {
             func_ctx,
             filters_desc,
@@ -74,6 +85,8 @@ impl RuntimeFiltersDesc {
             inlist_threshold,
             min_max_threshold,
             selectivity_threshold,
+            probe_ratio_threshold,
+            build_limit,
             runtime_filters_ready,
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
@@ -90,6 +103,7 @@ impl RuntimeFiltersDesc {
             packet,
             runtime_filter_descs,
             self.selectivity_threshold,
+            self.probe_ratio_threshold,
             self.ctx.get_settings().get_max_threads()? as usize,
         )
         .await?;

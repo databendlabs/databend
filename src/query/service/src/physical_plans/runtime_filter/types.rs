@@ -42,6 +42,8 @@ pub struct PhysicalRuntimeFilter {
     /// All probe targets in this list are in the same equivalence class
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
+    pub probe_table_rows: Vec<Option<u64>>,
+
     pub build_table_rows: Option<u64>,
 
     /// Enable bloom filter for this runtime filter
