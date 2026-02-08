@@ -793,6 +793,7 @@ impl VirtualColumnBuilder {
 
         for row in 0..num_rows {
             let mut decoded_jsonb: Option<Vec<u8>> = None;
+            let mut validated_jsonb = false;
             for (idx, builder) in builders.iter_mut().enumerate() {
                 let entry = block.get_by_offset(source_offsets[idx]);
                 let value = unsafe { entry.index_unchecked(row) };
@@ -800,24 +801,21 @@ impl VirtualColumnBuilder {
                     builder.push(ScalarRef::Null);
                     continue;
                 };
-                let mut raw_jsonb = RawJsonb::new(jsonb_bytes);
+                if !validated_jsonb {
+                    validated_jsonb = true;
+                    if jsonb::from_slice(jsonb_bytes).is_err() {
+                        if let Ok(jsonb) = parquet_variant_bytes_to_jsonb(jsonb_bytes) {
+                            decoded_jsonb = Some(jsonb);
+                        }
+                    }
+                }
+                let jsonb_bytes = decoded_jsonb.as_deref().unwrap_or(jsonb_bytes);
+                let raw_jsonb = RawJsonb::new(jsonb_bytes);
                 let path = &borrowed_paths[idx];
                 let raw_value = match raw_jsonb.get_by_keypath(path.paths.iter()) {
                     Ok(Some(value)) => Some(value),
                     Ok(None) => None,
-                    Err(_) => {
-                        if decoded_jsonb.is_none() {
-                            if let Ok(jsonb) = parquet_variant_bytes_to_jsonb(jsonb_bytes) {
-                                decoded_jsonb = Some(jsonb);
-                            }
-                        }
-                        if let Some(ref jsonb) = decoded_jsonb {
-                            raw_jsonb = RawJsonb::new(jsonb);
-                            raw_jsonb.get_by_keypath(path.paths.iter()).ok().flatten()
-                        } else {
-                            None
-                        }
-                    }
+                    Err(_) => None,
                 };
                 let Some(raw_value) = raw_value else {
                     builder.push(ScalarRef::Null);
