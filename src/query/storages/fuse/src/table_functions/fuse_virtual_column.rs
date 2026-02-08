@@ -19,8 +19,8 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnId;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -142,6 +142,7 @@ impl FuseVirtualColumn {
                     let Some(block_meta) = block.virtual_block_meta() else {
                         continue;
                     };
+                    let location = block_meta.virtual_location.0.clone();
                     let entries = if block_meta.virtual_column_size == 0 {
                         collect_inline_virtual_column_entries(
                             &block_meta.virtual_column_metas,
@@ -149,7 +150,6 @@ impl FuseVirtualColumn {
                             &virtual_field_map,
                         )
                     } else {
-                        let location = block_meta.virtual_location.0;
                         let Ok(virtual_meta) =
                             load_virtual_column_file_meta(tbl.operator.clone(), &location).await
                         else {
@@ -159,8 +159,7 @@ impl FuseVirtualColumn {
                     };
 
                     for entry in entries {
-                        let location = block_meta.virtual_location.0.clone();
-                        virtual_block_location.put_and_commit(location);
+                        virtual_block_location.put_and_commit(&location);
                         virtual_block_size.push(block_meta.virtual_column_size);
                         row_count.push(entry.num_values);
 
@@ -270,7 +269,10 @@ fn build_virtual_field_map(
         return map;
     };
     for field in virtual_schema.fields() {
-        map.insert(field.column_id, (field.source_column_id, field.name.clone()));
+        map.insert(
+            field.column_id,
+            (field.source_column_id, field.name.clone()),
+        );
     }
     map
 }
