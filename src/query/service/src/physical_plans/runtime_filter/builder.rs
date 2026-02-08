@@ -68,6 +68,11 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
     )
 }
 
+fn should_skip_runtime_filter_for_join(join: &Join) -> bool {
+    join.from_correlated_subquery
+        && matches!(join.join_type, JoinType::RightSemi | JoinType::RightAnti)
+}
+
 /// Build runtime filters for a join operation
 ///
 /// This is the legacy method that creates one runtime filter per probe key.
@@ -97,6 +102,13 @@ pub async fn build_runtime_filter(
     }
 
     if !supported_join_type_for_runtime_filter(&join.join_type) {
+        return Ok(Default::default());
+    }
+
+    // Correlated EXISTS / NOT EXISTS are decorrelated as RightSemi / RightAnti joins.
+    // In distributed execution with spill, runtime filters on these joins can prune probe
+    // rows too aggressively and change semantics.
+    if should_skip_runtime_filter_for_join(join) {
         return Ok(Default::default());
     }
 
@@ -268,6 +280,34 @@ fn scalar_to_remote_expr(
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_sql::plans::Join;
+    use databend_common_sql::plans::JoinType;
+
+    use super::should_skip_runtime_filter_for_join;
+
+    #[test]
+    fn test_skip_runtime_filter_for_correlated_right_semi_anti() {
+        let mut join = Join {
+            join_type: JoinType::RightSemi,
+            from_correlated_subquery: true,
+            ..Default::default()
+        };
+        assert!(should_skip_runtime_filter_for_join(&join));
+
+        join.join_type = JoinType::RightAnti;
+        assert!(should_skip_runtime_filter_for_join(&join));
+
+        join.from_correlated_subquery = false;
+        assert!(!should_skip_runtime_filter_for_join(&join));
+
+        join.join_type = JoinType::Inner;
+        join.from_correlated_subquery = true;
+        assert!(!should_skip_runtime_filter_for_join(&join));
+    }
 }
 
 struct UnionFind {
