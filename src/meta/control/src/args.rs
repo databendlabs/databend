@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use clap::Args;
-use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
+use databend_meta_raft_store::config::RaftConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Args)]

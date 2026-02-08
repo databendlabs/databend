@@ -22,9 +22,6 @@ use std::sync::Arc;
 use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::DumpRaftLogWalArgs;
@@ -48,15 +45,18 @@ use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::init_logging;
-use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::UpsertKV;
+use databend_meta_types::protobuf::WatchRequest;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
 use mlua::Lua;
@@ -83,12 +83,12 @@ impl App {
         let addr = args.grpc_api_address.clone();
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
             None,
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )?;
 
         let res = client.get_cluster_status().await?;
@@ -165,12 +165,12 @@ impl App {
             i += 1;
             let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
-                BUILD_INFO.semver(),
                 "root",
                 "xxx",
                 None,
                 None,
                 None,
+                DEFAULT_GRPC_MESSAGE_SIZE,
             )?;
             let res = client.get_kv("foo").await;
             println!("{}-th: get_kv(foo): {:?}", i, res);
@@ -199,7 +199,7 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args, BUILD_INFO.semver()).await?;
+                export_from_grpc::export_from_running_node(args).await?;
             }
             Some(ref _dir) => {
                 export_from_disk::export_from_dir::<DatabendRuntime>(args).await?;
@@ -214,7 +214,7 @@ impl App {
     }
 
     async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
-        keys_layout_from_grpc::keys_layout_from_running_node(args, BUILD_INFO.semver()).await?;
+        keys_layout_from_grpc::keys_layout_from_running_node(args).await?;
         Ok(())
     }
 
@@ -260,7 +260,7 @@ impl App {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua, BUILD_INFO.semver())?;
+        lua_support::setup_lua_environment(&lua)?;
 
         let script = match &args.file {
             Some(path) => std::fs::read_to_string(path)?,
@@ -295,7 +295,7 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script, BUILD_INFO.semver()).await? {
+        match lua_support::run_lua_script_with_result(&lua_script).await? {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
@@ -316,7 +316,7 @@ return metrics, nil
         &self,
         addresses: Vec<String>,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-        lua_support::new_grpc_client(addresses, BUILD_INFO.semver())
+        lua_support::new_grpc_client(addresses)
     }
 
     async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {
@@ -336,9 +336,7 @@ return metrics, nil
         });
 
         let dump =
-            raft_log::Dump::<databend_common_meta_raft_store::raft_log_v004::RaftLogTypes>::new(
-                config,
-            )?;
+            raft_log::Dump::<databend_meta_raft_store::raft_log_v004::RaftLogTypes>::new(config)?;
         dump.write_display(io::stdout())?;
         Ok(())
     }

@@ -37,8 +37,8 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::anyerror::func_name;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
 use parking_lot::RwLock;
 
@@ -88,12 +88,10 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
-        version: BuildInfoRef,
+        _version: BuildInfoRef,
     ) -> Result<Arc<CatalogManager>> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider
                 .create_meta_store::<DatabendRuntime>()

@@ -14,8 +14,8 @@
 
 use std::future::Future;
 
-use databend_common_meta_runtime_api::SpawnApi;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::SpawnApi;
 use futures::FutureExt;
 use log::debug;
 use log::info;

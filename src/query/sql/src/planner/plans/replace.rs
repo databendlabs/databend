@@ -22,8 +22,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::StringType;
-use databend_common_meta_types::MetaId;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_meta_types::MetaId;
 
 use super::insert::format_insert_source;
 use crate::FormatOptions;

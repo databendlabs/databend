@@ -10,9 +10,9 @@ edition = { workspace = true }
 [dependencies]
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
-databend-common-meta-runtime-api = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
 fastrace = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

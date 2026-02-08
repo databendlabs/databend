@@ -42,7 +42,6 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
@@ -56,6 +55,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;

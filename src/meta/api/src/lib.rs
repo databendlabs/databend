@@ -19,7 +19,7 @@
 #![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
-extern crate databend_common_meta_types;
+extern crate databend_meta_types;
 pub mod catalog_api;
 pub mod data_mask_api;
 mod data_mask_api_impl;

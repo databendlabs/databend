@@ -21,9 +21,9 @@ use databend_common_management::UserApi;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserQuota;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateUserPlan;
 use databend_common_users::UserApiProvider;
+use databend_meta_types::MatchSeq;
 use log::debug;
 
 use crate::interpreters::Interpreter;

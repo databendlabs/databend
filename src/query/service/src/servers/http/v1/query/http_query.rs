@@ -367,6 +367,21 @@ impl HttpSessionConf {
     pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
+        if let Some(conf_settings) = &self.settings {
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
         if let Some(catalog) = &self.catalog {
             if !catalog.is_empty() {
                 session.set_current_catalog(catalog.clone());
@@ -386,22 +401,6 @@ impl HttpSessionConf {
         session
             .set_secondary_roles_checked(self.secondary_roles.clone())
             .await?;
-        // TODO(liyz): pass secondary roles here
-        if let Some(conf_settings) = &self.settings {
-            let settings = session.get_settings();
-            for (k, v) in conf_settings {
-                settings
-                    .set_setting(k.to_string(), v.to_string())
-                    .or_else(|e| {
-                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                            warn!("Unknown session setting ignored: {}", k);
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })?;
-            }
-        }
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)

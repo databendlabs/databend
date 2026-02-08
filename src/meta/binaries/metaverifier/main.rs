@@ -26,19 +26,19 @@ use std::time::Instant;
 use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
 use databend_common_tracing::init_logging;
-use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::SpawnApi;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::Operation;
+use databend_meta_types::UpsertKV;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -130,12 +130,12 @@ async fn main() -> Result<()> {
             async move {
                 let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                     addrs.clone(),
-                    BUILD_INFO.semver(),
                     "root",
                     "xxx",
                     None,
                     None,
                     None,
+                    DEFAULT_GRPC_MESSAGE_SIZE,
                 );
 
                 let client = match client {

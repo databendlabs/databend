@@ -30,7 +30,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;

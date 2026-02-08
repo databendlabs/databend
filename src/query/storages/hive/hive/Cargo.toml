@@ -17,12 +17,12 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-common-users = { workspace = true }
+databend-meta-types = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }

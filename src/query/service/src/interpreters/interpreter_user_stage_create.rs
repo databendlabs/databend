@@ -21,11 +21,11 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_meta_types::MatchSeq;
 use log::debug;
 use log::info;
 

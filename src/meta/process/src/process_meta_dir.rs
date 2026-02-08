@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_sled_store::init_get_sled_db;
+use databend_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_meta_sled_store::init_get_sled_db;
 
 /// Rewrite protobuf encoded logs and applied record in a sled db.
 ///

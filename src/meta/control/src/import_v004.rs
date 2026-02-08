@@ -16,21 +16,21 @@ use std::io;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::key_spaces::SMEntry;
-use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_raft_store::ondisk::Header;
-use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::raft_log_v004;
-use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
-use databend_common_meta_raft_store::sm_v003::WriteEntry;
-use databend_common_meta_raft_store::sm_v003::adapter::SMEntryV002ToV004;
-use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
-use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::raft_types::LogId;
-use databend_common_meta_types::sys_data::SysData;
+use databend_meta_raft_store::config::RaftConfig;
+use databend_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_meta_raft_store::key_spaces::SMEntry;
+use databend_meta_raft_store::ondisk::DataVersion;
+use databend_meta_raft_store::ondisk::Header;
+use databend_meta_raft_store::ondisk::OnDisk;
+use databend_meta_raft_store::raft_log_v004;
+use databend_meta_raft_store::raft_log_v004::RaftLogV004;
+use databend_meta_raft_store::sm_v003::SnapshotStoreV004;
+use databend_meta_raft_store::sm_v003::WriteEntry;
+use databend_meta_raft_store::sm_v003::adapter::SMEntryV002ToV004;
+use databend_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_meta_runtime_api::SpawnApi;
+use databend_meta_types::raft_types::LogId;
+use databend_meta_types::sys_data::SysData;
 
 /// Import serialized lines for `DataVersion::V004`
 ///

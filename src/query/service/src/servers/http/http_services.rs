@@ -20,7 +20,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
-use databend_common_meta_types::anyerror::AnyError;
+use databend_meta_types::anyerror::AnyError;
 use http::StatusCode;
 use log::info;
 use poem::Endpoint;

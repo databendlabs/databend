@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_types::NodeInfo;
+use databend_meta_types::NodeInfo;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Cluster {

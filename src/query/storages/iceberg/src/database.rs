@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::TableCreation;

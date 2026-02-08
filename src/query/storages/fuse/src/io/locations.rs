@@ -41,6 +41,7 @@ use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
+use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::index::InvertedIndexFile;
 use crate::index::filters::BlockFilter;
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
@@ -241,6 +242,12 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_virtual_block_location(location: &str) -> String {
         location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
+    }
+
+    pub fn is_legacy_virtual_block_location(location: &str) -> bool {
+        location
+            .split('/')
+            .any(|segment| segment == FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1)
     }
 
     pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {

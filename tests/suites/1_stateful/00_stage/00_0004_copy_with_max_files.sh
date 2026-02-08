@@ -3,6 +3,11 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+run_bendsql() {
+  $BENDSQL_CLIENT_CONNECT <<SQL
+$1
+SQL
+}
 
 # Should be <root>/tests/data/
 
@@ -13,11 +18,13 @@ do
 		for purge in 'false'  'true'
 		do
 			table="test_max_files_force_${force}_purge_${purge}_transform_${transform}"
-			echo "drop table if exists ${table}" | $BENDSQL_CLIENT_CONNECT
-			echo "CREATE TABLE ${table} (
+			run_bendsql "
+DROP TABLE IF EXISTS ${table};
+CREATE TABLE ${table} (
 				id INT,
 				c1 INT
-			) ENGINE=FUSE;" | $BENDSQL_CLIENT_CONNECT
+			) ENGINE=FUSE;
+"
 		done
 	done
 done
@@ -72,8 +79,10 @@ do
 	do
 		for purge in 'false'  'true'
 		do
-			table="test_max_files_force_${force}_purge_${purge}"
-			echo "drop table if exists ${table}" | $BENDSQL_CLIENT_CONNECT
+			table="test_max_files_force_${force}_purge_${purge}_transform_${transform}"
+			run_bendsql "
+DROP TABLE IF EXISTS ${table};
+"
 		done
 	done
 done
@@ -95,4 +104,3 @@ stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV)"
 stmt "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true"
 query "copy into ${TABLE} from 'fs://${DIR}/' FILE_FORMAT = (type = CSV) force=true purge=true return_failed_only=true"
 query "drop table ${TABLE}"
-

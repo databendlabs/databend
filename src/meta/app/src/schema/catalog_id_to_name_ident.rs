@@ -36,7 +36,7 @@ impl CatalogIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::CatalogIdToNameIdent;
     use crate::schema::catalog_name_ident::CatalogNameIdentRaw;
@@ -65,7 +65,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::CatalogIdToNameIdent;
     use crate::schema::catalog_id_ident::CatalogId;

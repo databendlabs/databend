@@ -35,6 +35,7 @@ use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use opendal::Operator;
 
+use crate::io::TableMetaLocationGenerator;
 use crate::io::read::load_virtual_column_file_meta;
 
 pub struct VirtualColumnPruner {
@@ -83,6 +84,11 @@ impl VirtualColumnPruner {
             return Ok(None);
         };
         if virtual_block_meta.virtual_column_size == 0 {
+            return Ok(None);
+        }
+        if TableMetaLocationGenerator::is_legacy_virtual_block_location(
+            &virtual_block_meta.virtual_location.0,
+        ) {
             return Ok(None);
         }
 

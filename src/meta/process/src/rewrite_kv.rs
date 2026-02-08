@@ -14,9 +14,9 @@
 
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_proto_conv::FromToProto;
 use databend_common_protos::pb;
+use databend_meta_kvapi::kvapi::Key;
 use prost::Message;
 
 /// Convert old version TableMeta protobuf message to new version.

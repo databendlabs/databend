@@ -19,7 +19,7 @@ use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_types::anyerror::func_name;
+use databend_meta_types::anyerror::func_name;
 use maplit::btreemap;
 
 use crate::common;

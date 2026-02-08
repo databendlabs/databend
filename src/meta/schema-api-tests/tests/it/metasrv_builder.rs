@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
-use databend_common_version::BUILD_INFO;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_kvapi::kvapi;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::start_metasrv;
@@ -38,12 +38,12 @@ impl kvapi::ApiBuilder<MetaStore> for MetaSrvBuilder {
 
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
             None,
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )
         .unwrap();
 

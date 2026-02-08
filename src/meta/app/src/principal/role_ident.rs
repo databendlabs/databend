@@ -36,7 +36,7 @@ impl RoleIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
@@ -65,7 +65,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::RoleIdent;
     use crate::tenant::Tenant;
