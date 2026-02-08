@@ -563,8 +563,15 @@ fn try_to_variant_column_from_struct(array: ArrayRef) -> Result<BinaryColumn> {
             builder.commit_row();
             continue;
         }
-        let value = match &value_col {
-            Some(col) if !col.is_null(row) => Some(col.value(row)),
+        let mut value = match &value_col {
+            Some(col) if !col.is_null(row) => {
+                let bytes = col.value(row);
+                if bytes.is_empty() {
+                    None
+                } else {
+                    Some(bytes)
+                }
+            }
             _ => None,
         };
         if value.is_none() {
@@ -577,8 +584,13 @@ fn try_to_variant_column_from_struct(array: ArrayRef) -> Result<BinaryColumn> {
             }
         }
         let metadata = metadata_col.value(row);
-        let value = value.unwrap_or(&[]);
-        let jsonb = crate::types::variant_parquet::parquet_variant_to_jsonb(metadata, value)?;
+        let value_bytes = value.unwrap_or(&[]);
+        if value_bytes.is_empty() {
+            builder.put_slice(crate::types::variant::JSONB_NULL);
+            builder.commit_row();
+            continue;
+        }
+        let jsonb = crate::types::variant_parquet::parquet_variant_to_jsonb(metadata, value_bytes)?;
         builder.put_slice(&jsonb);
         builder.commit_row();
     }

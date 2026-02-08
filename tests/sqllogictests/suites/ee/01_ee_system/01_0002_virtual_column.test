@@ -305,7 +305,8 @@ test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
 test_virtual_column tweets data 3000000005 ['user']['id'] UInt64
 test_virtual_column tweets data 3000000006 ['likes'] UInt64
-test_virtual_column tweets data 3000000007 ['tags'] Jsonb
+test_virtual_column tweets data 3000000007 ['tags'][0] String
+test_virtual_column tweets data 3000000008 ['tags'][1] String
 
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
