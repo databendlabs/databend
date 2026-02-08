@@ -506,3 +506,35 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         additional_stats_meta: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::reduce_column_statistics;
+
+    #[test]
+    fn test_reduce_column_statistics_mixed_types_drop_min_max() {
+        let stats = vec![
+            ColumnStatistics::new(
+                Scalar::Number(NumberScalar::Int32(1)),
+                Scalar::Number(NumberScalar::Int32(2)),
+                0,
+                0,
+                None,
+            ),
+            ColumnStatistics::new(
+                Scalar::Number(NumberScalar::Int64(3)),
+                Scalar::Number(NumberScalar::Int64(4)),
+                0,
+                0,
+                None,
+            ),
+        ];
+        let reduced = reduce_column_statistics(&stats, Some(1));
+        assert!(reduced.min().is_null());
+        assert!(reduced.max().is_null());
+    }
+}
