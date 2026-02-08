@@ -94,6 +94,7 @@ fn decimal_hash_factory_1_arg<H: HashFunction>(args_type: &[DataType]) -> Option
         signature,
         FunctionDomain::Full,
         eval,
+        None,
         nullable,
     )))
 }
@@ -137,6 +138,7 @@ fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
         signature,
         FunctionDomain::Full,
         eval,
+        None,
         nullable,
     )))
 }

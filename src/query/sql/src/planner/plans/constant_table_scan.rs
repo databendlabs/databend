@@ -24,8 +24,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_storage::Datum;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 
 use crate::ColumnSet;
 use crate::IndexType;
@@ -171,7 +170,7 @@ impl Operator for ConstantTableScan {
                 vec![],
             )?;
             let min = if let Some(v) = mins.index(0) {
-                match Datum::from_scalar(v.to_owned()) {
+                match v.to_owned().to_datum() {
                     Some(val) => val,
                     None => {
                         continue;
@@ -188,7 +187,7 @@ impl Operator for ConstantTableScan {
                 vec![],
             )?;
             let max = if let Some(v) = maxs.index(0) {
-                match Datum::from_scalar(v.to_owned()) {
+                match v.to_owned().to_datum() {
                     Some(val) => val,
                     None => {
                         continue;

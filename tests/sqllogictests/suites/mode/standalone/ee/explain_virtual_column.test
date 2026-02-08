@@ -105,7 +105,7 @@ explain select a, get_by_keypath(v, '{"a",0}') from t2 where get_by_keypath(v, '
 Filter
 ├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
 ├── filters: [is_true(TRY_CAST(t2.v['b']['c'] (#3) AS UInt8 NULL) = 10)]
-├── estimated rows: 0.50
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.test_virtual_db.t2
     ├── scan id: 0
@@ -149,7 +149,7 @@ explain select a, get(v, 'd') from t2 where get(v, 'd') = 20
 Filter
 ├── output columns: [t2.a (#0), t2.v['d'] (#2)]
 ├── filters: [is_true(TRY_CAST(t2.v['d'] (#2) AS UInt8 NULL) = 20)]
-├── estimated rows: 0.50
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.test_virtual_db.t2
     ├── scan id: 0
@@ -273,11 +273,11 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [TRY_CAST(t2.v['b']['c'] (#4) AS Int32 NULL) = t1.a (#2)]
-├── estimated rows: 0.50
+├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#0), t2.v['b']['c'] (#4)]
 │   ├── filters: [is_true(TRY_CAST(t2.v['a'][0] (#6) AS UInt8 NULL) = 1)]
-│   ├── estimated rows: 0.50
+│   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
 │       ├── scan id: 0
@@ -733,7 +733,7 @@ CommitSink
                     ├── apply join filters: [#0, #1]
                     └── estimated rows: 1.00
 
-query TTT
+query TT?
 SELECT * FROM data_main;
 ----
 rec1 cat1 {"metadata":{"category_id":"cat1","timestamp":1625000000000},"timestamp":1625000000000}
