@@ -106,10 +106,13 @@ struct ColStatBuilder {
 impl ColStatBuilder {
     fn new(data_type: &TableDataType, block_per_segment: usize) -> Self {
         let data_type: DataType = data_type.into();
+        let nullable_type = data_type.wrap_nullable();
         Self {
             data_type: data_type.clone(),
-            min: ColumnBuilder::with_capacity(&data_type, block_per_segment),
-            max: ColumnBuilder::with_capacity(&data_type, block_per_segment),
+            // min/max stats are nullable in segment schema; keep builders nullable so cast failures
+            // can drop stats without panicking on non-nullable builders.
+            min: ColumnBuilder::with_capacity(&nullable_type, block_per_segment),
+            max: ColumnBuilder::with_capacity(&nullable_type, block_per_segment),
             null_count: Vec::with_capacity(block_per_segment),
             in_memory_size: Vec::with_capacity(block_per_segment),
             distinct_of_values: Vec::with_capacity(block_per_segment),
