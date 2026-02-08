@@ -17,9 +17,9 @@ use std::cmp::Ordering;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
-use databend_common_storage::HistogramBucket;
+use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::HistogramBucket;
 
 pub type F64 = OrderedFloat<f64>;
 
@@ -60,7 +60,7 @@ impl HistogramBuilder {
 
         // Extract min and max values
         let (min, max) = match bound {
-            Some((min, max)) => (min.to_float(), max.to_float()),
+            Some((min, max)) => (min.cast_float(), max.cast_float()),
             None => {
                 return Err(format!(
                     "Must have min and max value when NDV is greater than 0, got NDV: {}",
@@ -189,10 +189,10 @@ impl UniformSampleSet {
         match (&self.min, &other.min) {
             (Datum::Bytes(_), Datum::Bytes(_)) => Ok((None, None)),
             _ => {
-                let left_min = self.min.to_double()?;
-                let left_max = self.max.to_double()?;
-                let right_min = other.min.to_double()?;
-                let right_max = other.max.to_double()?;
+                let left_min = self.min.as_double()?;
+                let left_max = self.max.as_double()?;
+                let right_min = other.min.as_double()?;
+                let right_max = other.max.as_double()?;
                 let new_min = if left_min <= right_min {
                     other.min.clone()
                 } else {

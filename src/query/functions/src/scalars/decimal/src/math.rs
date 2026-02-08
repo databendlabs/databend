@@ -76,6 +76,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::Full,
             eval,
+            None,
             args_type[0].is_nullable(),
         ))
     };
@@ -114,6 +115,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::Full,
             decimal_abs,
+            None,
             args_type[0].is_nullable(),
         ))
     };

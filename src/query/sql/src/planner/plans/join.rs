@@ -20,10 +20,9 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::F64;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
 
 use crate::ColumnSet;
 use crate::IndexType;
@@ -415,10 +414,8 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
-                left.min = Datum::Float(F64::from(left.min.to_double()?));
-                left.max = Datum::Float(F64::from(left.max.to_double()?));
-            }
+            left.min = left.min.clone().cast_float();
+            left.max = left.max.clone().cast_float();
             left.histogram = Some(HistogramBuilder::from_ndv(
                 left.ndv.value() as u64,
                 max(join_card as u64, left.ndv.value() as u64),
@@ -436,10 +433,8 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
-                right.min = Datum::Float(F64::from(right.min.to_double()?));
-                right.max = Datum::Float(F64::from(right.max.to_double()?));
-            }
+            right.min = right.min.clone().cast_float();
+            right.max = right.max.clone().cast_float();
             right.histogram = Some(HistogramBuilder::from_ndv(
                 right.ndv.value() as u64,
                 max(join_card as u64, right.ndv.value() as u64),
@@ -877,11 +872,11 @@ fn evaluate_by_histogram(
         let mut has_intersection = false;
         let left_num_rows = left_bucket.num_values();
         let left_ndv = left_bucket.num_distinct();
-        let left_bucket_min = left_bucket.lower_bound().to_double()?;
-        let left_bucket_max = left_bucket.upper_bound().to_double()?;
+        let left_bucket_min = left_bucket.lower_bound().as_double()?;
+        let left_bucket_max = left_bucket.upper_bound().as_double()?;
         for right_bucket in right_hist.buckets.iter() {
-            let right_bucket_min = right_bucket.lower_bound().to_double()?;
-            let right_bucket_max = right_bucket.upper_bound().to_double()?;
+            let right_bucket_min = right_bucket.lower_bound().as_double()?;
+            let right_bucket_max = right_bucket.upper_bound().as_double()?;
             if left_bucket_min < right_bucket_max && left_bucket_max > right_bucket_min {
                 has_intersection = true;
                 let right_num_rows = right_bucket.num_values();

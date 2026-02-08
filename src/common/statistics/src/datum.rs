@@ -17,9 +17,6 @@ use std::fmt::Formatter;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_expression::Scalar;
-use databend_common_expression::types::number::NumberScalar;
 
 pub type F64 = OrderedFloat<f64>;
 
@@ -33,33 +30,11 @@ pub enum Datum {
 }
 
 impl Datum {
-    pub fn from_scalar(data_value: Scalar) -> Option<Self> {
-        match data_value {
-            Scalar::Boolean(v) => Some(Datum::Bool(v)),
-            Scalar::Number(NumberScalar::Int8(v)) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int16(v)) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int32(v)) | Scalar::Date(v) => Some(Datum::Int(v as i64)),
-            Scalar::Number(NumberScalar::Int64(v)) | Scalar::Timestamp(v) => Some(Datum::Int(v)),
-            Scalar::Number(NumberScalar::UInt8(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt16(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt32(v)) => Some(Datum::UInt(v as u64)),
-            Scalar::Number(NumberScalar::UInt64(v)) => Some(Datum::UInt(v)),
-            Scalar::Number(NumberScalar::Float32(v)) => {
-                Some(Datum::Float(F64::from(f32::from(v) as f64)))
-            }
-            Scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
-            Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
-            Scalar::Binary(v) => Some(Datum::Bytes(v)),
-            Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),
-            _ => None,
-        }
-    }
-
     pub fn is_bytes(&self) -> bool {
         matches!(self, Datum::Bytes(_))
     }
 
-    pub fn to_float(self) -> Self {
+    pub fn cast_float(self) -> Self {
         match self {
             Datum::Int(v) => Datum::Float(F64::from(v as f64)),
             Datum::UInt(v) => Datum::Float(F64::from(v as f64)),
@@ -67,7 +42,7 @@ impl Datum {
         }
     }
 
-    pub fn to_double(&self) -> Result<f64> {
+    pub fn as_double(&self) -> Result<f64, ErrorCode> {
         match self {
             Datum::Bool(v) => Ok(*v as u8 as f64),
             Datum::Int(v) => Ok(*v as f64),
@@ -80,7 +55,7 @@ impl Datum {
         }
     }
 
-    pub fn to_string(&self) -> Result<String> {
+    pub fn to_string(&self) -> Result<String, ErrorCode> {
         match self {
             Datum::Bool(v) => Ok(v.to_string()),
             Datum::Int(v) => Ok(v.to_string()),
@@ -157,7 +132,7 @@ impl Datum {
         }
     }
 
-    pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {
+    pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering, ErrorCode> {
         match (self, other) {
             (Datum::Bool(l), Datum::Bool(r)) => Ok(l.cmp(r)),
 

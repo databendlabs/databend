@@ -76,6 +76,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             signature,
             DecimalComparisonDomain::<Op>::default(),
             eval,
+            None,
             has_nullable,
         )))
     }));
@@ -88,7 +89,7 @@ struct DecimalComparisonDomain<Op> {
 }
 
 impl<Op: CmpOp> ScalarFunctionDomain for DecimalComparisonDomain<Op> {
-    fn calc_domain(&self, _: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, _: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let d1 = domains[0].as_decimal().unwrap();
         let d2 = domains[1].as_decimal().unwrap();
 

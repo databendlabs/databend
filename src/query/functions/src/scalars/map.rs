@@ -143,17 +143,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| Value::Scalar(()),
     );
 
-    registry.register_passthrough_nullable_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<0>>, _, _>(
-        "map_keys",
-        |_, domain| {
-            FunctionDomain::Domain(
-                domain.clone().map(|(key_domain, _)| key_domain.clone())
-            )
-        },
-        vectorize_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<0>>>(
-            |map, _| map.keys
-        ),
-    );
+    registry
+        .scalar_builder("map_keys")
+        .function()
+        .typed_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| {
+            FunctionDomain::Domain(domain.clone().map(|(key_domain, _)| key_domain.clone()))
+        })
+        .vectorized(vectorize_1_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            ArrayType<GenericType<0>>,
+        >(|map, _| map.keys))
+        .register();
 
     registry.register_1_arg_core::<EmptyMapType, EmptyArrayType, _, _>(
         "map_values",
@@ -161,19 +163,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| Value::Scalar(()),
     );
 
-    registry.register_passthrough_nullable_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>, _, _>(
-        "map_values",
-        |_, domain| {
-            FunctionDomain::Domain(
-                domain.clone().map(|(_, val_domain)| val_domain.clone())
-            )
-        },
-        vectorize_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>>(
-            |map, _| map.values
-        ),
-    );
+    registry
+        .scalar_builder("map_values")
+        .function()
+        .typed_1_arg::<MapType<GenericType<0>, GenericType<1>>, ArrayType<GenericType<1>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| {
+            FunctionDomain::Domain(domain.clone().map(|(_, val_domain)| val_domain.clone()))
+        })
+        .vectorized(vectorize_1_arg::<
+            MapType<GenericType<0>, GenericType<1>>,
+            ArrayType<GenericType<1>>,
+        >(|map, _| map.values))
+        .register();
 
-    registry.register_2_arg::<EmptyMapType, EmptyMapType, EmptyMapType, _, _>(
+    registry.register_2_arg::<EmptyMapType, EmptyMapType, EmptyMapType, _>(
         "map_cat",
         |_, _, _| FunctionDomain::Full,
         |_, _, _| (),
@@ -234,7 +238,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| Value::Scalar(0u8),
     );
 
-    registry.register_1_arg::<MapType<GenericType<0>, GenericType<1>>, NumberType<u64>, _, _>(
+    registry.register_1_arg::<MapType<GenericType<0>, GenericType<1>>, NumberType<u64>, _>(
         "map_size",
         |_, _| FunctionDomain::Full,
         |map, _| map.len() as u64,
@@ -330,6 +334,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         None => Value::Scalar(output_map_builder.build_scalar()),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -342,13 +347,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry
-        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, BooleanType, _, _>(
+        .register_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, BooleanType, _>(
             "map_contains_key",
             |_, _, _| FunctionDomain::Full,
-            |map, key, _| {
-                map.iter()
-                    .any(|(k, _)| k == key)
-            },
+            |map, key, _| map.iter().any(|(k, _)| k == key),
         );
 
     registry.register_3_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
@@ -527,6 +529,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         None => Value::Scalar(output_map_builder.build_scalar()),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));

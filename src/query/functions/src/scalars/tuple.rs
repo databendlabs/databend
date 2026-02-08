@@ -76,6 +76,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Scalar(Scalar::Tuple(fields))
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -110,6 +111,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Value::Column(Column::Tuple(fields)) => Value::Column(fields[idx].to_owned()),
                     _ => unreachable!(),
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -171,6 +173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                     _ => unreachable!(),
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -206,6 +209,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: scalar_evaluator(move |_, _| Value::Scalar(Scalar::Null)),
+                derive_stat: None,
             },
         }))
     }));

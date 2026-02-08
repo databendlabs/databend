@@ -35,6 +35,8 @@ use crate::FunctionDomain;
 use crate::FunctionSignature;
 use crate::Scalar;
 use crate::Value;
+use crate::function_stat::DeriveStat;
+use crate::function_stat::ScalarFunctionStat;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NullableColumn;
@@ -45,14 +47,14 @@ use crate::types::nullable::NullableDomain;
 impl<F> ScalarFunctionDomain for F
 where F: Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> + Send + Sync + 'static
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         (self)(ctx, domains)
     }
 }
 
 impl ScalarFunctionDomain for Box<dyn ScalarFunctionDomain> {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
-        (**self).calc_domain(ctx, domains)
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+        (**self).domain_eval(ctx, domains)
     }
 }
 
@@ -71,7 +73,7 @@ impl ScalarFunction for Box<dyn ScalarFunction> {
 }
 
 impl ScalarFunctionDomain for FunctionDomain<AnyType> {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         self.clone()
     }
 }
@@ -89,14 +91,15 @@ where F: Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
         let Function { signature, eval } = self;
-        let (calc_domain, eval) = eval.into_scalar().unwrap();
-        Function::with_passthrough_nullable(signature, calc_domain, eval, true)
+        let (calc_domain, derive_stat, eval) = eval.into_scalar().unwrap();
+        Function::with_passthrough_nullable(signature, calc_domain, eval, derive_stat, true)
     }
 
     pub fn with_passthrough_nullable(
         signature: FunctionSignature,
         calc_domain: impl ScalarFunctionDomain,
         eval: impl ScalarFunction,
+        derive_stat: Option<Box<dyn ScalarFunctionStat>>,
         is_nullable: bool,
     ) -> Self {
         if !is_nullable {
@@ -105,6 +108,7 @@ impl Function {
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(calc_domain),
                     eval: Box::new(eval),
+                    derive_stat,
                 },
             };
         }
@@ -131,6 +135,7 @@ impl Function {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(PassthroughNullableDomain(calc_domain)),
                 eval: Box::new(PassthroughNullable(eval)),
+                derive_stat,
             },
         }
     }
@@ -142,10 +147,10 @@ impl Function {
         let return_type = signature.return_type.wrap_nullable();
         signature.return_type = return_type.clone();
 
-        let (calc_domain, eval) = self.eval.into_scalar().unwrap();
+        let (calc_domain, derive_stat, eval) = self.eval.into_scalar().unwrap();
 
         let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
-            let domain = calc_domain.calc_domain(ctx, domains);
+            let domain = calc_domain.domain_eval(ctx, domains);
             match domain {
                 FunctionDomain::Domain(domain) => {
                     let new_domain = NullableDomain {
@@ -186,17 +191,18 @@ impl Function {
             eval: FunctionEval::Scalar {
                 calc_domain: new_calc_domain,
                 eval: new_eval,
+                derive_stat,
             },
         }
     }
 }
 
-struct PassthroughNullableDomain<T>(T);
+pub struct PassthroughNullableDomain<T>(pub T);
 
 impl<T> ScalarFunctionDomain for PassthroughNullableDomain<T>
 where T: ScalarFunctionDomain
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let mut args_has_null = false;
         let mut args_domain = Vec::with_capacity(domains.len());
         for domain in domains {
@@ -218,7 +224,7 @@ where T: ScalarFunctionDomain
             }
         }
 
-        self.0.calc_domain(ctx, &args_domain).map(|result_domain| {
+        self.0.domain_eval(ctx, &args_domain).map(|result_domain| {
             let (result_has_null, result_domain) = match result_domain {
                 Domain::Nullable(NullableDomain { has_null, value }) => (has_null, value),
                 domain => (false, Some(Box::new(domain))),

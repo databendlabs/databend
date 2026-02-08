@@ -145,5 +145,5 @@ pub fn interval_to_string(i: &months_days_micros) -> impl Display {
         days: i.days(),
         micros: i.microseconds(),
     };
-    interval.to_string()
+    interval
 }

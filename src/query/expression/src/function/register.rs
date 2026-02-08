@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use super::register_vectorize::*;
 use crate::EvalContext;
 use crate::Function;
 use crate::FunctionContext;
@@ -24,24 +25,17 @@ use crate::FunctionSignature;
 use crate::ScalarFunction;
 use crate::ScalarFunctionDomain;
 use crate::property::Domain;
-use crate::register_vectorize::*;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
 impl FunctionRegistry {
-    pub fn register_1_arg<I1: ArgType, O: ArgType, F, G>(
+    pub fn register_1_arg<I1: ArgType, O: ArgType, G>(
         &mut self,
         name: &str,
-        calc_domain: F,
+        calc_domain: fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O>,
         func: G,
     ) where
-        F: Fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
         G: Fn(I1::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
             + 'static
             + Clone
@@ -49,25 +43,21 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        self.register_passthrough_nullable_1_arg::<I1, O, _, _>(
-            name,
-            calc_domain,
-            vectorize_1_arg(func),
-        )
+        self.scalar_builder(name)
+            .function()
+            .typed_1_arg::<I1, O>()
+            .passthrough_nullable()
+            .calc_domain(calc_domain)
+            .each_row(func)
+            .register();
     }
 
-    pub fn register_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
+    pub fn register_2_arg<I1: ArgType, I2: ArgType, O: ArgType, G>(
         &mut self,
         name: &str,
-        calc_domain: F,
+        calc_domain: fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O>,
         func: G,
     ) where
-        F: Fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
         G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, &mut EvalContext) -> O::Scalar
             + 'static
             + Clone
@@ -75,11 +65,13 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        self.register_passthrough_nullable_2_arg::<I1, I2, O, _, _>(
-            name,
-            calc_domain,
-            vectorize_2_arg(func),
-        )
+        self.scalar_builder(name)
+            .function()
+            .typed_2_arg::<I1, I2, O>()
+            .passthrough_nullable()
+            .calc_domain(calc_domain)
+            .each_row(func)
+            .register();
     }
 
     pub fn register_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType, F, G>(
@@ -151,52 +143,21 @@ impl FunctionRegistry {
         )
     }
 
-    pub fn register_passthrough_nullable_1_arg<I1: ArgType, O: ArgType, F, G>(
+    pub fn register_passthrough_nullable_1_arg<I1: ArgType, O: ArgType, G>(
         &mut self,
         name: &str,
-        calc_domain: F,
+        calc_domain: fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O>,
         func: G,
     ) where
-        F: Fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
         G: Fn(Value<I1>, &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
     {
-        let has_nullable = &[I1::data_type(), O::data_type()]
-            .iter()
-            .any(|ty| ty.as_nullable().is_some() || ty.is_null());
-
-        assert!(
-            !has_nullable,
-            "Function {} has nullable argument or output, please use register_1_arg_core instead",
-            name
-        );
-
-        self.register_1_arg_core::<I1, O, _, _>(name, calc_domain, func);
-
-        self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
-            name,
-            move |ctx, arg1| match (&arg1.value) {
-                (Some(value1)) => {
-                    if let Some(domain) = calc_domain(ctx, value1).normalize() {
-                        FunctionDomain::Domain(NullableDomain {
-                            has_null: arg1.has_null,
-                            value: Some(Box::new(domain)),
-                        })
-                    } else {
-                        FunctionDomain::MayThrow
-                    }
-                }
-                _ => FunctionDomain::Domain(NullableDomain {
-                    has_null: true,
-                    value: None,
-                }),
-            },
-            passthrough_nullable_1_arg(func),
-        );
+        self.scalar_builder(name)
+            .function()
+            .typed_1_arg()
+            .passthrough_nullable()
+            .calc_domain(calc_domain)
+            .vectorized(func)
+            .register();
     }
 
     pub fn register_passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType, F, G>(
@@ -504,180 +465,20 @@ impl FunctionRegistry {
         );
     }
 
-    pub fn register_combine_nullable_3_arg<
-        I1: ArgType,
-        I2: ArgType,
-        I3: ArgType,
-        O: ArgType,
-        F,
-        G,
-    >(
+    pub fn register_0_arg_core<O: ArgType, G>(
         &mut self,
         name: &str,
-        calc_domain: F,
+        calc_domain: fn(&FunctionContext) -> FunctionDomain<O>,
         func: G,
     ) where
-        F: Fn(
-                &FunctionContext,
-                &I1::Domain,
-                &I2::Domain,
-                &I3::Domain,
-            ) -> FunctionDomain<NullableType<O>>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
-        G: Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<NullableType<O>>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
-    {
-        let has_nullable = &[
-            I1::data_type(),
-            I2::data_type(),
-            I3::data_type(),
-            O::data_type(),
-        ]
-        .iter()
-        .any(|ty| ty.as_nullable().is_some() || ty.is_null());
-
-        assert!(
-            !has_nullable,
-            "Function {} has nullable argument or output, please use register_3_arg_core instead",
-            name
-        );
-
-        self.register_3_arg_core::<I1, I2, I3, NullableType<O>, _, _>(name, calc_domain, func);
-
-        self.register_3_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<I3>,  NullableType<O>, _, _>(
-                        name,
-                        move |ctx, arg1,arg2,arg3,| {
-                            match (&arg1.value,&arg2.value,&arg3.value) {
-                                (Some(value1),Some(value2),Some(value3)) => {
-                                    if let Some(domain) = calc_domain(ctx, value1,value2,value3,).normalize() {
-                                        FunctionDomain::Domain(NullableDomain {
-                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null || domain.has_null,
-                                            value: domain.value,
-                                        })
-                                    } else {
-                                        FunctionDomain::MayThrow
-                                    }
-                                }
-                                _ => {
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: true,
-                                        value: None,
-                                    })
-                                },
-                            }
-                        },
-                        combine_nullable_3_arg(func),
-                    );
-    }
-
-    pub fn register_combine_nullable_4_arg<
-        I1: ArgType,
-        I2: ArgType,
-        I3: ArgType,
-        I4: ArgType,
-        O: ArgType,
-        F,
-        G,
-    >(
-        &mut self,
-        name: &str,
-        calc_domain: F,
-        func: G,
-    ) where
-        F: Fn(
-                &FunctionContext,
-                &I1::Domain,
-                &I2::Domain,
-                &I3::Domain,
-                &I4::Domain,
-            ) -> FunctionDomain<NullableType<O>>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
-        G: Fn(
-                Value<I1>,
-                Value<I2>,
-                Value<I3>,
-                Value<I4>,
-                &mut EvalContext,
-            ) -> Value<NullableType<O>>
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
-    {
-        let has_nullable = &[
-            I1::data_type(),
-            I2::data_type(),
-            I3::data_type(),
-            I4::data_type(),
-            O::data_type(),
-        ]
-        .iter()
-        .any(|ty| ty.as_nullable().is_some() || ty.is_null());
-
-        assert!(
-            !has_nullable,
-            "Function {} has nullable argument or output, please use register_4_arg_core instead",
-            name
-        );
-
-        self.register_4_arg_core::<I1, I2, I3, I4, NullableType<O>, _, _>(name, calc_domain, func);
-
-        self.register_4_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<I3>, NullableType<I4>,  NullableType<O>, _, _>(
-                        name,
-                        move |ctx, arg1,arg2,arg3,arg4,| {
-                            match (&arg1.value,&arg2.value,&arg3.value,&arg4.value) {
-                                (Some(value1),Some(value2),Some(value3),Some(value4)) => {
-                                    if let Some(domain) = calc_domain(ctx, value1,value2,value3,value4,).normalize() {
-                                        FunctionDomain::Domain(NullableDomain {
-                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null || domain.has_null,
-                                            value: domain.value,
-                                        })
-                                    } else {
-                                        FunctionDomain::MayThrow
-                                    }
-                                }
-                                _ => {
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: true,
-                                        value: None,
-                                    })
-                                },
-                            }
-                        },
-                        combine_nullable_4_arg(func),
-                    );
-    }
-
-    pub fn register_0_arg_core<O: ArgType, F, G>(&mut self, name: &str, calc_domain: F, func: G)
-    where
-        F: Fn(&FunctionContext) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
         G: Fn(&mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
     {
-        let func = Function {
-            signature: FunctionSignature {
-                name: name.to_string(),
-                args_type: vec![],
-                return_type: O::data_type(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(EraseCalcDomainGeneric0Arg { func: calc_domain }),
-                eval: Box::new(EraseFunctionGeneric0Arg { func }),
-            },
-        };
-        self.register_function(func);
+        self.scalar_builder(name)
+            .function()
+            .typed_0_arg()
+            .calc_domain(calc_domain)
+            .vectorized(func)
+            .register();
     }
 
     pub fn register_1_arg_core<I1: ArgType, O: ArgType, F, G>(
@@ -709,6 +510,7 @@ impl FunctionRegistry {
                     func,
                     _marker: PhantomData,
                 }),
+                derive_stat: None,
             },
         };
         self.register_function(func);
@@ -748,6 +550,7 @@ impl FunctionRegistry {
                     func,
                     _marker: PhantomData,
                 }),
+                derive_stat: None,
             },
         };
         self.register_function(func);
@@ -787,6 +590,7 @@ impl FunctionRegistry {
                     func,
                     _marker: PhantomData,
                 }),
+                derive_stat: None,
             },
         };
         self.register_function(func);
@@ -845,6 +649,7 @@ impl FunctionRegistry {
                     func,
                     _marker: PhantomData,
                 }),
+                derive_stat: None,
             },
         };
         self.register_function(func);
@@ -860,7 +665,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
         (self.func)(ctx).map(|d| O::upcast_domain(d))
     }
 }
@@ -876,7 +681,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext, &I1::Domain) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         (self.calc_domain)(ctx, &arg1).map(|d| O::upcast_domain(d))
     }
@@ -894,7 +699,7 @@ where
     O: ArgType,
     F: Fn(&FunctionContext, &I1::Domain, &I2::Domain) -> FunctionDomain<O> + Send + Sync + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         (self.calc_domain)(ctx, &arg1, &arg2).map(|d| O::upcast_domain(d))
@@ -917,7 +722,7 @@ where
         + Sync
         + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&domains[2]).unwrap();
@@ -948,7 +753,7 @@ where
         + Sync
         + 'static,
 {
-    fn calc_domain(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
         let arg1 = I1::try_downcast_domain(&domains[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&domains[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&domains[2]).unwrap();

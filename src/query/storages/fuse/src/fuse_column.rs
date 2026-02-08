@@ -17,8 +17,7 @@ use std::collections::HashMap;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_expression::ColumnId;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
+use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 
 /// A column statistics provider for fuse table.
@@ -47,8 +46,8 @@ impl FuseTableColumnStatisticsProvider {
                     .or(stat.distinct_of_values)
                     .unwrap_or(row_count);
                 let stat = BasicColumnStatistics {
-                    min: Datum::from_scalar(stat.min),
-                    max: Datum::from_scalar(stat.max),
+                    min: stat.min.to_datum(),
+                    max: stat.max.to_datum(),
                     ndv: Some(ndv),
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,

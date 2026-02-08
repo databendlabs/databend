@@ -30,6 +30,7 @@ databend-common-grpc = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-common-statistics = { workspace = true }
 databend-common-timezone = { workspace = true }
 educe = { workspace = true }
 either = { workspace = true }

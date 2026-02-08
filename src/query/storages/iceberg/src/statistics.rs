@@ -30,7 +30,6 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::Number;
-use databend_common_storage::Datum as DatabendDatum;
 use iceberg::spec::DataContentType;
 use iceberg::spec::Datum;
 use iceberg::spec::ManifestStatus;
@@ -216,11 +215,11 @@ fn get_column_stats(
         min: lower
             .get(&iceberg_col_id)
             .and_then(parse_datum)
-            .and_then(DatabendDatum::from_scalar),
+            .and_then(Scalar::to_datum),
         max: upper
             .get(&iceberg_col_id)
             .and_then(parse_datum)
-            .and_then(DatabendDatum::from_scalar),
+            .and_then(Scalar::to_datum),
         ndv: None,
         null_count: null_counts
             .get(&iceberg_col_id)

@@ -274,6 +274,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     eval: scalar_evaluator(move |args, _ctx| {
                         calculate_distance(args, is_nullable, cosine_distance)
                     }),
+                    derive_stat: None,
                 },
             }))
         }));
@@ -293,6 +294,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, l1_distance)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -312,6 +314,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, l2_distance)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -331,6 +334,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, _ctx| {
                     calculate_distance(args, is_nullable, inner_product)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -381,6 +385,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -443,6 +448,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));

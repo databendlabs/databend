@@ -238,6 +238,16 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(10.0), null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(10.0), null_count: 10, histogram: None }
 
+expr          : a + 1 = 15
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(10.0), null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(10.0), null_count: 10, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(1.0), null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(1.0), null_count: 1, histogram: None }
+
 expr          : and_filters(a = 5, a > 3)
 cardinality   : 100
 estimated     : 10

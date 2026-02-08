@@ -74,6 +74,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     eval: scalar_evaluator(move |_, _| {
                         unreachable!("`{func_name}` should be handled by the `Evaluator`")
                     }),
+                    derive_stat: None,
                 },
             }))
         }))
@@ -81,19 +82,22 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("and_filters", fn_filters_factory("and_filters"));
     registry.register_function_factory("or_filters", fn_filters_factory("or_filters"));
 
-    registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
-        "not",
-        |_, arg| {
+    registry
+        .scalar_builder("not")
+        .function()
+        .typed_1_arg::<BooleanType, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(|_, arg| {
             FunctionDomain::Domain(BooleanDomain {
                 has_false: arg.has_true,
                 has_true: arg.has_false,
             })
-        },
-        |val, _| match val {
+        })
+        .vectorized(|val, _| match val {
             Value::Scalar(scalar) => Value::Scalar(!scalar),
             Value::Column(column) => Value::Column(!&column),
-        },
-    );
+        })
+        .register();
 
     registry.register_2_arg_core::<BooleanType, BooleanType, BooleanType, _, _>(
         "and",
@@ -236,11 +240,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_passthrough_nullable_1_arg::<BooleanType, StringType, _, _>(
-        "to_string",
-        |_, _| FunctionDomain::Full,
-        eval_boolean_to_string,
-    );
+    registry
+        .scalar_builder("to_string")
+        .function()
+        .typed_1_arg::<BooleanType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(eval_boolean_to_string)
+        .register();
 
     registry.register_combine_nullable_1_arg::<BooleanType, StringType, _, _>(
         "try_to_string",
@@ -248,11 +255,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         error_to_null(eval_boolean_to_string),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, BooleanType, _, _>(
-        "to_boolean",
-        |_, _| FunctionDomain::MayThrow,
-        eval_string_to_boolean,
-    );
+    registry
+        .scalar_builder("to_boolean")
+        .function()
+        .typed_1_arg::<StringType, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(eval_string_to_boolean)
+        .register();
 
     registry.register_combine_nullable_1_arg::<StringType, BooleanType, _, _>(
         "try_to_boolean",
@@ -287,7 +297,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for num_type in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _>(
                     "to_boolean",
                     |_, domain| {
                         FunctionDomain::Domain(BooleanDomain {
@@ -320,7 +330,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
 
                 let name = format!("to_{num_type}").to_lowercase();
-                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _>(
                     &name,
                     |_, domain| {
                         FunctionDomain::Domain(SimpleDomain {
@@ -359,7 +369,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     for num_type in ALL_FLOAT_TYPES {
         with_float_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _>(
                     "to_boolean",
                     |_, domain| {
                         FunctionDomain::Domain(BooleanDomain {
@@ -396,7 +406,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     );
 
                 let name = format!("to_{num_type}").to_lowercase();
-                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _>(
                     &name,
                     |_, domain| {
                         FunctionDomain::Domain(SimpleDomain {
@@ -461,8 +471,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn eval_boolean_to_string(val: Value<BooleanType>, ctx: &mut EvalContext) -> Value<StringType> {
     vectorize_with_builder_1_arg::<BooleanType, StringType>(|val, output, _| {
-        output.put_str(if val { "true" } else { "false" });
-        output.commit_row();
+        output.put_and_commit(if val { "true" } else { "false" });
     })(val, ctx)
 }
 

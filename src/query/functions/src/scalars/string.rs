@@ -25,7 +25,6 @@ use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::unify_string;
-use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -100,53 +99,63 @@ pub fn register(registry: &mut FunctionRegistry) {
         "substring_utf8",
     ]);
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "upper",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            for ch in val.chars() {
-                if ch.is_ascii() {
-                    output.put_char(ch.to_ascii_uppercase());
-                } else {
-                    for x in ch.to_uppercase() {
-                        output.put_char(x);
+    registry
+        .scalar_builder("upper")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                for ch in val.chars() {
+                    if ch.is_ascii() {
+                        output.put_char(ch.to_ascii_uppercase());
+                    } else {
+                        for x in ch.to_uppercase() {
+                            output.put_char(x);
+                        }
                     }
                 }
-            }
-            output.commit_row();
-        }),
-    );
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "lower",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            for ch in val.chars() {
-                if ch.is_ascii() {
-                    output.put_char(ch.to_ascii_lowercase());
-                } else {
-                    for x in ch.to_lowercase() {
-                        output.put_char(x);
+    registry
+        .scalar_builder("lower")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                for ch in val.chars() {
+                    if ch.is_ascii() {
+                        output.put_char(ch.to_ascii_lowercase());
+                    } else {
+                        for x in ch.to_lowercase() {
+                            output.put_char(x);
+                        }
                     }
                 }
-            }
-            output.commit_row();
-        }),
-    );
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u64>, _>(
         "bit_length",
         |_, _| FunctionDomain::Full,
         |val, _| 8 * val.len() as u64,
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
-        "octet_length",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<StringType, NumberType<u64>>(|val, _| val.len() as u64),
-    );
+    registry
+        .scalar_builder("octet_length")
+        .function()
+        .typed_1_arg::<StringType, NumberType<u64>>()
+        .passthrough_nullable()
+        .each_row(|val, _| val.len() as u64)
+        .register();
 
-    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u64>, _>(
         "length",
         |_, _| FunctionDomain::Full,
         |val, _ctx| val.chars().count() as u64,
@@ -287,7 +296,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     register_decimal_to_uuid(registry);
 
-    registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
+    registry.register_2_arg::<StringType, StringType, NumberType<i8>, _>(
         "strcmp",
         |_, lhs, rhs| {
             let (d1, d2) = unify_string(lhs, rhs);
@@ -410,7 +419,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         0
     }
 
-    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _>(
         "instr",
         |_, _, _| FunctionDomain::Full,
         move |s: &str, substr: &str, _| find_at(s, substr, 1),
@@ -428,13 +437,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         move |s: &str, substr: &str, pos, occurrence, _| instr(s, substr, pos, occurrence),
     );
 
-    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _>(
         "position",
         |_, _, _| FunctionDomain::Full,
         move |substr: &str, s: &str, _| find_at(s, substr, 1),
     );
 
-    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
+    registry.register_2_arg::<StringType, StringType, NumberType<u64>, _>(
         "locate",
         |_, _, _| FunctionDomain::Full,
         move |substr: &str, s: &str, _| find_at(s, substr, 1),
@@ -446,39 +455,49 @@ pub fn register(registry: &mut FunctionRegistry) {
         move |substr: &str, s: &str, pos: u64, _| find_at(s, substr, pos),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "quote",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            for ch in val.chars() {
-                match ch {
-                    '\0' => output.put_str("\\0"),
-                    '\'' => output.put_str("\\\'"),
-                    '\"' => output.put_str("\\\""),
-                    '\u{8}' => output.put_str("\\b"),
-                    '\n' => output.put_str("\\n"),
-                    '\r' => output.put_str("\\r"),
-                    '\t' => output.put_str("\\t"),
-                    '\\' => output.put_str("\\\\"),
-                    c => output.put_char(c),
+    registry
+        .scalar_builder("quote")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                for ch in val.chars() {
+                    match ch {
+                        '\0' => output.put_str("\\0"),
+                        '\'' => output.put_str("\\'"),
+                        '\"' => output.put_str("\\\""),
+                        '\u{8}' => output.put_str("\\b"),
+                        '\n' => output.put_str("\\n"),
+                        '\r' => output.put_str("\\r"),
+                        '\t' => output.put_str("\\t"),
+                        '\\' => output.put_str("\\\\"),
+                        c => output.put_char(c),
+                    }
                 }
-            }
-            output.commit_row();
-        }),
-    );
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "reverse",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            for char in val.chars().rev() {
-                output.put_char(char);
-            }
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("reverse")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                for char in val.chars().rev() {
+                    output.put_char(char);
+                }
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_1_arg::<StringType, NumberType<u8>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u8>, _>(
         "ascii",
         |_, domain| {
             FunctionDomain::Domain(SimpleDomain {
@@ -493,36 +512,51 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| val.as_bytes().first().map_or(0, |v| *v),
     );
 
-    registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
+    registry.register_1_arg::<StringType, NumberType<u32>, _>(
         "unicode",
         |_, _| FunctionDomain::Full,
         |val, _| val.chars().next().map_or(0, |c| c as u32),
     );
 
     // Trim functions
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "ltrim",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim_start_matches(' '));
-        }),
-    );
+    registry
+        .scalar_builder("ltrim")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                output.put_and_commit(val.trim_start_matches(' '));
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "rtrim",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim_end_matches(' '));
-        }),
-    );
+    registry
+        .scalar_builder("rtrim")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                output.put_and_commit(val.trim_end_matches(' '));
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "trim",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim_matches(' '));
-        }),
-    );
+    registry
+        .scalar_builder("trim")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                output.put_and_commit(val.trim_matches(' '));
+            },
+        ))
+        .register();
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "ltrim",
@@ -626,43 +660,65 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "to_hex",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            let len = val.len() * 2;
-            output.row_buffer.resize(len, 0);
-            hex::encode_to_slice(val, &mut output.row_buffer).unwrap();
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("to_hex")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, _| {
+                let len = val.len() * 2;
+                output.row_buffer.resize(len, 0);
+                hex::encode_to_slice(val, &mut output.row_buffer).unwrap();
+                output.commit_row();
+            },
+        ))
+        .register();
 
     // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
     // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
-    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-        "bin",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.row_buffer, "{val:b}").unwrap();
-            output.commit_row();
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-        "oct",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.row_buffer, "{val:o}").unwrap();
-            output.commit_row();
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<NumberType<i64>, StringType, _, _>(
-        "to_hex",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(|val, output, _| {
-            write!(output.row_buffer, "{val:x}").unwrap();
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("bin")
+        .function()
+        .typed_1_arg::<NumberType<i64>, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
+            |val, output, _| {
+                write!(output.row_buffer, "{val:b}").unwrap();
+                output.commit_row();
+            },
+        ))
+        .register();
+
+    registry
+        .scalar_builder("oct")
+        .function()
+        .typed_1_arg::<NumberType<i64>, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
+            |val, output, _| {
+                write!(output.row_buffer, "{val:o}").unwrap();
+                output.commit_row();
+            },
+        ))
+        .register();
+
+    registry
+        .scalar_builder("to_hex")
+        .function()
+        .typed_1_arg::<NumberType<i64>, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
+            |val, output, _| {
+                write!(output.row_buffer, "{val:x}").unwrap();
+                output.commit_row();
+            },
+        ))
+        .register();
 
     const MAX_REPEAT_TIMES: u64 = 1000000;
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
@@ -686,7 +742,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_1_arg::<StringType, UInt64Type, _, _>(
+    registry.register_1_arg::<StringType, UInt64Type, _>(
         "ord",
         |_, _| FunctionDomain::Full,
         |str: &str, _| {
@@ -711,30 +767,40 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "soundex",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, StringType>(soundex::soundex),
-    );
+    registry
+        .scalar_builder("soundex")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            soundex::soundex,
+        ))
+        .register();
 
     const MAX_SPACE_LENGTH: u64 = 1000000;
-    registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
-        "space",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<NumberType<u64>, StringType>(|times, output, ctx| {
-            if times > MAX_SPACE_LENGTH {
-                ctx.set_error(
-                    output.len(),
-                    format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
-                );
-            } else {
-                for _ in 0..times {
-                    output.put_char(' ');
+    registry
+        .scalar_builder("space")
+        .function()
+        .typed_1_arg::<NumberType<u64>, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<NumberType<u64>, StringType>(
+            |times, output, ctx| {
+                if times > MAX_SPACE_LENGTH {
+                    ctx.set_error(
+                        output.len(),
+                        format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                    );
+                } else {
+                    for _ in 0..times {
+                        output.put_char(' ');
+                    }
                 }
-            }
-            output.commit_row();
-        }),
-    );
+                output.commit_row();
+            },
+        ))
+        .register();
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "left",

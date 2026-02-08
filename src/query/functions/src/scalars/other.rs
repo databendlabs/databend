@@ -91,23 +91,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
-        "humanize_size",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
-            let new_val = convert_byte_size(val.into());
-            output.put_and_commit(new_val);
-        }),
-    );
+    registry
+        .scalar_builder("humanize_size")
+        .function()
+        .typed_1_arg::<Float64Type, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<Float64Type, StringType>(
+            move |val, output, _| {
+                let new_val = convert_byte_size(val.into());
+                output.put_and_commit(new_val);
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
-        "humanize_number",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
-            let new_val = convert_number_size(val.into());
-            output.put_and_commit(new_val);
-        }),
-    );
+    registry
+        .scalar_builder("humanize_number")
+        .function()
+        .typed_1_arg::<Float64Type, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<Float64Type, StringType>(
+            move |val, output, _| {
+                let new_val = convert_number_size(val.into());
+                output.put_and_commit(new_val);
+            },
+        ))
+        .register();
 
     registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
         "sleep",
@@ -140,15 +150,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_0_arg_core::<NumberType<F64>, _, _>(
-        "rand",
-        |_| {
+    registry
+        .scalar_builder("rand")
+        .function()
+        .typed_0_arg::<NumberType<F64>>()
+        .calc_domain(|_| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
                 max: OrderedFloat(1.0),
             })
-        },
-        |ctx| {
+        })
+        .vectorized(|ctx| {
             let mut rng = if ctx.func_ctx.random_function_seed {
                 rand::rngs::SmallRng::seed_from_u64(1)
             } else {
@@ -158,28 +170,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                 .map(|_| rng.r#gen::<F64>())
                 .collect::<Vec<_>>();
             Value::Column(rand_nums.into())
-        },
-    );
-
-    registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
-        "rand",
-        |_, _| {
+        })
+        .function()
+        .typed_1_arg::<NumberType<u64>, NumberType<F64>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
                 max: OrderedFloat(1.0),
             })
-        },
-        |val, _| {
+        })
+        .each_row(|val, _| {
             let mut rng = rand::rngs::SmallRng::seed_from_u64(val);
             rng.r#gen::<F64>()
-        },
-    );
+        })
+        .register();
 
-    registry.register_1_arg_core::<GenericType<0>, StringType, _, _>(
-        "typeof",
-        |_, _| FunctionDomain::Full,
-        |_, ctx| Value::Scalar(ctx.generics[0].sql_name()),
-    );
+    registry
+        .scalar_builder("typeof")
+        .function()
+        .typed_1_arg::<GenericType<0>, StringType>()
+        .vectorized(|_, ctx| Value::Scalar(ctx.generics[0].sql_name()))
+        .register();
 
     let ignore = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
@@ -196,6 +208,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }))
                 }),
                 eval: scalar_evaluator(|_, _| Value::Scalar(Scalar::Boolean(false))),
+                derive_stat: None,
             },
         }))
     }));
@@ -230,7 +243,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             |val, _| val.to_owned(),
         );
 
-    registry.register_0_arg_core::<StringType, _, _>(
+    registry.register_0_arg_core::<StringType, _>(
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
@@ -256,11 +269,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn register_inet_aton(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<StringType, UInt32Type, _, _>(
-        "inet_aton",
-        |_, _| FunctionDomain::MayThrow,
-        eval_inet_aton,
-    );
+    registry
+        .scalar_builder("inet_aton")
+        .function()
+        .typed_1_arg::<StringType, UInt32Type>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(eval_inet_aton)
+        .register();
 
     registry.register_combine_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "try_inet_aton",
@@ -285,11 +301,14 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
 }
 
 fn register_inet_ntoa(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_1_arg::<Int64Type, StringType, _, _>(
-        "inet_ntoa",
-        |_, _| FunctionDomain::MayThrow,
-        eval_inet_ntoa,
-    );
+    registry
+        .scalar_builder("inet_ntoa")
+        .function()
+        .typed_1_arg::<Int64Type, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(eval_inet_ntoa)
+        .register();
 
     registry.register_combine_nullable_1_arg::<Int64Type, StringType, _, _>(
         "try_inet_ntoa",
@@ -318,10 +337,13 @@ fn register_inet_ntoa(registry: &mut FunctionRegistry) {
 
 macro_rules! register_simple_domain_type_run_diff {
     ($registry:ident, $T:ty, $O:ty, $source_primitive_type:ty, $zero:expr) => {
-        $registry.register_passthrough_nullable_1_arg::<$T, $O, _, _>(
-            "running_difference",
-            |_, _| FunctionDomain::MayThrow,
-            move |arg1, ctx| match arg1 {
+        $registry
+            .scalar_builder("running_difference")
+            .function()
+            .typed_1_arg::<$T, $O>()
+            .passthrough_nullable()
+            .calc_domain(|_, _| FunctionDomain::MayThrow)
+            .vectorized(move |arg1, ctx| match arg1 {
                 Value::Scalar(_val) => {
                     let mut builder =
                         NumberType::<$source_primitive_type>::create_builder(1, ctx.generics);
@@ -343,8 +365,8 @@ macro_rules! register_simple_domain_type_run_diff {
                     }
                     Value::Column(NumberType::<$source_primitive_type>::build_column(builder))
                 }
-            },
-        );
+            })
+            .register();
     };
 }
 
@@ -390,6 +412,7 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                     }
                     v => unreachable!("unexpected value type for grouping function: {:?}", v),
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -412,6 +435,7 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                         args
                     )
                 }),
+                derive_stat: None,
             },
         }))
     }));

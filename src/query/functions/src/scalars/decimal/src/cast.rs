@@ -150,6 +150,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                         desc_type,
                     )
                 }),
+                derive_stat: None,
             },
         })
     };
@@ -217,6 +218,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, ctx| {
                     convert_as_decimal(&args[0], ctx, decimal_type)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -284,7 +286,11 @@ pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
                 args_type: vec![arg_type.clone()],
                 return_type: data_type.clone(),
             },
-            eval: FunctionEval::Scalar { calc_domain, eval },
+            eval: FunctionEval::Scalar {
+                calc_domain,
+                eval,
+                derive_stat: None,
+            },
         };
 
         Some(function)
@@ -373,6 +379,7 @@ pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
                         .unwrap_or(FunctionDomain::MayThrow)
                 }),
                 eval: scalar_evaluator(move |args, ctx| decimal_to_int::<T>(&args[0], ctx)),
+                derive_stat: None,
             },
         };
 
@@ -419,37 +426,34 @@ pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let function = Function {
-            signature: FunctionSignature {
-                name: "to_string".to_string(),
-                args_type: vec![DataType::Decimal(size)],
-                return_type: StringType::data_type(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(FunctionDomain::Full),
-                eval: scalar_evaluator(move |args, ctx| {
-                    if let Ok(arg) = args[0].try_downcast::<Decimal64Type>() {
-                        let arg_type = DecimalDataType::Decimal64(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    if let Ok(arg) = args[0].try_downcast::<Decimal128Type>() {
-                        let arg_type = DecimalDataType::Decimal128(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    if let Ok(arg) = args[0].try_downcast::<Decimal256Type>() {
-                        let arg_type = DecimalDataType::Decimal256(size);
-                        return decimal_to_string(arg, arg_type, ctx).upcast();
-                    };
-                    unreachable!()
-                }),
-            },
+        let signature = FunctionSignature {
+            name: "to_string".to_string(),
+            args_type: vec![DataType::Decimal(size)],
+            return_type: StringType::data_type(),
         };
 
-        if nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
+        let function = Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::Full,
+            scalar_evaluator(move |args, ctx| {
+                if let Ok(arg) = args[0].try_downcast::<Decimal64Type>() {
+                    let arg_type = DecimalDataType::Decimal64(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                if let Ok(arg) = args[0].try_downcast::<Decimal128Type>() {
+                    let arg_type = DecimalDataType::Decimal128(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                if let Ok(arg) = args[0].try_downcast::<Decimal256Type>() {
+                    let arg_type = DecimalDataType::Decimal256(size);
+                    return decimal_to_string(arg, arg_type, ctx).upcast();
+                };
+                unreachable!()
+            }),
+            None,
+            nullable,
+        );
+        Some(Arc::new(function))
     };
     registry.register_function_factory("to_string", FunctionFactory::Closure(Box::new(factory)));
 }

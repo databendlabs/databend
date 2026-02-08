@@ -130,7 +130,7 @@ explain select t.number from t, t1 where t.number + t1.number = 1
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [t.number (#0) + t1.number (#1) = 1]
-├── estimated rows: 2.00
+├── estimated rows: 1.00
 └── HashJoin
     ├── output columns: [t1.number (#1), t.number (#0)]
     ├── join type: CROSS

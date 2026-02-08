@@ -9,12 +9,9 @@ runs:
       shell: bash
       run: pip install uv
 
-    - name: Install nox
-      shell: bash
-      run: pip install nox
-
     - uses: ./.github/actions/setup_minio
 
+    - uses: wntrblm/nox@2025.05.01
     - name: Run Sandbox UDF Test
       shell: bash
       run: |

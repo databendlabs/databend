@@ -705,7 +705,7 @@ explain select t.number from numbers(10) as t where t.number = (select 1);
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [t.number (#0) = 1]
-├── estimated rows: 2.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.system.numbers
     ├── scan id: 0
@@ -787,7 +787,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
-└── estimated rows: 0.60
+└── estimated rows: 0.38
 
 query T
 select * from t where i like any (SELECT c1 FROM (VALUES ('data%')) words(c1));
@@ -840,7 +840,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t.i (#0), 'data$%%', '$'))], limit: NONE]
-└── estimated rows: 0.60
+└── estimated rows: 0.38
 
 query T
 select * from t where i like any (SELECT c1 FROM (VALUES ('data$%%')) words(c1)) escape '$';

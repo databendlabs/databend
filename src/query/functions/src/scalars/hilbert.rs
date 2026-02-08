@@ -118,6 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Column(BinaryType::upcast_column(BinaryType::build_column(builder)))
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));

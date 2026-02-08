@@ -839,6 +839,11 @@ pub trait ReturnType: ValueType {
         }
         Self::build_column(builder)
     }
+
+    fn full_domain_with_type(data_type: &DataType) -> Self::Domain {
+        let domain = Domain::full(data_type);
+        Self::try_downcast_domain(&domain).unwrap()
+    }
 }
 
 /// The [DataType] of [ArgType] is a unit type, so we can omit [DataType].
