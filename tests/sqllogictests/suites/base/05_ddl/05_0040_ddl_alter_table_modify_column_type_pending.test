@@ -66,6 +66,20 @@ ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 'a'
 statement ok
 ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 1.2
 
+statement ok
+CREATE TABLE c_multi(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO c_multi VALUES(1, 1)
+
+statement error 1006
+ALTER TABLE c_multi MODIFY COLUMN a FLOAT NOT NULL, COLUMN b FLOAT NOT NULL DEFAULT 'a'
+
+query TT
+SELECT name, data_type FROM system.columns WHERE database = 'db_05_0040' AND table = 'c_multi' ORDER BY name
+----
+a INT
+b INT
 
 query B
 SELECT count(*) = 1 AND min(a) = 0 AND max(a) = 0 AND sum(b) = 1 FROM c

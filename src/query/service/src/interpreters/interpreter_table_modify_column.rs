@@ -416,7 +416,6 @@ impl ModifyTableColumnInterpreter {
 
                 if data_type_changed || computed_expr_changed {
                     need_rebuild = true;
-                    break;
                 }
             }
         }
