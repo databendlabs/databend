@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -380,7 +379,7 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut modified_default_scalars = HashMap::new();
+        let mut need_rebuild = false;
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
@@ -389,29 +388,41 @@ impl ModifyTableColumnInterpreter {
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_alter_column_string_to_binary =
                     is_string_to_binary(&old_field.data_type, &field.data_type);
-                // If two conditions are met, we don't need rebuild the table,
-                // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
-                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
-                //    new added column.
-                if ((format_as_parquet && is_alter_column_string_to_binary)
-                    || old_field.data_type == field.data_type)
-                    && old_field.default_expr == field.default_expr
-                    && old_field.computed_expr == field.computed_expr
+                let data_type_changed = old_field.data_type != field.data_type;
+                let default_expr_changed = old_field.default_expr != field.default_expr;
+                let computed_expr_changed = old_field.computed_expr != field.computed_expr;
+
+                // Validate the new default expression against the new column type
+                // to keep ALTER-time semantics consistent for invalid defaults.
+                if data_type_changed || default_expr_changed {
+                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                    let _ = default_expr_binder
+                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
+                }
+
+                // Keep the existing parquet String -> Binary fast path.
+                if format_as_parquet
+                    && is_alter_column_string_to_binary
+                    && !default_expr_changed
+                    && !computed_expr_changed
                 {
                     continue;
                 }
-                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                let default_scalar = default_expr_binder
-                    .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
-                modified_default_scalars.insert(field_index, default_scalar);
+
+                // Allow default-only changes to avoid rebuilding table data.
+                if !data_type_changed && default_expr_changed && !computed_expr_changed {
+                    continue;
+                }
+
+                if data_type_changed || computed_expr_changed {
+                    need_rebuild = true;
+                    break;
+                }
             }
         }
 
         // if don't need to rebuild table, only update table meta.
-        if modified_default_scalars.is_empty()
-            || base_snapshot.is_none_or(|v| v.summary.row_count == 0)
-        {
+        if !need_rebuild || base_snapshot.is_none_or(|v| v.summary.row_count == 0) {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),

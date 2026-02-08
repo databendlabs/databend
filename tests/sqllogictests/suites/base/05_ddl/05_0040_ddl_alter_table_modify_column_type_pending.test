@@ -1,0 +1,154 @@
+# Scenario A: type conversion on existing columns.
+# Scenario B: expected errors for invalid cast / unknown column / invalid default.
+# Scenario C: default evolution after modify/add operations.
+# Scenario D: varchar default and not-null behavior after modify.
+
+statement ok
+DROP DATABASE IF EXISTS db_05_0040
+
+statement ok
+CREATE DATABASE db_05_0040
+
+statement ok
+USE db_05_0040
+
+# --------------------------
+# A. Basic type conversion
+# --------------------------
+statement ok
+CREATE TABLE a(a STRING NOT NULL, b INT NOT NULL, c INT NOT NULL)
+
+statement ok
+INSERT INTO a VALUES('1', 2, 3)
+
+statement ok
+ALTER TABLE a MODIFY COLUMN a FLOAT NOT NULL, COLUMN b STRING NOT NULL
+
+query B
+SELECT count(*) = 1 AND min(a) = 1 AND min(b) = '2' AND min(c) = 3 FROM a
+----
+1
+
+query TT
+SELECT name, data_type FROM system.columns WHERE database = 'db_05_0040' AND table = 'a' ORDER BY name
+----
+a FLOAT
+b VARCHAR
+c INT
+
+# ----------------------------------------------
+# B. Invalid cast / unknown column / bad default
+# ----------------------------------------------
+statement ok
+CREATE TABLE b(a STRING NOT NULL)
+
+statement ok
+INSERT INTO b VALUES('a')
+
+statement error 1006
+ALTER TABLE b MODIFY COLUMN a FLOAT NOT NULL
+
+statement error 1058
+ALTER TABLE b MODIFY COLUMN b FLOAT NOT NULL
+
+statement ok
+CREATE TABLE c(a INT NOT NULL, b INT NOT NULL)
+
+statement error 1006
+INSERT INTO c (b) VALUES(1)
+
+statement ok
+INSERT INTO c (a, b) VALUES(0, 1)
+
+statement error 1006
+ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 'a'
+
+statement ok
+ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 1.2
+
+
+query B
+SELECT count(*) = 1 AND min(a) = 0 AND max(a) = 0 AND sum(b) = 1 FROM c
+----
+1
+
+# ----------------------------------------------
+# C. Default evolution with modify/add operations
+# ----------------------------------------------
+statement ok
+CREATE TABLE d(a INT NOT NULL, b INT NOT NULL DEFAULT 10)
+
+statement ok
+INSERT INTO d (a) VALUES(1)
+
+statement ok
+ALTER TABLE d MODIFY COLUMN b INT NOT NULL DEFAULT 2
+
+statement ok
+ALTER TABLE d ADD COLUMN c FLOAT NOT NULL DEFAULT 1.01
+
+statement ok
+ALTER TABLE d MODIFY COLUMN c FLOAT NOT NULL DEFAULT 2.2
+
+statement ok
+INSERT INTO d (a) VALUES(10)
+
+query B
+SELECT count(*) = 2 AND sum(b) = 12 AND min(c) > 2.1 AND max(c) < 2.3 FROM d
+----
+1
+
+query I
+SELECT count(*) FROM d WHERE a = 10 AND b = 2 AND c = 2.2
+----
+1
+
+# ----------------------------------------------
+# D. VARCHAR default + NOT NULL behavior
+# ----------------------------------------------
+statement ok
+CREATE TABLE e(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO e VALUES(1, 1)
+
+statement ok
+ALTER TABLE e MODIFY COLUMN a VARCHAR(10) NOT NULL DEFAULT 'not'
+
+# Default expression should be updated after MODIFY COLUMN.
+query T
+SELECT default_expression FROM system.columns WHERE database = 'db_05_0040' AND table = 'e' AND name = 'a'
+----
+'not'
+
+statement ok
+INSERT INTO e (b) VALUES(2)
+
+query TI
+SELECT a, b FROM e ORDER BY b
+----
+1 1
+not 2
+
+statement ok
+CREATE TABLE f(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO f VALUES(1, 1)
+
+statement ok
+ALTER TABLE f MODIFY COLUMN a VARCHAR(10) NOT NULL COMMENT 'new column'
+
+statement error 1006
+INSERT INTO f (b) VALUES(2)
+
+statement ok
+INSERT INTO f (a, b) VALUES('', 2)
+
+query T
+SELECT comment FROM system.columns WHERE database = 'db_05_0040' AND table = 'f' AND name = 'a'
+----
+new column
+
+statement ok
+DROP DATABASE db_05_0040

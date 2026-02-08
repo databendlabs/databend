@@ -1,0 +1,78 @@
+statement ok
+CREATE OR REPLACE DATABASE db_09_0103
+
+statement ok
+USE db_09_0103
+
+#############################################
+# default-only modify keeps time travel diff #
+#############################################
+
+statement ok
+CREATE TABLE t(a INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES(1),(2)
+
+statement ok
+ALTER TABLE t ADD COLUMN b INT DEFAULT 10
+
+query II
+SELECT a,b FROM t ORDER BY a
+----
+1 10
+2 10
+
+query I
+SELECT sleep(3)
+----
+0
+
+statement ok
+ALTER TABLE t MODIFY COLUMN b INT DEFAULT 20
+
+query II
+SELECT a,b FROM t ORDER BY a
+----
+1 20
+2 20
+
+query II
+SELECT a,b FROM t AT (TIMESTAMP => now() - INTERVAL 2 SECOND) ORDER BY a
+----
+1 10
+2 10
+
+####################################################
+# change tracking: default-only is allowed no-write #
+####################################################
+
+statement ok
+CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
+
+statement ok
+INSERT INTO t_ct(a) VALUES(1)
+
+statement ok
+ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 99
+
+statement ok
+INSERT INTO t_ct(a) VALUES(2)
+
+query II
+SELECT a,b FROM t_ct ORDER BY a
+----
+1 10
+2 99
+
+statement error 1132
+ALTER TABLE t_ct MODIFY COLUMN b STRING
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP TABLE t_ct ALL
+
+statement ok
+DROP DATABASE db_09_0103
