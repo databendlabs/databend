@@ -15,10 +15,13 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::task::Poll;
+use std::task::Waker;
 
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
+use arrow_flight::FlightDescriptor;
 use arrow_ipc::CompressionType;
 use arrow_ipc::writer::DictionaryTracker;
 use arrow_ipc::writer::IpcDataGenerator;
@@ -34,18 +37,17 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
 use super::ExchangeSinkBuffer;
-use super::WakeTarget;
 
 /// Exchange channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
 pub trait ExchangeChannel: Send + Sync {
-    /// Add a data block to this channel.
+    /// Poll to send a data block to this channel.
     ///
     /// Returns:
-    /// - `Ok(true)`: Can continue sending
-    /// - `Ok(false)`: Backpressure triggered, should wait for wake-up
-    /// - `Err(...)`: Channel error (closed, remote error, etc.)
-    fn add_block(&self, wake_target: &Arc<WakeTarget>, block: DataBlock) -> Result<bool>;
+    /// - `Poll::Ready(Ok(()))`: Data accepted.
+    /// - `Poll::Ready(Err(...))`: Channel error (closed, remote error, etc.)
+    /// - `Poll::Pending`: Backpressure triggered, waker registered.
+    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>>;
 }
 
 /// Remote exchange channel that serializes DataBlock to FlightData
@@ -108,11 +110,18 @@ impl RemoteChannel {
         let meta_bytes: Bytes = meta.into();
         let mut result = Vec::with_capacity(dict_data.len() + value_data.len());
 
+        let descriptor = Some(FlightDescriptor {
+            r#type: 0,
+            cmd: (self.channel_id as u16).to_le_bytes().to_vec().into(),
+            path: vec![],
+        });
+
         // Add dictionary data with marker (0x05)
         for mut dict in dict_data {
             let mut app_metadata = dict.app_metadata.to_vec();
             app_metadata.push(0x05);
             dict.app_metadata = app_metadata.into();
+            dict.flight_descriptor = descriptor.clone();
             result.push(dict);
         }
 
@@ -124,7 +133,7 @@ impl RemoteChannel {
                 app_metadata: metadata.into(),
                 data_body: value.data_body,
                 data_header: value.data_header,
-                flight_descriptor: None,
+                flight_descriptor: descriptor.clone(),
             });
         }
 
@@ -173,37 +182,39 @@ impl RemoteChannel {
 }
 
 impl ExchangeChannel for RemoteChannel {
-    fn add_block(&self, wake_target: &Arc<WakeTarget>, block: DataBlock) -> Result<bool> {
+    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>> {
         // Profile recording
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
 
         // Serialize the block
-        let flight_data_list = self.serialize_block(block)?;
+        let flight_data_list = match self.serialize_block(block) {
+            Ok(list) => list,
+            Err(e) => return Poll::Ready(Err(e)),
+        };
 
         // Send each FlightData through the buffer
-        let mut can_continue = true;
         for flight_data in flight_data_list {
             let bytes = flight_data.data_body.len()
                 + flight_data.data_header.len()
                 + flight_data.app_metadata.len();
             Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
 
-            can_continue =
-                self.buffer
-                    .add_block(wake_target, self.channel_id, self.dest_idx, flight_data)?;
-
-            // If backpressure triggered, stop sending
-            if !can_continue {
-                break;
+            match self
+                .buffer
+                .poll_send(self.channel_id, self.dest_idx, flight_data, waker)
+            {
+                Poll::Ready(Ok(())) => {}
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                Poll::Pending => return Poll::Pending,
             }
         }
 
-        Ok(can_continue)
+        Poll::Ready(Ok(()))
     }
 }
 
 /// Broadcast channel that wraps multiple channels and sends blocks
-/// to them in round-robin fashion (one channel per add_block call).
+/// to them in round-robin fashion (one channel per poll_send call).
 pub struct BroadcastChannel {
     channels: Vec<Arc<dyn ExchangeChannel>>,
     next_idx: AtomicUsize,
@@ -219,13 +230,13 @@ impl BroadcastChannel {
 }
 
 impl ExchangeChannel for BroadcastChannel {
-    fn add_block(&self, wake_target: &Arc<WakeTarget>, block: DataBlock) -> Result<bool> {
+    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>> {
         if self.channels.is_empty() {
-            return Ok(true);
+            return Poll::Ready(Ok(()));
         }
 
         // Round-robin: get current index and increment
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
-        self.channels[idx].add_block(wake_target, block)
+        self.channels[idx].poll_send(waker, block)
     }
 }

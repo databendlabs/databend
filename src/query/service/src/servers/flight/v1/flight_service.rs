@@ -29,12 +29,14 @@ use arrow_flight::Result as FlightResult;
 use arrow_flight::SchemaResult;
 use arrow_flight::Ticket;
 use arrow_flight::flight_service_server::FlightService;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use tokio_stream::Stream;
+use tokio_stream::StreamExt;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
@@ -145,8 +147,34 @@ impl FlightService for DatabendQueryFlightService {
     type DoExchangeStream = FlightStream<FlightData>;
 
     #[async_backtrace::framed]
-    async fn do_exchange(&self, _: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        Err(Status::unimplemented("unimplemented do_exchange"))
+    async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
+        let query_id = req.get_metadata("x-query-id")?;
+        let channel_id = req.get_metadata("x-channel-id")?;
+
+        let sender = DataExchangeManager::instance().handle_do_exchange(&query_id, &channel_id)?;
+
+        let mut stream = req.into_inner();
+        let (tx, rx) = async_channel::bounded(1);
+
+        GlobalIORuntime::instance().spawn(async move {
+            while let Some(result) = stream.next().await {
+                let Ok(flight_data) = result else {
+                    break;
+                };
+
+                if sender.add_data(flight_data).await.is_err() {
+                    break; // Receiver closed
+                }
+
+                // Send pong (empty response signals readiness for next ping)
+                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
+                    break;
+                }
+            }
+            // sender is dropped here → closes sub-queues, notifies processors
+        });
+
+        Ok(RawResponse::new(Box::pin(rx)))
     }
 
     type DoActionStream = FlightStream<FlightResult>;

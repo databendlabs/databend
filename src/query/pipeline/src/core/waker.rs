@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::task::Wake;
+use std::task::Waker;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -71,5 +73,27 @@ impl ExecutorWaker {
     #[inline]
     pub fn is_bound(&self) -> bool {
         self.callback.get().is_some()
+    }
+
+    /// Create a `std::task::Waker` that calls `ExecutorWaker::wake()` with the
+    /// given `processor_id` and `worker_id` when woken.
+    pub fn to_waker(self: &Arc<Self>, processor_id: NodeIndex, worker_id: usize) -> Waker {
+        Waker::from(Arc::new(ExecutorWakerAdapter {
+            executor_waker: self.clone(),
+            processor_id,
+            worker_id,
+        }))
+    }
+}
+
+struct ExecutorWakerAdapter {
+    executor_waker: Arc<ExecutorWaker>,
+    processor_id: NodeIndex,
+    worker_id: usize,
+}
+
+impl Wake for ExecutorWakerAdapter {
+    fn wake(self: Arc<Self>) {
+        let _ = self.executor_waker.wake(self.processor_id, self.worker_id);
     }
 }

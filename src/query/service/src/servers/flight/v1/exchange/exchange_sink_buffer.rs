@@ -15,16 +15,14 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::task::Poll;
+use std::task::Waker;
 
 use arrow_flight::FlightData;
-use concurrent_queue::ConcurrentQueue;
 use databend_common_exception::Result;
-use databend_common_pipeline::core::ExecutorWaker;
 use parking_lot::Mutex;
-use petgraph::stable_graph::NodeIndex;
 use tonic::Status;
 
 use super::PingPongCallback;
@@ -49,27 +47,6 @@ impl Default for ExchangeBufferConfig {
     }
 }
 
-/// Wake target identity for backpressure wake-up.
-pub struct WakeTarget {
-    pub pid: NodeIndex,
-    pub worker_id: usize,
-    blocked: AtomicBool,
-}
-
-impl WakeTarget {
-    pub fn new(pid: NodeIndex, worker_id: usize) -> Arc<Self> {
-        Arc::new(Self {
-            pid,
-            worker_id,
-            blocked: AtomicBool::new(false),
-        })
-    }
-
-    pub fn is_blocked(&self) -> bool {
-        self.blocked.load(Ordering::SeqCst)
-    }
-}
-
 /// Per-sink channel containing its own pending queue.
 struct Channel {
     pending_queue: VecDeque<FlightData>,
@@ -87,21 +64,7 @@ impl Channel {
     }
 
     fn pop_front(&mut self, _max_batch_bytes: usize) -> Option<(usize, FlightData)> {
-        // let mut batch = Vec::new();
-        // let mut batch_size = 0usize;
-
         self.pending_queue.pop_front().map(|x| (1, x))
-        // while let Some(data) = self.pending_queue.front() {
-        //     let data_size = data.data_body.len();
-        //
-        //     if batch_size + data_size > max_batch_bytes && !batch.is_empty() {
-        //         break;
-        //     }
-        //     batch.push(self.pending_queue.pop_front().unwrap());
-        //     batch_size += data_size;
-        // }
-        //
-        // Some((1, batch[0]))
     }
 }
 
@@ -109,7 +72,7 @@ impl Channel {
 struct RemoteInstanceState {
     /// Pre-allocated channels, indexed by channel_id
     channels: Vec<Channel>,
-    /// Last error from the exchange, returned on next add_block call
+    /// Last error from the exchange, returned on next poll_send call
     last_error: Option<Status>,
 }
 
@@ -141,9 +104,8 @@ struct ExchangeSinkBufferInner {
     remotes: Vec<Arc<RemoteInstance>>,
     queue_capacity: usize,
     queue_size: AtomicUsize,
-    waker: Arc<ExecutorWaker>,
-    /// Use ConcurrentQueue for lock-free wake target collection
-    blocked_targets: ConcurrentQueue<Arc<WakeTarget>>,
+    /// Blocked sender wakers
+    blocked_wakers: Mutex<Vec<Waker>>,
 }
 
 impl ExchangeSinkBufferInner {
@@ -156,7 +118,7 @@ impl ExchangeSinkBufferInner {
 
             let remaining = state.channels.iter().map(|x| x.remaining()).sum::<usize>();
             self.queue_size.fetch_sub(remaining, Ordering::SeqCst);
-            return self.ready_queue();
+            return self.wake_blocked();
         }
 
         // Find channel with max queue size
@@ -172,15 +134,15 @@ impl ExchangeSinkBufferInner {
 
             // Sent successfully
             self.queue_size.fetch_sub(batch, Ordering::SeqCst);
-            self.ready_queue();
+            self.wake_blocked();
         }
     }
 
-    fn ready_queue(&self) {
+    fn wake_blocked(&self) {
         if self.queue_size.load(Ordering::SeqCst) <= self.queue_capacity {
-            while let Ok(target) = self.blocked_targets.pop() {
-                target.blocked.store(false, Ordering::SeqCst);
-                let _ = self.waker.wake(target.pid, target.worker_id);
+            let mut wakers = self.blocked_wakers.lock();
+            for waker in wakers.drain(..) {
+                waker.wake();
             }
         }
     }
@@ -206,6 +168,8 @@ impl PingPongCallback for SinkBufferCallback {
 ///
 /// This buffer manages multiple remote instances (one per destination node) and uses
 /// ping-pong mode to ensure at most one request is in-flight per instance at any time.
+///
+/// Uses `std::task::Waker` for backpressure signaling.
 pub struct ExchangeSinkBuffer {
     inner: Arc<ExchangeSinkBufferInner>,
 }
@@ -215,12 +179,10 @@ impl ExchangeSinkBuffer {
     ///
     /// - `exchanges`: Pre-created PingPongExchange instances (not yet started).
     /// - `num_channels`: Number of channels per remote instance.
-    /// - `waker`: ExecutorWaker for waking up blocked processors.
     /// - `config`: Buffer configuration.
     pub fn create(
         exchanges: Vec<PingPongExchange>,
         num_channels: usize,
-        waker: Arc<ExecutorWaker>,
         config: ExchangeBufferConfig,
     ) -> Result<Self> {
         let queue_capacity = config.queue_capacity_factor * exchanges.len().max(1);
@@ -230,7 +192,6 @@ impl ExchangeSinkBuffer {
                 let mut remotes = Vec::with_capacity(exchanges.len());
 
                 for (dest_idx, exchange) in exchanges.into_iter().enumerate() {
-                    // Note: start() may fail, but we handle that after
                     let _ = exchange.start(Arc::new(SinkBufferCallback {
                         dest_idx,
                         buffer: weak_inner.clone(),
@@ -240,33 +201,34 @@ impl ExchangeSinkBuffer {
                 }
 
                 ExchangeSinkBufferInner {
-                    waker,
                     config,
                     remotes,
                     queue_capacity,
                     queue_size: AtomicUsize::new(0),
-                    blocked_targets: ConcurrentQueue::unbounded(),
+                    blocked_wakers: Mutex::new(Vec::new()),
                 }
             }),
         })
     }
 
-    /// Add a block to the specified destination's queue.
+    /// Poll to send data to the specified destination.
     ///
-    /// - `wake_target`: Wake target identity for backpressure wake-up.
-    /// - `channel_id`: Channel identifier (typically same as processor ID index).
+    /// - `channel_id`: Channel identifier.
     /// - `dest_idx`: Destination index.
     /// - `data`: Data to send.
+    /// - `waker`: Waker to be notified when backpressure is released.
     ///
-    /// Returns `Ok(true)` if can continue sending, `Ok(false)` if backpressure is triggered.
-    /// Returns error if the destination has a previous error.
-    pub fn add_block(
+    /// Returns:
+    /// - `Poll::Ready(Ok(()))`: Data accepted.
+    /// - `Poll::Ready(Err(...))`: Error from the destination.
+    /// - `Poll::Pending`: Backpressure, waker registered.
+    pub fn poll_send(
         &self,
-        wake_target: &Arc<WakeTarget>,
         channel_id: usize,
         dest_idx: usize,
         data: FlightData,
-    ) -> Result<bool> {
+        waker: &Waker,
+    ) -> Poll<Result<()>> {
         let remote = &self.inner.remotes[dest_idx];
 
         // Try to send directly first
@@ -274,24 +236,21 @@ impl ExchangeSinkBuffer {
             // Failed to send (in-flight or channel full), queue the data
             let mut state = remote.state.lock();
 
-            // Check for previous error, return it instead of queueing
+            // Check for previous error
             if let Some(status) = state.last_error.take() {
-                return Err(status.into());
+                return Poll::Ready(Err(status.into()));
             }
 
             state.channels[channel_id].pending_queue.push_back(data);
 
             // Check backpressure
             if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {
-                // Only add to queue if not already blocked (avoid duplicates)
-                if !wake_target.blocked.swap(true, Ordering::SeqCst) {
-                    let _ = self.inner.blocked_targets.push(wake_target.clone());
-                }
-
-                return Ok(false);
+                let mut wakers = self.inner.blocked_wakers.lock();
+                wakers.push(waker.clone());
+                return Poll::Pending;
             }
         }
 
-        Ok(true)
+        Poll::Ready(Ok(()))
     }
 }
