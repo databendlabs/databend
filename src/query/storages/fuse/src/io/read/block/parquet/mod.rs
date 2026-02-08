@@ -495,7 +495,11 @@ fn compatible_read_type(data_type: &TableDataType) -> (TableDataType, bool) {
         }
         TableDataType::Number(num) => match num {
             NumberDataType::Int64 => (TableDataType::Number(NumberDataType::Int32), true),
+            NumberDataType::Int32 => (TableDataType::Number(NumberDataType::Int16), true),
+            NumberDataType::Int16 => (TableDataType::Number(NumberDataType::Int8), true),
             NumberDataType::UInt64 => (TableDataType::Number(NumberDataType::UInt32), true),
+            NumberDataType::UInt32 => (TableDataType::Number(NumberDataType::UInt16), true),
+            NumberDataType::UInt16 => (TableDataType::Number(NumberDataType::UInt8), true),
             NumberDataType::Float64 => (TableDataType::Number(NumberDataType::Float32), true),
             _ => (data_type.clone(), false),
         },
@@ -527,6 +531,45 @@ fn compatible_decimal_read_type(decimal: &DecimalDataType) -> Option<DecimalData
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::compatible_read_type;
+
+    #[test]
+    fn test_compatible_read_type_widening_numbers() {
+        let cases = [
+            (NumberDataType::Int64, NumberDataType::Int32),
+            (NumberDataType::Int32, NumberDataType::Int16),
+            (NumberDataType::Int16, NumberDataType::Int8),
+            (NumberDataType::UInt64, NumberDataType::UInt32),
+            (NumberDataType::UInt32, NumberDataType::UInt16),
+            (NumberDataType::UInt16, NumberDataType::UInt8),
+            (NumberDataType::Float64, NumberDataType::Float32),
+        ];
+
+        for (from, to) in cases {
+            let (ty, changed) = compatible_read_type(&TableDataType::Number(from));
+            assert_eq!(ty, TableDataType::Number(to));
+            assert!(changed);
+        }
+
+        let (ty, changed) = compatible_read_type(&TableDataType::Number(NumberDataType::Int8));
+        assert_eq!(ty, TableDataType::Number(NumberDataType::Int8));
+        assert!(!changed);
+
+        let (ty, changed) = compatible_read_type(&TableDataType::Number(NumberDataType::UInt8));
+        assert_eq!(ty, TableDataType::Number(NumberDataType::UInt8));
+        assert!(!changed);
+
+        let (ty, changed) = compatible_read_type(&TableDataType::Number(NumberDataType::Float32));
+        assert_eq!(ty, TableDataType::Number(NumberDataType::Float32));
+        assert!(!changed);
     }
 }
 
