@@ -256,16 +256,12 @@ pub fn build_runtime_filter_packet(
     is_spill_happened: bool,
 ) -> Result<JoinRuntimeFilterPacket> {
     if is_spill_happened {
-        return Ok(JoinRuntimeFilterPacket::disable_all(
-            runtime_filter_desc,
-            build_num_rows,
-        ));
+        return Ok(JoinRuntimeFilterPacket::disable_all(build_num_rows));
     }
     if build_num_rows == 0 {
-        return Ok(JoinRuntimeFilterPacket {
-            packets: None,
-            build_rows: build_num_rows,
-        });
+        return Ok(JoinRuntimeFilterPacket::complete_without_filters(
+            build_num_rows,
+        ));
     }
     let mut runtime_filters = HashMap::new();
     for rf in runtime_filter_desc {
@@ -283,8 +279,8 @@ pub fn build_runtime_filter_packet(
             .build(rf)?,
         );
     }
-    Ok(JoinRuntimeFilterPacket {
-        packets: Some(runtime_filters),
-        build_rows: build_num_rows,
-    })
+    Ok(JoinRuntimeFilterPacket::complete(
+        runtime_filters,
+        build_num_rows,
+    ))
 }

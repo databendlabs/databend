@@ -31,8 +31,6 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 
-use crate::pipelines::processors::transforms::RuntimeFilterDesc;
-
 /// Represents a runtime filter that can be transmitted and merged.
 ///
 /// # Fields
@@ -66,30 +64,41 @@ impl Debug for RuntimeFilterPacket {
 ///
 /// # Fields
 ///
-/// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`. When `packets` is `None`, it means that `build_num_rows` is zero.
+/// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`.
 /// * `build_rows` - Total number of rows used when building the runtime filters.
+/// * `disable_all_due_to_spill` - Indicates if this packet comes from a spilled build and should disable all runtime filters globally.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct JoinRuntimeFilterPacket {
     #[serde(default)]
     pub packets: Option<HashMap<usize, RuntimeFilterPacket>>,
     #[serde(default)]
     pub build_rows: usize,
+    #[serde(default)]
+    pub disable_all_due_to_spill: bool,
 }
 
 impl JoinRuntimeFilterPacket {
-    pub fn disable_all(descs: &[RuntimeFilterDesc], build_rows: usize) -> Self {
-        let mut packets = HashMap::new();
-        for desc in descs {
-            packets.insert(desc.id, RuntimeFilterPacket {
-                id: desc.id,
-                inlist: None,
-                min_max: None,
-                bloom: None,
-            });
+    pub fn complete_without_filters(build_rows: usize) -> Self {
+        Self {
+            packets: None,
+            build_rows,
+            disable_all_due_to_spill: false,
         }
+    }
+
+    pub fn complete(packets: HashMap<usize, RuntimeFilterPacket>, build_rows: usize) -> Self {
         Self {
             packets: Some(packets),
             build_rows,
+            disable_all_due_to_spill: false,
+        }
+    }
+
+    pub fn disable_all(build_rows: usize) -> Self {
+        Self {
+            packets: None,
+            build_rows,
+            disable_all_due_to_spill: true,
         }
     }
 }
@@ -108,6 +117,8 @@ struct FlightJoinRuntimeFilterPacket {
     pub build_rows: usize,
     #[serde(default)]
     pub packets: Option<HashMap<usize, FlightRuntimeFilterPacket>>,
+    #[serde(default)]
+    pub disable_all_due_to_spill: bool,
 
     pub schema: DataSchemaRef,
 }
@@ -166,6 +177,7 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
         data_block.add_meta(Some(Box::new(FlightJoinRuntimeFilterPacket {
             build_rows: self.build_rows,
             packets: join_flight_packets,
+            disable_all_due_to_spill: self.disable_all_due_to_spill,
             schema,
         })))
     }
@@ -183,6 +195,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
                 return Ok(JoinRuntimeFilterPacket {
                     packets: None,
                     build_rows: flight_join_rf.build_rows,
+                    disable_all_due_to_spill: flight_join_rf.disable_all_due_to_spill,
                 });
             };
 
@@ -219,6 +232,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
             return Ok(JoinRuntimeFilterPacket {
                 packets: Some(flight_packets),
                 build_rows: flight_join_rf.build_rows,
+                disable_all_due_to_spill: flight_join_rf.disable_all_due_to_spill,
             });
         }
 

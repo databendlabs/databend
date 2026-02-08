@@ -28,6 +28,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
+use log::info;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -227,7 +228,21 @@ impl Processor for TransformHashJoin {
                 let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
+                    let spilled = self.join.is_spill_happened();
                     let packet = self.join.build_runtime_filter()?;
+                    let (total, disabled_all) = match &packet.packets {
+                        None => (0, true),
+                        Some(packets) => {
+                            let disabled = packets.values().all(|p| {
+                                p.inlist.is_none() && p.min_max.is_none() && p.bloom.is_none()
+                            });
+                            (packets.len(), disabled)
+                        }
+                    };
+                    info!(
+                        "spilled: {}, globalize runtime filter: total {}, disabled all: {}",
+                        spilled, total, disabled_all
+                    );
                     self.rf_desc.globalization(packet).await?;
                 }
 
