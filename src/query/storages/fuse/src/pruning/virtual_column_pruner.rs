@@ -431,10 +431,8 @@ fn build_plans_for_node(
             entries.push((child_key, plan));
         }
     }
-    if !entries.is_empty() && !has_index_descendant {
-        // Object: reconstruct a parent object from child plans.
-        plans.push(VirtualColumnReadPlan::Object { entries });
-    }
+    // Avoid reconstructing parent objects from child plans to preserve
+    // correct semantics for NULL vs missing/object values.
 
     (plans, has_index_descendant)
 }

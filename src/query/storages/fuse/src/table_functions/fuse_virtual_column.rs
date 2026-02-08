@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -26,6 +27,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -36,6 +38,7 @@ use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
@@ -120,6 +123,8 @@ impl FuseVirtualColumn {
         let schema = tbl.schema();
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
         let source_column_names = build_source_column_name_map(schema.as_ref());
+        let virtual_schema = tbl.get_table_info().meta.virtual_schema.clone();
+        let virtual_field_map = build_virtual_field_map(&virtual_schema);
 
         let mut num_rows = 0;
         let chunk_size =
@@ -137,17 +142,25 @@ impl FuseVirtualColumn {
                     let Some(block_meta) = block.virtual_block_meta() else {
                         continue;
                     };
-                    let location = block_meta.virtual_location.0;
-                    let Ok(virtual_meta) =
-                        load_virtual_column_file_meta(tbl.operator.clone(), &location).await
-                    else {
-                        continue;
+                    let entries = if block_meta.virtual_column_size == 0 {
+                        collect_inline_virtual_column_entries(
+                            &block_meta.virtual_column_metas,
+                            &source_column_names,
+                            &virtual_field_map,
+                        )
+                    } else {
+                        let location = block_meta.virtual_location.0;
+                        let Ok(virtual_meta) =
+                            load_virtual_column_file_meta(tbl.operator.clone(), &location).await
+                        else {
+                            continue;
+                        };
+                        collect_virtual_column_entries(&virtual_meta, &source_column_names)
                     };
-                    let entries =
-                        collect_virtual_column_entries(&virtual_meta, &source_column_names);
 
                     for entry in entries {
-                        virtual_block_location.put_and_commit(location.clone());
+                        let location = block_meta.virtual_location.0.clone();
+                        virtual_block_location.put_and_commit(location);
                         virtual_block_size.push(block_meta.virtual_column_size);
                         row_count.push(entry.num_values);
 
@@ -246,6 +259,53 @@ fn collect_virtual_column_entries(
     }
 
     entries.sort_by_key(|entry| entry.column_id);
+    entries
+}
+
+fn build_virtual_field_map(
+    virtual_schema: &Option<VirtualDataSchema>,
+) -> HashMap<ColumnId, (u32, String)> {
+    let mut map = HashMap::new();
+    let Some(virtual_schema) = virtual_schema else {
+        return map;
+    };
+    for field in virtual_schema.fields() {
+        map.insert(field.column_id, (field.source_column_id, field.name.clone()));
+    }
+    map
+}
+
+fn collect_inline_virtual_column_entries(
+    virtual_column_metas: &HashMap<ColumnId, VirtualColumnMeta>,
+    source_column_names: &HashMap<u32, String>,
+    virtual_field_map: &HashMap<ColumnId, (u32, String)>,
+) -> Vec<VirtualColumnEntry> {
+    let mut entries = Vec::new();
+    if virtual_field_map.is_empty() {
+        return entries;
+    }
+    let mut column_ids: Vec<ColumnId> = virtual_column_metas.keys().copied().collect();
+    column_ids.sort_unstable();
+    for column_id in column_ids {
+        let Some(meta) = virtual_column_metas.get(&column_id) else {
+            continue;
+        };
+        let Some((source_column_id, key_name)) = virtual_field_map.get(&column_id) else {
+            continue;
+        };
+        let source_column_name = source_column_names
+            .get(source_column_id)
+            .cloned()
+            .unwrap_or_else(|| source_column_id.to_string());
+        entries.push(VirtualColumnEntry {
+            column_name: format!("{source_column_name}{key_name}"),
+            column_type: meta.data_type().to_string(),
+            column_id,
+            offset: meta.offset,
+            len: meta.len,
+            num_values: meta.num_values,
+        });
+    }
     entries
 }
 
