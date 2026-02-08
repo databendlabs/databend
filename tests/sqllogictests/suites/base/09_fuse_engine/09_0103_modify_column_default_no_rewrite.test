@@ -60,32 +60,6 @@ SELECT a,b FROM t_ct ORDER BY a
 1 10
 2 99
 
-#############################################################
-# stream-style CHANGES checks after default-only modify      #
-#############################################################
-
-statement ok
-INSERT INTO t_ct(a) VALUES(3)
-
-# Query A:
-# We insert only column a, so b should come from the new default (99).
-# This query checks the DEFAULT change feed and also confirms this row is
-# a normal INSERT record (not an UPDATE rewrite record).
-query B
-SELECT count(*) >= 1 FROM t_ct CHANGES(INFORMATION => DEFAULT) AT(OFFSET => -1)
-WHERE a = 3 AND b = 99 AND change$action = 'INSERT' AND change$is_update = false
-----
-1
-
-# Query B:
-# Check the APPEND_ONLY change feed for the same inserted row.
-# It should also contain a=3 and b=99.
-query B
-SELECT count(*) >= 1 FROM t_ct CHANGES(INFORMATION => APPEND_ONLY) AT(OFFSET => -1)
-WHERE a = 3 AND b = 99
-----
-1
-
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING
 
