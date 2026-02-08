@@ -490,3 +490,84 @@ impl LocationsWithOption {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use databend_common_expression::BlockThresholds;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::ColumnOrientedSegmentBuilder;
+    use super::SegmentBuilder;
+    use crate::meta::column_oriented_segment::stat_name;
+    use crate::meta::BlockMeta;
+    use crate::meta::ColumnMeta;
+    use crate::meta::ColumnMetaV0;
+    use crate::meta::ColumnStatistics;
+    use crate::meta::Compression;
+
+    #[test]
+    fn test_drop_stats_on_cast_failure() -> databend_common_exception::Result<()> {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new_from_column_id(
+            "a",
+            TableDataType::Number(NumberDataType::Int64),
+            0,
+        )]));
+        let mut builder = ColumnOrientedSegmentBuilder::new(schema, 1);
+
+        let mut col_stats = HashMap::new();
+        col_stats.insert(
+            0,
+            ColumnStatistics::new(
+                Scalar::String("bad".to_string()),
+                Scalar::String("bad".to_string()),
+                0,
+                0,
+                None,
+            ),
+        );
+        let mut col_metas = HashMap::new();
+        col_metas.insert(0, ColumnMeta::Parquet(ColumnMetaV0::new(0, 0, 1)));
+
+        let block_meta = BlockMeta::new(
+            1,
+            1,
+            1,
+            col_stats,
+            col_metas,
+            None,
+            ("dummy".to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::None,
+            None,
+        );
+        builder.add_block(block_meta)?;
+
+        let segment = builder.build(BlockThresholds::default(), None, None)?;
+        let stat_idx = segment.segment_schema.index_of(&stat_name(0))?;
+        let entry = segment.block_metas.get_by_offset(stat_idx);
+        let databend_common_expression::BlockEntry::Column(
+            databend_common_expression::Column::Tuple(cols),
+        ) = entry
+        else {
+            panic!("stat column should be a tuple");
+        };
+
+        assert!(matches!(cols[0].index(0), Some(ScalarRef::Null)));
+        assert!(matches!(cols[1].index(0), Some(ScalarRef::Null)));
+        Ok(())
+    }
+}
