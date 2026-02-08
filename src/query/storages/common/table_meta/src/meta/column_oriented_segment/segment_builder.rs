@@ -506,12 +506,12 @@ mod tests {
 
     use super::ColumnOrientedSegmentBuilder;
     use super::SegmentBuilder;
-    use crate::meta::column_oriented_segment::stat_name;
     use crate::meta::BlockMeta;
     use crate::meta::ColumnMeta;
     use crate::meta::ColumnMetaV0;
     use crate::meta::ColumnStatistics;
     use crate::meta::Compression;
+    use crate::meta::column_oriented_segment::stat_name;
 
     #[test]
     fn test_drop_stats_on_cast_failure() -> databend_common_exception::Result<()> {
