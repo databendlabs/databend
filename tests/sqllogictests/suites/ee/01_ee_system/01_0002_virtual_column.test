@@ -332,6 +332,8 @@ data['replies'] 7 3 8 (empty)
 data['text'] 7 0 16 (empty)
 data['user']['id'] 6 0 8 (empty)
 data['likes'] 2 0 1 (empty)
+data['tags'][0] 2 0 3 (empty)
+data['tags'][1] 2 0 3 (empty)
 
 query TTTIIIITTIT
 SHOW STATISTICS FROM TABLE test_virtual_column.tweets;
