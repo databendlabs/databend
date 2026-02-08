@@ -22,6 +22,7 @@ databend-common-frozen-api = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-native = { workspace = true }
+databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
 enum-as-inner = { workspace = true }
 log = { workspace = true }

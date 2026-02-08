@@ -33,9 +33,8 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_storage::Datum;
-use databend_common_storage::Histogram;
-use databend_common_storage::HistogramBucket;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::HistogramBucket;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -158,16 +157,24 @@ impl SinkAnalyzeState {
             let value = column.index(row).clone().unwrap();
             let number = value.as_number().unwrap();
             let ndv = number.as_u_int64().unwrap();
-            let upper_bound =
-                Datum::from_scalar(data_block.get_by_offset(2).index(row).unwrap().to_owned())
-                    .ok_or_else(|| {
-                        ErrorCode::Internal("Don't support the type to generate histogram")
-                    })?;
-            let lower_bound =
-                Datum::from_scalar(data_block.get_by_offset(3).index(row).unwrap().to_owned())
-                    .ok_or_else(|| {
-                        ErrorCode::Internal("Don't support the type to generate histogram")
-                    })?;
+            let upper_bound = data_block
+                .get_by_offset(2)
+                .index(row)
+                .unwrap()
+                .to_owned()
+                .to_datum()
+                .ok_or_else(|| {
+                    ErrorCode::Internal("Don't support the type to generate histogram")
+                })?;
+            let lower_bound = data_block
+                .get_by_offset(3)
+                .index(row)
+                .unwrap()
+                .to_owned()
+                .to_datum()
+                .ok_or_else(|| {
+                    ErrorCode::Internal("Don't support the type to generate histogram")
+                })?;
 
             let count: Option<_> = try {
                 *data_block

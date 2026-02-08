@@ -121,7 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     register_array_aggr(registry);
 
-    registry.register_0_arg_core::<EmptyArrayType, _, _>(
+    registry.register_0_arg_core::<EmptyArrayType, _>(
         "array",
         |_| FunctionDomain::Full,
         |_| Value::Scalar(()),
@@ -177,6 +177,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         None => Value::Scalar(Scalar::Array(builder.build_scalar())),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -301,18 +302,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                         _ => Value::Scalar(Scalar::Array(builder.build())),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
     registry.register_function_factory("arrays_zip", array_zip_factory);
 
-    registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
+    registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _>(
         "length",
         |_, _| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
         |_, _| 0u8,
     );
 
-    registry.register_2_arg::<NumberType<i64>, NumberType<i64>, ArrayType<NumberType<i64>>, _, _>(
+    registry.register_2_arg::<NumberType<i64>, NumberType<i64>, ArrayType<NumberType<i64>>, _>(
         "range",
         |_, _, _| FunctionDomain::Full,
         |start, end, ctx| {
@@ -375,7 +377,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
+    registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _>(
         "length",
         |_, _| FunctionDomain::Full,
         |arr, _| arr.len() as u64,
@@ -423,7 +425,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, EmptyArrayType, _, _>(
+    registry.register_2_arg::<EmptyArrayType, EmptyArrayType, EmptyArrayType, _>(
         "array_concat",
         |_, _, _| FunctionDomain::Full,
         |_, _, _| (),
@@ -456,19 +458,22 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry
-        .register_passthrough_nullable_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
-            "array_flatten",
-            |_, domain| FunctionDomain::Domain(domain.clone().flatten()),
-            vectorize_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>(
-                |arr, ctx| {
-                    let mut builder = ColumnBuilder::with_capacity(&ctx.generics[0], arr.len());
-                    for v in arr.iter() {
-                        builder.append_column(&v);
-                    }
-                    builder.build()
-                }
-            ),
-        );
+        .scalar_builder("array_flatten")
+        .function()
+        .typed_1_arg::<ArrayType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone().flatten()))
+        .vectorized(vectorize_1_arg::<
+            ArrayType<ArrayType<GenericType<0>>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, ctx| {
+            let mut builder = ColumnBuilder::with_capacity(&ctx.generics[0], arr.len());
+            for v in arr.iter() {
+                builder.append_column(&v);
+            }
+            builder.build()
+        }))
+        .register();
 
     registry
         .register_passthrough_nullable_2_arg::<ArrayType<StringType>, StringType, StringType, _, _>(
@@ -623,77 +628,110 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "array_remove_first",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
-            *output += 1;
-        }),
-    );
+    registry
+        .scalar_builder("array_remove_first")
+        .function()
+        .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(
+            vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
+                *output += 1;
+            }),
+        )
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_remove_first",
-        |_, domain| FunctionDomain::Domain(domain.clone()),
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |arr, output, _| {
-                if arr.len() <= 1 {
-                    output.push_default();
-                } else {
-                    let range = Range { start: 1, end: arr.len() };
-                    let arr_slice = arr.slice(range);
-                    output.push(arr_slice);
-                }
+    registry
+        .scalar_builder("array_remove_first")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone()))
+        .vectorized(vectorize_with_builder_1_arg::<
+            ArrayType<GenericType<0>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, output, _| {
+            if arr.len() <= 1 {
+                output.push_default();
+            } else {
+                let range = Range {
+                    start: 1,
+                    end: arr.len(),
+                };
+                let arr_slice = arr.slice(range);
+                output.push(arr_slice);
             }
-        ),
-    );
+        }))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "array_remove_last",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
-            *output += 1;
-        }),
-    );
+    registry
+        .scalar_builder("array_remove_last")
+        .function()
+        .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(
+            vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
+                *output += 1;
+            }),
+        )
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_remove_last",
-        |_, domain| FunctionDomain::Domain(domain.clone()),
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |arr, output, _| {
-                if arr.len() <= 1 {
-                    output.push_default();
-                } else {
-                    let range = Range { start: 0, end: arr.len() - 1 };
-                    let arr_slice = arr.slice(range);
-                    output.push(arr_slice);
-                }
+    registry
+        .scalar_builder("array_remove_last")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone()))
+        .vectorized(vectorize_with_builder_1_arg::<
+            ArrayType<GenericType<0>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, output, _| {
+            if arr.len() <= 1 {
+                output.push_default();
+            } else {
+                let range = Range {
+                    start: 0,
+                    end: arr.len() - 1,
+                };
+                let arr_slice = arr.slice(range);
+                output.push(arr_slice);
             }
-        ),
-    );
+        }))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "array_reverse",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
-    );
+    registry
+        .scalar_builder("array_reverse")
+        .function()
+        .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(
+            |arr, _| arr,
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_reverse",
-        |_, domain| FunctionDomain::Domain(domain.clone()),
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |arr, output, _| {
-                let mut vals = Vec::with_capacity(arr.len());
-                let mut builder = ColumnBuilder::with_capacity(&arr.data_type(), arr.len());
-                for val in arr.iter() {
-                    vals.push(val);
-                }
-                for val in vals.into_iter().rev() {
-                    builder.push(val);
-                }
-                output.push(builder.build());
+    registry
+        .scalar_builder("array_reverse")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone()))
+        .vectorized(vectorize_with_builder_1_arg::<
+            ArrayType<GenericType<0>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, output, _| {
+            let mut vals = Vec::with_capacity(arr.len());
+            let mut builder = ColumnBuilder::with_capacity(&arr.data_type(), arr.len());
+            for val in arr.iter() {
+                vals.push(val);
             }
-        ),
-    );
+            for val in vals.into_iter().rev() {
+                builder.push(val);
+            }
+            output.push(builder.build());
+        }))
+        .register();
 
     registry.register_2_arg_core::<GenericType<0>, NullableType<ArrayType<GenericType<0>>>, ArrayType<GenericType<0>>, _, _>(
         "array_prepend",
@@ -936,44 +974,63 @@ pub fn register(registry: &mut FunctionRegistry) {
         )
     );
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, UInt64Type, _, _>(
-        "array_unique",
-        |_, _| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
-        vectorize_1_arg::<EmptyArrayType, UInt64Type>(|_, _| 0),
-    );
+    registry
+        .scalar_builder("array_unique")
+        .function()
+        .typed_1_arg::<EmptyArrayType, UInt64Type>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }))
+        .vectorized(vectorize_1_arg::<EmptyArrayType, UInt64Type>(|_, _| 0))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, UInt64Type, _, _>(
-        "array_unique",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<ArrayType<GenericType<0>>, UInt64Type>(|arr, _| {
-            if arr.len() > 0 {
-                let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
-                for val in arr.iter() {
-                    if val == ScalarRef::Null {
-                        continue;
+    registry
+        .scalar_builder("array_unique")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, UInt64Type>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_1_arg::<ArrayType<GenericType<0>>, UInt64Type>(
+            |arr, _| {
+                if arr.len() > 0 {
+                    let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
+                    for val in arr.iter() {
+                        if val == ScalarRef::Null {
+                            continue;
+                        }
+                        let mut hasher = SipHasher24::new();
+                        val.hash(&mut hasher);
+                        let hash128 = hasher.finish128();
+                        let _ = set.set_insert(hash128.into());
                     }
-                    let mut hasher = SipHasher24::new();
-                    val.hash(&mut hasher);
-                    let hash128 = hasher.finish128();
-                    let _ = set.set_insert(hash128.into());
+                    set.len() as u64
+                } else {
+                    0
                 }
-                set.len() as u64
-            } else {
-                0
-            }
-        }),
-    );
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "array_distinct",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
-    );
+    registry
+        .scalar_builder("array_distinct")
+        .function()
+        .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(
+            |arr, _| arr,
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_distinct",
-        |_, domain| FunctionDomain::Domain(domain.clone()),
-        vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+    registry
+        .scalar_builder("array_distinct")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone()))
+        .vectorized(vectorize_1_arg::<
+            ArrayType<GenericType<0>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, _| {
             if arr.len() > 0 {
                 let data_type = arr.data_type();
                 let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len());
@@ -995,31 +1052,40 @@ pub fn register(registry: &mut FunctionRegistry) {
             } else {
                 arr
             }
-        }),
-    );
+        }))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-        "array_compact",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
-    );
+    registry
+        .scalar_builder("array_compact")
+        .function()
+        .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(
+            |arr, _| arr,
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-        "array_compact",
-        |_, domain| FunctionDomain::Domain(domain.clone()),
-        vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
-            |arr, output, _| {
-                let builder = &mut output.builder;
-                for val in arr.iter() {
-                    if val == ScalarRef::Null {
-                        continue;
-                    }
-                    builder.push(val);
+    registry
+        .scalar_builder("array_compact")
+        .function()
+        .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| FunctionDomain::Domain(domain.clone()))
+        .vectorized(vectorize_with_builder_1_arg::<
+            ArrayType<GenericType<0>>,
+            ArrayType<GenericType<0>>,
+        >(|arr, output, _| {
+            let builder = &mut output.builder;
+            for val in arr.iter() {
+                if val == ScalarRef::Null {
+                    continue;
                 }
-                output.commit_row()
+                builder.push(val);
             }
-        ),
-    );
+            output.commit_row()
+        }))
+        .register();
 
     registry.register_passthrough_nullable_2_arg::<EmptyArrayType, EmptyArrayType, EmptyArrayType, _, _>(
         "array_intersection",
@@ -1397,6 +1463,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 eval: FunctionEval::Scalar {
                     calc_domain: domain_evaluator(move |_, _| FunctionDomain::MayThrow),
                     eval: scalar_evaluator(move |args, ctx| impl_info.eval(args, ctx)),
+                    derive_stat: None,
                 },
             }))
         }));
@@ -1404,68 +1471,87 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
     }
 
     for (fn_name, sort_desc) in ARRAY_SORT_FUNCTIONS {
-        registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
-            fn_name,
-            |_, _| FunctionDomain::Full,
-            vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(|arr, _| arr),
-        );
+        registry
+            .scalar_builder(*fn_name)
+            .function()
+            .typed_1_arg::<EmptyArrayType, EmptyArrayType>()
+            .passthrough_nullable()
+            .calc_domain(|_, _| FunctionDomain::Full)
+            .vectorized(vectorize_1_arg::<EmptyArrayType, EmptyArrayType>(
+                |arr, _| arr,
+            ))
+            .register();
 
-        registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
-            fn_name,
-            |_, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(output.len())
-                {
-                    output.commit_row();
-                    return;
-                }
-                let array_val = RawJsonb::new(val);
-                match array_val.array_values() {
-                    Ok(vals_opt) => {
-                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
-                        let variant_col = BinaryColumn::from_iter(vals.iter().map(|v| v.as_raw()));
-                        let len = variant_col.len();
-                        let col = BlockEntry::Column(Column::Variant(variant_col));
-                        let sort_desc = vec![SortColumnDescription {
-                            offset: 0,
-                            asc: sort_desc.0,
-                            nulls_first: sort_desc.1,
-                        }];
-                        match DataBlock::sort(&DataBlock::new(vec![col], len), &sort_desc, None) {
-                            Ok(block) => {
-                                let sorted_arr = block.columns()[0].value().into_column().unwrap();
-                                let mut sorted_vals = Vec::with_capacity(sorted_arr.len());
-                                for scalar in sorted_arr.iter() {
-                                    let val = scalar.as_variant().unwrap();
-                                    sorted_vals.push(RawJsonb::new(val));
-                                }
-                                match OwnedJsonb::build_array(sorted_vals.into_iter()) {
-                                    Ok(owned_jsonb) => {
-                                        output.put_slice(owned_jsonb.as_ref());
+        registry
+            .scalar_builder(*fn_name)
+            .function()
+            .typed_1_arg::<VariantType, VariantType>()
+            .passthrough_nullable()
+            .calc_domain(|_, _| FunctionDomain::MayThrow)
+            .vectorized(vectorize_with_builder_1_arg::<VariantType, VariantType>(
+                |val, output, ctx| {
+                    if let Some(validity) = &ctx.validity
+                        && !validity.get_bit(output.len())
+                    {
+                        output.commit_row();
+                        return;
+                    }
+                    let array_val = RawJsonb::new(val);
+                    match array_val.array_values() {
+                        Ok(vals_opt) => {
+                            let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                            let variant_col =
+                                BinaryColumn::from_iter(vals.iter().map(|v| v.as_raw()));
+                            let len = variant_col.len();
+                            let col = BlockEntry::Column(Column::Variant(variant_col));
+                            let sort_desc = vec![SortColumnDescription {
+                                offset: 0,
+                                asc: sort_desc.0,
+                                nulls_first: sort_desc.1,
+                            }];
+                            match DataBlock::sort(&DataBlock::new(vec![col], len), &sort_desc, None)
+                            {
+                                Ok(block) => {
+                                    let sorted_arr =
+                                        block.columns()[0].value().into_column().unwrap();
+                                    let mut sorted_vals = Vec::with_capacity(sorted_arr.len());
+                                    for scalar in sorted_arr.iter() {
+                                        let val = scalar.as_variant().unwrap();
+                                        sorted_vals.push(RawJsonb::new(val));
                                     }
-                                    Err(err) => {
-                                        ctx.set_error(output.len(), err.to_string());
+                                    match OwnedJsonb::build_array(sorted_vals.into_iter()) {
+                                        Ok(owned_jsonb) => {
+                                            output.put_slice(owned_jsonb.as_ref());
+                                        }
+                                        Err(err) => {
+                                            ctx.set_error(output.len(), err.to_string());
+                                        }
                                     }
                                 }
-                            }
-                            Err(err) => {
-                                ctx.set_error(output.len(), err.to_string());
+                                Err(err) => {
+                                    ctx.set_error(output.len(), err.to_string());
+                                }
                             }
                         }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
                     }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
-                }
-                output.commit_row();
-            }),
-        );
+                    output.commit_row();
+                },
+            ))
+            .register();
 
-        registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
-            fn_name,
-            |_, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, output, ctx| {
+        registry
+            .scalar_builder(*fn_name)
+            .function()
+            .typed_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>()
+            .passthrough_nullable()
+            .calc_domain(|_, _| FunctionDomain::MayThrow)
+            .vectorized(vectorize_with_builder_1_arg::<
+                ArrayType<GenericType<0>>,
+                ArrayType<GenericType<0>>,
+            >(|arr, output, ctx| {
                 let len = arr.len();
                 let sort_desc = vec![SortColumnDescription {
                     offset: 0,
@@ -1482,7 +1568,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                         output.push_default();
                     }
                 }
-            }),
-        );
+            }))
+            .register();
     }
 }

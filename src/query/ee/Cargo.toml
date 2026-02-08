@@ -57,7 +57,6 @@ log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
-typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

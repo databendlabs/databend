@@ -80,7 +80,7 @@ explain select * from numbers(1) where number = pow(1, 1 + 1)
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [CAST(numbers.number (#0) AS Float64) = 1]
-├── estimated rows: 0.50
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
     ├── scan id: 0
