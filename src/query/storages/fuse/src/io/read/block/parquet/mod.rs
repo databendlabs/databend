@@ -21,18 +21,27 @@ use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterVisitor;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::variant::JSONB_NULL;
+use databend_common_expression::types::variant_parquet::parquet_variant_bytes_to_jsonb;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::VariantEncoding;
+use jsonb::from_slice as jsonb_from_slice;
 mod adapter;
 mod deserialize;
 mod row_selection;
@@ -43,6 +52,7 @@ pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
+use crate::io::is_variant_value_column_id;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
@@ -59,6 +69,7 @@ impl BlockReader {
             &part.compression,
             &part.location,
             selection,
+            part.variant_encoding,
         )
     }
 
@@ -70,28 +81,39 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
         selection: Option<&RowSelection>,
+        variant_encoding: VariantEncoding,
     ) -> databend_common_exception::Result<DataBlock> {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
             return Ok(DataBlock::empty_with_rows(result_rows));
         }
-
         if result_rows == 0 {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
         let has_selection = selection.is_some();
         let parquet_selection = selection.map(|s| s.selection.clone());
+        if column_chunks.is_empty() {
+            return self.build_default_values_block(result_rows);
+        }
+        let use_variant_struct = variant_encoding == VariantEncoding::ParquetVariant
+            && column_metas
+                .keys()
+                .any(|column_id| is_variant_value_column_id(*column_id));
         let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
             parquet_selection,
+            use_variant_struct,
+            None,
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
+        let needs_parquet_variant_decode =
+            variant_encoding == VariantEncoding::ParquetVariant && !use_variant_struct;
 
         let array_cache = if self.put_cache && !has_selection {
             CacheManager::instance().get_table_data_array_cache()
@@ -157,7 +179,113 @@ impl BlockReader {
             };
             entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
-        Ok(DataBlock::new(entries, result_rows))
+        let block = DataBlock::new(entries, result_rows);
+        if needs_parquet_variant_decode {
+            decode_variant_block_if_needed(block, &self.projected_schema, variant_encoding)
+        } else {
+            Ok(block)
+        }
+    }
+}
+
+fn decode_variant_block_if_needed(
+    block: DataBlock,
+    schema: &TableSchema,
+    variant_encoding: VariantEncoding,
+) -> databend_common_exception::Result<DataBlock> {
+    if variant_encoding != VariantEncoding::ParquetVariant {
+        return Ok(block);
+    }
+
+    let num_rows = block.num_rows();
+    let mut block = block;
+    let meta = block.take_meta();
+    let entries = block.take_columns();
+    let mut new_entries = Vec::with_capacity(entries.len());
+    for (entry, field) in entries.into_iter().zip(schema.fields().iter()) {
+        if field.data_type().remove_nullable() == TableDataType::Variant {
+            new_entries.push(decode_variant_entry(entry)?);
+        } else {
+            new_entries.push(entry);
+        }
+    }
+    Ok(DataBlock::new_with_meta(new_entries, num_rows, meta))
+}
+
+fn decode_variant_entry(entry: BlockEntry) -> databend_common_exception::Result<BlockEntry> {
+    match entry {
+        BlockEntry::Const(scalar, data_type, num_rows) => {
+            if scalar.is_null() {
+                return Ok(BlockEntry::Const(scalar, data_type, num_rows));
+            }
+            let Scalar::Variant(bytes) = scalar else {
+                return Ok(BlockEntry::Const(scalar, data_type, num_rows));
+            };
+            let decoded = decode_variant_bytes(&bytes)?;
+            Ok(BlockEntry::Const(
+                Scalar::Variant(decoded),
+                data_type,
+                num_rows,
+            ))
+        }
+        BlockEntry::Column(column) => {
+            let column = match column {
+                Column::Variant(col) => Column::Variant(decode_variant_column(col)?),
+                Column::Nullable(col) => {
+                    let (inner, validity) = col.destructure();
+                    let inner = match inner {
+                        Column::Variant(col) => {
+                            Column::Variant(decode_variant_column_with_validity(col, &validity)?)
+                        }
+                        other => other,
+                    };
+                    NullableColumn::new_column(inner, validity)
+                }
+                other => other,
+            };
+            Ok(BlockEntry::Column(column))
+        }
+    }
+}
+
+fn decode_variant_column(column: BinaryColumn) -> databend_common_exception::Result<BinaryColumn> {
+    let mut builder = BinaryColumnBuilder::with_capacity(column.len(), 0);
+    for value in column.iter() {
+        let decoded = decode_variant_bytes(value)?;
+        builder.put_slice(&decoded);
+        builder.commit_row();
+    }
+    Ok(builder.build())
+}
+
+fn decode_variant_column_with_validity(
+    column: BinaryColumn,
+    validity: &databend_common_expression::types::Bitmap,
+) -> databend_common_exception::Result<BinaryColumn> {
+    let mut builder = BinaryColumnBuilder::with_capacity(column.len(), 0);
+    for (idx, value) in column.iter().enumerate() {
+        if !validity.get(idx).unwrap_or(false) {
+            builder.put_slice(JSONB_NULL);
+            builder.commit_row();
+            continue;
+        }
+        let decoded = decode_variant_bytes(value)?;
+        builder.put_slice(&decoded);
+        builder.commit_row();
+    }
+    Ok(builder.build())
+}
+
+fn decode_variant_bytes(bytes: &[u8]) -> databend_common_exception::Result<Vec<u8>> {
+    match parquet_variant_bytes_to_jsonb(bytes) {
+        Ok(decoded) => Ok(decoded),
+        Err(err) => {
+            if jsonb_from_slice(bytes).is_ok() {
+                Ok(bytes.to_vec())
+            } else {
+                Err(err)
+            }
+        }
     }
 }
 

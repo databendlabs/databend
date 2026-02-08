@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 use parquet::format::FileMetaData;
@@ -340,6 +341,7 @@ fn build_test_segment_info(
         vector_index_location: None,
         virtual_block_meta: None,
         compression: Compression::Lz4,
+        variant_encoding: VariantEncoding::default(),
         create_on: Some(Utc::now()),
     };
 

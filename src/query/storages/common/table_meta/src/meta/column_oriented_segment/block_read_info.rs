@@ -19,6 +19,7 @@ use databend_common_expression::ColumnId;
 use crate::meta::BlockMeta;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;
+use crate::meta::VariantEncoding;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct BlockReadInfo {
@@ -27,6 +28,8 @@ pub struct BlockReadInfo {
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub compression: Compression,
     pub block_size: u64,
+    #[serde(default)]
+    pub variant_encoding: VariantEncoding,
 }
 
 impl From<&BlockMeta> for BlockReadInfo {
@@ -37,6 +40,7 @@ impl From<&BlockMeta> for BlockReadInfo {
             col_metas: meta.col_metas.clone(),
             compression: meta.compression,
             block_size: meta.block_size,
+            variant_encoding: meta.variant_encoding,
         }
     }
 }

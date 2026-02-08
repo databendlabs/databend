@@ -457,3 +457,109 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         additional_stats_meta: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::VariantEncoding;
+    use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+
+    use super::*;
+
+    fn make_block_meta(virtual_block_meta: Option<VirtualBlockMeta>) -> BlockMeta {
+        BlockMeta::new(
+            1,
+            0,
+            0,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            ("".to_string(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            virtual_block_meta,
+            Compression::Lz4,
+            VariantEncoding::Jsonb,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_reduce_block_metas_virtual_stats_require_all_blocks() {
+        let mut virtual_column_metas = HashMap::new();
+        let stats = ColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int64(1)),
+            Scalar::Number(NumberScalar::Int64(2)),
+            0,
+            0,
+            None,
+        );
+        virtual_column_metas.insert(100_u32, VirtualColumnMeta {
+            offset: 0,
+            len: 0,
+            num_values: 1,
+            data_type: 3,
+            column_stat: Some(stats),
+        });
+        let virtual_block_meta = VirtualBlockMeta {
+            virtual_column_metas,
+            virtual_column_size: 0,
+            virtual_location: ("".to_string(), 0),
+        };
+
+        let block_with = make_block_meta(Some(virtual_block_meta.clone()));
+        let block_without = make_block_meta(None);
+
+        let thresholds = BlockThresholds::default();
+        let stats = reduce_block_metas(&[block_with.clone(), block_without], thresholds, None);
+        assert!(stats.virtual_col_stats.is_none());
+
+        let stats = reduce_block_metas(&[block_with.clone(), block_with], thresholds, None);
+        let virtual_stats = stats.virtual_col_stats.expect("virtual stats");
+        assert!(virtual_stats.contains_key(&100_u32));
+    }
+
+    #[test]
+    fn test_generate_virtual_column_statistics_type_mismatch_is_ignored() {
+        let mut map1 = HashMap::new();
+        map1.insert(10_u32, VirtualColumnMeta {
+            offset: 0,
+            len: 0,
+            num_values: 1,
+            data_type: 3,
+            column_stat: Some(ColumnStatistics::new(
+                Scalar::Number(NumberScalar::Int64(1)),
+                Scalar::Number(NumberScalar::Int64(2)),
+                0,
+                0,
+                None,
+            )),
+        });
+
+        let mut map2 = HashMap::new();
+        map2.insert(10_u32, VirtualColumnMeta {
+            offset: 0,
+            len: 0,
+            num_values: 1,
+            data_type: 5,
+            column_stat: Some(ColumnStatistics::new(
+                Scalar::String("a".to_string()),
+                Scalar::String("b".to_string()),
+                0,
+                0,
+                None,
+            )),
+        });
+
+        let stats = generate_virtual_column_statistics(&[&map1, &map2]);
+        assert!(!stats.contains_key(&10_u32));
+    }
+}

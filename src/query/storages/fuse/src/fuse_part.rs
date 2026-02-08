@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -45,6 +46,7 @@ pub struct FuseBlockPartInfo {
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
+    pub variant_encoding: VariantEncoding,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
@@ -81,6 +83,7 @@ impl FuseBlockPartInfo {
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
+        variant_encoding: VariantEncoding,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
@@ -91,6 +94,7 @@ impl FuseBlockPartInfo {
             columns_meta,
             nums_rows: rows_count as usize,
             compression,
+            variant_encoding,
             sort_min_max,
             block_meta_index,
             columns_stat,

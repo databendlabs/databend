@@ -938,6 +938,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::MetaEncoding;
     use databend_storages_common_table_meta::meta::RawBlockMeta;
+    use databend_storages_common_table_meta::meta::VariantEncoding;
     use tempfile::TempDir;
 
     use super::*;
@@ -1206,6 +1207,7 @@ mod tests {
             vector_index_size: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
+            variant_encoding: VariantEncoding::default(),
             create_on: None,
         });
 

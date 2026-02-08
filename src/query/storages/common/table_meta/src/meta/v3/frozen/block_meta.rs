@@ -22,6 +22,7 @@ use serde::Serialize;
 
 use super::statistics::ColumnStatistics;
 use crate::meta::Location;
+use crate::meta::VariantEncoding;
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockMeta {
@@ -67,6 +68,7 @@ impl From<BlockMeta> for crate::meta::BlockMeta {
             vector_index_location: None,
             virtual_block_meta: None,
             compression: value.compression.into(),
+            variant_encoding: VariantEncoding::default(),
             create_on: None,
         }
     }
