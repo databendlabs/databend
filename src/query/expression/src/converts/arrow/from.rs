@@ -566,11 +566,7 @@ fn try_to_variant_column_from_struct(array: ArrayRef) -> Result<BinaryColumn> {
         let mut value = match &value_col {
             Some(col) if !col.is_null(row) => {
                 let bytes = col.value(row);
-                if bytes.is_empty() {
-                    None
-                } else {
-                    Some(bytes)
-                }
+                if bytes.is_empty() { None } else { Some(bytes) }
             }
             _ => None,
         };
