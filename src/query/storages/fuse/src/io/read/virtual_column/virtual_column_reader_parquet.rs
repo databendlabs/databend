@@ -19,7 +19,6 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use log::debug;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
@@ -47,6 +46,7 @@ use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::Compression;
 use jsonb::keypath::OwnedKeyPath as JsonbOwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths as JsonbOwnedKeyPaths;
+use log::debug;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
