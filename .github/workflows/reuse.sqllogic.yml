@@ -263,16 +263,14 @@ jobs:
       fail-fast: false
       matrix:
         tests:
+          - { dirs: "query", runner: "4c" }
+          - { dirs: "duckdb", runner: "4c" }
+          - { dirs: "crdb", runner: "2c", parallel: "2" }
+          - { dirs: "base", runner: "2c", parallel: "2" }
+          - { dirs: "ydb", runner: "2c" }
           - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
-          - { dirs: "tpcds", runner: "4c" }
+          - { dirs: "tpch", runner: "2c" }
+          - { dirs: "cluster", runner: "2c" }
         handler:
           - "hybrid"
           - "http"
