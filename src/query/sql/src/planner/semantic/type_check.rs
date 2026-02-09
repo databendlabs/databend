@@ -6502,20 +6502,15 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
-        } else {
-            if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
-                if let Some(stage) = constant.value.as_string() {
-                    let stage_name = parse_stage_name(stage).map_err(|err| {
-                        ErrorCode::SemanticError(err.message().to_string()).set_span(span)
-                    })?;
-                    let stage_info = Self::resolve_stage_info_for_read_file(
-                        self.ctx.as_ref(),
-                        span,
-                        &stage_name,
-                    )?;
-                    read_file_arg.stage_name = Some(stage_name);
-                    read_file_arg.stage_info = Some(Box::new(stage_info));
-                }
+        } else if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+            if let Some(stage) = constant.value.as_string() {
+                let stage_name = parse_stage_name(stage).map_err(|err| {
+                    ErrorCode::SemanticError(err.message().to_string()).set_span(span)
+                })?;
+                let stage_info =
+                    Self::resolve_stage_info_for_read_file(self.ctx.as_ref(), span, &stage_name)?;
+                read_file_arg.stage_name = Some(stage_name);
+                read_file_arg.stage_info = Some(Box::new(stage_info));
             }
         }
 
