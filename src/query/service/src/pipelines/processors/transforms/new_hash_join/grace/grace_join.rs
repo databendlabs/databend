@@ -33,7 +33,6 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::get_hashes;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
