@@ -28,7 +28,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::SeqV;
 
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
