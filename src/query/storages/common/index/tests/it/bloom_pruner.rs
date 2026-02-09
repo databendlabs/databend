@@ -18,8 +18,8 @@ use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnId;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -547,7 +547,7 @@ fn eval_index_expr(
 
     let mut eq_scalar_map = HashMap::<(ColumnId, Scalar), u64>::new();
     for (index, scalar, ty) in result.bloom_scalars.into_iter() {
-        let Some(field) = bloom_columns.get(&index) else {
+        let Some(field) = result.bloom_fields.get(index) else {
             continue;
         };
         let key = (field.column_id, scalar.clone());
@@ -558,7 +558,9 @@ fn eval_index_expr(
 
     let mut like_scalar_map = HashMap::<(ColumnId, Scalar), Vec<u64>>::new();
     for (index, scalar) in result.ngram_scalars.into_iter() {
-        let field = schema.field(index);
+        let Some(field) = result.ngram_fields.get(index) else {
+            continue;
+        };
         let Some(ngram_arg) = ngram_args
             .iter()
             .find(|arg| arg.column_id() == field.column_id)
