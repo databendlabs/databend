@@ -19,9 +19,8 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MetaError;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
@@ -134,7 +133,7 @@ mod get_users {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_empty() -> Result<(), MetaError> {
-        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
+        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
         let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         let users = user_mgr.get_users().await?;
@@ -145,7 +144,7 @@ mod get_users {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_users_multiple() -> Result<(), MetaError> {
-        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
+        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
         let user_mgr = UserMgr::create(Arc::new(meta_store), &Tenant::new_literal("tenant1"));
 
         // Add multiple users

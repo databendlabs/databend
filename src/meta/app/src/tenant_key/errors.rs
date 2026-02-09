@@ -14,23 +14,11 @@
 
 use std::fmt;
 use std::fmt::Formatter;
-use databend_common_exception::ErrorCode;
+
 use databend_meta_types::MatchSeq;
 
 use crate::app_error::AppErrorMessage;
 use crate::tenant_key::resource::TenantResource;
-
-/// Trait for converting tenant key errors to ErrorCode.
-///
-/// Implement this trait for a `TenantResource` to enable automatic conversion
-/// from `UnknownError<R, N>` and `ExistError<R, N>` to `ErrorCode`.
-pub trait TenantResourceErrorCode<N> {
-    /// Create an ErrorCode for "unknown/not found" error.
-    fn unknown_error_code(name: &N) -> ErrorCode;
-
-    /// Create an ErrorCode for "already exists" error.
-    fn exist_error_code(name: &N) -> ErrorCode;
-}
 
 /// Error occurred when a record already exists for a key.
 #[derive(thiserror::Error)]
@@ -210,22 +198,6 @@ where
     R: TenantResource,
     N: fmt::Display,
 {
-}
-
-impl<R, N> From<UnknownError<R, N>> for ErrorCode
-where R: TenantResourceErrorCode<N>
-{
-    fn from(err: UnknownError<R, N>) -> Self {
-        R::unknown_error_code(&err.name)
-    }
-}
-
-impl<R, N> From<ExistError<R, N>> for ErrorCode
-where R: TenantResourceErrorCode<N>
-{
-    fn from(err: ExistError<R, N>) -> Self {
-        R::exist_error_code(&err.name)
-    }
 }
 
 fn type_name<R: TenantResource>() -> &'static str {

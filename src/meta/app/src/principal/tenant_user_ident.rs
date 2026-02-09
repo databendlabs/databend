@@ -41,7 +41,8 @@ mod kvapi_impl {
     use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;
     use crate::principal::UserInfo;
-    use crate::tenant_key::errors::TenantResourceErrorCode;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -52,13 +53,15 @@ mod kvapi_impl {
         type ValueType = UserInfo;
     }
 
-    impl TenantResourceErrorCode<UserIdentity> for Resource {
-        fn unknown_error_code(name: &UserIdentity) -> ErrorCode {
-            ErrorCode::UnknownUser(format!("User {} does not exist.", name.display()))
+    impl From<ExistError<Resource, UserIdentity>> for ErrorCode {
+        fn from(err: ExistError<Resource, UserIdentity>) -> Self {
+            ErrorCode::UserAlreadyExists(format!("User {} already exists.", err.name().display()))
         }
+    }
 
-        fn exist_error_code(name: &UserIdentity) -> ErrorCode {
-            ErrorCode::UserAlreadyExists(format!("User {} already exists.", name.display()))
+    impl From<UnknownError<Resource, UserIdentity>> for ErrorCode {
+        fn from(err: UnknownError<Resource, UserIdentity>) -> Self {
+            ErrorCode::UnknownUser(format!("User {} does not exist.", err.name().display()))
         }
     }
 
