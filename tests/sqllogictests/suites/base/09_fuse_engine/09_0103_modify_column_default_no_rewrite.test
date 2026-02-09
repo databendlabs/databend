@@ -41,6 +41,36 @@ SELECT snapshot:schema:fields[1]:default_expr FROM fuse_dump_snapshots('db_09_01
 "20"
 "10"
 
+#############################################################
+# non-deterministic default: default-only modify triggers rewrite #
+#############################################################
+
+statement ok
+CREATE TABLE t_nd(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_nd VALUES(1)
+
+statement ok
+ALTER TABLE t_nd ADD COLUMN b FLOAT DEFAULT 1.0
+
+# The ADD COLUMN above is metadata-only, so the existing block does not have
+# physical column metadata for `b`.
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_nd MODIFY COLUMN b FLOAT DEFAULT rand()
+
+# Changing the default to a non-deterministic expression requires rewriting
+# existing blocks to materialize stable values.
+query B
+SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
+----
+1
+
 ####################################################
 # change tracking: default-only modify is allowed (metadata-only) #
 ####################################################
@@ -65,6 +95,9 @@ ALTER TABLE t_ct MODIFY COLUMN b STRING
 
 statement ok
 DROP TABLE t ALL
+
+statement ok
+DROP TABLE t_nd ALL
 
 statement ok
 DROP TABLE t_ct ALL

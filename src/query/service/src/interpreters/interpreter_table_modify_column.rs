@@ -22,6 +22,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -29,6 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -411,7 +413,25 @@ impl ModifyTableColumnInterpreter {
 
                 // Allow default-only changes to avoid rebuilding table data.
                 if !data_type_changed && default_expr_changed && !computed_expr_changed {
-                    continue;
+                    if field.default_expr.is_some() {
+                        let data_field: DataField = field.into();
+                        let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
+                        let expr = scalar_expr
+                            .as_expr()?
+                            .project_column_ref(|col| Ok(col.index))?;
+
+                        // For non-deterministic default expressions, a metadata-only change may
+                        // cause missing column values in historical blocks to be re-evaluated on
+                        // every query (e.g. `rand()`), leading to unstable results.
+                        // Force rebuilding table data to materialize existing values.
+                        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                            need_rebuild = true;
+                        }
+                    }
+
+                    if !need_rebuild {
+                        continue;
+                    }
                 }
 
                 if data_type_changed || computed_expr_changed {
