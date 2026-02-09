@@ -255,7 +255,11 @@ impl AuthMgr {
                         }
                         info!("JWT create user: {}", user_info.name);
                         user_api
-                            .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
+                            .create_user(
+                                &tenant,
+                                user_info.clone(),
+                                &CreateOption::CreateIfNotExists,
+                            )
                             .await?;
                         user_info
                     }
