@@ -32,6 +32,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringColumn;
@@ -216,6 +217,31 @@ impl ReadFileContext {
         Ok(operator)
     }
 
+    async fn read_files_in_parallel<K, I>(&self, tasks_info: I) -> Result<HashMap<K, Vec<u8>>>
+    where
+        K: Eq + std::hash::Hash + Send + 'static,
+        I: IntoIterator<Item = (K, Operator, String)>,
+    {
+        let thread_num = self.thread_num();
+        let permit_num = self.permit_num();
+        let tasks = tasks_info
+            .into_iter()
+            .map(|(key, operator, path)| async move {
+                let buffer = operator.read(&path).await?;
+                Ok::<(K, Vec<u8>), ErrorCode>((key, buffer.to_bytes().to_vec()))
+            });
+        let results = execute_futures_in_parallel(
+            tasks,
+            thread_num,
+            permit_num,
+            "read-file-worker".to_string(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        Ok(results.into_iter().collect())
+    }
+
     fn normalize_relative_path(path: &str) -> Result<String> {
         let path = path.trim_start_matches('/');
         let path = if path.is_empty() { "/" } else { path };
@@ -313,6 +339,243 @@ impl ReadFileContext {
         Ok(buffer.to_bytes().to_vec())
     }
 
+    pub async fn transform_read_file_column(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        values: Vec<Value<AnyType>>,
+        allow_nullable: bool,
+        read_file_arg: &ReadFileFunctionArgument,
+    ) -> Result<Value<AnyType>> {
+        let null_scalar = || -> Result<Value<AnyType>> { Ok(Value::Scalar(Scalar::Null)) };
+
+        if values.iter().any(|v| v.is_scalar_null()) {
+            return null_scalar();
+        }
+
+        let require_string = |scalar: &Scalar| -> Result<String> {
+            if let Scalar::String(value) = scalar {
+                Ok(value.clone())
+            } else {
+                Err(ErrorCode::BadArguments(
+                    "Bug: read_file args must be a string",
+                ))
+            }
+        };
+
+        fn output_from_cache<K, I>(
+            rows: I,
+            cache: &HashMap<K, Vec<u8>>,
+            result_is_nullable: bool,
+        ) -> Result<Value<AnyType>>
+        where
+            K: Eq + std::hash::Hash + std::fmt::Debug,
+            I: IntoIterator<Item = Option<K>>,
+        {
+            let mut output = Vec::new();
+            for key in rows {
+                let Some(key) = key else {
+                    output.push(None);
+                    continue;
+                };
+                let bytes = cache
+                    .get(&key)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!("read_file missing cached value for {:?}", key))
+                    })?
+                    .clone();
+                output.push(Some(bytes));
+            }
+            let result = Value::Column(BinaryType::from_opt_data(output));
+            if result_is_nullable {
+                Ok(result)
+            } else {
+                let (result, has_null) = result.remove_nullable();
+                if has_null {
+                    Err(ErrorCode::Internal("Bug: read_file got null".to_owned()))
+                } else {
+                    Ok(result)
+                }
+            }
+        }
+
+        let resolve_stage_name = |stage: &str| -> Result<String> {
+            if let Some(stage_name) = &read_file_arg.stage_name {
+                Ok(stage_name.clone())
+            } else {
+                parse_stage_name(stage)
+            }
+        };
+
+        match values.len() {
+            1 => match &values[0] {
+                Value::Scalar(scalar) => {
+                    let location = require_string(scalar)?;
+                    let bytes = self
+                        .read_stage_file(ctx.as_ref(), location.as_str())
+                        .await?;
+                    Ok(Value::Scalar(Scalar::Binary(bytes)))
+                }
+                Value::Column(column) => {
+                    let (is_all_null, validity) = column.validity();
+                    if is_all_null {
+                        null_scalar()
+                    } else {
+                        let string_col: StringColumn =
+                            StringType::try_downcast_column(&column.remove_nullable())?;
+                        let mut row_locations = Vec::with_capacity(string_col.len());
+                        let mut unique_locations = HashSet::new();
+                        for location in string_col.option_iter(validity) {
+                            let Some(location) = location else {
+                                row_locations.push(None);
+                                continue;
+                            };
+                            let location = location.to_string();
+                            unique_locations.insert(location.clone());
+                            row_locations.push(Some(location));
+                        }
+
+                        let mut tasks_info = Vec::with_capacity(unique_locations.len());
+                        for location in unique_locations {
+                            let (operator, path) =
+                                self.resolve_stage_file(ctx.as_ref(), &location).await?;
+                            tasks_info.push((location, operator, path));
+                        }
+                        let cache = self.read_files_in_parallel(tasks_info).await?;
+                        output_from_cache(row_locations, &cache, allow_nullable)
+                    }
+                }
+            },
+            2 => match (&values[0], &values[1]) {
+                (Value::Scalar(stage_scalar), Value::Scalar(path_scalar)) => {
+                    let stage = require_string(stage_scalar)?;
+                    let path = require_string(path_scalar)?;
+                    let stage_name = resolve_stage_name(stage.as_str())?;
+                    let (operator, path) = self
+                        .resolve_stage_file_with_stage_name(
+                            ctx.as_ref(),
+                            &stage_name,
+                            path.as_str(),
+                        )
+                        .await?;
+                    let buffer = operator.read(&path).await?;
+                    Ok(Value::Scalar(Scalar::Binary(buffer.to_bytes().to_vec())))
+                }
+                (Value::Scalar(stage_scalar), Value::Column(path_column)) => {
+                    let stage = require_string(stage_scalar)?;
+                    let stage_name = resolve_stage_name(stage.as_str())?;
+                    let (is_all_null, validity) = path_column.validity();
+                    if is_all_null {
+                        null_scalar()
+                    } else {
+                        let string_col: StringColumn =
+                            StringType::try_downcast_column(&path_column.remove_nullable())?;
+                        let mut row_paths = Vec::with_capacity(string_col.len());
+                        let mut unique_paths = HashSet::new();
+                        for path in string_col.option_iter(validity) {
+                            let Some(path) = path else {
+                                row_paths.push(None);
+                                continue;
+                            };
+                            let normalized = Self::normalize_relative_path(path)?;
+                            unique_paths.insert(normalized.clone());
+                            row_paths.push(Some(normalized));
+                        }
+
+                        let stage_info = self.stage_info_for(ctx.as_ref(), &stage_name).await?;
+                        let operator = self.operator_for_stage(&stage_info)?;
+                        let tasks_info = unique_paths
+                            .into_iter()
+                            .map(|path| (path.clone(), operator.clone(), path))
+                            .collect::<Vec<_>>();
+                        let cache = self.read_files_in_parallel(tasks_info).await?;
+                        output_from_cache(row_paths, &cache, allow_nullable)
+                    }
+                }
+                (Value::Column(stage_column), Value::Scalar(path_scalar)) => {
+                    let path = require_string(path_scalar)?;
+                    let (is_all_null, validity) = stage_column.validity();
+                    if is_all_null {
+                        null_scalar()
+                    } else {
+                        let string_col: StringColumn =
+                            StringType::try_downcast_column(&stage_column.remove_nullable())?;
+                        let normalized_path = Self::normalize_relative_path(path.as_str())?;
+                        let mut row_stages = Vec::with_capacity(string_col.len());
+                        let mut unique_stages = HashSet::new();
+                        for stage in string_col.option_iter(validity) {
+                            let Some(stage) = stage else {
+                                row_stages.push(None);
+                                continue;
+                            };
+                            let stage_name = parse_stage_name(stage)?;
+                            unique_stages.insert(stage_name.clone());
+                            row_stages.push(Some(stage_name));
+                        }
+
+                        let mut tasks_info = Vec::with_capacity(unique_stages.len());
+                        for stage_name in unique_stages {
+                            let (operator, path) = self
+                                .resolve_stage_file_with_stage_name(
+                                    ctx.as_ref(),
+                                    &stage_name,
+                                    &normalized_path,
+                                )
+                                .await?;
+                            tasks_info.push((stage_name, operator, path));
+                        }
+                        let cache = self.read_files_in_parallel(tasks_info).await?;
+                        output_from_cache(row_stages, &cache, allow_nullable)
+                    }
+                }
+                (Value::Column(stage_column), Value::Column(path_column)) => {
+                    let (stage_all_null, stage_validity) = stage_column.validity();
+                    let (path_all_null, path_validity) = path_column.validity();
+                    if stage_all_null || path_all_null {
+                        null_scalar()
+                    } else {
+                        let stage_col: StringColumn =
+                            StringType::try_downcast_column(&stage_column.remove_nullable())?;
+                        let path_col: StringColumn =
+                            StringType::try_downcast_column(&path_column.remove_nullable())?;
+                        let mut row_keys = Vec::with_capacity(stage_col.len());
+                        let mut unique_keys = HashSet::new();
+                        for (stage, path) in stage_col
+                            .option_iter(stage_validity)
+                            .zip(path_col.option_iter(path_validity))
+                        {
+                            let (Some(stage), Some(path)) = (stage, path) else {
+                                row_keys.push(None);
+                                continue;
+                            };
+                            let stage_name = parse_stage_name(stage)?;
+                            let normalized_path = Self::normalize_relative_path(path)?;
+                            let key = (stage_name, normalized_path);
+                            unique_keys.insert(key.clone());
+                            row_keys.push(Some(key));
+                        }
+
+                        let mut tasks_info = Vec::with_capacity(unique_keys.len());
+                        for (stage_name, path) in unique_keys {
+                            let (operator, resolved_path) = self
+                                .resolve_stage_file_with_stage_name(
+                                    ctx.as_ref(),
+                                    &stage_name,
+                                    &path,
+                                )
+                                .await?;
+                            tasks_info.push(((stage_name, path), operator, resolved_path));
+                        }
+                        let cache = self.read_files_in_parallel(tasks_info).await?;
+                        output_from_cache(row_keys, &cache, allow_nullable)
+                    }
+                }
+            },
+            _ => Err(ErrorCode::Internal(
+                "read_file expects one or two arguments".to_string(),
+            )),
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn transform_read_file(
         &mut self,
@@ -329,537 +592,21 @@ impl ReadFileContext {
                 self.cache_stage_info(stage_name, stage_info.as_ref().clone());
             }
         }
-
-        let output = match arg_indices.len() {
-            1 => {
-                let entry = data_block.get_by_offset(arg_indices[0]);
-                let value = entry.value();
-                match value {
-                    Value::Scalar(scalar) => match scalar {
-                        Scalar::Null => {
-                            if data_type.is_nullable_or_null() {
-                                Value::Scalar(Scalar::Null)
-                            } else {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file requires a non-null location".to_string(),
-                                ));
-                            }
-                        }
-                        Scalar::String(location) => {
-                            let bytes = self.read_stage_file(ctx.as_ref(), &location).await?;
-                            Value::Scalar(Scalar::Binary(bytes))
-                        }
-                        _ => {
-                            return Err(ErrorCode::BadArguments(
-                                "read_file argument must be a string".to_string(),
-                            ));
-                        }
-                    },
-                    Value::Column(column) => {
-                        let (is_all_null, validity) = column.validity();
-                        if is_all_null {
-                            if data_type.is_nullable_or_null() {
-                                let nulls: Vec<Option<Vec<u8>>> = vec![None; column.len()];
-                                Value::Column(BinaryType::from_opt_data(nulls))
-                            } else {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file requires a non-null location".to_string(),
-                                ));
-                            }
-                        } else {
-                            let string_col: StringColumn =
-                                StringType::try_downcast_column(&column.remove_nullable())?;
-                            let is_nullable = data_type.is_nullable_or_null();
-                            let mut unique_locations = Vec::new();
-                            let mut seen_locations = HashSet::new();
-                            for location in string_col.option_iter(validity).flatten() {
-                                if seen_locations.insert(location.to_string()) {
-                                    unique_locations.push(location.to_string());
-                                }
-                            }
-
-                            let thread_num = self.thread_num();
-                            let permit_num = self.permit_num();
-                            let mut tasks_info = Vec::with_capacity(unique_locations.len());
-                            for location in unique_locations {
-                                let (operator, path) =
-                                    self.resolve_stage_file(ctx.as_ref(), &location).await?;
-                                tasks_info.push((location, operator, path));
-                            }
-                            let tasks = tasks_info.into_iter().map(
-                                |(location, operator, path)| async move {
-                                    let buffer = operator.read(&path).await?;
-                                    Ok::<(String, Vec<u8>), ErrorCode>((
-                                        location,
-                                        buffer.to_bytes().to_vec(),
-                                    ))
-                                },
-                            );
-                            let results = execute_futures_in_parallel(
-                                tasks,
-                                thread_num,
-                                permit_num,
-                                "read-file-worker".to_string(),
-                            )
-                            .await?
-                            .into_iter()
-                            .collect::<Result<Vec<_>>>()?;
-
-                            let cache: HashMap<String, Vec<u8>> = results.into_iter().collect();
-
-                            if is_nullable {
-                                let mut output = Vec::with_capacity(string_col.len());
-                                for location in string_col.option_iter(validity) {
-                                    let Some(location) = location else {
-                                        output.push(None);
-                                        continue;
-                                    };
-                                    let bytes = cache
-                                        .get(location)
-                                        .ok_or_else(|| {
-                                            ErrorCode::Internal(format!(
-                                                "read_file missing cached value for {}",
-                                                location
-                                            ))
-                                        })?
-                                        .clone();
-                                    output.push(Some(bytes));
-                                }
-                                Value::Column(BinaryType::from_opt_data(output))
-                            } else {
-                                let mut output = Vec::with_capacity(string_col.len());
-                                for location in string_col.option_iter(validity) {
-                                    let Some(location) = location else {
-                                        return Err(ErrorCode::BadArguments(
-                                            "read_file requires a non-null location".to_string(),
-                                        ));
-                                    };
-                                    let bytes = cache
-                                        .get(location)
-                                        .ok_or_else(|| {
-                                            ErrorCode::Internal(format!(
-                                                "read_file missing cached value for {}",
-                                                location
-                                            ))
-                                        })?
-                                        .clone();
-                                    output.push(bytes);
-                                }
-                                Value::Column(BinaryType::from_data(output))
-                            }
-                        }
-                    }
-                }
-            }
-            2 => {
-                let is_nullable = data_type.is_nullable_or_null();
-                let stage_entry = data_block.get_by_offset(arg_indices[0]);
-                let path_entry = data_block.get_by_offset(arg_indices[1]);
-                let stage_value = stage_entry.value();
-                let path_value = path_entry.value();
-
-                match (stage_value, path_value) {
-                    (Value::Scalar(stage_scalar), Value::Scalar(path_scalar)) => {
-                        match (stage_scalar, path_scalar) {
-                            (Scalar::Null, _) | (_, Scalar::Null) => {
-                                if is_nullable {
-                                    Value::Scalar(Scalar::Null)
-                                } else {
-                                    return Err(ErrorCode::BadArguments(
-                                        "read_file requires non-null stage and path".to_string(),
-                                    ));
-                                }
-                            }
-                            (Scalar::String(stage), Scalar::String(path)) => {
-                                let stage_name = if let Some(stage_name) = &read_file_arg.stage_name
-                                {
-                                    stage_name.clone()
-                                } else {
-                                    parse_stage_name(&stage)?
-                                };
-                                let (operator, path) = self
-                                    .resolve_stage_file_with_stage_name(
-                                        ctx.as_ref(),
-                                        &stage_name,
-                                        &path,
-                                    )
-                                    .await?;
-                                let buffer = operator.read(&path).await?;
-                                Value::Scalar(Scalar::Binary(buffer.to_bytes().to_vec()))
-                            }
-                            _ => {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file arguments must be strings".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                    (Value::Scalar(stage_scalar), Value::Column(path_column)) => match stage_scalar
-                    {
-                        Scalar::Null => {
-                            if is_nullable {
-                                let nulls: Vec<Option<Vec<u8>>> = vec![None; path_column.len()];
-                                Value::Column(BinaryType::from_opt_data(nulls))
-                            } else {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file requires a non-null stage".to_string(),
-                                ));
-                            }
-                        }
-                        Scalar::String(stage) => {
-                            let stage_name = if let Some(stage_name) = &read_file_arg.stage_name {
-                                stage_name.clone()
-                            } else {
-                                parse_stage_name(&stage)?
-                            };
-
-                            let (is_all_null, validity) = path_column.validity();
-                            if is_all_null {
-                                if is_nullable {
-                                    let nulls: Vec<Option<Vec<u8>>> = vec![None; path_column.len()];
-                                    Value::Column(BinaryType::from_opt_data(nulls))
-                                } else {
-                                    return Err(ErrorCode::BadArguments(
-                                        "read_file requires a non-null path".to_string(),
-                                    ));
-                                }
-                            } else {
-                                let string_col: StringColumn = StringType::try_downcast_column(
-                                    &path_column.remove_nullable(),
-                                )?;
-                                let mut row_paths = Vec::with_capacity(string_col.len());
-                                let mut unique_paths = HashSet::new();
-                                for path in string_col.option_iter(validity) {
-                                    let Some(path) = path else {
-                                        row_paths.push(None);
-                                        continue;
-                                    };
-                                    let normalized = Self::normalize_relative_path(path)?;
-                                    unique_paths.insert(normalized.clone());
-                                    row_paths.push(Some(normalized));
-                                }
-
-                                let stage_info =
-                                    self.stage_info_for(ctx.as_ref(), &stage_name).await?;
-                                let operator = self.operator_for_stage(&stage_info)?;
-                                let thread_num = self.thread_num();
-                                let permit_num = self.permit_num();
-                                let tasks = unique_paths.into_iter().map(|path| {
-                                    let operator = operator.clone();
-                                    async move {
-                                        let buffer = operator.read(&path).await?;
-                                        Ok::<(String, Vec<u8>), ErrorCode>((
-                                            path,
-                                            buffer.to_bytes().to_vec(),
-                                        ))
-                                    }
-                                });
-                                let results = execute_futures_in_parallel(
-                                    tasks,
-                                    thread_num,
-                                    permit_num,
-                                    "read-file-worker".to_string(),
-                                )
-                                .await?
-                                .into_iter()
-                                .collect::<Result<Vec<_>>>()?;
-
-                                let cache: HashMap<String, Vec<u8>> = results.into_iter().collect();
-                                if is_nullable {
-                                    let mut output = Vec::with_capacity(string_col.len());
-                                    for path in row_paths {
-                                        let Some(path) = path else {
-                                            output.push(None);
-                                            continue;
-                                        };
-                                        let bytes = cache
-                                            .get(&path)
-                                            .ok_or_else(|| {
-                                                ErrorCode::Internal(format!(
-                                                    "read_file missing cached value for {}",
-                                                    path
-                                                ))
-                                            })?
-                                            .clone();
-                                        output.push(Some(bytes));
-                                    }
-                                    Value::Column(BinaryType::from_opt_data(output))
-                                } else {
-                                    let mut output = Vec::with_capacity(string_col.len());
-                                    for path in row_paths {
-                                        let Some(path) = path else {
-                                            return Err(ErrorCode::BadArguments(
-                                                "read_file requires a non-null path".to_string(),
-                                            ));
-                                        };
-                                        let bytes = cache
-                                            .get(&path)
-                                            .ok_or_else(|| {
-                                                ErrorCode::Internal(format!(
-                                                    "read_file missing cached value for {}",
-                                                    path
-                                                ))
-                                            })?
-                                            .clone();
-                                        output.push(bytes);
-                                    }
-                                    Value::Column(BinaryType::from_data(output))
-                                }
-                            }
-                        }
-                        _ => {
-                            return Err(ErrorCode::BadArguments(
-                                "read_file stage must be a string".to_string(),
-                            ));
-                        }
-                    },
-                    (Value::Column(stage_column), Value::Scalar(path_scalar)) => {
-                        match path_scalar {
-                            Scalar::Null => {
-                                if is_nullable {
-                                    let nulls: Vec<Option<Vec<u8>>> =
-                                        vec![None; stage_column.len()];
-                                    Value::Column(BinaryType::from_opt_data(nulls))
-                                } else {
-                                    return Err(ErrorCode::BadArguments(
-                                        "read_file requires a non-null path".to_string(),
-                                    ));
-                                }
-                            }
-                            Scalar::String(path) => {
-                                let (is_all_null, validity) = stage_column.validity();
-                                if is_all_null {
-                                    if is_nullable {
-                                        let nulls: Vec<Option<Vec<u8>>> =
-                                            vec![None; stage_column.len()];
-                                        Value::Column(BinaryType::from_opt_data(nulls))
-                                    } else {
-                                        return Err(ErrorCode::BadArguments(
-                                            "read_file requires a non-null stage".to_string(),
-                                        ));
-                                    }
-                                } else {
-                                    let string_col: StringColumn = StringType::try_downcast_column(
-                                        &stage_column.remove_nullable(),
-                                    )?;
-                                    let normalized_path = Self::normalize_relative_path(&path)?;
-                                    let mut row_stages = Vec::with_capacity(string_col.len());
-                                    let mut unique_stages = HashSet::new();
-                                    for stage in string_col.option_iter(validity) {
-                                        let Some(stage) = stage else {
-                                            row_stages.push(None);
-                                            continue;
-                                        };
-                                        let stage_name = parse_stage_name(stage)?;
-                                        unique_stages.insert(stage_name.clone());
-                                        row_stages.push(Some(stage_name));
-                                    }
-
-                                    let thread_num = self.thread_num();
-                                    let permit_num = self.permit_num();
-                                    let mut tasks_info = Vec::with_capacity(unique_stages.len());
-                                    for stage_name in unique_stages {
-                                        let (operator, path) = self
-                                            .resolve_stage_file_with_stage_name(
-                                                ctx.as_ref(),
-                                                &stage_name,
-                                                &normalized_path,
-                                            )
-                                            .await?;
-                                        tasks_info.push((stage_name, operator, path));
-                                    }
-                                    let tasks = tasks_info.into_iter().map(
-                                        |(stage_name, operator, path)| async move {
-                                            let buffer = operator.read(&path).await?;
-                                            Ok::<(String, Vec<u8>), ErrorCode>((
-                                                stage_name,
-                                                buffer.to_bytes().to_vec(),
-                                            ))
-                                        },
-                                    );
-                                    let results = execute_futures_in_parallel(
-                                        tasks,
-                                        thread_num,
-                                        permit_num,
-                                        "read-file-worker".to_string(),
-                                    )
-                                    .await?
-                                    .into_iter()
-                                    .collect::<Result<Vec<_>>>()?;
-
-                                    let cache: HashMap<String, Vec<u8>> =
-                                        results.into_iter().collect();
-                                    if is_nullable {
-                                        let mut output = Vec::with_capacity(string_col.len());
-                                        for stage_name in row_stages {
-                                            let Some(stage_name) = stage_name else {
-                                                output.push(None);
-                                                continue;
-                                            };
-                                            let bytes = cache
-                                                .get(&stage_name)
-                                                .ok_or_else(|| {
-                                                    ErrorCode::Internal(format!(
-                                                        "read_file missing cached value for {}",
-                                                        stage_name
-                                                    ))
-                                                })?
-                                                .clone();
-                                            output.push(Some(bytes));
-                                        }
-                                        Value::Column(BinaryType::from_opt_data(output))
-                                    } else {
-                                        let mut output = Vec::with_capacity(string_col.len());
-                                        for stage_name in row_stages {
-                                            let Some(stage_name) = stage_name else {
-                                                return Err(ErrorCode::BadArguments(
-                                                    "read_file requires a non-null stage"
-                                                        .to_string(),
-                                                ));
-                                            };
-                                            let bytes = cache
-                                                .get(&stage_name)
-                                                .ok_or_else(|| {
-                                                    ErrorCode::Internal(format!(
-                                                        "read_file missing cached value for {}",
-                                                        stage_name
-                                                    ))
-                                                })?
-                                                .clone();
-                                            output.push(bytes);
-                                        }
-                                        Value::Column(BinaryType::from_data(output))
-                                    }
-                                }
-                            }
-                            _ => {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file path must be a string".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                    (Value::Column(stage_column), Value::Column(path_column)) => {
-                        let (stage_all_null, stage_validity) = stage_column.validity();
-                        let (path_all_null, path_validity) = path_column.validity();
-                        if stage_all_null || path_all_null {
-                            if is_nullable {
-                                let nulls: Vec<Option<Vec<u8>>> = vec![None; stage_column.len()];
-                                Value::Column(BinaryType::from_opt_data(nulls))
-                            } else {
-                                return Err(ErrorCode::BadArguments(
-                                    "read_file requires non-null stage and path".to_string(),
-                                ));
-                            }
-                        } else {
-                            let stage_col: StringColumn =
-                                StringType::try_downcast_column(&stage_column.remove_nullable())?;
-                            let path_col: StringColumn =
-                                StringType::try_downcast_column(&path_column.remove_nullable())?;
-                            let mut row_keys = Vec::with_capacity(stage_col.len());
-                            let mut unique_keys = HashSet::new();
-                            for (stage, path) in stage_col
-                                .option_iter(stage_validity)
-                                .zip(path_col.option_iter(path_validity))
-                            {
-                                let (Some(stage), Some(path)) = (stage, path) else {
-                                    row_keys.push(None);
-                                    continue;
-                                };
-                                let stage_name = parse_stage_name(stage)?;
-                                let normalized_path = Self::normalize_relative_path(path)?;
-                                let key = (stage_name, normalized_path);
-                                unique_keys.insert(key.clone());
-                                row_keys.push(Some(key));
-                            }
-
-                            let thread_num = self.thread_num();
-                            let permit_num = self.permit_num();
-                            let mut tasks_info = Vec::with_capacity(unique_keys.len());
-                            for (stage_name, path) in unique_keys {
-                                let (operator, resolved_path) = self
-                                    .resolve_stage_file_with_stage_name(
-                                        ctx.as_ref(),
-                                        &stage_name,
-                                        &path,
-                                    )
-                                    .await?;
-                                tasks_info.push(((stage_name, path), operator, resolved_path));
-                            }
-                            let tasks =
-                                tasks_info
-                                    .into_iter()
-                                    .map(|(key, operator, path)| async move {
-                                        let buffer = operator.read(&path).await?;
-                                        Ok::<((String, String), Vec<u8>), ErrorCode>((
-                                            key,
-                                            buffer.to_bytes().to_vec(),
-                                        ))
-                                    });
-                            let results = execute_futures_in_parallel(
-                                tasks,
-                                thread_num,
-                                permit_num,
-                                "read-file-worker".to_string(),
-                            )
-                            .await?
-                            .into_iter()
-                            .collect::<Result<Vec<_>>>()?;
-
-                            let cache: HashMap<(String, String), Vec<u8>> =
-                                results.into_iter().collect();
-                            if is_nullable {
-                                let mut output = Vec::with_capacity(stage_col.len());
-                                for key in row_keys {
-                                    let Some(key) = key else {
-                                        output.push(None);
-                                        continue;
-                                    };
-                                    let bytes = cache
-                                        .get(&key)
-                                        .ok_or_else(|| {
-                                            ErrorCode::Internal(format!(
-                                                "read_file missing cached value for @{}",
-                                                key.0
-                                            ))
-                                        })?
-                                        .clone();
-                                    output.push(Some(bytes));
-                                }
-                                Value::Column(BinaryType::from_opt_data(output))
-                            } else {
-                                let mut output = Vec::with_capacity(stage_col.len());
-                                for key in row_keys {
-                                    let Some(key) = key else {
-                                        return Err(ErrorCode::BadArguments(
-                                            "read_file requires non-null stage and path"
-                                                .to_string(),
-                                        ));
-                                    };
-                                    let bytes = cache
-                                        .get(&key)
-                                        .ok_or_else(|| {
-                                            ErrorCode::Internal(format!(
-                                                "read_file missing cached value for @{}",
-                                                key.0
-                                            ))
-                                        })?
-                                        .clone();
-                                    output.push(bytes);
-                                }
-                                Value::Column(BinaryType::from_data(output))
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {
-                return Err(ErrorCode::Internal(
-                    "read_file expects one or two arguments".to_string(),
-                ));
-            }
-        };
-
+        let allow_nullable = data_type.is_nullable_or_null();
+        let entries = arg_indices
+            .iter()
+            .map(|i| data_block.get_by_offset(*i).clone())
+            .collect::<Vec<_>>();
+        let is_nullable = entries.iter().any(|b| b.data_type().is_nullable_or_null());
+        let values = entries.into_iter().map(|e| e.value()).collect::<Vec<_>>();
+        if !allow_nullable && is_nullable {
+            return Err(ErrorCode::BadArguments(
+                "Bug: read_file args should not be null".to_string(),
+            ));
+        }
+        let output = self
+            .transform_read_file_column(ctx, values, allow_nullable, read_file_arg)
+            .await?;
         let entry = BlockEntry::new(output, || (data_type.clone(), data_block.num_rows()));
         data_block.add_entry(entry);
         Ok(())
