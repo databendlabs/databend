@@ -116,7 +116,8 @@ pub(crate) fn check_parquet_schema(
     if expect.root_schema() != actual.root_schema() {
         // TODO:
         // 1. better print the differs for large schema
-        // 2. don't check column id, table name, just check column name and types
+        // 2. don't check column id (including parquet/arrow field id metadata),
+        //    table name, just check column name and types
         return Err(ErrorCode::TableSchemaMismatch(format!(
             "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
             schema_from, path, expect, actual

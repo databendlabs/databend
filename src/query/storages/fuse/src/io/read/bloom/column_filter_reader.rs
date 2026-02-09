@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
 use databend_storages_common_cache::CacheKey;
 use databend_storages_common_cache::CachedObject;
@@ -33,6 +32,7 @@ use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::schema::types::SchemaDescPtr;
 
+use super::BloomIndexColumnOrdinal;
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 
 type CachedReader = HybridCacheReader<FilterImpl, BloomFilterLoader>;
@@ -48,7 +48,7 @@ pub struct BloomColumnFilterReader {
 impl BloomColumnFilterReader {
     pub fn new(
         index_path: String,
-        column_id: ColumnId,
+        column_ordinal: BloomIndexColumnOrdinal,
         filter_name: &str,
         column_chunk_meta: &SingleColumnMeta,
         operator: Operator,
@@ -69,7 +69,7 @@ impl BloomColumnFilterReader {
             len: *len,
             num_values: *num_values,
             schema_desc,
-            column_id,
+            column_ordinal,
         };
 
         let cached_reader = CachedReader::new(FilterImpl::cache(), loader);
@@ -99,7 +99,7 @@ pub struct BloomFilterLoader {
     pub len: u64,
     pub num_values: u64,
     pub schema_desc: SchemaDescPtr,
-    pub column_id: u32,
+    pub column_ordinal: BloomIndexColumnOrdinal,
     pub cache_key: String,
     pub operator: Operator,
 }
@@ -118,11 +118,11 @@ impl Loader<FilterImpl> for BloomFilterLoader {
             &self.schema_desc,
             ParquetCompression::UNCOMPRESSED,
         );
-        builder.add_column_chunk(self.column_id as usize, chunk);
+        builder.add_column_chunk(self.column_ordinal.as_usize(), chunk);
         let row_group = Box::new(builder.build());
         let field_levels = parquet_to_arrow_field_levels(
             self.schema_desc.as_ref(),
-            ProjectionMask::leaves(&self.schema_desc, vec![self.column_id as usize]),
+            ProjectionMask::leaves(&self.schema_desc, vec![self.column_ordinal.as_usize()]),
             None,
         )?;
         let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(

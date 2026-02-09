@@ -46,6 +46,7 @@ use crate::io::read::inverted_index::inverted_index_loader::cache_key_of_index_c
 use crate::io::read::inverted_index::inverted_index_loader::legacy_load_inverted_index_files;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_meta;
+use crate::pruning::InvertedIndexFieldId;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -79,7 +80,7 @@ impl InvertedIndexReader {
         self,
         settings: &ReadSettings,
         query: Box<dyn Query>,
-        field_ids: &HashSet<u32>,
+        field_ids: &HashSet<InvertedIndexFieldId>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         index_loc: &str,
@@ -110,7 +111,7 @@ impl InvertedIndexReader {
         settings: &ReadSettings,
         index_path: &str,
         query: Box<dyn Query>,
-        field_ids: &HashSet<u32>,
+        field_ids: &HashSet<InvertedIndexFieldId>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
     ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
@@ -241,7 +242,7 @@ impl InvertedIndexReader {
         settings: &ReadSettings,
         index_path: &str,
         query: Box<dyn Query>,
-        field_ids: &HashSet<u32>,
+        field_ids: &HashSet<InvertedIndexFieldId>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         mut inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
@@ -249,6 +250,7 @@ impl InvertedIndexReader {
         // 1. read fst and term files.
         let mut columns = Vec::with_capacity(field_ids.len() * 2);
         for field_id in field_ids {
+            let field_id = field_id.as_u32();
             let fst_col_name = format!("fst-{}", field_id);
             let term_col_name = format!("term-{}", field_id);
 
@@ -271,6 +273,7 @@ impl InvertedIndexReader {
 
         let mut fst_maps = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
+            let field_id = field_id.as_u32();
             let fst_col_name = format!("fst-{}", field_id);
             let fst = if let Some(fst_data) = column_files_map.remove(&fst_col_name) {
                 Fst::new(fst_data).map_err(|err| {
@@ -288,7 +291,7 @@ impl InvertedIndexReader {
                 Fst::new(fst_data).unwrap()
             };
             let fst_map = tantivy_fst::Map::from(fst);
-            fst_maps.insert(*field_id, fst_map);
+            fst_maps.insert(field_id, fst_map);
         }
 
         // 2. check whether query is matched in the fsts.
@@ -313,17 +316,18 @@ impl InvertedIndexReader {
         let mut term_infos = HashMap::with_capacity(matched_terms.len());
         let mut field_term_ids = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
-            field_term_ids.insert(*field_id, HashSet::new());
+            let field_id = field_id.as_u32();
+            field_term_ids.insert(field_id, HashSet::new());
             let term_col_name = format!("term-{}", field_id);
             if let Some(term_dict_data) = column_files_map.remove(&term_col_name) {
                 let term_dict_file = FileSlice::new(Arc::new(term_dict_data));
                 let term_info_store = TermInfoStore::open(term_dict_file)?;
 
                 for (_, (term_field_id, term_id)) in matched_terms.iter() {
-                    if field_id == term_field_id {
+                    if field_id == *term_field_id {
                         let term_info = term_info_store.get(*term_id);
                         term_infos.insert(*term_id, term_info);
-                        if let Some(term_ids) = field_term_ids.get_mut(field_id) {
+                        if let Some(term_ids) = field_term_ids.get_mut(&field_id) {
                             term_ids.insert(*term_id);
                         }
                     }
@@ -451,11 +455,12 @@ impl InvertedIndexReader {
         }
         if self.has_score {
             for field_id in field_ids {
+                let field_id = field_id.as_u32();
                 // if fieldnorm not exist, add a constant fieldnorm reader.
-                if !fieldnorm_reader_map.contains_key(field_id) {
+                if !fieldnorm_reader_map.contains_key(&field_id) {
                     let constant_fieldnorm_reader =
                         FieldNormReader::constant(self.row_count as u32, 1);
-                    fieldnorm_reader_map.insert(*field_id, constant_fieldnorm_reader);
+                    fieldnorm_reader_map.insert(field_id, constant_fieldnorm_reader);
                 }
             }
         }
