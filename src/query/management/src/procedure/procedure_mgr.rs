@@ -62,6 +62,7 @@ impl ProcedureMgr {
     }
 
     /// Add a PROCEDURE to /tenant/procedure-name.
+    /// Returns `ExistError` if the procedure already exists and `overriding` is false.
     #[async_backtrace::framed]
     pub async fn create_procedure(
         &self,

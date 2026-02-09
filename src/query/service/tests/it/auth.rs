@@ -159,7 +159,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> anyhow::Result<()> {
         let tenant = session.get_current_tenant();
         let user2_info = UserInfo::new(user2, "%", AuthInfo::JWT);
         UserApiProvider::instance()
-            .add_user(
+            .create_user(
                 &tenant,
                 user2_info.clone(),
                 &CreateOption::CreateIfNotExists,
