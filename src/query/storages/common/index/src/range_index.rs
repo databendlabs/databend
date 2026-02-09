@@ -302,6 +302,12 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
     }
 }
 
+impl Index for RangeIndex {
+    fn supported_type(data_type: &DataType) -> bool {
+        databend_storages_common_table_meta::meta::supported_stat_type(data_type)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Domain;
@@ -318,11 +324,5 @@ mod tests {
         let ty = DataType::Number(NumberDataType::Int64);
         let domain = statistics_to_domain(vec![&stat], &ty);
         assert_eq!(domain, Domain::full(&ty));
-    }
-}
-
-impl Index for RangeIndex {
-    fn supported_type(data_type: &DataType) -> bool {
-        databend_storages_common_table_meta::meta::supported_stat_type(data_type)
     }
 }
