@@ -119,9 +119,7 @@ impl HybridHashJoin {
     /// Switch from Memory mode to Grace mode
     fn switch_to_grace_mode(&mut self, finished: bool) -> Result<()> {
         if let HybridJoinMode::Memory(memory_join) = &mut self.mode {
-            if !finished {
-                memory_join.add_block(None)?;
-            }
+            memory_join.add_block(None)?;
 
             self.state.set_spilled();
             self.add_transition_work()?;
